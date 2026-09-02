@@ -1,0 +1,81 @@
+# Jarvis — configuração da Etapa 0
+#
+# Tudo que dá pra ajustar sem mexer em código está aqui.
+# O ESCOPO §3 exige que a persona fique fora do código, porque a ideia é
+# trocar por uma personagem feminina no futuro.
+
+[persona]
+nome = "Jarvis"
+
+[audio]
+# "" usa o microfone padrão do sistema. Para fixar outro, use um trecho do
+# nome — `python etapa0.py --listar-dispositivos` mostra a lista.
+# Nesta máquina existem 3 entradas: Fifine MV-SILICON (padrão), Fifine K420
+# e o headset H510-PRO.
+dispositivo_entrada = ""
+dispositivo_saida = ""
+taxa_amostragem = 16000
+
+# Portão anti-eco: quanto esperar depois que o Jarvis termina de falar antes
+# de reabrir o microfone. Sem isto ele pega a cauda da própria voz nas caixas
+# e responde a si mesmo em laço. Suba se estiver usando caixas num ambiente
+# com eco; pode baixar bastante se usar o headset.
+guarda_pos_fala_ms = 300
+
+[vad]
+# Probabilidade mínima do Silero para considerar que há fala.
+# Subir = menos ruído captado, mais risco de cortar fala baixa.
+limiar = 0.5
+
+# Quantos blocos de 32ms seguidos acima do limiar para abrir o segmento.
+# 2 blocos ≈ 64ms: evita que um estalo ou uma batida de mesa abra gravação.
+blocos_para_iniciar = 2
+
+# Quanto silêncio encerra o segmento. ESTE É O MAIOR PEDAÇO DA LATÊNCIA
+# PERCEBIDA — é o primeiro botão a girar se a resposta parecer lenta.
+# Baixar demais faz ele cortar você no meio de uma pausa natural.
+silencio_final_ms = 700
+
+# Áudio guardado ANTES do VAD disparar. O detector só reage depois que a fala
+# já começou; sem isto a primeira sílaba some e o Whisper recebe "estando o
+# jarvis" em vez de "testando o jarvis".
+pre_roll_ms = 300
+
+# Segmento mais curto que isto é descartado sem chegar ao Whisper.
+# É a defesa contra o "comando fantasma" do ESCOPO §7.
+fala_minima_ms = 250
+
+# Trava de segurança: encerra o segmento à força.
+fala_maxima_s = 20.0
+
+[stt]
+modelo = "large-v3-turbo"
+dispositivo = "cuda"
+
+# Pedido explícito do Léo: int8.
+# Em Ampere (que é o caso da 3060), "int8_float16" costuma ser mais rápido.
+# Como esta etapa é um banco de medição, vale rodar as duas e comparar os
+# .jsonl em logs/ — é trocar só esta palavra.
+compute_type = "int8"
+
+# Idioma fixo: pula a etapa de detecção automática e economiza tempo.
+idioma = "pt"
+
+# 1 = busca gulosa = menor latência. ESCOPO §2.7.
+beam_size = 1
+
+[tts]
+motor = "piper"
+
+# Vozes masculinas PT-BR baixadas: faber, cadu e jeff (todas "medium").
+# Trocar aqui e rodar de novo é o jeito de comparar as três.
+voz = "pt_BR-faber-medium"
+
+# Maior = mais devagar (é o length_scale do Piper).
+velocidade = 1.0
+
+[log]
+# Grava um .wav por segmento aprovado pelo VAD, em logs/audio/, com o mesmo
+# timestamp da linha do .jsonl. Serve para separar erro de microfone de erro
+# de modelo quando uma transcrição sair errada.
+salvar_audio = true

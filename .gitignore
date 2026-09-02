@@ -1,0 +1,13 @@
+# ambiente
+.venv/
+__pycache__/
+*.py[cod]
+
+# modelos baixados sob demanda (vozes do Piper ~63MB cada)
+vozes/
+
+# medições e áudio bruto da Etapa 0
+logs/
+
+# áudio avulso (autoteste, experimentos)
+*.wav

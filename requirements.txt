@@ -1,0 +1,33 @@
+# Jarvis — Etapa 0 (esqueleto de voz)
+#
+# Versões conferidas no PyPI em 2026-09-02, todas com wheel manylinux x86_64
+# para cp312 (o Python do sistema é 3.12.3).
+#
+# REGRA: não subir nem descer versão por conta própria. Se alguma destas sumir
+# do PyPI ou falhar ao instalar, parar e perguntar ao Léo qual usar.
+
+# captura e reprodução de áudio — PortAudio, que aqui fala com o PipeWire
+sounddevice==0.5.6
+numpy==2.5.2
+
+# VAD Silero. Obrigatório antes do STT (ESCOPO §2.6).
+# Escolhido no lugar do pacote `silero-vad` oficial porque aquele exige
+# torch + torchaudio (~2,5GB) como dependência dura. Este é o mesmo modelo
+# Silero, empacotado em 5MB pelo time do Rhasspy/Piper, sem torch.
+pysilero-vad==3.4.0
+
+# STT — traz junto av (PyAV, com ffmpeg embutido no wheel), onnxruntime,
+# tokenizers, huggingface-hub e tqdm.
+faster-whisper==1.2.1
+ctranslate2==4.8.2
+
+# TTS — em modo inferência precisa só de onnxruntime + pathvalidate.
+piper-tts==1.7.0
+
+# Runtime CUDA. O wheel do ctranslate2 tem 39MB e NÃO embute CUDA: ele faz
+# dlopen de libcublas.so.12 e libcudnn*.so.9 em tempo de execução. Como não
+# instalamos torch (que traria essas libs de carona), elas entram por aqui e
+# são pré-carregadas por jarvis/cuda_setup.py.
+# Atenção: são grandes — 581MB + 751MB.
+nvidia-cublas-cu12==12.9.2.10
+nvidia-cudnn-cu12==9.25.1.1

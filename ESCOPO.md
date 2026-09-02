@@ -5,9 +5,10 @@
 > qualquer linha. Se algo aqui conflitar com um pedido, pergunte antes de
 > implementar.
 
-Versão: 2.0 — planejamento. Sistema: **Linux Mint Cinnamon**.
+Versão: 2.1. Sistema: **Linux Mint Cinnamon**.
 Pasta: `~/Projetos/Jarvis`. Repositório Git privado no GitHub.
-Nada implementado ainda.
+Etapa 0 implementada e aprovada (set/2026). Da Etapa 0.5 em diante,
+nada feito.
 
 ---
 
@@ -90,8 +91,13 @@ devolve depois. Ele pode falar por cima do jogo. No Linux isso é feito via
 PipeWire, ajustando o volume por fluxo (sink-input).
 
 **Stack decidida** (pesquisada em ago/2026):
-- **Wake word:** openWakeWord — *ainda não verificado, confirmar antes da Etapa 0*
-- **VAD (detector de voz):** obrigatório, antes do STT. Ver risco na §7
+- **Wake word:** openWakeWord — *ainda não verificado; adiado para a Etapa 0.5*
+- **VAD (detector de voz):** Silero, via pacote `pysilero-vad` (set/2026).
+  Obrigatório, antes do STT — ver risco na §7. Escolhido no lugar do pacote
+  `silero-vad` oficial porque aquele exige torch + torchaudio (~2,5GB) como
+  dependência dura; o `pysilero-vad` é o mesmo modelo Silero empacotado em
+  5MB pelo time do Rhasspy/Piper, sem torch. Menos disco e nada disputando
+  VRAM com o Whisper
 - **STT:** faster-whisper, modelo `large-v3-turbo`, na GPU com int8.
   Escolhido por ser ~4x mais rápido que whisper.cpp na GPU e por ser
   multilíngue de verdade (Parakeet e Canary são só inglês)
@@ -116,11 +122,43 @@ Ordem obrigatória. Nada de pular. Cada etapa só começa depois que a
 anterior foi testada manualmente pelo Léo e aprovada — **o teste dele é a
 fonte de verdade.**
 
-### Etapa 0 — Esqueleto de voz
-Ele ouve o nome, transcreve o que foi dito e repete de volta. **Zero ações.**
+### Etapa 0 — Esqueleto de voz (sem wake word)
+Ele ouve, transcreve o que foi dito e repete de volta. **Zero ações.**
 Serve para medir a latência real do ciclo completo e validar o PT-BR do
 Whisper.
+
+A cadeia é `microfone → VAD (Silero) → STT (faster-whisper) → TTS (Piper)`.
+O wake word ficou **de fora de propósito** e virou a Etapa 0.5: ele é o único
+item da stack ainda não verificado (§8.5), e amarrar a medição de latência a
+uma peça não testada contaminaria justamente o número que esta etapa existe
+para produzir.
+
 Critério de aprovação: latência aceitável na prática, transcrição confiável.
+
+**APROVADA — set/2026**, no teste manual do Léo:
+
+- **STT em 0,30s para 2,72s de fala**, na GPU (confirmada em uso)
+- Transcrição do português correta, ortografia certa
+- **30 segundos em silêncio sem transcrever nada** — o comando fantasma
+  da §7 não apareceu; o VAD na frente do STT fez o trabalho
+- Cadeia ouvir → transcrever → falar funcionando de ponta a ponta
+
+Com isso, o risco de latência da §7 **não se confirmou**, e a arquitetura
+do §4 segue de pé para as próximas etapas.
+
+**Pendência conhecida, não bloqueante:** o Piper lê mal o que não é frase
+corrida — letra solta ("mm" vira o nome da letra M), número com vírgula
+sai pausado demais, e palavra rara ele engole ou pronuncia errado. Não
+vira tarefa agora porque no uso real quem escreve o texto falado é o
+sistema, não o Léo: a entrada é sempre frase corrida. Só volta a importar
+se um dia o Jarvis tiver de ler conteúdo bruto em voz alta.
+
+### Etapa 0.5 — Wake word
+Só depois da Etapa 0 aprovada. Verificar o openWakeWord (§8.5) e colocá-lo na
+frente da cadeia: rodando na CPU, sempre ativo, disparando o resto só quando
+ouvir o nome. Aqui entra o ciclo de vida dormindo → acordado → dormindo
+descrito na §4.
+Critério de aprovação: acorda quando chamado, e não acorda sozinho.
 
 ### Etapa 1 — Abrir coisas
 Primeiras funções com tool calling. Risco baixo: se errar, abre a coisa
@@ -212,9 +250,10 @@ insuportável.
 |---|---|---|
 | Modelo local errando tool calling **em português** | Alta | Poucas funções por etapa; nomes de função em inglês, descrições em PT-BR; testar cedo (Etapa 1) |
 | **Whisper alucinando em silêncio/ruído** (comando fantasma) | **Alta** | VAD obrigatório antes do STT; descartar transcrição sem fala detectada; nunca executar ação destrutiva sem confirmação falada |
-| Latência do ciclo completo alta demais | Alta | Medir na Etapa 0 antes de investir em qualquer outra coisa |
+| Latência do ciclo completo alta demais | ~~Alta~~ — **não se confirmou** | Medida na Etapa 0 (set/2026): STT em 0,30s para 2,72s de fala. Evidência na §5 |
 | Briga por VRAM com jogos/outros projetos | Média | Carregar e descarregar sob demanda |
 | Ryzen 5 3400G (4 núcleos) gargalando o TTS | Média | Piper é leve; se pesar, testar voz menor |
+| Piper lendo mal texto que não é frase corrida (letra solta, número com vírgula, palavra rara) | Baixa | Observado na Etapa 0. Não bloqueia: quem escreve o texto falado é o sistema, sempre em frase corrida. Ver §5 |
 | Ducking por aplicativo no PipeWire ser mais trabalhoso que no Windows | Baixa | Testar cedo, na Etapa 0; se complicar, adiar para depois da Etapa 3 |
 | Escopo crescendo e o projeto morrendo | **Alta** | Este documento. Nada fora dele sem atualizar ele antes |
 
@@ -226,9 +265,10 @@ insuportável.
 2. ~~Definir pasta do projeto e ferramenta~~ — `D:\Jarvis`, Claude Code
    no VSCode.
 3. ~~Sistema operacional~~ — migrado para Linux Mint Cinnamon (ago/2026).
-4. **Confirmar o processador** (dito de memória como Ryzen 5 3400G).
+4. ~~Confirmar o processador~~ — feito (set/2026). É mesmo um **AMD Ryzen 5
+   3400G** (4 núcleos, 8 threads), conferido via `lscpu` na máquina.
 5. **Verificar o wake word** (openWakeWord) — único item da stack ainda
-   não pesquisado.
+   não pesquisado. Virou a **Etapa 0.5** (ver §5), fora da Etapa 0.
 6. **Testar tool calling do qwen3:8b em português** antes de construir
    qualquer coisa em cima. Se falhar feio, a arquitetura muda.
 
