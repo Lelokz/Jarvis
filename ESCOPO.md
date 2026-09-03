@@ -5,9 +5,9 @@
 > qualquer linha. Se algo aqui conflitar com um pedido, pergunte antes de
 > implementar.
 
-Versão: 2.2. Sistema: **Linux Mint Cinnamon**.
+Versão: 2.3. Sistema: **Linux Mint Cinnamon**.
 Pasta: `~/Projetos/Jarvis`. Repositório Git privado no GitHub.
-Etapas 0 e 0.5 aprovadas (set/2026). Da Etapa 0.6 em diante, nada feito.
+Etapas 0, 0.5 e 0.6 aprovadas (set/2026). Da Etapa 1 em diante, nada feito.
 
 ---
 
@@ -65,25 +65,83 @@ conveniência de implementação.
 ```
 [microfone sempre ligado]
         ↓
-  wake word ("Jarvis")          ← leve, roda na CPU, sempre ativo
+  wake word ("hey Jarvis")      ← leve, roda na CPU, sempre ativo
         ↓
-  carrega Whisper + LLM na GPU  ← só agora ocupa VRAM
+  saudação falada → abre janela de 30s
         ↓
-  fala → texto (Whisper)
+  fala → texto (Whisper)        ← residente na VRAM, não recarrega
         ↓
-  LLM local decide qual função chamar (tool calling)
+  LLM local extrai só o NOME do que foi pedido
         ↓
-  executa a função (código Python nosso, lista fechada)
+  Python procura em atalhos.toml (casamento aproximado)
         ↓
+  achou → executa pelo `tipo`   |   não achou → pergunta
+        ↓                            (código Python nosso, lista fechada)
   resposta → fala (Piper)
         ↓
-  janela de 30s aguardando novo comando
+  janela de 30s reinicia quando ELE termina de responder
         ↓
-  sem fala → descarrega modelos → volta a dormir
+  sem fala → volta a dormir (o Whisper continua carregado)
 ```
 
 **Ciclo de vida:** dormindo (só o wake word) → acordado (30s, renovável a
-cada fala) → dormindo. Isso evita segurar VRAM enquanto o Léo joga.
+cada resposta) → dormindo. **Só o ciclo lógico dorme; o Whisper não.**
+
+Esta parte mudou na Etapa 0.6. O plano original era carregar os modelos ao
+acordar e descarregar ao dormir, para não segurar VRAM enquanto o Léo joga. A
+Etapa 0 mediu o custo disso: ~6,4s de carga mais ~1,9s de aquecimento. Pagar
+quase 8 segundos toda vez que ele é chamado destrói a sensação de resposta, que
+é justamente o que a Etapa 0 existiu para proteger. O Whisper passa a ser
+carregado uma vez na subida e fica.
+
+**Custo medido:** ~1,5GB de VRAM em uso total com o Whisper residente
+(`large-v3-turbo`, int8), de 12GB. O assistente imprime esse número na subida.
+
+**Isto vale para o Whisper, não para o LLM.** O `qwen3:8b` da Etapa 1 é outra
+ordem de grandeza de VRAM, e se ele fica residente, se descarrega, ou se usa o
+keep-alive do Ollama é decisão daquela etapa — com medição própria, não por
+analogia com esta.
+
+**Núcleo e clientes** (decidido em set/2026). O Jarvis vai ser acessível
+remotamente no futuro — do celular, talvez do relógio. O PC continua sendo onde
+tudo roda; os outros aparelhos são controles remotos que falam com ele pela
+rede.
+
+Isso não se constrói agora, mas tem uma consequência que é de agora: **o
+sistema nasce partido em dois.**
+
+```
+┌─ NÚCLEO ──────────────────────────────────────┐
+│  texto entra → decide a função → executa      │
+│  → texto sai                                  │
+│                                               │
+│  não sabe o que é microfone, voz, wake word,  │
+│  nem rede                                     │
+└───────────────────────────────────────────────┘
+        ▲
+        │  hoje: chamada de função direta
+        │
+┌─ CLIENTES ────────────────────────────────────┐
+│  • loop de voz (assistente.py) — o primeiro   │
+│  • celular, relógio — depois                  │
+└───────────────────────────────────────────────┘
+```
+
+**Nada de transporte de rede nem API HTTP por enquanto.** Só a linha interna.
+O motivo de traçá-la desde já: se as funções nascerem costuradas dentro do loop
+de voz, separar depois é reescrever; nascendo do lado certo, cada cliente novo
+custa pouco.
+
+Onde a linha passa:
+
+| núcleo | cliente de voz |
+|---|---|
+| `jarvis/nucleo/` — da Etapa 1 em diante | `assistente.py` |
+| decidir a função, casar atalhos, executar | `microfone.py`, `vad.py`, `stt.py`, `tts.py`, `wakeword.py` |
+| log das ações (§2.5) | log de áudio e de wake word |
+
+O núcleo **não imprime e não fala**: devolve texto, e o cliente decide se
+sintetiza, mostra na tela ou manda notificação.
 
 **Áudio:** ao responder, abaixa o volume dos outros programas (ducking) e
 devolve depois. Ele pode falar por cima do jogo. No Linux isso é feito via
@@ -119,6 +177,21 @@ PipeWire, ajustando o volume por fluxo (sink-input).
   Escolhido pela latência mais baixa. É o mais robótico do mercado —
   se incomodar, o upgrade é Kokoro-82M (mais natural, 2-3GB).
   **Peça deliberadamente trocável:** manter atrás de uma interface
+- **Coisas do dia a dia:** `atalhos.toml` (set/2026). Uma tabela escrita à mão
+  com o que o Léo abre todo dia, cada entrada com um `tipo` que diz **como**
+  abrir:
+  ```toml
+  "loft"          = { tipo = "site",   alvo = "https://loftchat.com.br" }
+  "projeto loft"  = { tipo = "vscode", alvo = "~/Projetos/Loft" }
+  "gravações"     = { tipo = "pasta",  alvo = "/media/lelokz/HD/Estudio/Gravacoes" }
+  ```
+  O modelo **só extrai o nome** do que foi pedido; o Python procura na tabela
+  com casamento aproximado, para tolerar erro de transcrição do Whisper. Achou,
+  executa pelo `tipo`. Não achou, pergunta ou cai numa busca genérica.
+  Escolhido por três motivos: tira a ambiguidade das coisas do dia a dia de
+  cima do modelo — que é o risco Alto da §7 —, o Léo edita sem mexer em código,
+  e faz a Etapa 7 ("ensinar coisas novas") virar escrever uma linha aqui em vez
+  de um subsistema
 - **Busca de arquivos:** `plocate` (índice do sistema) ou `fd`
 - **Controle de volume por app (ducking):** PipeWire / `pactl`
 - **Linguagem:** Python
@@ -203,6 +276,10 @@ do outro, ser conservador é o certo.
 (20). Há 0.05 de folga antes que mexer no limiar mude qualquer
 comportamento.
 
+Os números completos da sessão — distribuição, tabela de disparos por limiar de
+0.20 a 0.80, os 30 grupos um a um e os quase-acertos — estão em
+[`medicoes/etapa0.5-wake-word.md`](medicoes/etapa0.5-wake-word.md).
+
 ### Etapa 0.6 — Integração do wake word
 A peça já foi escolhida e medida na Etapa 0.5. Esta etapa é ligá-la: pôr o
 openWakeWord na frente da cadeia do `etapa0.py` — rodando na CPU, sempre ativo,
@@ -227,14 +304,51 @@ auditar os quase-acertos — justamente os frames mais informativos quando se
 investiga por que algo *não* disparou. Resolver nesta etapa, porque a partir da
 integração o áudio dos disparos deixa de ser dado de teste e vira **dado de
 operação**: é com ele que se explica um acordar indevido no meio de um jogo,
-meses depois, quando ninguém lembrar do contexto.
+meses depois, quando ninguém lembrar do contexto. — **Feito:** o
+`assistente.py` grava todo grupo cujo pico passe do piso de 0.10, tenha
+disparado ou não, com teto de arquivos em `logs/audio-wake/`.
+
+**APROVADA — set/2026**, no teste manual do Léo. Os três critérios bateram, e o
+ciclo foi repetido várias vezes seguidas com comportamento igual.
+
+Duas descobertas do uso real:
+
+**As duas pronúncias funcionam.** "hey Jarvis" à inglesa e "Járvis" à
+brasileira, ambas acordam — com o limiar 0.50, o mesmo da medição. Isso
+**contradiz a Etapa 0.5**, onde as 10 falas em português deram zero disparos,
+com picos de 0.141 a 0.409.
+
+A medição da 0.5 foi conservadora, provavelmente por variação de distância ou
+entonação no experimento. Não foi mudança de código: antes de registrar isto,
+o limiar carregado em execução foi conferido (0.50, sem override) e os dois
+caminhos de alimentação do modelo foram comparados com o mesmo áudio em 7
+alinhamentos — o do experimento (blocos de 1280 direto) e o do assistente (512
+acumulados) — dando média 0,146 contra 0,149, sem viés sistemático.
+
+**30 minutos dormindo, com som no PC e o Léo falando outras coisas, sem nenhum
+despertar indevido.** Amostra três vezes maior que os 10 minutos da 0.5, e
+agora com barulho por cima.
 
 ### Etapa 1 — Abrir coisas
-Primeiras funções com tool calling. Risco baixo: se errar, abre a coisa
-errada e pronto.
-- `abrir_programa(nome)`
-- `abrir_pasta(caminho)`
-- `abrir_site(url_ou_nome, navegador="Brave")`
+Primeiro tool calling. Risco baixo: se errar, abre a coisa errada e pronto.
+
+**O modelo enxerga uma função só: `abrir(nome)`.** Ele extrai o nome do que foi
+pedido, e nada mais. Quem decide **como** abrir é o `tipo` da entrada no
+`atalhos.toml` (§4) — site, pasta, VS Code —, não o modelo. Trocar três funções
+por uma é deliberado: o §7 marca "modelo errando tool calling em português"
+como risco Alto, e cada escolha a menos é uma chance a menos de errar.
+
+Também é a etapa em que o **núcleo** da §4 nasce: `jarvis/nucleo/` recebe
+texto, decide, executa e devolve texto, sem saber que existe microfone. O
+`assistente.py` vira o primeiro cliente.
+
+Não achou o nome na tabela: candidato próximo → pergunta em voz alta ("você
+quis dizer gravações?"); nada perto → diz que não conhece. Busca genérica é a
+Etapa 2.
+
+**Antes de qualquer código desta etapa**, resolver a pendência §8.6: testar o
+tool calling do `qwen3:8b` em português, isolado e por texto. Se falhar feio, a
+arquitetura muda.
 
 ### Etapa 2 — Buscar
 O Jarvis não precisa saber onde as coisas ficam. Ele precisa saber procurar.

@@ -16,6 +16,7 @@ RAIZ = Path(__file__).resolve().parent.parent
 @dataclass(frozen=True)
 class Persona:
     nome: str
+    saudacao: str
 
 
 @dataclass(frozen=True)
@@ -53,8 +54,22 @@ class Tts:
 
 
 @dataclass(frozen=True)
+class WakeWord:
+    modelo: str
+    limiar: float
+    piso_registro: float
+    refratario_s: float
+
+
+@dataclass(frozen=True)
+class Ciclo:
+    janela_s: float
+
+
+@dataclass(frozen=True)
 class Log:
     salvar_audio: bool
+    max_audios_wake: int
 
 
 @dataclass(frozen=True)
@@ -64,6 +79,8 @@ class Config:
     vad: Vad
     stt: Stt
     tts: Tts
+    wakeword: WakeWord
+    ciclo: Ciclo
     log: Log
     raiz: Path
 
@@ -75,6 +92,10 @@ class Config:
     def dir_logs(self) -> Path:
         return self.raiz / "logs"
 
+    @property
+    def dir_modelos_wake(self) -> Path:
+        return self.raiz / "modelos-wakeword"
+
 
 _SECOES = {
     "persona": Persona,
@@ -82,6 +103,8 @@ _SECOES = {
     "vad": Vad,
     "stt": Stt,
     "tts": Tts,
+    "wakeword": WakeWord,
+    "ciclo": Ciclo,
     "log": Log,
 }
 

@@ -33,7 +33,7 @@ from pathlib import Path
 
 import numpy as np
 
-from jarvis import microfone
+from jarvis import microfone, wakeword
 
 RAIZ = Path(__file__).resolve().parent
 DIR_MODELOS = RAIZ / "modelos-wakeword"
@@ -203,25 +203,14 @@ class Sessao:
 
 
 def carregar_modelo(caminho_modelo: Path):
-    """Instancia o openWakeWord forçando ONNX.
+    """Carrega o modelo pelos mesmos parâmetros que o assistente usa.
 
-    `inference_framework="onnx"` não é preferência: o wheel do tflite-runtime
-    não existe para Python 3.12, e é só com onnx que o import preguiçoso do
-    tflite nunca é acionado. Os caminhos dos modelos são explícitos para tudo
-    ficar em modelos-wakeword/, em vez de escondido dentro da .venv.
+    A implementação mora em `jarvis/wakeword.py` desde a Etapa 0.6. Ter uma
+    cópia aqui e outra lá seria o jeito de os dois divergirem em silêncio — e
+    no dia em que divergissem, a medição desta etapa deixaria de valer para o
+    que roda de verdade.
     """
-    from openwakeword.model import Model
-
-    return Model(
-        wakeword_models=[str(caminho_modelo)],
-        melspec_model_path=str(DIR_MODELOS / "melspectrogram.onnx"),
-        embedding_model_path=str(DIR_MODELOS / "embedding_model.onnx"),
-        inference_framework="onnx",
-        # Desligado de propósito: a medição "ele dispara sozinho?" precisa do
-        # falso positivo bruto do wake word. Com o VAD filtrando na frente,
-        # mediríamos o conjunto, não o modelo.
-        vad_threshold=0,
-    )
+    return wakeword.carregar_modelo(caminho_modelo, DIR_MODELOS)
 
 
 def checar_nivel(mic: microfone.Microfone, segundos: float = 1.0) -> None:

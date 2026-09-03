@@ -7,6 +7,9 @@
 [persona]
 nome = "Jarvis"
 
+# O que ele fala ao acordar. Curto: é confirmação de que ouviu, não conversa.
+saudacao = "Pois não?"
+
 [audio]
 # "" usa o microfone padrão do sistema. Para fixar outro, use um trecho do
 # nome — `python etapa0.py --listar-dispositivos` mostra a lista.
@@ -74,8 +77,39 @@ voz = "pt_BR-faber-medium"
 # Maior = mais devagar (é o length_scale do Piper).
 velocidade = 1.0
 
+[wakeword]
+# Escolhido e medido na Etapa 0.5: 20/20 de acerto na pronúncia inglesa
+# ("hey Jarvis", não "Járvis"), zero falso positivo em 10 minutos.
+modelo = "hey_jarvis_v0.1"
+
+# 0.50 está num platô — de 0.45 a 0.50 o resultado é idêntico. Há 0.05 de
+# folga para baixo antes que mexer aqui mude qualquer comportamento.
+limiar = 0.50
+
+# Abaixo do limiar, mas alto o bastante para valer gravar o áudio. É o que
+# permite auditar um quase-acerto depois: o log diz o score, o .wav diz o que
+# o microfone ouviu.
+piso_registro = 0.10
+
+# Um "hey Jarvis" pontua alto por vários frames seguidos. Sem isto, uma fala
+# viraria vários acordares.
+refratario_s = 1.5
+
+[ciclo]
+# Quanto tempo ele fica escutando depois de acordar (ESCOPO §4).
+# O relógio reinicia quando ELE termina de responder, não quando você para
+# de falar.
+janela_s = 30.0
+
 [log]
 # Grava um .wav por segmento aprovado pelo VAD, em logs/audio/, com o mesmo
 # timestamp da linha do .jsonl. Serve para separar erro de microfone de erro
 # de modelo quando uma transcrição sair errada.
+#
+# Atenção: num assistente ligado o dia todo isto grava toda frase que você
+# falar dentro da janela — bem mais áudio do que era num teste de laboratório.
 salvar_audio = true
+
+# Teto de arquivos em logs/audio-wake/. Ao passar do limite, o mais antigo é
+# apagado. Processo que fica ligado o dia todo não pode crescer sem limite.
+max_audios_wake = 200

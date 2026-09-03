@@ -87,6 +87,31 @@ class DetectorDeFala:
 
     # ----------------------------------------------------------------------
 
+    @property
+    def falando(self) -> bool:
+        """Há um segmento aberto agora.
+
+        O ciclo de vida consulta isto para não dormir no meio de uma frase: se
+        a janela vencer enquanto alguém está falando, esperar o segmento fechar
+        é melhor do que cortar a pessoa e dormir com ela falando.
+        """
+        return self._estado is _Estado.FALANDO
+
+    def reiniciar(self) -> None:
+        """Zera o estado entre despertares.
+
+        O Silero é uma LSTM e o pré-roll é um buffer: nenhum dos dois deve
+        atravessar um período em que o detector ficou sem receber áudio.
+        """
+        self._estado = _Estado.SILENCIO
+        self._acumulado = []
+        self._pre_roll.clear()
+        self._blocos_de_fala = 0
+        self._silencio_seguido = 0
+        self._blocos_com_fala = 0
+        if hasattr(self._vad, "reset"):
+            self._vad.reset()
+
     def processar(self, bloco: bytes) -> Segmento | None:
         """Consome um bloco do microfone. Devolve o segmento quando fecha um."""
         if len(bloco) != self.bytes_por_bloco:
