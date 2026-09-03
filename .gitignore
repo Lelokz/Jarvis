@@ -11,3 +11,6 @@ logs/
 
 # áudio avulso (autoteste, experimentos)
 *.wav
+
+# modelos do experimento de wake word (~9MB, baixados sob demanda)
+modelos-wakeword/

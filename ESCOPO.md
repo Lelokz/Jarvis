@@ -5,10 +5,9 @@
 > qualquer linha. Se algo aqui conflitar com um pedido, pergunte antes de
 > implementar.
 
-Versão: 2.1. Sistema: **Linux Mint Cinnamon**.
+Versão: 2.2. Sistema: **Linux Mint Cinnamon**.
 Pasta: `~/Projetos/Jarvis`. Repositório Git privado no GitHub.
-Etapa 0 implementada e aprovada (set/2026). Da Etapa 0.5 em diante,
-nada feito.
+Etapas 0 e 0.5 aprovadas (set/2026). Da Etapa 1 em diante, nada feito.
 
 ---
 
@@ -91,7 +90,17 @@ devolve depois. Ele pode falar por cima do jogo. No Linux isso é feito via
 PipeWire, ajustando o volume por fluxo (sink-input).
 
 **Stack decidida** (pesquisada em ago/2026):
-- **Wake word:** openWakeWord — *ainda não verificado; adiado para a Etapa 0.5*
+- **Wake word:** openWakeWord v0.6.0, modelo pré-treinado `hey_jarvis`,
+  limiar 0.50, **pronúncia inglesa**. Verificado e aprovado na Etapa 0.5
+  (set/2026) — ver §5. Não treinamos modelo customizado: o pronto resolve.
+  Roda na CPU em ONNX, custando **2,8ms por frame de 80ms** (~3,5% de um
+  núcleo em tempo real), o que cabe num processo sempre ligado.
+  **Restrição de instalação:** o `tflite-runtime` é dependência dura no
+  Linux e não tem wheel para cp312, então `pip install openwakeword`
+  falha no nosso Python 3.12. Instala-se com `--no-deps` mais `requests`,
+  `scipy` e `scikit-learn` à mão, usando `inference_framework="onnx"` —
+  aí o import do tflite nunca é acionado. Detalhes em
+  `requirements-wakeword.txt`
 - **VAD (detector de voz):** Silero, via pacote `pysilero-vad` (set/2026).
   Obrigatório, antes do STT — ver risco na §7. Escolhido no lugar do pacote
   `silero-vad` oficial porque aquele exige torch + torchaudio (~2,5GB) como
@@ -128,10 +137,10 @@ Serve para medir a latência real do ciclo completo e validar o PT-BR do
 Whisper.
 
 A cadeia é `microfone → VAD (Silero) → STT (faster-whisper) → TTS (Piper)`.
-O wake word ficou **de fora de propósito** e virou a Etapa 0.5: ele é o único
-item da stack ainda não verificado (§8.5), e amarrar a medição de latência a
-uma peça não testada contaminaria justamente o número que esta etapa existe
-para produzir.
+O wake word ficou **de fora de propósito** e virou a Etapa 0.5: na época ele
+era o único item da stack ainda não verificado, e amarrar a medição de
+latência a uma peça não testada contaminaria justamente o número que esta
+etapa existe para produzir. (Verificado depois, na Etapa 0.5.)
 
 Critério de aprovação: latência aceitável na prática, transcrição confiável.
 
@@ -159,6 +168,50 @@ frente da cadeia: rodando na CPU, sempre ativo, disparando o resto só quando
 ouvir o nome. Aqui entra o ciclo de vida dormindo → acordado → dormindo
 descrito na §4.
 Critério de aprovação: acorda quando chamado, e não acorda sozinho.
+
+**APROVADA — set/2026.** Rodada como experimento isolado
+(`experimento_wakeword.py`), sem integrar ao loop. Os dois critérios
+bateram:
+
+- **Acorda quando chamado:** 20 falas de "hey Jarvis" na pronúncia
+  inglesa, 20 disparos. **100%.** As pronúncias foram intercaladas, não
+  feitas em bloco — então o resultado não veio de um trecho favorável da
+  sessão.
+- **Não acorda sozinho:** 10 minutos falando outras coisas, **zero frames
+  acima do piso de 0.10**. Nenhum falso positivo, e nada que chegasse
+  perto.
+
+**Decisão: pronúncia inglesa, limiar 0.50.**
+
+O modelo **responde** ao "Járvis" abrasileirado — não é surdo a ele —, mas
+pontuando 2 a 3 vezes menos: os picos das falas em português ficam entre
+**0.141 e 0.409**, contra **0.658 a 0.988** da versão inglesa. Há uma
+lacuna de **0.249** sem nenhum grupo no meio: a separação é limpa.
+
+Baixar o limiar para 0.30 pegaria 9 das 10 falas em português, e foi
+**descartado**. O motivo não é o custo do falso negativo: é que os 10
+minutos de escuta passiva não geraram nenhum frame acima de 0.10, então
+**não existe evidência nenhuma sobre como fala comum se distribui na faixa
+0.30–0.45**. Descer o limiar seria às cegas. Some-se a assimetria de
+custo: falso negativo se resolve repetindo a palavra; falso positivo
+acorda o Jarvis no meio de um jogo. Sendo o erro barato de um lado e caro
+do outro, ser conservador é o certo.
+
+**0.50 está num platô:** de 0.45 a 0.50 o número de disparos é idêntico
+(20). Há 0.05 de folga antes que mexer no limiar mude qualquer
+comportamento.
+
+**Pendência técnica, registrada e não corrigida:** o
+`experimento_wakeword.py` só grava `.wav` quando há disparo, o que torna
+impossível auditar os quase-acertos — justamente os frames mais
+interessantes quando se investiga por que algo *não* disparou. Corrigir
+quando o wake word virar integração de verdade.
+
+**Atenção ao ler esta etapa:** a aprovação cobre a **escolha da peça** —
+modelo, pronúncia e limiar, medidos em experimento isolado. A integração
+descrita no parágrafo acima **não foi construída**: o wake word ainda não
+está na frente da cadeia, e o ciclo dormindo → acordado → dormindo da §4
+continua sem existir. Isso fica para quando for integrar.
 
 ### Etapa 1 — Abrir coisas
 Primeiras funções com tool calling. Risco baixo: se errar, abre a coisa
@@ -254,6 +307,7 @@ insuportável.
 | Briga por VRAM com jogos/outros projetos | Média | Carregar e descarregar sob demanda |
 | Ryzen 5 3400G (4 núcleos) gargalando o TTS | Média | Piper é leve; se pesar, testar voz menor |
 | Piper lendo mal texto que não é frase corrida (letra solta, número com vírgula, palavra rara) | Baixa | Observado na Etapa 0. Não bloqueia: quem escreve o texto falado é o sistema, sempre em frase corrida. Ver §5 |
+| **Sem dados de falso positivo na faixa 0.10–0.50** do wake word — a escuta passiva de 10 min não produziu nada acima do piso | Baixa | Só importa se um dia quisermos baixar o limiar de 0.50. O teste seria rodar `experimento_wakeword.py --piso 0.02` por uma hora em silêncio. Enquanto o limiar for 0.50, é irrelevante |
 | Ducking por aplicativo no PipeWire ser mais trabalhoso que no Windows | Baixa | Testar cedo, na Etapa 0; se complicar, adiar para depois da Etapa 3 |
 | Escopo crescendo e o projeto morrendo | **Alta** | Este documento. Nada fora dele sem atualizar ele antes |
 
@@ -267,8 +321,9 @@ insuportável.
 3. ~~Sistema operacional~~ — migrado para Linux Mint Cinnamon (ago/2026).
 4. ~~Confirmar o processador~~ — feito (set/2026). É mesmo um **AMD Ryzen 5
    3400G** (4 núcleos, 8 threads), conferido via `lscpu` na máquina.
-5. **Verificar o wake word** (openWakeWord) — único item da stack ainda
-   não pesquisado. Virou a **Etapa 0.5** (ver §5), fora da Etapa 0.
+5. ~~Verificar o wake word~~ — feito (set/2026) na **Etapa 0.5**. O
+   openWakeWord v0.6.0 com o modelo pronto `hey_jarvis` foi testado e
+   aprovado; ver §4 e §5. **A stack não tem mais item não verificado.**
 6. **Testar tool calling do qwen3:8b em português** antes de construir
    qualquer coisa em cima. Se falhar feio, a arquitetura muda.
 
