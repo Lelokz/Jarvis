@@ -7,7 +7,7 @@
 
 Versão: 2.2. Sistema: **Linux Mint Cinnamon**.
 Pasta: `~/Projetos/Jarvis`. Repositório Git privado no GitHub.
-Etapas 0 e 0.5 aprovadas (set/2026). Da Etapa 1 em diante, nada feito.
+Etapas 0 e 0.5 aprovadas (set/2026). Da Etapa 0.6 em diante, nada feito.
 
 ---
 
@@ -162,11 +162,13 @@ vira tarefa agora porque no uso real quem escreve o texto falado é o
 sistema, não o Léo: a entrada é sempre frase corrida. Só volta a importar
 se um dia o Jarvis tiver de ler conteúdo bruto em voz alta.
 
-### Etapa 0.5 — Wake word
-Só depois da Etapa 0 aprovada. Verificar o openWakeWord (§8.5) e colocá-lo na
-frente da cadeia: rodando na CPU, sempre ativo, disparando o resto só quando
-ouvir o nome. Aqui entra o ciclo de vida dormindo → acordado → dormindo
-descrito na §4.
+### Etapa 0.5 — Wake word: escolha da peça
+Só depois da Etapa 0 aprovada. Verificar o openWakeWord e decidir **qual peça
+usar**: modelo, pronúncia e limiar, escolhidos com medição e não por intuição.
+
+Etapa de experimento, não de implementação. Roda num script isolado, sem tocar
+no `etapa0.py`. Ligar o wake word na cadeia é a Etapa 0.6.
+
 Critério de aprovação: acorda quando chamado, e não acorda sozinho.
 
 **APROVADA — set/2026.** Rodada como experimento isolado
@@ -201,17 +203,31 @@ do outro, ser conservador é o certo.
 (20). Há 0.05 de folga antes que mexer no limiar mude qualquer
 comportamento.
 
-**Pendência técnica, registrada e não corrigida:** o
-`experimento_wakeword.py` só grava `.wav` quando há disparo, o que torna
-impossível auditar os quase-acertos — justamente os frames mais
-interessantes quando se investiga por que algo *não* disparou. Corrigir
-quando o wake word virar integração de verdade.
+### Etapa 0.6 — Integração do wake word
+A peça já foi escolhida e medida na Etapa 0.5. Esta etapa é ligá-la: pôr o
+openWakeWord na frente da cadeia do `etapa0.py` — rodando na CPU, sempre ativo,
+disparando o resto só quando ouvir o nome — e montar o ciclo de vida
+dormindo → acordado → dormindo descrito na §4, com a janela de 30s renovável a
+cada fala.
 
-**Atenção ao ler esta etapa:** a aprovação cobre a **escolha da peça** —
-modelo, pronúncia e limiar, medidos em experimento isolado. A integração
-descrita no parágrafo acima **não foi construída**: o wake word ainda não
-está na frente da cadeia, e o ciclo dormindo → acordado → dormindo da §4
-continua sem existir. Isso fica para quando for integrar.
+É aqui que a arquitetura da §4 deixa de ser desenho e vira comportamento: até a
+Etapa 0.5, o Jarvis não dorme nem acorda — ele só escuta o tempo todo.
+
+Critério de aprovação, os três juntos:
+
+1. **Acorda quando chamado com jogo ou música tocando.** Silêncio de
+   laboratório não vale: o uso real é com barulho por cima.
+2. **Escuta pela janela definida no escopo** — os 30s da §4, renováveis a cada
+   fala.
+3. **Volta a dormir sozinho**, sem o Léo precisar fazer nada.
+
+**Pendência herdada da Etapa 0.5, a resolver aqui:** o
+`experimento_wakeword.py` só grava `.wav` quando há disparo, o que impede
+auditar os quase-acertos — justamente os frames mais informativos quando se
+investiga por que algo *não* disparou. Resolver nesta etapa, porque a partir da
+integração o áudio dos disparos deixa de ser dado de teste e vira **dado de
+operação**: é com ele que se explica um acordar indevido no meio de um jogo,
+meses depois, quando ninguém lembrar do contexto.
 
 ### Etapa 1 — Abrir coisas
 Primeiras funções com tool calling. Risco baixo: se errar, abre a coisa
