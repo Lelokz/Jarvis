@@ -1,0 +1,17 @@
+# Atalhos do Jarvis — as coisas que o Léo abre todo dia.
+#
+# O modelo NÃO lê este arquivo para decidir: ele só extrai o nome que você
+# falou. Quem procura aqui é o Python, com casamento aproximado, para tolerar
+# erro de transcrição do Whisper ("gravasoes" ainda acha "gravações").
+#
+# `tipo` diz COMO abrir. Os tipos existentes estão em jarvis/nucleo/acoes.py:
+#   site    → abre a URL no navegador
+#   pasta   → abre no gerenciador de arquivos
+#   vscode  → abre a pasta como projeto no VS Code
+#
+# Ensinar uma coisa nova ao Jarvis é acrescentar uma linha aqui. Não precisa
+# mexer em código, e não precisa reiniciar o modelo.
+
+"loft" = { tipo = "site", alvo = "https://loftchat.com.br" }
+"projeto loft" = { tipo = "vscode", alvo = "~/Projetos/Loft" }
+"gravações" = { tipo = "pasta", alvo = "/media/lelokz/HD/Estudio/Gravacoes" }

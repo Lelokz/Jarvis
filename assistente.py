@@ -1,12 +1,16 @@
 #!/usr/bin/env python3
-"""Jarvis — o assistente com wake word e ciclo de vida (Etapa 0.6).
+"""Jarvis — o cliente de voz.
 
 Dorme escutando só o wake word. Ao ouvir "hey Jarvis", cumprimenta, abre uma
-janela de 30s e usa a cadeia da Etapa 0 (VAD → Whisper → Piper) enquanto ela
-durar. Sem fala, volta a dormir sozinho.
+janela de 30s e escuta. Sem fala, volta a dormir sozinho.
 
-Ainda sem LLM e sem ações: dentro da janela ele ecoa o que você disse, como na
-Etapa 0. O modelo entra na Etapa 1.
+**Este arquivo é um cliente, não o Jarvis** (ESCOPO §4). Ele cuida de ouvir e
+falar: microfone, wake word, VAD, Whisper, Piper e o ciclo de vida. Quem decide
+o que fazer e executa é `jarvis/nucleo/`, do outro lado da linha — este laço
+entrega texto e recebe texto, e não sabe o que é atalho, tabela ou LLM.
+
+É essa divisão que vai permitir um cliente de celular depois sem reescrever
+nada: só o transporte muda.
 
 O `etapa0.py` continua existindo e intocado — é o banco de medição de latência
 e o `--autoteste`, que é o primeiro diagnóstico quando algo aqui quebrar.
@@ -26,6 +30,7 @@ import numpy as np
 
 from jarvis import config, cronometro, microfone, tts, wakeword
 from jarvis.cronometro import Tempos
+from jarvis.nucleo.nucleo import ErroDoCerebro, Nucleo
 from jarvis.registro import Registrador
 from jarvis.stt import ErroDeCuda, Transcritor
 from jarvis.vad import DetectorDeFala
@@ -103,11 +108,13 @@ class Ciclo:
         detector_ww: wakeword.Detector,
         transcritor: Transcritor,
         voz: tts.Voz,
+        nucleo: Nucleo,
         registrador: Registrador,
         portao,
         dispositivo_saida: int | None,
     ) -> None:
         self.cfg = cfg
+        self.nucleo = nucleo
         self.vad = detector_vad
         self.ww = detector_ww
         self.transcritor = transcritor
@@ -122,6 +129,7 @@ class Ciclo:
 
         self.despertares = 0
         self.frases = 0
+        self.acoes = 0
         self.vazias = 0
         self.eventos_wake = 0
         self.resumo = cronometro.Resumo()
@@ -246,7 +254,15 @@ class Ciclo:
             return
 
         print(f'             você:   "{transcricao.texto}"')
-        fala = self._falar(transcricao.texto)
+
+        # Aqui o cliente entrega o texto e recebe texto. Tudo o que decide e
+        # executa está do outro lado da linha do ESCOPO §4 — este laço não
+        # sabe o que é atalho, tabela ou LLM.
+        resposta = self.nucleo.processar(transcricao.texto)
+        if resposta.acao:
+            self.acoes += 1
+            self.registrador.registrar_estado("acao", acao=resposta.acao)
+        fala = self._falar(resposta.texto)
 
         tempos = Tempos(
             duracao_segmento_s=segmento.duracao_total_s,
@@ -287,6 +303,7 @@ class Ciclo:
             REGUA,
             f"  despertares{self.despertares:>43}",
             f"  frases dentro da janela{self.frases:>31}",
+            f"  ações executadas{self.acoes:>38}",
             f"  frases por despertar{por_despertar:>34.1f}",
             f"  transcrições vazias{self.vazias:>35}",
             f"  eventos de wake word gravados{self.eventos_wake:>25}",
@@ -328,13 +345,30 @@ def _montar(cfg: config.Config):
     voz = tts.criar_voz(cfg.tts, cfg.dir_vozes)
     _partida("Piper", voz.nome, voz.segundos_de_carga)
 
+    inicio = time.monotonic()
+    nucleo = Nucleo(cfg)
+    _partida("núcleo", nucleo.descricao, time.monotonic() - inicio)
+
+    # O cliente lê os nomes do núcleo e entrega ao Whisper como vocabulário.
+    # A direção é permitida pela linha da §4: cliente conhece o núcleo, o
+    # núcleo não conhece o cliente. Medido: sem vocabulário 4/15 dos nomes
+    # sobrevivem à fala rápida, com vocabulário 9/15, sem custo de latência.
+    nomes = [a.nome for a in nucleo.tabela.atalhos]
+    transcritor.usar_vocabulario(nomes)
+    _partida(
+        "vocabulário",
+        f"{len(nomes)} nomes do atalhos.toml"
+        if transcritor.vocabulario
+        else "desligado no config.toml",
+    )
+
     # O Whisper fica residente: a Etapa 0 mediu ~6,4s de carga mais ~1,9s de
     # aquecimento, e pagar isso a cada acordar mataria a sensação de resposta.
     # Só o ciclo lógico dorme.
     _partida("VRAM em uso", f"{_vram()}   (residente)")
     _partida("janela", f"{cfg.ciclo.janela_s:g} s")
 
-    return detector_vad, detector_ww, transcritor, voz
+    return detector_vad, detector_ww, transcritor, voz, nucleo
 
 
 # ---------------------------------------------------------------------------
@@ -354,8 +388,8 @@ def teste_ciclo(cfg: config.Config) -> int:
     cfg = dataclasses.replace(cfg, ciclo=config.Ciclo(janela_s=janela_curta))
 
     try:
-        detector_vad, detector_ww, transcritor, voz = _montar(cfg)
-    except (ErroDeCuda, wakeword.ModeloAusente, FileNotFoundError) as e:
+        detector_vad, detector_ww, transcritor, voz, nucleo = _montar(cfg)
+    except (ErroDeCuda, ErroDoCerebro, wakeword.ModeloAusente, FileNotFoundError) as e:
         print(f"\n{e}\n", file=sys.stderr)
         return 1
 
@@ -365,6 +399,7 @@ def teste_ciclo(cfg: config.Config) -> int:
         detector_ww=detector_ww,
         transcritor=transcritor,
         voz=voz,
+        nucleo=nucleo,
         registrador=Registrador.criar(cfg, prefixo="teste-ciclo"),
         portao=_PortaoFalso(),
         dispositivo_saida=None,
@@ -415,7 +450,7 @@ def teste_ciclo(cfg: config.Config) -> int:
 
 
 def conversar(cfg: config.Config) -> int:
-    print(f"\n{cfg.persona.nome} — assistente (Etapa 0.6)")
+    print(f"\n{cfg.persona.nome} — cliente de voz")
 
     try:
         indice_entrada = microfone.resolver(cfg.audio.dispositivo_entrada, entrada=True)
@@ -426,11 +461,11 @@ def conversar(cfg: config.Config) -> int:
     _partida("microfone", microfone.nome_do_dispositivo(indice_entrada, entrada=True))
 
     try:
-        detector_vad, detector_ww, transcritor, voz = _montar(cfg)
+        detector_vad, detector_ww, transcritor, voz, nucleo = _montar(cfg)
     except ErroDeCuda as e:
         print(f"\nCUDA não subiu:\n{e}\n", file=sys.stderr)
         return 1
-    except (wakeword.ModeloAusente, FileNotFoundError) as e:
+    except (ErroDoCerebro, wakeword.ModeloAusente, FileNotFoundError) as e:
         print(f"\n{e}\n", file=sys.stderr)
         return 1
 
@@ -456,6 +491,7 @@ def conversar(cfg: config.Config) -> int:
                 detector_ww=detector_ww,
                 transcritor=transcritor,
                 voz=voz,
+                nucleo=nucleo,
                 registrador=registrador,
                 portao=mic,
                 dispositivo_saida=indice_saida,

@@ -17,6 +17,7 @@ RAIZ = Path(__file__).resolve().parent.parent
 class Persona:
     nome: str
     saudacao: str
+    nao_sei: str
 
 
 @dataclass(frozen=True)
@@ -44,6 +45,7 @@ class Stt:
     compute_type: str
     idioma: str
     beam_size: int
+    usar_vocabulario: bool
 
 
 @dataclass(frozen=True)
@@ -51,6 +53,21 @@ class Tts:
     motor: str
     voz: str
     velocidade: float
+
+
+@dataclass(frozen=True)
+class Llm:
+    url: str
+    modelo: str
+    keep_alive: str
+    timeout_s: int
+
+
+@dataclass(frozen=True)
+class Acoes:
+    comando_site: str
+    comando_pasta: str
+    comando_vscode: str
 
 
 @dataclass(frozen=True)
@@ -79,6 +96,8 @@ class Config:
     vad: Vad
     stt: Stt
     tts: Tts
+    llm: Llm
+    acoes: Acoes
     wakeword: WakeWord
     ciclo: Ciclo
     log: Log
@@ -103,6 +122,8 @@ _SECOES = {
     "vad": Vad,
     "stt": Stt,
     "tts": Tts,
+    "llm": Llm,
+    "acoes": Acoes,
     "wakeword": WakeWord,
     "ciclo": Ciclo,
     "log": Log,

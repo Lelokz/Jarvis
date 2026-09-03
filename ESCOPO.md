@@ -7,7 +7,7 @@
 
 Versão: 2.3. Sistema: **Linux Mint Cinnamon**.
 Pasta: `~/Projetos/Jarvis`. Repositório Git privado no GitHub.
-Etapas 0, 0.5 e 0.6 aprovadas (set/2026). Da Etapa 1 em diante, nada feito.
+Etapas 0 a 1 aprovadas (set/2026). Da Etapa 2 em diante, nada feito.
 
 ---
 
@@ -348,7 +348,44 @@ Etapa 2.
 
 **Antes de qualquer código desta etapa**, resolver a pendência §8.6: testar o
 tool calling do `qwen3:8b` em português, isolado e por texto. Se falhar feio, a
-arquitetura muda.
+arquitetura muda. — **Feito**, com 15/15. Ver abaixo.
+
+**APROVADA — set/2026**, no teste manual do Léo: "abre o loft" abre o Brave,
+"abre o projeto loft" abre o VS Code, e atalho inexistente responde direito.
+
+O que foi medido, num experimento isolado e por texto
+(`experimento_toolcalling.py`, dados em `medicoes/`):
+
+- **Tool calling do `qwen3:8b` em português: 15/15 na decisão, zero resoluções
+  erradas.** Nunca chamou `abrir` para "que horas são?" ou "toca uma música", e
+  nunca deixou de chamar quando devia. **Isto resolve a §8.6, aberta desde o
+  escopo inicial: a arquitetura de lista fechada se sustenta.**
+- **Lista de nomes no prompt:** 70% de resolução direta contra 60% sem ela, e
+  0,49s de latência média contra 0,91s, com muito menos variação. A tabela
+  segue sendo a fonte da verdade e o casamento em Python segue validando — o
+  prompt só ajuda o modelo a extrair o nome já perto da forma canônica.
+- **STT com `initial_prompt` + `hotwords` alimentados pelo `atalhos.toml`:**
+  3/15 → 9/15 de nomes sobrevivendo à fala rápida, com latência estável
+  (0,269s → 0,260s). `beam_size` **fica em 1** — medido, não ajuda com o
+  vocabulário ligado e custa até 24% mais tempo. Detalhes em
+  [`medicoes/etapa1-stt.md`](medicoes/etapa1-stt.md).
+- **Carga do LLM:** ~0,5s quente, ~6s frio. `keep_alive = "5m"`.
+- **VRAM com os dois modelos:** 7,0GB de 12GB; cai para ~1,5GB quando o Ollama
+  solta o `qwen3`.
+
+**Duas limitações conhecidas, não bloqueantes:**
+
+**O corte do casamento em 0.92.** Semelhança de caracteres não separa erro do
+Whisper de palavra diferente parecida: "gravitações" pontua 0.90 contra
+"gravações", **acima** de "gravasoes" com 0.89, que é o erro legítimo. Nenhum
+limiar acerta os dois. O corte alto faz 3 de 10 comandos pedirem confirmação em
+vez de agir direto. Aceito pela assimetria de custo: errar a pergunta custa uma
+palavra, errar a ação abre a coisa errada.
+
+**A medição do STT foi em áudio sintetizado no Piper**, porque o microfone
+estava mutado. Os números absolutos são pessimistas — voz sintética, velocidade
+exagerada e palavra inglesa dita por voz portuguesa. A comparação entre
+configurações é que vale.
 
 ### Etapa 2 — Buscar
 O Jarvis não precisa saber onde as coisas ficam. Ele precisa saber procurar.
@@ -454,8 +491,11 @@ insuportável.
 5. ~~Verificar o wake word~~ — feito (set/2026) na **Etapa 0.5**. O
    openWakeWord v0.6.0 com o modelo pronto `hey_jarvis` foi testado e
    aprovado; ver §4 e §5. **A stack não tem mais item não verificado.**
-6. **Testar tool calling do qwen3:8b em português** antes de construir
-   qualquer coisa em cima. Se falhar feio, a arquitetura muda.
+6. ~~Testar tool calling do qwen3:8b em português~~ — feito (set/2026) na
+   **Etapa 1**: 15/15 na decisão, zero resoluções erradas. A arquitetura de
+   lista fechada se sustenta; ver §5.
+
+**Não há mais pendência aberta nesta seção.**
 
 ---
 

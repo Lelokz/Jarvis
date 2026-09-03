@@ -1,4 +1,4 @@
-# Jarvis — configuração da Etapa 0
+# Jarvis — configuração
 #
 # Tudo que dá pra ajustar sem mexer em código está aqui.
 # O ESCOPO §3 exige que a persona fique fora do código, porque a ideia é
@@ -9,6 +9,31 @@ nome = "Jarvis"
 
 # O que ele fala ao acordar. Curto: é confirmação de que ouviu, não conversa.
 saudacao = "Pois não?"
+
+# Quando entendeu a frase mas não é nada que ele saiba fazer ainda.
+nao_sei = "Isso eu ainda não sei fazer."
+
+[llm]
+url = "http://localhost:11434"
+modelo = "qwen3:8b"
+
+# Quanto tempo o Ollama segura o modelo na VRAM depois do último comando.
+# "5m" é o padrão dele, e o meio-termo escolhido na Etapa 1: o Whisper já fica
+# residente (~1,1GB) e o qwen3:8b pesa ~6GB — segurar os dois o tempo todo
+# tiraria dos jogos a VRAM que o ESCOPO §4 queria proteger.
+# Medido: comando com o modelo quente ~0,5s; primeiro comando depois de
+# descarregado ~6s. Use "-1" para deixar residente, "0" para descarregar já.
+keep_alive = "5m"
+timeout_s = 120
+
+[acoes]
+# Os executáveis de cada tipo do atalhos.toml. Ficam aqui para você trocar sem
+# mexer em código. O modelo NUNCA escreve nada disto: ele só devolve um nome,
+# que vira chave de busca na tabela.
+# Nesta máquina o xdg-open já abre no Brave, que é o navegador padrão.
+comando_site = "xdg-open"
+comando_pasta = "xdg-open"
+comando_vscode = "code"
 
 [audio]
 # "" usa o microfone padrão do sistema. Para fixar outro, use um trecho do
@@ -64,8 +89,16 @@ compute_type = "int8"
 # Idioma fixo: pula a etapa de detecção automática e economiza tempo.
 idioma = "pt"
 
-# 1 = busca gulosa = menor latência. ESCOPO §2.7.
+# Quantos caminhos o Whisper considera. 1 = busca gulosa = menor latência,
+# que foi a escolha da Etapa 0 quando latência era a pergunta em aberto.
+# Medido na Etapa 1 — ver medicoes/etapa1-stt.md.
 beam_size = 1
+
+# Alimenta o initial_prompt do Whisper com os nomes do atalhos.toml antes de
+# transcrever. Fala rápida é onde ele mais depende de contexto, e "loft" não é
+# palavra em português: sem vocabulário ele tende a inventar algo parecido.
+# A lista sai da tabela, então atalho novo já melhora a transcrição dele.
+usar_vocabulario = true
 
 [tts]
 motor = "piper"
