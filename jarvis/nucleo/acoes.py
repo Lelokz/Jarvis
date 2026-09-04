@@ -52,6 +52,26 @@ def _abrir(comando: list[str]) -> None:
     )
 
 
+def abrir_caminho(caminho: Path, comandos: Comandos) -> Resultado:
+    """Abre um caminho vindo da busca, que não tem `tipo` de tabela.
+
+    Arquivo e pasta vão os dois pelo `xdg-open`: ele respeita o programa padrão
+    de cada tipo, que é o que o Léo já configurou no sistema. Adivinhar aqui
+    seria pior do que perguntar ao desktop.
+    """
+    if not caminho.exists():
+        return Resultado(False, f"{caminho.name} não está mais lá.")
+    executavel = comandos.pasta
+    if shutil.which(executavel) is None:
+        return Resultado(False, f"O programa {executavel} não está instalado.")
+    comando = [executavel, str(caminho)]
+    try:
+        _abrir(comando)
+    except OSError as e:
+        return Resultado(False, f"Não consegui abrir {caminho.name}: {e}", comando)
+    return Resultado(True, f"Abrindo {caminho.name}.", comando)
+
+
 def executar(atalho: Atalho, comandos: Comandos) -> Resultado:
     executavel = {
         "site": comandos.site,

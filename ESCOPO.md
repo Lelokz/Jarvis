@@ -5,9 +5,9 @@
 > qualquer linha. Se algo aqui conflitar com um pedido, pergunte antes de
 > implementar.
 
-Versão: 2.3. Sistema: **Linux Mint Cinnamon**.
+Versão: 2.4. Sistema: **Linux Mint Cinnamon**.
 Pasta: `~/Projetos/Jarvis`. Repositório Git privado no GitHub.
-Etapas 0 a 1 aprovadas (set/2026). Da Etapa 2 em diante, nada feito.
+Etapas 0 a 2 aprovadas (set/2026). Da Etapa 3 em diante, nada feito.
 
 ---
 
@@ -183,7 +183,7 @@ PipeWire, ajustando o volume por fluxo (sink-input).
   ```toml
   "loft"          = { tipo = "site",   alvo = "https://loftchat.com.br" }
   "projeto loft"  = { tipo = "vscode", alvo = "~/Projetos/Loft" }
-  "gravações"     = { tipo = "pasta",  alvo = "/media/lelokz/HD/Estudio/Gravacoes" }
+  "gravações"     = { tipo = "pasta",  alvo = "/mnt/cab1286d-6765-4c73-9c77-8d3119b4b644/Estudio/Gravacoes" }
   ```
   O modelo **só extrai o nome** do que foi pedido; o Python procura na tabela
   com casamento aproximado, para tolerar erro de transcrição do Whisper. Achou,
@@ -382,6 +382,12 @@ limiar acerta os dois. O corte alto faz 3 de 10 comandos pedirem confirmação e
 vez de agir direto. Aceito pela assimetria de custo: errar a pergunta custa uma
 palavra, errar a ação abre a coisa errada.
 
+**Ideia registrada, não implementada:** o vocabulário do `initial_prompt`
+carrega hoje só os nomes do `atalhos.toml`. Nomes de arquivo dos projetos do
+Léo poderiam entrar também — no teste com voz real, "wake word" virou "wake
+world" e a busca falhou por uma letra, coisa que o vocabulário teria evitado.
+Fica para quando incomodar o bastante.
+
 **A medição do STT foi em áudio sintetizado no Piper**, porque o microfone
 estava mutado. Os números absolutos são pessimistas — voz sintética, velocidade
 exagerada e palavra inglesa dita por voz portuguesa. A comparação entre
@@ -392,6 +398,66 @@ O Jarvis não precisa saber onde as coisas ficam. Ele precisa saber procurar.
 - `buscar_arquivo(nome)` → lista de caminhos
 - `buscar_pasta(nome)` → lista de caminhos
 - **Desambiguação obrigatória:** achou mais de um, pergunta qual.
+
+**APROVADA — set/2026**, no teste por voz do Léo.
+
+O que decidiu a etapa não foi a busca funcionar, foi ela devolver **pouco**:
+
+- **Exclusões de ruído.** `downloads` caía de 95 para **2**; `readme` de 3003
+  para **29**; `config` de 6377 para **189**. Os dois primeiros batiam no teto
+  de 200 antes, então os números velhos escondiam o tamanho do problema. O
+  ruído dominante era tema de ícone (`.icons`, 84 dos 95) e prefixo Wine/Steam.
+- **Pastas do dia a dia no `atalhos.toml`.** Downloads, Documentos, Imagens,
+  Vídeos, Área de trabalho e Músicas resolvem pela tabela, instantâneo, sem
+  tocar no disco. A busca existe para o que o Léo **não** previu; essas ele
+  prevê. Mais três apelidos, porque "imagem", "vídeo" e "desktop" ficariam
+  abaixo do corte de 0.92 e virariam pergunta.
+- **A busca sobrevive à pista ruim.** Pista que não casa mantém os candidatos e
+  pede outra, em vez de apagar tudo. Errar a pista é o caso comum — o desenho
+  anterior punia exatamente ele, e foi o que matou a desambiguação no primeiro
+  teste.
+- **As frases explicam o que pedem.** "Achei três. Em qual pasta?" foi entendido
+  como "qual pasta você quer de dentro daí". Agora: *"Achei 3 com esse nome, em
+  lugares diferentes: um em Downloads, um em Loft e um em tests. Em qual
+  deles?"* — diz que é o mesmo nome, em lugares distintos, e que a resposta é o
+  lugar. Ficam no `config.toml`, editáveis.
+
+**Latência.** O `keep_alive` de 5 min fazia o primeiro comando após uma pausa
+custar ~8s de recarga do LLM. O assistente passa a mandar o Ollama carregar o
+modelo **no instante em que o wake word dispara**, em segundo plano: a saudação
+e a fala do comando já gastam esse tempo. Medido com o Ollama frio de verdade:
+**8,18s → 0,73s, 91% da recarga escondida**, sem segurar VRAM enquanto ele
+dorme.
+
+**Correção de uma métrica que mentia.** A `latencia_percebida_s` existe desde a
+Etapa 0 para medir o que o Léo sente, mas não contava o tempo do núcleo — que
+não existia quando ela foi escrita. Marcava 1,15s numa fala sentida como 8s,
+porque a recarga do LLM caía justamente nesse vão. O `Tempos` ganhou
+`nucleo_s`, e toda decisão de latência daqui para frente sai de um número que
+fecha.
+
+### A lição que vai voltar a cada função nova
+
+Pôr `"músicas"` na tabela fez **"toca uma música" abrir a pasta Músicas** — um
+comando de mídia da Etapa 3 executando ação da Etapa 1. As 15 frases de
+regressão caíram para 14/15 e pegaram isso.
+
+O erro não era do casamento aproximado (nota 0.923, legítima): era o **modelo
+escolhendo a ferramenta errada**. A correção foi ensiná-lo a decidir **pelo
+verbo, não pelo assunto** — "abre", "mostra", "acessa" e "põe na tela" são
+abrir; "toca", "reproduz", "ouve" e "pausa" não são.
+
+**Isto vai se repetir a cada etapa que acrescentar função.** Toda entrada nova
+na tabela amplia o que o modelo pode confundir com o que já existe, e o teste
+de regressão das frases é o que pega. Uma primeira tentativa de correção baniu
+o substantivo "música" e quebrou `"abre música"` — a instrução tem que mirar o
+verbo.
+
+**Capacidade futura, registrada e não implementada:** pedir algo **dentro** de
+um lugar — "abre a pasta screenshots que está dentro de downloads". Hoje a
+busca procura coisas *chamadas* X, não coisas *dentro* de X; foi o que fez o
+Léo responder "Screenshots" a uma lista de candidatos que só continha arquivos
+chamados "downloads". É funcionalidade nova, não conserto.
 
 ### Etapa 3 — Mídia e status do PC
 Tudo leitura ou reversível. Seguro.

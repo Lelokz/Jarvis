@@ -23,6 +23,11 @@ class Tempos:
     duracao_segmento_s: float
     espera_silencio_s: float
     stt_s: float
+    # Tempo do núcleo: decidir a função, casar atalho, buscar, executar.
+    # Não existia na Etapa 0 porque o núcleo não existia. Sem ele, a latência
+    # percebida mentia — marcava 1,15s numa fala que o Léo sentiu como 8s,
+    # porque a recarga do LLM caía justamente neste vão.
+    nucleo_s: float
     tts_primeiro_s: float
     tts_total_s: float
     reproducao_s: float
@@ -37,7 +42,12 @@ class Tempos:
         importa. O que decide a aprovação é o intervalo em que você está
         parado esperando.
         """
-        return self.espera_silencio_s + self.stt_s + self.tts_primeiro_s
+        return (
+            self.espera_silencio_s
+            + self.stt_s
+            + self.nucleo_s
+            + self.tts_primeiro_s
+        )
 
     @property
     def ciclo_total_s(self) -> float:
@@ -46,6 +56,7 @@ class Tempos:
             self.duracao_segmento_s
             + self.espera_silencio_s
             + self.stt_s
+            + self.nucleo_s
             + self.tts_primeiro_s
             + self.reproducao_s
         )
@@ -71,6 +82,7 @@ def formatar_bloco(texto: str, t: Tempos) -> str:
             _linha("fala capturada", t.duracao_segmento_s),
             _linha("espera do silêncio", t.espera_silencio_s),
             _linha("STT (whisper)", t.stt_s),
+            _linha("núcleo (decisão)", t.nucleo_s),
             _linha("TTS 1º áudio", t.tts_primeiro_s),
             _linha("TTS síntese total", t.tts_total_s),
             _linha("reprodução", t.reproducao_s),
@@ -90,6 +102,7 @@ class Resumo:
         ("fala capturada", "duracao_segmento_s"),
         ("espera do silêncio", "espera_silencio_s"),
         ("STT (whisper)", "stt_s"),
+        ("núcleo (decisão)", "nucleo_s"),
         ("TTS 1º áudio", "tts_primeiro_s"),
         ("TTS síntese total", "tts_total_s"),
         ("reprodução", "reproducao_s"),

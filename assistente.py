@@ -161,6 +161,11 @@ class Ciclo:
         if pendente is not None:
             self._registrar_evento(pendente)
 
+        # Manda o LLM se carregar agora, em segundo plano. A saudação leva
+        # 1-2s e você ainda vai levar mais alguns falando o comando — tempo
+        # que já está sendo gasto e que esconde a recarga de ~7,5s.
+        self.nucleo.aquecer()
+
         self._falar(self.cfg.persona.saudacao)
         self.estado = Estado.ACORDADO
         self._renovar("janela aberta")
@@ -174,6 +179,9 @@ class Ciclo:
         # laço, sem o microfone ter captado nada.
         self.ww.reiniciar()
         self.vad.reiniciar()
+        # Confirmação ou busca pendente não atravessam o sono: senão a
+        # primeira fala do próximo despertar viraria filtro de uma busca velha.
+        self.nucleo.reiniciar_conversa()
         _linha("dormiu", motivo)
         self.registrador.registrar_estado("dormiu", motivo=motivo)
 
@@ -258,16 +266,28 @@ class Ciclo:
         # Aqui o cliente entrega o texto e recebe texto. Tudo o que decide e
         # executa está do outro lado da linha do ESCOPO §4 — este laço não
         # sabe o que é atalho, tabela ou LLM.
+        inicio_nucleo = time.monotonic()
         resposta = self.nucleo.processar(transcricao.texto)
+        nucleo_s = time.monotonic() - inicio_nucleo
         if resposta.acao:
             self.acoes += 1
-            self.registrador.registrar_estado("acao", acao=resposta.acao)
+        # O diagnóstico do núcleo vai inteiro para o log. Sem ele, investigar
+        # por que um comando falhou obrigava a reproduzir a sessão fala por
+        # fala — foi o que aconteceu depois do primeiro teste com voz real.
+        self.registrador.registrar_estado(
+            "decisao",
+            resposta=resposta.texto,
+            acao=resposta.acao,
+            perguntando=resposta.perguntando,
+            **resposta.diagnostico,
+        )
         fala = self._falar(resposta.texto)
 
         tempos = Tempos(
             duracao_segmento_s=segmento.duracao_total_s,
             espera_silencio_s=segmento.espera_silencio_s,
             stt_s=transcricao.segundos,
+            nucleo_s=nucleo_s,
             tts_primeiro_s=fala.primeiro_audio_s,
             tts_total_s=fala.sintese_total_s,
             reproducao_s=fala.reproducao_s,
@@ -283,6 +303,7 @@ class Ciclo:
         )
         print(
             f"             {'':<8}stt {transcricao.segundos:.2f}s · "
+            f"núcleo {nucleo_s:.2f}s · "
             f"tts {fala.primeiro_audio_s:.2f}s · "
             f"latência {tempos.latencia_percebida_s:.2f}s"
         )

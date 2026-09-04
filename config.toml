@@ -13,6 +13,33 @@ saudacao = "Pois não?"
 # Quando entendeu a frase mas não é nada que ele saiba fazer ainda.
 nao_sei = "Isso eu ainda não sei fazer."
 
+# Quando o modelo devolve um nome que não bate com o que você falou. Precisa
+# ser diferente do nao_sei, senão não dá para distinguir os dois no teste.
+nao_entendi = "Não entendi o nome, repete?"
+
+# Quando você nega uma confirmação sem dizer o que queria.
+o_que_entao = "O que você quis dizer?"
+
+# Quando a pista que você deu para estreitar uma busca não casa com nenhum
+# candidato. Os candidatos continuam guardados — é só tentar outra pista.
+pista_ruim = "Com essa pista não achei nada. Tenta outra?"
+
+# --- frases da desambiguação -------------------------------------------
+# Estas carregam a EXPLICAÇÃO de propósito. A versão anterior era só
+# "Achei três. Em qual pasta?" — e o Léo entendeu como "qual pasta você quer
+# de dentro daí", quando a pergunta era "em qual desses lugares está o que
+# você quer". Ele respondeu errado em todos os testes por causa disso.
+#
+# A frase precisa dizer três coisas: que são o MESMO NOME, que estão em
+# LUGARES DIFERENTES, e que a resposta esperada é o LUGAR.
+#
+# Campos disponíveis: {n} = quantos, {lugares} = a lista falada,
+# {termo} = o que você pediu.
+busca_poucos = "Achei {n} com esse nome, em lugares diferentes: {lugares}. Em qual deles?"
+busca_muitos = "Achei {n} coisas com esse nome espalhadas pelo disco. Me diz o nome de uma pasta do caminho pra estreitar."
+busca_muitos_ainda = "Ainda são {n} com esse nome. Me diz outra pasta do caminho pra estreitar."
+busca_nada = "Não achei nada chamado {termo}."
+
 [llm]
 url = "http://localhost:11434"
 modelo = "qwen3:8b"
@@ -25,6 +52,14 @@ modelo = "qwen3:8b"
 # descarregado ~6s. Use "-1" para deixar residente, "0" para descarregar já.
 keep_alive = "5m"
 timeout_s = 120
+
+# Guarda contra o modelo inventar: o nome que ele devolve tem que ser
+# encontrável na transcrição. Com a lista de atalhos no prompt, ele às vezes
+# força uma entrada embaralhada para dentro da lista — "abridança.ppxt" já
+# virou "loft" e abriu o navegador, com nota 1.00 e sem confirmação.
+# Medido: normalizações legítimas ficam acima de 0.737, invenções abaixo de
+# 0.333. O corte de 0.60 tem folga dos dois lados.
+ancoragem_minima = 0.60
 
 [acoes]
 # Os executáveis de cada tipo do atalhos.toml. Ficam aqui para você trocar sem
@@ -133,6 +168,46 @@ refratario_s = 1.5
 # O relógio reinicia quando ELE termina de responder, não quando você para
 # de falar.
 janela_s = 30.0
+
+[busca]
+# Onde procurar. Raiz inexistente é pulada em silêncio — o HD externo só entra
+# quando estiver montado, e não ter ele ligado não é erro.
+# TEMPORÁRIO: o HD monta com o UUID como nome. O Léo vai trocar para
+# /mnt/hd — quando trocar, atualizar aqui e no atalhos.toml.
+raizes = ["~", "/mnt/cab1286d-6765-4c73-9c77-8d3119b4b644"]
+
+# O que nunca entra no resultado. Isto é o que torna a busca usável: sem as
+# exclusões, procurar "config" devolvia 6382 resultados, 617 deles dentro
+# destas pastas.
+ignorar = [
+    "node_modules",
+    ".venv",
+    ".cache",
+    ".git",
+    "site-packages",
+    "__pycache__",
+    ".local/share/Trash",
+    # Medido numa busca real por "downloads", que devolvia 95 resultados:
+    # .icons sozinho removia 84 deles (downloads.svg de tema de ícone), e o
+    # resto era Steam e prefixo Wine. Com tudo isto, 95 viraram 2 — que eram
+    # as duas pastas Downloads de verdade.
+    ".icons",
+    "icons",
+    ".steam",
+    "steamapps",
+    "compatdata",
+    "pfx",
+]
+
+# Teto do que fica guardado para você estreitar. Um termo genérico pode deixar
+# centenas mesmo depois de filtrado; não vale carregar todas.
+max_resultados = 200
+
+# Trava do fallback com `find`. O plocate é instantâneo, mas o índice dele é
+# atualizado uma vez por dia — arquivo baixado agora só apareceria amanhã.
+# Quando ele não acha nada, varremos as raízes de verdade, com este limite
+# para a conversa não travar.
+segundos_find = 8
 
 [log]
 # Grava um .wav por segmento aprovado pelo VAD, em logs/audio/, com o mesmo

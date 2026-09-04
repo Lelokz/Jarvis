@@ -18,6 +18,7 @@ perto da forma canônica.
 
 from __future__ import annotations
 
+import threading
 import time
 from dataclasses import dataclass
 from enum import Enum, auto
@@ -33,7 +34,11 @@ FERRAMENTA_ABRIR = {
         "description": (
             "Abre uma coisa no computador do usuário: um site, uma pasta ou um "
             "projeto. Use apenas quando o usuário pedir para abrir, mostrar ou "
-            "acessar alguma coisa."
+            "acessar alguma coisa.\n"
+            "Quem decide é o VERBO, não o assunto: 'abre', 'mostra', 'acessa' "
+            "e 'põe na tela' são abrir. 'toca', 'reproduz', 'ouve' e 'pausa' "
+            "não são — 'toca uma música' é comando de mídia, mas 'abre "
+            "músicas' é abrir a pasta. NÃO use para perguntas."
         ),
         "parameters": {
             "type": "object",
@@ -94,6 +99,39 @@ class Cerebro:
     def usar_atalhos(self, nomes: list[str]) -> None:
         self._nomes = nomes
 
+    def aquecer(self) -> None:
+        """Manda o Ollama carregar o modelo, sem esperar resposta.
+
+        Com `keep_alive` de 5 minutos, o `qwen3:8b` cai da VRAM quando o Léo
+        fica um tempo sem falar, e o comando seguinte paga ~7,5s de recarga —
+        medido. Mas entre o wake word disparar e a saudação terminar de tocar
+        passam uns 2 a 3 segundos que já estão sendo gastos de qualquer jeito.
+
+        Carregar nessa janela esconde quase toda a recarga sem segurar VRAM
+        enquanto ele dorme, que era o que o ESCOPO §4 queria proteger.
+
+        Requisição com `messages` vazio: o Ollama carrega o modelo e não gera
+        nada. Em thread daemon, porque isto **nunca** pode atrasar a saudação.
+        """
+
+        def carregar() -> None:
+            try:
+                requests.post(
+                    f"{self.cfg.url}/api/chat",
+                    json={
+                        "model": self.cfg.modelo,
+                        "messages": [],
+                        "keep_alive": self.cfg.keep_alive,
+                    },
+                    timeout=self.cfg.timeout_s,
+                )
+            except Exception:
+                # Aquecer é otimização. Falhar aqui só custa a recarga que
+                # já pagaríamos — nunca deve derrubar o assistente.
+                pass
+
+        threading.Thread(target=carregar, daemon=True).start()
+
     # ----------------------------------------------------------------------
 
     def _chat(self, mensagens: list[dict], tools: list[dict] | None = None) -> dict:
@@ -140,6 +178,37 @@ class Cerebro:
         nome = chamadas[0].get("function", {}).get("arguments", {}).get("nome")
         return Interpretacao(nome or None, segundos)
 
+    def corrigir(self, frase: str) -> str | None:
+        """Extrai o nome certo de dentro de uma negação.
+
+        Existe porque negar era beco sem saída: o Léo dizia "não, eu quis dizer
+        configurações" — entregando o nome certo na mesma frase — e o sistema
+        respondia "isso eu ainda não sei fazer", porque `interpretar()` não
+        dispara em frase que não tem cara de comando.
+
+        Prompt dedicado em vez de lista de palavras chumbada: o atalho por
+        lista já foi vetado uma vez, por brigar com o modelo depois.
+        """
+        resposta = self._chat(
+            [
+                {
+                    "role": "system",
+                    "content": (
+                        "O usuário está corrigindo um pedido anterior que você "
+                        "entendeu errado. Se ele disse qual é a coisa certa, "
+                        "responda APENAS com o nome dela, sem verbo e sem "
+                        "artigo. Se ele apenas negou sem dizer o que queria, "
+                        "responda apenas NADA."
+                    ),
+                },
+                {"role": "user", "content": frase},
+            ]
+        )
+        texto = (resposta.get("message", {}).get("content") or "").strip()
+        if not texto or texto.upper().startswith("NADA"):
+            return None
+        return texto.strip(" .\"'")
+
     def confirmar(self, frase: str) -> Confirmacao:
         """Classifica a resposta a uma pergunta de sim/não."""
         resposta = self._chat(
@@ -148,9 +217,14 @@ class Cerebro:
                     "role": "system",
                     "content": (
                         "O usuário está respondendo a uma pergunta de sim ou "
-                        "não. Responda com uma palavra só: SIM se ele "
-                        "concordou, NAO se ele negou, OUTRO se ele falou "
-                        "outra coisa qualquer."
+                        "não. Responda com uma palavra só:\n"
+                        "SIM — ele concordou.\n"
+                        "NAO — ele negou, discordou ou corrigiu. Use NAO "
+                        "também quando ele nega e já diz o que queria, como "
+                        "em 'não, eu quis dizer outra coisa' ou 'nada disso, "
+                        "quero X'.\n"
+                        "OUTRO — ele ignorou a pergunta e falou de um assunto "
+                        "sem relação."
                     ),
                 },
                 {"role": "user", "content": frase},

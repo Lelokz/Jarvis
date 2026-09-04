@@ -266,6 +266,9 @@ def conversar(cfg: config.Config) -> int:
                     duracao_segmento_s=segmento.duracao_total_s,
                     espera_silencio_s=segmento.espera_silencio_s,
                     stt_s=transcricao.segundos,
+                    # A Etapa 0 não tem núcleo: ela ecoa, não decide. O campo
+                    # existe para o assistente, e aqui é zero de verdade.
+                    nucleo_s=0.0,
                     tts_primeiro_s=fala.primeiro_audio_s,
                     tts_total_s=fala.sintese_total_s,
                     reproducao_s=fala.reproducao_s,

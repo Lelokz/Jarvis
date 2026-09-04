@@ -18,6 +18,13 @@ class Persona:
     nome: str
     saudacao: str
     nao_sei: str
+    nao_entendi: str
+    o_que_entao: str
+    pista_ruim: str
+    busca_poucos: str
+    busca_muitos: str
+    busca_muitos_ainda: str
+    busca_nada: str
 
 
 @dataclass(frozen=True)
@@ -61,6 +68,7 @@ class Llm:
     modelo: str
     keep_alive: str
     timeout_s: int
+    ancoragem_minima: float
 
 
 @dataclass(frozen=True)
@@ -84,6 +92,14 @@ class Ciclo:
 
 
 @dataclass(frozen=True)
+class Busca:
+    raizes: list[str]
+    ignorar: list[str]
+    max_resultados: int
+    segundos_find: int
+
+
+@dataclass(frozen=True)
 class Log:
     salvar_audio: bool
     max_audios_wake: int
@@ -100,6 +116,7 @@ class Config:
     acoes: Acoes
     wakeword: WakeWord
     ciclo: Ciclo
+    busca: Busca
     log: Log
     raiz: Path
 
@@ -126,6 +143,7 @@ _SECOES = {
     "acoes": Acoes,
     "wakeword": WakeWord,
     "ciclo": Ciclo,
+    "busca": Busca,
     "log": Log,
 }
 

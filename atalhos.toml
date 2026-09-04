@@ -12,6 +12,33 @@
 # Ensinar uma coisa nova ao Jarvis é acrescentar uma linha aqui. Não precisa
 # mexer em código, e não precisa reiniciar o modelo.
 
+# --- pastas do dia a dia -----------------------------------------------
+# Estas estão aqui de propósito, e não deixadas para a busca: são as que o Léo
+# prevê. Sem elas, "abre downloads" varria o disco atrás de qualquer coisa
+# chamada "downloads" e achava 95 candidatos — 93 deles ícones de tema e
+# prefixos Wine. A busca existe para o que ele NÃO previu.
+#
+# Os nomes das pastas estão em português porque o Mint está em pt_BR
+# (conferido com `xdg-user-dir`).
+"downloads" = { tipo = "pasta", alvo = "~/Downloads" }
+"documentos" = { tipo = "pasta", alvo = "~/Documentos" }
+"imagens" = { tipo = "pasta", alvo = "~/Imagens" }
+"vídeos" = { tipo = "pasta", alvo = "~/Vídeos" }
+"área de trabalho" = { tipo = "pasta", alvo = "~/Área de trabalho" }
+"músicas" = { tipo = "pasta", alvo = "~/Músicas" }
+
+# Apelidos. O casador aproximado resolve "download", "documento" e "musica"
+# sozinho, mas estas três ficariam abaixo do corte de 0.92 e virariam pergunta
+# — que é justamente o que as linhas acima existem para evitar:
+#   "imagem" → 0.769   "vídeo" → 0.909   "desktop" → 0.471
+"imagem" = { tipo = "pasta", alvo = "~/Imagens" }
+"vídeo" = { tipo = "pasta", alvo = "~/Vídeos" }
+"desktop" = { tipo = "pasta", alvo = "~/Área de trabalho" }
+
+# --- o resto -----------------------------------------------------------
 "loft" = { tipo = "site", alvo = "https://loftchat.com.br" }
 "projeto loft" = { tipo = "vscode", alvo = "~/Projetos/Loft" }
-"gravações" = { tipo = "pasta", alvo = "/media/lelokz/HD/Estudio/Gravacoes" }
+# TEMPORÁRIO: o HD monta com o UUID como nome. O Léo vai trocar o ponto de
+# montagem para /mnt/hd — quando trocar, atualizar esta linha e a lista de
+# raízes em config.toml (as duas, senão a busca no HD para de funcionar).
+"gravações" = { tipo = "pasta", alvo = "/mnt/cab1286d-6765-4c73-9c77-8d3119b4b644/Estudio/Gravacoes" }
