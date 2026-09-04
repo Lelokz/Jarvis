@@ -41,7 +41,10 @@ SUGESTAO = 0.60
 # Dois candidatos separados por menos que isto são um empate: perguntar qual.
 EMPATE = 0.08
 
-TIPOS_VALIDOS = ("site", "pasta", "vscode")
+# "musica" entra na Etapa 3: o alvo é um termo de busca ou uma URL, e quem
+# executa é o midia.py, não o acoes.py. É o caso "toca aquela música" — uma
+# linha na tabela, sem sistema novo.
+TIPOS_VALIDOS = ("site", "pasta", "vscode", "musica")
 
 
 class Desfecho(Enum):

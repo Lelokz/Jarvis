@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from ..config import Config
-from . import acoes
+from . import acoes, midia, sistema
 from .ancoragem import ancoragem
 from .atalhos import Atalho, Casamento, Desfecho, Tabela, normalizar
 from .busca import Achado, Buscador, pastas_que_distinguem
@@ -60,6 +60,8 @@ class Nucleo:
         self._termo = ""
         # Ele negou sem dizer o que queria; a próxima fala é o nome.
         self._esperando_nome = False
+        # Ele pediu música sem dizer qual; a próxima fala é o nome.
+        self._esperando_musica: str | None = None
         self._diag: dict = {}
 
     # ----------------------------------------------------------------------
@@ -82,13 +84,121 @@ class Nucleo:
             self._esperando_nome = False
             return self._resolver_nome(texto, origem="correção")
 
+        if self._esperando_musica is not None:
+            return self._musica_pedida(texto)
+
         interpretacao = self.cerebro.interpretar(texto)
-        if interpretacao.nome is None:
-            return Resposta(
-                self.cfg.persona.nao_sei,
-                diagnostico={"houve_tool_call": False, "dito": texto},
+        base = {"houve_tool_call": interpretacao.funcao is not None,
+                "funcao": interpretacao.funcao, "dito": texto,
+                "argumentos": interpretacao.argumentos}
+
+        if interpretacao.funcao is None:
+            return Resposta(self.cfg.persona.nao_sei, diagnostico=base)
+
+        if interpretacao.funcao == "abrir":
+            if interpretacao.nome is None:
+                return Resposta(self.cfg.persona.nao_entendi, diagnostico=base)
+            return self._resolver_nome(interpretacao.nome, dito=texto)
+
+        if interpretacao.funcao == "tocar":
+            return self._tocar(interpretacao, texto, base)
+
+        if interpretacao.funcao == "midia":
+            return self._midia(interpretacao.argumentos, base)
+
+        if interpretacao.funcao == "status_pc":
+            r = sistema.status_gpu()
+            base["detalhe"] = r.detalhe
+            return Resposta(r.mensagem, acao="status_pc" if r.ok else None,
+                            diagnostico=base)
+
+        # Função que o modelo inventou e nós não temos.
+        base["funcao_desconhecida"] = interpretacao.funcao
+        return Resposta(self.cfg.persona.nao_sei, diagnostico=base)
+
+    # -- mídia -------------------------------------------------------------
+
+    def _tocar(self, interpretacao, dito: str, diag: dict) -> Resposta:
+        onde = interpretacao.argumentos.get("onde") or "audio"
+        nome = interpretacao.nome
+
+        if nome is None:
+            # "toca uma música" sem dizer qual. Mesmo padrão da confirmação e
+            # da busca: pergunta e guarda o estado, em vez de desistir.
+            self._esperando_musica = onde
+            return Resposta(self.cfg.persona.qual_musica, perguntando=True,
+                            diagnostico=diag)
+
+        # A mesma guarda do `abrir`: o modelo não pode inventar um nome que
+        # não está no que foi falado.
+        nota = ancoragem(nome, dito)
+        diag["ancoragem"] = round(nota, 3)
+        if nota < self.cfg.llm.ancoragem_minima:
+            diag["reprovado_por_ancoragem"] = True
+            return Resposta(self.cfg.persona.nao_entendi, diagnostico=diag)
+
+        return self._tocar_nome(nome, onde, diag)
+
+    def _musica_pedida(self, texto: str) -> Resposta:
+        """A resposta a 'qual música?' — pode trazer o nome e o lugar."""
+        onde = self._esperando_musica or "audio"
+        self._esperando_musica = None
+
+        # Prompt dedicado, porque a resposta vem sem verbo — "tempo perdido
+        # no youtube" não parece comando, e o interpretar() devolvia nada.
+        interpretacao = self.cerebro.detalhar_musica(texto)
+        diag = {"origem": "qual música", "dito": texto,
+                "funcao": interpretacao.funcao,
+                "argumentos": interpretacao.argumentos}
+        if interpretacao.funcao == "tocar" and interpretacao.nome:
+            return self._tocar_nome(
+                interpretacao.nome,
+                interpretacao.argumentos.get("onde") or onde,
+                diag,
             )
-        return self._resolver_nome(interpretacao.nome, dito=texto)
+        return self._tocar_nome(texto, onde, diag)
+
+    def _tocar_nome(self, nome: str, onde: str, diag: dict) -> Resposta:
+        """Atalho primeiro, YouTube depois — o mesmo degrau do `abrir`."""
+        casamento = self.tabela.casar(nome)
+        if (
+            casamento.desfecho is Desfecho.CERTO
+            and casamento.atalho is not None
+            and casamento.atalho.tipo == "musica"
+        ):
+            diag["atalho"] = casamento.atalho.nome
+            nome = casamento.atalho.alvo
+
+        video = midia.buscar(nome, self.cfg.midia)
+        diag["busca_youtube"] = {"termo": nome,
+                                 "achou": video.titulo if video else None}
+        if video is None:
+            return Resposta(
+                self._frase("musica_nao_achei", termo=nome), diagnostico=diag
+            )
+
+        if onde == "navegador":
+            r = midia.tocar_navegador(video, self.cfg.midia)
+        else:
+            r = midia.tocar_audio(video, self.cfg.midia)
+        return Resposta(
+            r.mensagem,
+            acao=f"tocar:{onde}:{video.id}" if r.ok else None,
+            diagnostico=diag,
+        )
+
+    def _midia(self, argumentos: dict, diag: dict) -> Resposta:
+        acao = (argumentos.get("acao") or "").strip().lower()
+        if acao == "volume":
+            r = sistema.ajustar_volume(
+                argumentos.get("valor"), self.cfg.midia.passo_volume
+            )
+        else:
+            r = midia.controlar(acao)
+        diag["detalhe"] = r.detalhe
+        return Resposta(
+            r.mensagem, acao=f"midia:{acao}" if r.ok else None, diagnostico=diag
+        )
 
     def _resolver_nome(
         self,
@@ -319,6 +429,7 @@ class Nucleo:
         self._pendente = None
         self._busca = None
         self._esperando_nome = False
+        self._esperando_musica = None
         self._termo = ""
         self._diag = {}
 

@@ -25,6 +25,8 @@ class Persona:
     busca_muitos: str
     busca_muitos_ainda: str
     busca_nada: str
+    qual_musica: str
+    musica_nao_achei: str
 
 
 @dataclass(frozen=True)
@@ -72,6 +74,15 @@ class Llm:
 
 
 @dataclass(frozen=True)
+class Midia:
+    comando_mpv: str
+    comando_ytdlp: str
+    comando_navegador: str
+    segundos_busca: int
+    passo_volume: int
+
+
+@dataclass(frozen=True)
 class Acoes:
     comando_site: str
     comando_pasta: str
@@ -113,6 +124,7 @@ class Config:
     stt: Stt
     tts: Tts
     llm: Llm
+    midia: Midia
     acoes: Acoes
     wakeword: WakeWord
     ciclo: Ciclo
@@ -140,6 +152,7 @@ _SECOES = {
     "stt": Stt,
     "tts": Tts,
     "llm": Llm,
+    "midia": Midia,
     "acoes": Acoes,
     "wakeword": WakeWord,
     "ciclo": Ciclo,

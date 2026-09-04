@@ -5,9 +5,9 @@
 > qualquer linha. Se algo aqui conflitar com um pedido, pergunte antes de
 > implementar.
 
-Versão: 2.4. Sistema: **Linux Mint Cinnamon**.
+Versão: 2.5. Sistema: **Linux Mint Cinnamon**.
 Pasta: `~/Projetos/Jarvis`. Repositório Git privado no GitHub.
-Etapas 0 a 2 aprovadas (set/2026). Da Etapa 3 em diante, nada feito.
+Etapas 0 a 3 aprovadas (set/2026). Da Etapa 4 em diante, nada feito.
 
 ---
 
@@ -461,9 +461,60 @@ chamados "downloads". É funcionalidade nova, não conserto.
 
 ### Etapa 3 — Mídia e status do PC
 Tudo leitura ou reversível. Seguro.
-- `mídia(pausar | próxima | anterior | volume)`
-- `tocar_musica(termo)` — YouTube
-- `status_pc()` — temperatura de GPU/CPU, uso, espaço em disco
+- `tocar(o_que, onde)` — YouTube, no mpv (só áudio) ou no navegador
+- `midia(acao)` — pausar, continuar, próxima, anterior, volume
+- `status_pc()` — por enquanto só temperatura e uso da GPU
+
+**Três funções e não sete.** Controle não cabe dentro de `tocar`: aquele recebe
+texto livre — o nome de uma música —, e controle **não tem objeto**, age no que
+já estiver tocando. Forçar `tocar("pausar")` faria o parâmetro significar duas
+coisas, que é a raiz do bug do "músicas" registrado na Etapa 2. Mas cinco
+funções separadas (`pausar`, `continuar`, `próxima`…) seriam cinco concorrentes
+novos pela atenção do modelo. Uma `midia(acao)` com `enum` fechado no schema é o
+meio: o modelo escolhe entre quatro funções, e o parâmetro é uma lista fixa.
+
+**APROVADA — set/2026**, no teste por voz do Léo: "toca uma música" pergunta
+qual, "toca X no YouTube" toca direto, os controles acertam o player certo com
+outra coisa tocando, o volume mexe no sistema e o status da GPU responde.
+
+- **Roteamento entre as 4 funções: 15/15.** O maior salto de concorrência desde
+  que o modelo entrou não quebrou nada.
+- **As 15 frases da Etapa 1: 15/15**, com duas mudando de gabarito como
+  previsto — "toca uma música" e "qual a temperatura da GPU" agora têm dono.
+- **Do comando ao primeiro som: 1,99s**, sendo 1,47s a busca no YouTube.
+- **Volume pelo sistema, via `pactl`**, em todos os casos: número, "mais",
+  "menos" e "mudo".
+
+**O mpv como padrão foi decisão acertada no uso real.** Tocar o áudio direto,
+sem abrir aba, é o comportamento certo enquanto há jogo ou outra coisa na tela.
+O caminho pelo navegador fica para quando o Léo disser "no YouTube".
+
+**Três limitações conhecidas, nenhuma bloqueante:**
+
+**Às vezes toca a música errada.** Pega o primeiro resultado da busca do
+YouTube, que nem sempre é a versão desejada — pode vir cover, ao vivo ou vídeo
+de reação. É ordenação do YouTube, não erro de roteamento. Se incomodar, as
+saídas seriam dizer o título antes de tocar, ou aceitar "não, a próxima".
+
+**A fonte local ficou fora**, porque não há música na máquina: a varredura da
+home e do HD inteiros achou **um único MP3**. Quando houver música em
+`~/Músicas` ou no HD, acrescentar é pequeno.
+
+**O mpv mente sobre `CanGoNext`** — responde `true` mesmo com um vídeo só na
+fila, enquanto o Brave responde `false` corretamente. A guarda que dependia
+dessa propriedade deixava o Jarvis dizer "Próxima." sem nada acontecer.
+
+> **O padrão que fica: não confiar no que o player declara.** Troca de faixa
+> passou a ser verificada **por observação** — guardar o que está tocando,
+> chamar o método, comparar. Não mudou, ele diz que não tem. Funciona com
+> qualquer player, honesto ou não, e é o mesmo princípio de medir em vez de
+> presumir que vale para o resto do projeto.
+
+Uma segunda armadilha do mesmo tipo apareceu antes: o desempate entre dois
+players era **alfabético**, e "brave" vem antes de "mpv" — mandar tocar uma
+música e dizer "pausa" pausaria o vídeo do navegador. A ordem agora é: tocando
+e iniciado por nós → qualquer um tocando → iniciado por nós mesmo pausado → o
+resto.
 
 ### Etapa 4 — Anotar e lembrar
 Só cria coisa nova. Não toca em nada existente.

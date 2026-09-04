@@ -36,9 +36,11 @@ FERRAMENTA_ABRIR = {
             "projeto. Use apenas quando o usuário pedir para abrir, mostrar ou "
             "acessar alguma coisa.\n"
             "Quem decide é o VERBO, não o assunto: 'abre', 'mostra', 'acessa' "
-            "e 'põe na tela' são abrir. 'toca', 'reproduz', 'ouve' e 'pausa' "
-            "não são — 'toca uma música' é comando de mídia, mas 'abre "
-            "músicas' é abrir a pasta. NÃO use para perguntas."
+            "e 'põe na tela' são abrir.\n"
+            "Para 'toca', 'reproduz' ou 'ouve', use `tocar`. Para 'pausa', "
+            "'continua', 'próxima' ou 'volume', use `midia`. Para perguntas "
+            "sobre o computador, use `status_pc`.\n"
+            "'abre músicas' é abrir a pasta; 'toca uma música' não é abrir."
         ),
         "parameters": {
             "type": "object",
@@ -57,6 +59,98 @@ FERRAMENTA_ABRIR = {
 }
 
 
+FERRAMENTA_TOCAR = {
+    "type": "function",
+    "function": {
+        "name": "tocar",
+        "description": (
+            "Toca uma música ou vídeo. Use quando o usuário disser 'toca', "
+            "'reproduz', 'ouve', 'coloca uma música' ou 'põe pra tocar'.\n"
+            "Se ele não disser o nome do que quer ('toca uma música', 'coloca "
+            "um som'), chame mesmo assim com `o_que` vazio — vamos perguntar."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "o_que": {
+                    "type": "string",
+                    "description": (
+                        "O nome da música, artista ou vídeo, como o usuário "
+                        "falou. Vazio se ele não disse o quê."
+                    ),
+                },
+                "onde": {
+                    "type": "string",
+                    "enum": ["audio", "navegador"],
+                    "description": (
+                        "'navegador' quando ele pedir no YouTube, no navegador "
+                        "ou quiser VER o vídeo. 'audio' no resto — é o padrão."
+                    ),
+                },
+            },
+            "required": ["o_que"],
+        },
+    },
+}
+
+FERRAMENTA_MIDIA = {
+    "type": "function",
+    "function": {
+        "name": "midia",
+        "description": (
+            "Controla o que JÁ está tocando, seja música, vídeo ou o som de um "
+            "jogo. Não serve para começar a tocar algo — para isso use `tocar`."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "acao": {
+                    "type": "string",
+                    "enum": [
+                        "pausar",
+                        "continuar",
+                        "proxima",
+                        "anterior",
+                        "volume",
+                    ],
+                    "description": "O que fazer com o que está tocando.",
+                },
+                "valor": {
+                    "type": "string",
+                    "description": (
+                        "Só para acao='volume': um número de 0 a 100, ou "
+                        "'mais', 'menos', 'mudo'."
+                    ),
+                },
+            },
+            "required": ["acao"],
+        },
+    },
+}
+
+FERRAMENTA_STATUS = {
+    "type": "function",
+    "function": {
+        "name": "status_pc",
+        "description": (
+            "Responde sobre o estado do computador: temperatura da placa de "
+            "vídeo, quanto ela está sendo usada, memória de vídeo. Use quando "
+            "ele PERGUNTAR sobre a máquina."
+        ),
+        "parameters": {"type": "object", "properties": {}},
+    },
+}
+
+# A ordem importa pouco para o modelo, mas manter `abrir` primeiro deixa
+# explícito que ele é o mais usado.
+FERRAMENTAS = [
+    FERRAMENTA_ABRIR,
+    FERRAMENTA_TOCAR,
+    FERRAMENTA_MIDIA,
+    FERRAMENTA_STATUS,
+]
+
+
 class Confirmacao(Enum):
     SIM = auto()
     NAO = auto()
@@ -65,8 +159,24 @@ class Confirmacao(Enum):
 
 @dataclass(frozen=True)
 class Interpretacao:
-    nome: str | None  # None = não é pedido de abrir
+    """Qual função o modelo escolheu, e com que argumentos.
+
+    Deixou de ser só `nome` na Etapa 3: com quatro ferramentas, o núcleo
+    precisa saber qual foi escolhida, não só o que foi extraído.
+    """
+
+    funcao: str | None  # None = o modelo não chamou nada
+    argumentos: dict
     segundos: float
+
+    @property
+    def nome(self) -> str | None:
+        """O texto livre que o modelo extraiu, quando a função tem um."""
+        for chave in ("nome", "o_que"):
+            valor = self.argumentos.get(chave)
+            if isinstance(valor, str) and valor.strip():
+                return valor.strip()
+        return None
 
 
 class ErroDoCerebro(RuntimeError):
@@ -169,14 +279,52 @@ class Cerebro:
         mensagens.append({"role": "user", "content": frase})
 
         inicio = time.monotonic()
-        resposta = self._chat(mensagens, tools=[FERRAMENTA_ABRIR])
+        resposta = self._chat(mensagens, tools=FERRAMENTAS)
         segundos = time.monotonic() - inicio
 
         chamadas = resposta.get("message", {}).get("tool_calls") or []
         if not chamadas:
-            return Interpretacao(None, segundos)
-        nome = chamadas[0].get("function", {}).get("arguments", {}).get("nome")
-        return Interpretacao(nome or None, segundos)
+            return Interpretacao(None, {}, segundos)
+        funcao = chamadas[0].get("function", {})
+        return Interpretacao(
+            funcao.get("name"), funcao.get("arguments") or {}, segundos
+        )
+
+    def detalhar_musica(self, frase: str) -> Interpretacao:
+        """Lê a resposta a "qual música?", que vem sem verbo.
+
+        `interpretar()` não dispara em "tempo perdido no youtube": sem verbo,
+        não parece comando, e o modelo devolve nada. Sem isto o "no youtube" se
+        perdia E ainda ia junto no termo de busca, procurando por
+        "tempo perdido no youtube" no YouTube.
+
+        Prompt dedicado dando o contexto que falta, e só a ferramenta `tocar`
+        à mesa — o modelo não tem o que escolher errado.
+        """
+        inicio = time.monotonic()
+        resposta = self._chat(
+            [
+                {
+                    "role": "system",
+                    "content": (
+                        "Você perguntou ao usuário qual música ele quer, e "
+                        "isto é a resposta dele. Chame `tocar` com o nome da "
+                        "música. Se ele disser YouTube, navegador ou que quer "
+                        "ver, use onde='navegador'."
+                    ),
+                },
+                {"role": "user", "content": frase},
+            ],
+            tools=[FERRAMENTA_TOCAR],
+        )
+        segundos = time.monotonic() - inicio
+        chamadas = resposta.get("message", {}).get("tool_calls") or []
+        if not chamadas:
+            return Interpretacao(None, {}, segundos)
+        funcao = chamadas[0].get("function", {})
+        return Interpretacao(
+            funcao.get("name"), funcao.get("arguments") or {}, segundos
+        )
 
     def corrigir(self, frase: str) -> str | None:
         """Extrai o nome certo de dentro de uma negação.

@@ -40,6 +40,10 @@ busca_muitos = "Achei {n} coisas com esse nome espalhadas pelo disco. Me diz o n
 busca_muitos_ainda = "Ainda são {n} com esse nome. Me diz outra pasta do caminho pra estreitar."
 busca_nada = "Não achei nada chamado {termo}."
 
+# Mídia (Etapa 3).
+qual_musica = "Qual música?"
+musica_nao_achei = "Não achei nada no YouTube com {termo}."
+
 [llm]
 url = "http://localhost:11434"
 modelo = "qwen3:8b"
@@ -60,6 +64,18 @@ timeout_s = 120
 # Medido: normalizações legítimas ficam acima de 0.737, invenções abaixo de
 # 0.333. O corte de 0.60 tem folga dos dois lados.
 ancoragem_minima = 0.60
+
+[midia]
+# mpv toca só o áudio (sem janela); o navegador entra quando você diz
+# "no YouTube". Medido: o yt-dlp do apt resolve a busca mas falha ao extrair
+# formatos — por isso o da venv, que é o novo, vem primeiro no caminho.
+comando_mpv = "mpv"
+comando_ytdlp = ".venv/bin/yt-dlp"
+comando_navegador = "xdg-open"
+segundos_busca = 20
+
+# De quanto em quanto o volume sobe e desce quando você não diz um número.
+passo_volume = 10
 
 [acoes]
 # Os executáveis de cada tipo do atalhos.toml. Ficam aqui para você trocar sem

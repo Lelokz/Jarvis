@@ -24,6 +24,13 @@ ctranslate2==4.8.2
 # TTS — em modo inferência precisa só de onnxruntime + pathvalidate.
 piper-tts==1.7.0
 
+# Mídia (Etapa 3). Resolve buscas do YouTube e entrega a URL de áudio ao mpv.
+# Precisa ser o do PyPI: o do apt (2024.04) resolve a busca mas falha ao
+# extrair formatos — "Requested format is not available".
+# Fora daqui, dois pacotes do sistema: `mpv` e `mpv-mpris` (o mpv não expõe
+# MPRIS sozinho, e sem MPRIS os controles não o alcançam).
+yt-dlp==2026.8.19
+
 # Runtime CUDA. O wheel do ctranslate2 tem 39MB e NÃO embute CUDA: ele faz
 # dlopen de libcublas.so.12 e libcudnn*.so.9 em tempo de execução. Como não
 # instalamos torch (que traria essas libs de carona), elas entram por aqui e
