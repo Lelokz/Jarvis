@@ -14,3 +14,9 @@ logs/
 
 # modelos do experimento de wake word (~9MB, baixados sob demanda)
 modelos-wakeword/
+
+# Credenciais do Google (Etapa 4). NUNCA commitar: são a chave da conta do Léo.
+# credenciais_google.json é o que o console gera; token_google.json é o que a
+# autorização grava depois do primeiro consentimento.
+credenciais_google.json
+token_google.json

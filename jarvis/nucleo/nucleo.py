@@ -16,13 +16,25 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from ..config import Config
-from . import acoes, midia, sistema
+import datetime as dt
+
+from . import acoes, midia, quando as mod_quando, sistema
+from .agenda import Agenda, ErroDaAgenda
 from .ancoragem import ancoragem
 from .atalhos import Atalho, Casamento, Desfecho, Tabela, normalizar
 from .busca import Achado, Buscador, pastas_que_distinguem
 from .cerebro import Cerebro, Confirmacao, ErroDoCerebro
 
 __all__ = ["Nucleo", "Resposta", "ErroDoCerebro"]
+
+# Corte de ancoragem só para a expressão de tempo, mais alto que o dos nomes.
+#
+# Pode ser mais exigente porque a extração de tempo é fácil para o modelo: nas
+# dez frases medidas ele copiou a expressão verbatim 10/10, dando ancoragem
+# 1.0. Já as invenções chegam perto do corte comum — "marca dentista" fez ele
+# devolver 'agora', que pontua exatos 0.600 contra o texto falado e passaria
+# por um fio, marcando um compromisso para agora sem ninguém ter pedido.
+ANCORAGEM_QUANDO = 0.75
 
 
 @dataclass(frozen=True)
@@ -43,6 +55,9 @@ class Nucleo:
         self.cerebro.conferir()
         self.cerebro.usar_atalhos([a.nome for a in self.tabela.atalhos])
         self.buscador = Buscador(cfg.busca)
+        # A agenda não conecta agora: autenticar na subida faria o Jarvis
+        # depender de rede para acordar. Conecta no primeiro uso.
+        self.agenda = Agenda(cfg.agenda, cfg.raiz)
         self.comandos = acoes.Comandos(
             site=cfg.acoes.comando_site,
             pasta=cfg.acoes.comando_pasta,
@@ -62,6 +77,21 @@ class Nucleo:
         self._esperando_nome = False
         # Ele pediu música sem dizer qual; a próxima fala é o nome.
         self._esperando_musica: str | None = None
+        # Evento resolvido esperando o "pode". Guarda título, data já
+        # calculada e a descrição falada — a confirmação existe justamente
+        # para você ouvir a data antes de ela virar notificação no celular.
+        # A descrição fica guardada para ele conseguir dizer O QUE descartou,
+        # com as mesmas palavras que você acabou de ouvir.
+        self._evento_pendente: tuple[str, dt.datetime, str] | None = None
+        # A última pergunta de sim/não feita. Vai junto para o classificador:
+        # sem ela, "abre o loft" durante uma confirmação era lido como recusa.
+        self._pergunta = ""
+        # Ele disse o quê mas não o quando; a próxima fala é a data.
+        self._esperando_quando: str | None = None
+        # Ele disse o dia mas não a hora. Guarda o título E o que ele já
+        # tinha dito, porque a resposta ("às 8") não carrega o dia: quem
+        # resolve é a soma das duas falas.
+        self._esperando_hora: tuple[str, str] | None = None
         self._diag: dict = {}
 
     # ----------------------------------------------------------------------
@@ -84,6 +114,23 @@ class Nucleo:
             self._esperando_nome = False
             return self._resolver_nome(texto, origem="correção")
 
+        if self._evento_pendente is not None:
+            return self._confirmar_evento(texto)
+
+        if self._esperando_quando is not None:
+            titulo, self._esperando_quando = self._esperando_quando, None
+            return self._agendar(titulo, texto, {"origem": "quando pedido"})
+
+        if self._esperando_hora is not None:
+            titulo, ja_dito = self._esperando_hora
+            self._esperando_hora = None
+            # Junta com o que ele já disse: "amanhã" + "às 8 da noite".
+            # Resolver só a resposta perderia o dia.
+            return self._agendar(
+                titulo, f"{ja_dito} {texto}",
+                {"origem": "hora pedida", "ja_dito": ja_dito},
+            )
+
         if self._esperando_musica is not None:
             return self._musica_pedida(texto)
 
@@ -93,6 +140,14 @@ class Nucleo:
                 "argumentos": interpretacao.argumentos}
 
         if interpretacao.funcao is None:
+            # "Pode" sem nada na mesa não pode virar nao_sei: foi assim que um
+            # dentista deixou de ser marcado sem ninguém notar — o pendente
+            # tinha morrido em silêncio duas falas antes. Custa 0,07s e só
+            # roda aqui, no caminho em que ele já ia desistir de qualquer jeito.
+            if self.cerebro.resposta_solta(texto):
+                base["resposta_solta"] = True
+                return Resposta(self.cfg.persona.nada_pendente,
+                                diagnostico=base)
             return Resposta(self.cfg.persona.nao_sei, diagnostico=base)
 
         if interpretacao.funcao == "abrir":
@@ -106,6 +161,18 @@ class Nucleo:
         if interpretacao.funcao == "midia":
             return self._midia(interpretacao.argumentos, base)
 
+        if interpretacao.funcao == "criar_evento":
+            return self._agendar(
+                str(interpretacao.argumentos.get("titulo") or "").strip(),
+                str(interpretacao.argumentos.get("quando") or "").strip(),
+                base,
+            )
+
+        if interpretacao.funcao == "agenda_do_dia":
+            return self._listar_agenda(
+                str(interpretacao.argumentos.get("quando") or "").strip(), base
+            )
+
         if interpretacao.funcao == "status_pc":
             r = sistema.status_gpu()
             base["detalhe"] = r.detalhe
@@ -115,6 +182,167 @@ class Nucleo:
         # Função que o modelo inventou e nós não temos.
         base["funcao_desconhecida"] = interpretacao.funcao
         return Resposta(self.cfg.persona.nao_sei, diagnostico=base)
+
+    # -- agenda ------------------------------------------------------------
+
+    def _agendar(
+        self, titulo: str, expressao: str, diag: dict, dito: str | None = None
+    ) -> Resposta:
+        if not titulo:
+            return Resposta(self.cfg.persona.nao_entendi, diagnostico=diag)
+
+        # O modelo inventa data quando você não diz nenhuma: "marca academia"
+        # devolvia quando='/' e "marca dentista" devolvia quando='agora'. Sem
+        # esta guarda ele marcava para amanhã de manhã sem você ter pedido.
+        #
+        # É a mesma ancoragem da Etapa 2, pelo mesmo motivo: o que o modelo
+        # devolve tem que estar no que foi falado.
+        dito = dito if dito is not None else diag.get("dito")
+        if expressao and dito:
+            nota = ancoragem(expressao, dito)
+            diag["ancoragem_quando"] = round(nota, 3)
+            if nota < ANCORAGEM_QUANDO:
+                diag["quando_inventado"] = expressao
+                expressao = ""
+
+        if not expressao:
+            # Disse o quê mas não o quando. Pergunta em vez de chutar hoje.
+            self._esperando_quando = titulo
+            return Resposta(
+                self.cfg.persona.agenda_sem_quando, perguntando=True,
+                diagnostico=diag,
+            )
+
+        quando = mod_quando.resolver(expressao)
+        if quando is None:
+            return Resposta(self.cfg.persona.nao_entendi, diagnostico=diag)
+
+        diag["quando"] = {"falado": expressao,
+                          "resolvido": quando.inicio.isoformat(),
+                          "descricao": quando.descricao}
+
+        # Confirma ANTES de escrever. Erro de data é silencioso — um horário
+        # bem formado e errado parece certo —, e a frase diz o dia da semana
+        # justamente para você perceber que ele entendeu sábado quando você
+        # quis dizer segunda.
+        if not quando.disse_hora:
+            # Ele disse o dia e não a hora. Marcar às 9 seria inventar um
+            # horário que ele não falou — e a confirmação diria só "amanhã,
+            # sexta", sem hora nenhuma, então nem dava para perceber o
+            # palpite. Perguntar custa uma fala; compromisso na hora errada
+            # custa o compromisso.
+            self._esperando_hora = (titulo, expressao)
+            return Resposta(self.cfg.persona.agenda_sem_hora,
+                            perguntando=True, diagnostico=diag)
+
+        self._evento_pendente = (titulo, quando.inicio, quando.descricao)
+        pergunta = self._frase("agenda_confirmar", titulo=titulo,
+                               quando=quando.descricao)
+        self._pergunta = pergunta
+        return Resposta(pergunta, perguntando=True, diagnostico=diag)
+
+    def _confirmar_evento(self, texto: str) -> Resposta:
+        titulo, inicio, descricao = self._evento_pendente
+        self._evento_pendente = None
+        resposta = self.cerebro.confirmar(texto, self._pergunta)
+        diag = {"origem": "confirmação de evento", "dito": texto,
+                "confirmacao": resposta.name, "titulo": titulo,
+                "inicio": inicio.isoformat()}
+
+        if resposta is Confirmacao.NAO:
+            return Resposta(self.cfg.persona.agenda_cancelado, diagnostico=diag)
+        if resposta is not Confirmacao.SIM:
+            # Não foi sim nem não: trata como pedido novo, a mesma saída de
+            # emergência que a confirmação de atalho já usa.
+            #
+            # Mas AVISA o que caiu. Descartar aqui é certo — insistir na
+            # pergunta antiga seria pior —, só que fazer isso calado deixa
+            # você achando que marcou. Foi o que aconteceu: duas falas soltas
+            # mataram um dentista pendente, e o "pode" seguinte não tinha mais
+            # nada para confirmar.
+            nova = self.processar(texto)
+            diag["descartado"] = f"{titulo} {descricao}"
+            aviso = self._frase("agenda_descartado", titulo=titulo,
+                                quando=descricao)
+            return Resposta(
+                f"{aviso} {nova.texto}".strip(),
+                acao=nova.acao,
+                perguntando=nova.perguntando,
+                diagnostico={**diag, "seguiu_para": nova.diagnostico},
+            )
+
+        try:
+            r = self.agenda.criar(titulo, inicio)
+        except ErroDaAgenda as e:
+            return Resposta(str(e).splitlines()[0], diagnostico=diag)
+        return Resposta(
+            self.cfg.persona.agenda_criado if r.ok else r.mensagem,
+            acao=f"agenda:criar:{inicio:%Y-%m-%dT%H:%M}" if r.ok else None,
+            diagnostico=diag,
+        )
+
+    def _listar_agenda(self, expressao: str, diag: dict) -> Resposta:
+        quando = mod_quando.resolver(expressao or "hoje")
+        dia = quando.inicio.date() if quando else dt.date.today()
+        rotulo = quando.descricao.split(" às ")[0] if quando else "hoje"
+
+        try:
+            eventos = self.agenda.do_dia(dia)
+        except ErroDaAgenda as e:
+            return Resposta(str(e).splitlines()[0], diagnostico=diag)
+
+        # HOJE corta pelo relógio; dia futuro, não. Perguntar "o que eu tenho
+        # hoje?" às 18h é perguntar o que ainda vai acontecer.
+        #
+        # A versão anterior lia os três primeiros CONTADOS DA MEIA-NOITE. Com
+        # cinco compromissos ela respondeu "escola às 7h30" — dez horas depois
+        # de a escola ter acabado — e escondeu os dois únicos que faltavam,
+        # justamente por serem os últimos. A frase dizia "os próximos" e
+        # entregava os primeiros.
+        #
+        # Em dia futuro o corte não existe: lá o dia inteiro está pela frente,
+        # e cortar esconderia compromisso.
+        #
+        # Evento de dia inteiro nunca é cortado. Ele começa 00:00 e contaria
+        # como passado a partir do primeiro minuto do dia, sumindo da lista
+        # sem nunca ter acontecido.
+        agora = dt.datetime.now()
+        passados: list = []
+        if dia == agora.date():
+            passados = [e for e in eventos
+                        if not e.dia_inteiro and e.inicio < agora]
+            eventos = [e for e in eventos
+                       if e.dia_inteiro or e.inicio >= agora]
+
+        diag["agenda"] = {"dia": dia.isoformat(), "restam": len(eventos),
+                          "ja_passaram": len(passados)}
+
+        if not eventos:
+            # Dia que acabou não é dia vazio, e a diferença importa: dizer
+            # "você não tem nada hoje" às 22h é falso sobre o dia inteiro.
+            chave = "agenda_acabou" if passados else "agenda_vazia"
+            return Resposta(self._frase(chave, dia=rotulo), diagnostico=diag)
+
+        teto = self.cfg.agenda.max_eventos_falados
+        falados = eventos[:teto]
+        lista = ", ".join(
+            f"{e.titulo}, {e.hora_falavel}" if e.dia_inteiro
+            else f"{e.titulo} às {e.hora_falavel}"
+            for e in falados
+        )
+
+        if len(eventos) == 1:
+            chave = "agenda_um"
+        elif len(eventos) <= teto:
+            chave = "agenda_varios"
+        else:
+            chave = "agenda_muitos"
+        return Resposta(
+            self._frase(chave, n=len(eventos), mostrados=len(falados),
+                        dia=rotulo, eventos=lista),
+            acao="agenda:listar",
+            diagnostico=diag,
+        )
 
     # -- mídia -------------------------------------------------------------
 
@@ -259,23 +487,17 @@ class Nucleo:
         self._pendente = casamento.atalho
         if casamento.empatados:
             a, b = casamento.empatados
-            return Resposta(
-                f"Você quis dizer {a.nome} ou {b.nome}?",
-                perguntando=True,
-                diagnostico=diag,
-            )
-        return Resposta(
-            f"Você quis dizer {casamento.atalho.nome}?",
-            perguntando=True,
-            diagnostico=diag,
-        )
+            self._pergunta = f"Você quis dizer {a.nome} ou {b.nome}?"
+        else:
+            self._pergunta = f"Você quis dizer {casamento.atalho.nome}?"
+        return Resposta(self._pergunta, perguntando=True, diagnostico=diag)
 
     def _responder_confirmacao(self, texto: str) -> Resposta:
         pendente = self._pendente
         self._pendente = None
         assert pendente is not None
 
-        resposta = self.cerebro.confirmar(texto)
+        resposta = self.cerebro.confirmar(texto, self._pergunta)
         diag = {"origem": "confirmação", "dito": texto,
                 "confirmacao": resposta.name, "sugerido": pendente.nome}
 
@@ -430,6 +652,10 @@ class Nucleo:
         self._busca = None
         self._esperando_nome = False
         self._esperando_musica = None
+        self._evento_pendente = None
+        self._esperando_quando = None
+        self._esperando_hora = None
+        self._pergunta = ""
         self._termo = ""
         self._diag = {}
 

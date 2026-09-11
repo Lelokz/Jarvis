@@ -39,7 +39,9 @@ FERRAMENTA_ABRIR = {
             "e 'põe na tela' são abrir.\n"
             "Para 'toca', 'reproduz' ou 'ouve', use `tocar`. Para 'pausa', "
             "'continua', 'próxima' ou 'volume', use `midia`. Para perguntas "
-            "sobre o computador, use `status_pc`.\n"
+            "sobre o computador, use `status_pc`. Para 'marca', 'agenda' ou "
+            "'me lembra', use `criar_evento`; para o que já está marcado, "
+            "`agenda_do_dia`.\n"
             "'abre músicas' é abrir a pasta; 'toca uma música' não é abrir."
         ),
         "parameters": {
@@ -141,13 +143,75 @@ FERRAMENTA_STATUS = {
     },
 }
 
+FERRAMENTA_CRIAR_EVENTO = {
+    "type": "function",
+    "function": {
+        "name": "criar_evento",
+        "description": (
+            "Marca um compromisso na agenda do usuário. Use para 'marca', "
+            "'agenda', 'me lembra de', 'põe na agenda', 'cria um evento'."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "titulo": {
+                    "type": "string",
+                    "description": (
+                        "O que é o compromisso, sem a parte de tempo. "
+                        "Em 'marca dentista amanhã de manhã', é 'dentista'."
+                    ),
+                },
+                "quando": {
+                    "type": "string",
+                    "description": (
+                        "A expressão de tempo EXATAMENTE como o usuário falou. "
+                        "NÃO calcule a data. Copie: 'amanhã de manhã', "
+                        "'sexta que vem às três', 'daqui a duas horas'. "
+                        "Vazio se ele não disse quando."
+                    ),
+                },
+            },
+            "required": ["titulo", "quando"],
+        },
+    },
+}
+
+FERRAMENTA_AGENDA_DIA = {
+    "type": "function",
+    "function": {
+        "name": "agenda_do_dia",
+        "description": (
+            "Diz o que o usuário já tem marcado num dia. Use para 'o que eu "
+            "tenho hoje', 'o que tem amanhã', 'como está minha agenda'."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "quando": {
+                    "type": "string",
+                    "description": (
+                        "O dia, como o usuário falou: 'hoje', 'amanhã', "
+                        "'sexta'. NÃO calcule a data. Vazio significa hoje."
+                    ),
+                }
+            },
+        },
+    },
+}
+
 # A ordem importa pouco para o modelo, mas manter `abrir` primeiro deixa
 # explícito que ele é o mais usado.
+#
+# São SEIS agora. A lição registrada na Etapa 2 diz que cada função nova amplia
+# o que o modelo pode confundir com o que já existe — por isso o conjunto de
+# roteamento cresce junto, e é ele que decide se a etapa está de pé.
 FERRAMENTAS = [
     FERRAMENTA_ABRIR,
     FERRAMENTA_TOCAR,
     FERRAMENTA_MIDIA,
     FERRAMENTA_STATUS,
+    FERRAMENTA_CRIAR_EVENTO,
+    FERRAMENTA_AGENDA_DIA,
 ]
 
 
@@ -357,22 +421,33 @@ class Cerebro:
             return None
         return texto.strip(" .\"'")
 
-    def confirmar(self, frase: str) -> Confirmacao:
-        """Classifica a resposta a uma pergunta de sim/não."""
+    def confirmar(self, frase: str, pergunta: str) -> Confirmacao:
+        """Classifica a resposta a uma pergunta de sim/não.
+
+        A `pergunta` entra no prompt, e isso não é enfeite. Sem ela o modelo
+        empurra pedido novo para NAO: "abre o loft" dito durante uma
+        confirmação virava "deixa pra lá" — cancelava o evento pendente E não
+        abria o Loft, porque a saída de emergência do OUTRO nunca disparava.
+        Medido em 5 rodadas de 16 frases: 61/80 sem a pergunta, 80/80 com ela.
+        """
         resposta = self._chat(
             [
                 {
                     "role": "system",
                     "content": (
-                        "O usuário está respondendo a uma pergunta de sim ou "
-                        "não. Responda com uma palavra só:\n"
-                        "SIM — ele concordou.\n"
-                        "NAO — ele negou, discordou ou corrigiu. Use NAO "
-                        "também quando ele nega e já diz o que queria, como "
-                        "em 'não, eu quis dizer outra coisa' ou 'nada disso, "
-                        "quero X'.\n"
-                        "OUTRO — ele ignorou a pergunta e falou de um assunto "
-                        "sem relação."
+                        f'Você perguntou ao usuário: "{pergunta}"\n'
+                        "Classifique a resposta dele com uma palavra só:\n"
+                        "SIM — ele concordou com ESSA pergunta. Em português "
+                        "falado isso inclui 'pode', 'manda', 'isso', "
+                        "'beleza', 'claro', 'vai lá', 'bora' e 'aham', não "
+                        "só 'sim'.\n"
+                        "NAO — ele recusou ESSA pergunta, ou corrigiu algo "
+                        "dela, como em 'não, era terça' ou 'nada disso'.\n"
+                        "OUTRO — ele não respondeu à pergunta. Qualquer frase "
+                        "que seja um pedido novo, uma ordem, outra pergunta, "
+                        f'ou que não tenha relação com "{pergunta}", é OUTRO '
+                        "— mesmo que soe seca. Na dúvida entre NAO e OUTRO, "
+                        "responda OUTRO."
                     ),
                 },
                 {"role": "user", "content": frase},
@@ -384,3 +459,40 @@ class Cerebro:
         if texto.startswith("NAO") or texto.startswith("NÃO"):
             return Confirmacao.NAO
         return Confirmacao.OUTRO
+
+    def resposta_solta(self, frase: str) -> bool:
+        """Diz se a frase é só um sim ou um não, com nada pendente.
+
+        Existe porque "pode" sem nada na mesa caía em nao_sei, e o Léo saiu de
+        uma conversa acreditando ter marcado um dentista que nunca foi criado.
+        Compromisso que você acredita ter e não tem é o pior resultado
+        possível numa agenda — pior que dar erro.
+
+        A nota sobre maiúsculas não é supérflua: o STT capitaliza a primeira
+        palavra da frase, e medindo deu 'não' → SOLTA mas 'Não' → OUTRO. Com
+        a nota, 90/90 em 5 rodadas de 18 frases.
+        """
+        resposta = self._chat(
+            [
+                {
+                    "role": "system",
+                    "content": (
+                        "A frase abaixo foi dita sem que houvesse nenhuma "
+                        "pergunta na mesa. Responda uma palavra só:\n"
+                        "SOLTA — a frase é só uma concordância ou uma recusa, "
+                        "sem pedido próprio: 'sim', 'pode', 'manda', "
+                        "'beleza', 'isso', 'aham', 'claro', 'não', 'deixa "
+                        "pra lá', 'nada disso'.\n"
+                        "OUTRO — qualquer outra coisa, incluindo saudação, "
+                        "agradecimento, elogio, pergunta e frase sem "
+                        "sentido.\n"
+                        "Pontuação e maiúsculas não mudam nada: 'Não.' é o "
+                        "mesmo que 'não'. Uma negação sozinha é SOLTA mesmo "
+                        "sem nada para negar."
+                    ),
+                },
+                {"role": "user", "content": frase},
+            ]
+        )
+        texto = (resposta.get("message", {}).get("content") or "").strip().upper()
+        return texto.startswith("SOLTA")

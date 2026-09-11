@@ -31,6 +31,12 @@ piper-tts==1.7.0
 # MPRIS sozinho, e sem MPRIS os controles não o alcançam).
 yt-dlp==2026.8.19
 
+# Google Agenda (Etapa 4). A fundação para Drive e Fotos depois: mesmo projeto
+# no Google Cloud, mesmo login, e cada serviço novo custa só mais um escopo.
+google-api-python-client==2.200.0
+google-auth-oauthlib==1.4.1
+google-auth-httplib2==0.4.2
+
 # Runtime CUDA. O wheel do ctranslate2 tem 39MB e NÃO embute CUDA: ele faz
 # dlopen de libcublas.so.12 e libcudnn*.so.9 em tempo de execução. Como não
 # instalamos torch (que traria essas libs de carona), elas entram por aqui e

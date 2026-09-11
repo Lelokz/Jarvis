@@ -20,6 +20,11 @@ nao_entendi = "Não entendi o nome, repete?"
 # Quando você nega uma confirmação sem dizer o que queria.
 o_que_entao = "O que você quis dizer?"
 
+# Quando você diz "pode" ou "não" e não há nada esperando confirmação.
+# Precisa ser diferente do nao_sei: cair no nao_sei fez o Léo sair de uma
+# conversa acreditando ter marcado um dentista que nunca existiu.
+nada_pendente = "Não tem nada esperando confirmação."
+
 # Quando a pista que você deu para estreitar uma busca não casa com nenhum
 # candidato. Os candidatos continuam guardados — é só tentar outra pista.
 pista_ruim = "Com essa pista não achei nada. Tenta outra?"
@@ -43,6 +48,43 @@ busca_nada = "Não achei nada chamado {termo}."
 # Mídia (Etapa 3).
 qual_musica = "Qual música?"
 musica_nao_achei = "Não achei nada no YouTube com {termo}."
+
+# Agenda (Etapa 4). A confirmação diz o DIA DA SEMANA de propósito: é assim que
+# você percebe que ele entendeu sábado quando você quis dizer segunda. Erro de
+# data é silencioso — um ISO bem formado e errado parece certo.
+agenda_confirmar = "{titulo} {quando}. Pode?"
+agenda_criado = "Marquei."
+agenda_cancelado = "Beleza, deixa pra lá."
+
+# Você tinha um evento esperando confirmação e falou de outra coisa. Ele
+# descarta e faz o que você pediu agora — mas diz o que caiu, com as mesmas
+# palavras que você tinha acabado de ouvir. Sumir calado é o que faz você
+# achar que marcou.
+agenda_descartado = "Descartei {titulo} {quando}."
+agenda_sem_quando = "Para quando?"
+
+# Ele disse o dia mas não a hora do dia. Perguntar é melhor que marcar num
+# horário que você não falou: "marca dentista amanhã" criava às 9h e
+# confirmava "dentista amanhã, sexta", sem hora — palpite invisível.
+# Período JÁ conta como hora dita: "amanhã de manhã" não cai aqui.
+agenda_sem_hora = "Que horas?"
+
+# Dia sem nenhum compromisso, do começo ao fim.
+agenda_vazia = "Você não tem nada {dia}."
+
+# Hoje tinha compromisso, mas todos já aconteceram. Precisa ser diferente do
+# agenda_vazia: "você não tem nada hoje" às 22h seria mentira sobre o dia, e
+# ler de volta o que já passou seria pior ainda.
+agenda_acabou = "Por hoje acabou, não tem mais nada."
+
+# Os três casos de lista. A separação existe porque a frase tem que dizer a
+# verdade sobre o que ela está fazendo: só o terceiro caso está resumindo, e
+# só ele anuncia o resumo. A versão anterior dizia "Os próximos:" sempre, e
+# num dia de 5 compromissos isso lia 3 sem avisar que havia mais.
+# {n} = quantos existem, {mostrados} = quantos ele vai falar.
+agenda_um = "Você tem um {dia}: {eventos}."
+agenda_varios = "Você tem {n} {dia}: {eventos}."
+agenda_muitos = "Você tem {n} {dia}. Os próximos {mostrados}: {eventos}."
 
 [llm]
 url = "http://localhost:11434"
@@ -184,6 +226,20 @@ refratario_s = 1.5
 # O relógio reinicia quando ELE termina de responder, não quando você para
 # de falar.
 janela_s = 30.0
+
+[agenda]
+# Fuso dos eventos criados. O calendário do Léo também tem um; este é o que
+# vai no corpo do evento.
+fuso = "America/Sao_Paulo"
+
+# Quanto dura um evento quando você não diz. "Marca dentista amanhã às 9" não
+# tem fim — uma hora é o padrão que menos surpreende.
+duracao_padrao_min = 60
+
+# Quantos compromissos ele lê em voz alta. Acima disso, diz o total e lê só os
+# primeiros — mesmo motivo dos 95 resultados da Etapa 2: lista longa falada é
+# pior que nenhuma.
+max_eventos_falados = 3
 
 [busca]
 # Onde procurar. Raiz inexistente é pulada em silêncio — o HD externo só entra

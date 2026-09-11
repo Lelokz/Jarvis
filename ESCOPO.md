@@ -5,9 +5,9 @@
 > qualquer linha. Se algo aqui conflitar com um pedido, pergunte antes de
 > implementar.
 
-Versão: 2.5. Sistema: **Linux Mint Cinnamon**.
+Versão: 2.6. Sistema: **Linux Mint Cinnamon**.
 Pasta: `~/Projetos/Jarvis`. Repositório Git privado no GitHub.
-Etapas 0 a 3 aprovadas (set/2026). Da Etapa 4 em diante, nada feito.
+Etapas 0 a 4 aprovadas (set/2026). Da Etapa 5 em diante, nada feito.
 
 ---
 
@@ -516,10 +516,210 @@ música e dizer "pausa" pausaria o vídeo do navegador. A ordem agora é: tocand
 e iniciado por nós → qualquer um tocando → iniciado por nós mesmo pausado → o
 resto.
 
-### Etapa 4 — Anotar e lembrar
+### Etapa 4 — Google Agenda
 Só cria coisa nova. Não toca em nada existente.
-- `criar_nota(texto)`
-- `criar_lembrete(texto, quando)`
+- `criar_evento(titulo, quando)`
+- `agenda_do_dia(quando)`
+
+**Mudança de escopo, decidida pelo Léo em set/2026.** Esta etapa era
+`criar_nota(texto)` e `criar_lembrete(texto, quando)` num bloco de notas local.
+Virou Google Agenda porque **nota que só existe no PC quase não seria usada** —
+o que ele quer é o lembrete chegando no celular.
+
+**A razão maior, e é a que faz valer o trabalho:** Agenda, Drive e Google Fotos
+usam o **mesmo projeto no Google Cloud e o mesmo login**. Esta etapa é a
+fundação para os três. Depois dela, cada serviço novo custa só mais uma
+permissão declarada — não um sistema de autenticação novo. É por isso que vale
+fazer bem feito agora, e não do jeito mais rápido.
+
+**Apagar evento fica de fora**, de propósito: é ação destrutiva e a §2.3 exige
+confirmação falada. O resto tem que estar de pé antes de mexer em algo que
+destrói.
+
+**A armadilha do OAuth, resolvida com a documentação do Google.** App com status
+de publicação **"Testing"** tem a autorização expirando em **7 dias**, o que
+obrigaria a reautorizar toda semana. A citação que decide:
+
+> *"A Google Cloud Platform project with an OAuth consent screen configured for
+> an external user type and a publishing status of 'Testing' is issued a refresh
+> token expiring in 7 days"*
+
+**A expiração depende do status de publicação, não da verificação** — o que
+contradiz vários tutoriais que afirmam ser preciso passar pela verificação do
+Google. Publicar em produção é um botão, e o app fica "não verificado", com uma
+tela de aviso que se atravessa uma vez. O teto de 100 usuários que forçaria
+verificação é irrelevante com um usuário.
+
+**Escopo pedido:** `.../auth/calendar.events` — o mais estreito que cria e lê
+eventos. É "sensível", mas não "restrito", que é a categoria que forçaria
+auditoria de segurança.
+
+> ### ⚠ Limitação conhecida: o app ficou em "Testing"
+>
+> **Publicar não deu.** O botão fica bloqueado porque o Google exige, na seção
+> Branding, uma **URL de página inicial** e uma **URL de política de
+> privacidade** — e o Jarvis não tem site. O app ficou em **Testing**, com o Léo
+> adicionado como usuário de teste.
+>
+> **Consequência:** a autorização pode expirar em **7 dias**, obrigando a rodar
+> `autorizar_google.py` de novo. Não quebra nada além disso: quando expira, a
+> chamada falha e é só reautorizar.
+>
+> **O que resolveria:** duas URLs públicas — uma página inicial e uma política
+> de privacidade. O caminho mais barato é o **GitHub Pages**, que o Léo já tem
+> conta: um repositório com `index.html` e `privacidade.html` dá as duas de
+> graça. Preenchidas, o botão Publicar destrava, o app vai para produção **sem
+> verificação** e a expiração de 7 dias some.
+>
+> **Adiado de propósito.** O Léo quer primeiro ver se agenda por voz é útil o
+> bastante para valer a briga com as URLs. Se for, é meia hora de trabalho; se
+> não for, foi meia hora economizada. Reautorizar semanalmente é o custo de
+> descobrir.
+
+**Converter fala em data e hora — medido antes de decidir.** Duas opções: o
+modelo devolver a data já calculada, ou devolver a expressão como foi falada e
+o Python converter. Dez frases, com hoje sendo sexta 04/09:
+
+| caminho | acerto |
+|---|---|
+| o modelo calcula | **5/10** |
+| o modelo extrai + Python converte | **9/10**, todas as datas certas |
+
+Os erros do modelo são **todos de aritmética de dia da semana**: "sexta que vem"
+virou quarta, "segunda" virou sábado, "terça" virou domingo. E nenhum se
+anuncia — ele devolve um ISO bem formado e errado, que parece certo. A extração
+da expressão, em contraste, foi 10/10.
+
+**Fica o caminho 2.** O `quando.py` mora separado do `agenda.py` de propósito:
+converter fala em data serve para lembrete, alarme e qualquer coisa futura com
+hora, e não é assunto do Google.
+
+**Isto sai da máquina, e é a primeira vez.** Todas as etapas anteriores eram
+locais. Aqui há rede, credencial e uma conta de verdade — errar escreve na
+agenda que o celular do Léo mostra. As credenciais (`credenciais_google.json` e
+`token_google.json`) ficam no `.gitignore`.
+
+**APROVADA — set/2026.** Criar e listar funcionam por voz, e a notificação
+chega no celular — que era a razão de a etapa ter trocado de escopo. Números
+completos em `medicoes/etapa4-agenda.md`.
+
+- **Roteamento: os pares novos da etapa deram 17/17** e as 15 frases da
+  Etapa 1 seguem **15/15**. O salto de 4 para 6 funções não custou nada de
+  roteamento — a lição da Etapa 2 previa custo e desta vez ele não apareceu.
+- Num conjunto mais largo, medido 5 vezes, deu **50/55**: dez frases em 5/5 e
+  **`"procura o arquivo de configuração"` em 0/5**, consistente. Não é
+  instabilidade nem regressão — o verbo "procura" **nunca** esteve na lista do
+  `abrir`, que é "abre", "mostra", "acessa" e "põe na tela". A busca da Etapa 2
+  se alcança dizendo **"abre X"** quando X não está no `atalhos.toml`. Ver a
+  limitação registrada abaixo.
+- **`abridança.ppxt` × 20: zero ações.** A guarda de ancoragem da Etapa 1
+  continua de pé.
+- **Resolvedor de datas: 13/14**, incluindo virada de mês, virada de ano e
+  "segunda numa segunda" (que é a próxima, não hoje).
+
+**A guarda de ancoragem foi estendida para a expressão de tempo, com corte em
+0.75 — mais alto que os 0.60 dos nomes.** O modelo inventa `quando` quando a
+frase não tem data: "marca academia" devolveu `/no_think` (um token de controle
+vazado) e "marca dentista" devolveu `agora`. O corte é mais exigente porque a
+extração de tempo é **fácil** para o modelo — 10/10 verbatim nas frases
+medidas, e mais 11/11 no teste por voz real —, então não há caso legítimo entre
+0.60 e 1.0 para proteger. Já as invenções encostam no corte comum: `agora`
+pontua **exatos 0.600** contra o texto falado e passaria por um fio, marcando
+compromisso para agora sem ninguém ter pedido.
+
+**A confirmação precisou aprender a falar a hora.** No teste por voz,
+"marca a dedista para hoje de noite" resolvia 19:00 corretamente e confirmava
+só *"dedista hoje"* — porque hora vinda de **período** era tratada como não
+explícita. Pegava até `"amanhã de manhã"`, que é a frase da verificação
+aprovada desta etapa: criava às 9h e nunca dizia isso. Separado em dois casos:
+período **é** hora dita e vai falada; nada dito é palpite e agora **pergunta**
+("Que horas?") em vez de marcar às 9h calado.
+
+**Listar passou a cortar pelo relógio.** A primeira versão lia os três
+**primeiros do dia**, contados da meia-noite, enquanto a frase prometia "os
+próximos" — às 17h53, com 5 compromissos, leu os 3 que já tinham acontecido (um
+deles 10h antes) e escondeu **os 2 únicos que ainda iam acontecer**. Hoje corta
+pelo horário atual; dia futuro não corta, porque lá o dia inteiro está pela
+frente; evento de dia inteiro nunca é cortado, já que começa 00:00 e sumiria no
+primeiro minuto do dia. E "por hoje acabou" é frase própria: dizer "você não
+tem nada hoje" às 22h seria falso sobre o dia.
+
+**Três limitações conhecidas** (além do modo Testing, no bloco acima):
+
+**Nome de mês não é entendido.** O `_resolver_dia` entende "dia 31" mas não
+"31 de dezembro" — a expressão cai em **hoje**, com a hora certa. Fica assim de
+propósito: data com nome de mês por voz é caso raro, e **a confirmação denuncia
+o erro antes de virar evento**, porque ela agora fala a hora e o dia ("hoje às
+23"). É o desenho funcionando — a confirmação existe para isto.
+
+**Não há saída falada das perguntas pendentes.** Em "Para quando?" e
+"Que horas?", a próxima fala é tratada como resposta, sempre: dizer "deixa pra
+lá" vira tentativa de data e ele pergunta de novo. Não cria nada de errado — a
+pergunta da hora bloqueia a criação —, mas prende a conversa até a janela de 30s
+fechar e o `reiniciar_conversa()` limpar o estado. O conserto seria passar essas
+falas pelo `resposta_solta()` antes de tratá-las como resposta.
+
+**Apagar e editar ficam de fora.** Marcou errado e confirmou, conserta no
+celular. Apagar é destrutivo e a §2.3 exige confirmação falada; entra quando o
+resto estiver rodado no uso real.
+
+> **Achado de fora da etapa, registrado para não se perder:** não dá para pedir
+> busca com o verbo **"procura"**. `"procura o arquivo de configuração"` não
+> casa com função nenhuma — 0/5 em 5 rodadas —, porque a descrição do `abrir`
+> lista só "abre", "mostra", "acessa" e "põe na tela". A busca da Etapa 2 é o
+> **segundo degrau** do `abrir`, alcançado quando o nome não está na tabela, e
+> nunca ganhou verbo próprio. É pré-existente à Etapa 4 e é conserto de uma
+> linha na descrição — mas mexer na lista de verbos foi o que quebrou
+> `"abre música"` na Etapa 3, então pede regressão das 15 frases junto.
+
+### O achado que não era da agenda: o classificador de sim/não
+
+**Apareceu medindo o custo de outra coisa, e valia mais que a etapa inteira.**
+O classificador de sim/não **nunca recebia a pergunta que estava sendo
+respondida** — o prompt só dizia "o usuário está respondendo a uma pergunta de
+sim ou não". Sem a pergunta, o modelo empurra **pedido novo** para NAO.
+
+Isto não é da agenda: é de **toda confirmação do sistema**, incluindo a
+desambiguação da busca da Etapa 2, que usa o mesmo classificador desde então.
+
+| 5 rodadas × 16 frases | sem a pergunta | com a pergunta |
+|---|---|---|
+| total | **60/80** | **80/80** |
+| `abre o loft` | 0/5 | 5/5 |
+| `toca uma música` | 0/5 | 5/5 |
+| `que horas são?` | 0/5 | 5/5 |
+| `qual a temperatura da GPU?` | 1/5 | 5/5 |
+
+As frases que quebravam são **exatamente os pedidos novos**. Na prática: com
+algo esperando confirmação, dizer "abre o loft" **cancelava o pendente e não
+abria o Loft** — o NAO virava "deixa pra lá", e a saída de emergência do OUTRO,
+que existe justamente para tratar a fala como pedido novo, quase nunca
+disparava.
+
+> ### E o detalhe que só erraria no uso real: a maiúscula
+>
+> No detector de confirmação órfã, **`'não'` classificava certo e `'Não'`
+> não.** Não era pontuação — era **maiúscula**. E o Whisper **sempre
+> capitaliza a primeira palavra da frase**, então em produção a negação solta
+> erraria **sempre**, e nunca no laboratório.
+>
+> Todas as formas de negação estavam quebradas: `Não` 0/5, `Não.` 0/5,
+> `nao` 0/5, `não` instável em 2/5. As afirmações iam todas bem — o viés era só
+> contra o "não". Com uma frase no prompt dizendo que pontuação e maiúsculas
+> não mudam nada: **105/105**.
+>
+> **O padrão que fica:** frase de teste escrita à mão não é a frase que chega.
+> O que chega passou pelo Whisper, que capitaliza, pontua e às vezes troca
+> palavra. Medir com texto limpo mede a coisa errada.
+
+**A confirmação não pode morrer em silêncio.** No teste por voz, duas falas sem
+relação mataram um dentista pendente sem avisar, e o "pode" seguinte caiu em
+`nao_sei` — o Léo saiu da conversa **acreditando ter marcado um compromisso que
+nunca existiu**. Compromisso que você acredita ter e não tem é o pior resultado
+possível numa agenda: pior que dar erro. Duas correções: descartar agora **diz
+o que caiu** ("Descartei dentista amanhã, sexta às 9.") na mesma fala em que
+atende o pedido novo, e confirmar sem nada pendente responde "não tem nada
+esperando confirmação" em vez de `nao_sei`.
 
 ### Etapa 5 — Mexer em arquivo ⚠️
 A etapa perigosa. Só depois que a busca (Etapa 2) estiver sólida.
@@ -593,6 +793,8 @@ insuportável.
 | Piper lendo mal texto que não é frase corrida (letra solta, número com vírgula, palavra rara) | Baixa | Observado na Etapa 0. Não bloqueia: quem escreve o texto falado é o sistema, sempre em frase corrida. Ver §5 |
 | **Sem dados de falso positivo na faixa 0.10–0.50** do wake word — a escuta passiva de 10 min não produziu nada acima do piso | Baixa | Só importa se um dia quisermos baixar o limiar de 0.50. O teste seria rodar `experimento_wakeword.py --piso 0.02` por uma hora em silêncio. Enquanto o limiar for 0.50, é irrelevante |
 | Ducking por aplicativo no PipeWire ser mais trabalhoso que no Windows | Baixa | Testar cedo, na Etapa 0; se complicar, adiar para depois da Etapa 3 |
+| **Prompt de classificação sem o contexto que está sendo classificado** | **Alta** — confirmada na Etapa 4 | O classificador de sim/não não via a pergunta e mandava pedido novo para NAO: 60/80. Com a pergunta, 80/80. Todo prompt que classifica uma resposta tem que receber aquilo a que ela responde |
+| **Medir com texto limpo em vez do que o Whisper entrega** | Média — confirmada na Etapa 4 | `'não'` acertava e `'Não'` errava, e o Whisper sempre capitaliza a primeira palavra: em produção erraria sempre. Frases de teste têm que vir com a capitalização e a pontuação que o STT produz |
 | Escopo crescendo e o projeto morrendo | **Alta** | Este documento. Nada fora dele sem atualizar ele antes |
 
 ---

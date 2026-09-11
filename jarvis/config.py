@@ -20,6 +20,7 @@ class Persona:
     nao_sei: str
     nao_entendi: str
     o_que_entao: str
+    nada_pendente: str
     pista_ruim: str
     busca_poucos: str
     busca_muitos: str
@@ -27,6 +28,17 @@ class Persona:
     busca_nada: str
     qual_musica: str
     musica_nao_achei: str
+    agenda_confirmar: str
+    agenda_criado: str
+    agenda_cancelado: str
+    agenda_descartado: str
+    agenda_sem_quando: str
+    agenda_sem_hora: str
+    agenda_vazia: str
+    agenda_acabou: str
+    agenda_um: str
+    agenda_varios: str
+    agenda_muitos: str
 
 
 @dataclass(frozen=True)
@@ -103,6 +115,13 @@ class Ciclo:
 
 
 @dataclass(frozen=True)
+class Agenda:
+    fuso: str
+    duracao_padrao_min: int
+    max_eventos_falados: int
+
+
+@dataclass(frozen=True)
 class Busca:
     raizes: list[str]
     ignorar: list[str]
@@ -128,6 +147,7 @@ class Config:
     acoes: Acoes
     wakeword: WakeWord
     ciclo: Ciclo
+    agenda: Agenda
     busca: Busca
     log: Log
     raiz: Path
@@ -156,6 +176,7 @@ _SECOES = {
     "acoes": Acoes,
     "wakeword": WakeWord,
     "ciclo": Ciclo,
+    "agenda": Agenda,
     "busca": Busca,
     "log": Log,
 }
