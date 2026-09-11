@@ -5,9 +5,9 @@
 > qualquer linha. Se algo aqui conflitar com um pedido, pergunte antes de
 > implementar.
 
-Versão: 2.6. Sistema: **Linux Mint Cinnamon**.
+Versão: 2.8. Sistema: **Linux Mint Cinnamon**.
 Pasta: `~/Projetos/Jarvis`. Repositório Git privado no GitHub.
-Etapas 0 a 4 aprovadas (set/2026). Da Etapa 5 em diante, nada feito.
+Etapas 0 a 5 aprovadas (set/2026). Da Etapa 5.5 em diante, nada feito.
 
 ---
 
@@ -722,11 +722,189 @@ atende o pedido novo, e confirmar sem nada pendente responde "não tem nada
 esperando confirmação" em vez de `nao_sei`.
 
 ### Etapa 5 — Mexer em arquivo ⚠️
-A etapa perigosa. Só depois que a busca (Etapa 2) estiver sólida.
+A primeira etapa destrutiva. Só depois que a busca (Etapa 2) estiver sólida.
 - `criar_pasta(nome, dentro_de)`
+- `renomear(caminho, novo_nome)` — **confirmação falada obrigatória**
+- `desfazer()` — volta a última renomeação
+
+**Fatiada em duas, decisão do Léo (set/2026).** `mover_arquivo` e
+`copiar_arquivo` saíram daqui e viraram a **Etapa 5.5**, que só começa depois
+que a máquina de confirmação estiver provada no uso real.
+
+Até aqui, errar significava **abrir a coisa errada** — custo zero, é só fechar.
+A partir daqui, errar significa **perder arquivo**. Fatiar deixa a etapa com uma
+função destrutiva só (`renomear`) e uma inofensiva (`criar_pasta`), as duas
+agindo **dentro de uma pasta só**: não há origem-e-destino, não há travessia de
+sistema de arquivos, não há cópia parcial. É o menor raio de explosão possível
+para provar a confirmação falada antes de ampliar.
+
+**Três consequências de graça:**
+
+1. **Nada de sistema de arquivos cruzado.** A máquina tem dois — `/` e o HD em
+   `/mnt/cab...`, este a 90%. Mover entre eles é copiar-e-apagar: não é atômico,
+   pode falhar pela metade e o desfazer vira uma segunda cópia. Renomear é um
+   `os.rename` no mesmo diretório, atômico, cujo desfazer é outro `os.rename`.
+2. **A armadilha do `plocate` foi adiada junto.** Pasta recém-criada não está no
+   índice, que atualiza uma vez por dia, e a busca só cai no `find` quando o
+   `plocate` devolve zero **depois** dos filtros. "Cria a pasta Notas" + "move o
+   relatório pra Notas" é o caso de uso óbvio, e era o que quebraria primeiro.
+3. **Zero código de apagar no núcleo.** Nada, em lugar nenhum, remove coisa. A
+   §2.4 não é respeitada por disciplina — é respeitada por ausência.
+
+**Onde ele pode mexer é uma lista branca**, no `[arquivos]` do `config.toml`.
+É o `atalhos.toml` desta etapa: a busca varre `~` e o HD inteiros porque existe
+para **achar**, e achar em todo lugar é certo; **agir** em todo lugar não é.
+Caminho alvo fora da lista, ou que só chegue lá por symlink ou `..`, é recusado.
+
+**Pasta nunca é alvo de `renomear`.** Renomear uma pasta com 3000 arquivos
+dentro é uma confirmação para 3000 consequências, e não há como ouvir o que tem
+lá dentro. Pasta só aparece como o `dentro_de` do `criar_pasta`.
+
+**Duas regras que não se negociam:**
+
+**Nunca sobrescrever.** Renomear para um nome que já existe na pasta destrói o
+que estava lá, e **nenhuma confirmação pega isso** — o Léo não sabe que havia
+algo com aquele nome. É o único caminho de perda silenciosa de dado na etapa.
+Nome ocupado → recusa, dizendo qual é.
+
+**A extensão é preservada sozinha.** "renomeia para proposta comercial" vira
+`proposta comercial.pdf`, não `proposta comercial`. Arquivo sem extensão para de
+abrir, e é uma quebra silenciosa: o arquivo continua lá, com o nome certo, e não
+funciona.
+
+> ### ⚠ O risco não estava onde este documento apontava
+>
+> A versão anterior desta seção tratava `mover_arquivo` como o perigo. Olhando
+> o código, o perigo é outro e já existe: **quando a busca sobra exatamente 1
+> resultado, o núcleo age imediatamente, sem confirmar.** É o desenho certo para
+> abrir — você pediu, achou um só, abre. Seria fatal para renomear, e é o
+> caminho em que o Léo tem **menos** informação: ele nunca ouviu a lista, não
+> sabe que só havia um candidato nem qual era.
+>
+> Por isso a ação destrutiva **não reusa** o caminho da busca. Ela tem estado
+> pendente próprio, no molde do `_evento_pendente` da Etapa 4, e a confirmação
+> é obrigatória **inclusive com um candidato só**.
+
+**A lixeira fica fora, e não é a mesma coisa que apagar.** A §2.4 já dizia
+*"mover para a lixeira, no máximo, e só depois da Etapa 5 estar sólida"* — já a
+classificou como teto do permitido e já a sequenciou depois desta etapa. O `gio`
+já está instalado e tem `--list`, que mostra os locais originais, e `--restore`,
+que devolve o arquivo ao lugar de onde saiu.
+
+> **A inversão que vale registrar:** a lixeira guarda a origem e tem desfazer
+> nativo. `mover_arquivo` não tem nenhum dos dois. A operação que o nome faz
+> parecer perigosa é **mais reversível** que a que o documento tratava como
+> comum. A lixeira fica fora por disciplina de sequência, não por risco — e o
+> desfazer desta etapa é desenhado para ela encaixar depois sem redesenho.
+
+**APROVADA — set/2026**, no teste por voz do Léo, nos seis casos: renomear com
+confirmação (e **ele reconheceu o nome do arquivo de ouvido**, que era a
+pergunta em aberto), renomear sem dizer o nome novo, descarte em voz alta ao
+mudar de assunto no meio da confirmação, desfazer, criar pasta, e a recusa de
+arquivo fora da lista branca.
+
+- **Extração do nome novo: 10/10 verbatim**, ancoragem 1.00, e vazio corretamente
+  quando o nome não foi dito.
+- **Roteamento com 9 funções: 150/150** em 5 rodadas — incluindo as 15 frases da
+  Etapa 1 em **75/75**. O maior salto de concorrência do projeto, de 6 para 9,
+  não derrubou nada.
+- **Recusas do teste isolado: 20/20** — nome ocupado, fora da lista branca, fuga
+  por `..`, symlink, pasta como alvo, nome vazio, nome só com pontos, nome só
+  com barra, arquivo inexistente, e `"versão 2.5"` **não** virando extensão.
+- **`abridança.ppxt` × 20: zero ações.** A guarda de ancoragem da Etapa 1 segue
+  de pé com três funções novas na mesa.
+
+### A lição do "procura": a instrução mora na ferramenta que deve GANHAR
+
+Vale muito além desta etapa, e é contraintuitiva o bastante para ficar em
+destaque.
+
+O verbo "procura" não casava com função nenhuma (0/5, achado ao fechar a Etapa
+4). Acrescentá-lo à lista de verbos do `abrir` resolveu — 0/5 → 5/5 — e criou um
+conflito previsto: `"procura o relatório e renomeia pra proposta"` passou a ir
+para `abrir`, quando o que o Léo quer feito é renomear.
+
+**A mesma regra, escrita nos dois lugares, deu resultados opostos:**
+
+| onde a instrução foi escrita | acerto |
+|---|---|
+| na descrição do `abrir` — *"mas 'procura X para renomear' é `renomear`, não isto"* | **0/5** |
+| na descrição do `renomear` — *"use ISTO sempre que a frase contiver 'renomear', inclusive quando começar com 'procura'"* | **5/5** |
+
+**Instrução de renúncia não funciona; instrução de reivindicação funciona.**
+Dizer a uma ferramenta que ela não deve pegar um caso não a impede de pegar —
+o modelo já decidiu por ela quando lê o primeiro verbo da frase. Dizer à outra
+que aquele caso é dela, sim. Toda vez que duas funções disputarem uma frase, a
+regra vai na que deve vencer.
+
+> **A descrição antiga do `abrir`, preservada porque foi substituída** e sem ela
+> o 0/5 não pode mais ser reproduzido:
+>
+> *"Abre uma coisa no computador do usuário: um site, uma pasta ou um projeto.
+> Use apenas quando o usuário pedir para abrir, mostrar ou acessar alguma
+> coisa.\nQuem decide é o VERBO, não o assunto: 'abre', 'mostra', 'acessa' e
+> 'põe na tela' são abrir."*
+
+### Três achados da medição desta etapa
+
+**O modelo copia o nome do alvo para o campo do nome novo.** `"Muda o nome do
+print"` devolve `nome_novo='print'` em **3 de 5 rodadas**, com ancoragem
+**1.00** — a palavra está mesmo na frase, então a guarda não tem o que barrar.
+É o mesmo formato do bug da Etapa 4: a ancoragem detecta **invenção**, não
+**palavra errada**. Guarda dirigida: nome novo igual ao alvo não é nome novo,
+e vira a pergunta "Para o quê?".
+
+*(A outra invenção, essa a guarda pega: `'novo nome'` e `'novo_nome'` pontuam
+0.47, bem abaixo do corte de 0.60.)*
+
+**"Esse aí" virou alvo.** `"Renomeia esse aí."` devolvia `alvo='esse aí'` em vez
+de vazio, e o Jarvis respondia *"não achei nada chamado esse aí"* — mandando o
+Léo repetir um nome que ele nunca disse. Resolvido com uma lista fechada de
+demonstrativos, da mesma natureza do `_SUPERFLUAS` que já existia: limpeza
+mecânica de português, não julgamento, e portanto não é trabalho para o modelo.
+
+**O custo de ir para 9 funções, medido.** A lição da Etapa 2 diz que cada função
+nova amplia o que o modelo pode confundir. Desta vez apareceu, e é pequeno:
+
+| frase | 6 ferramentas | 9 ferramentas |
+|---|---|---|
+| `"Pausa."` (cru) | 10/10 | **9/10** |
+| `"pausa"` | 10/10 | 10/10 |
+| `"Pausa a música."` | 10/10 | 10/10 |
+
+Só a forma crua de uma palavra só, e **a falha é `None`, não ação errada** — ele
+diz "isso eu não sei fazer" e o Léo repete. É o tipo de degradação aceitável;
+uma que trocasse de função não seria.
+
+### Duas limitações conhecidas
+
+**O desfazer morre quando ele dorme.** O estado vive no núcleo, junto das
+confirmações pendentes, e o `reiniciar_conversa()` limpa tudo. Renomear, sair
+por 40 segundos e voltar com "desfaz" não funciona. Foi escolha consciente do
+Léo — histórico em disco é bem mais código —, e é o que a Etapa 5.5 e a lixeira
+vão querer depois.
+
+**O `dentro_de` do `criar_pasta` resolve só pela tabela de atalhos**, não pela
+busca. Pasta que não está no `atalhos.toml` ele não sabe onde é, e responde
+"dentro de qual pasta?". Foi de propósito: acrescentar uma segunda
+desambiguação a uma operação inofensiva custaria mais estado no núcleo do que
+o problema merece. Se incomodar, a saída barata é pôr a pasta no `atalhos.toml`.
+
+### Etapa 5.5 — Mover e copiar arquivo ⚠️
+O resto da Etapa 5 original. Só começa depois que a 5 estiver rodada no uso
+real — a confirmação falada tem que ter sido provada com o Léo errando de
+verdade, não só em teste.
 - `mover_arquivo(origem, destino)`
-- `renomear(caminho, novo_nome)`
-- **Confirmação falada obrigatória em todas.**
+- `copiar_arquivo(origem, destino)` — não é destrutivo; é a saída para "na
+  dúvida, não move"
+
+**O que esta etapa traz de novo, e que a 5 não tem:** duas identificações numa
+frase só (origem **e** destino, cada uma podendo ser ambígua), travessia de
+sistema de arquivos, e a dependência do `plocate` desatualizado para achar
+pasta recém-criada. Os três problemas foram adiados de propósito.
+
+**Provavelmente é aqui que o desfazer precisa virar histórico em disco**, porque
+mover para longe é o erro que se percebe horas depois, não na hora.
 
 ### Etapa 6 — Interface
 Um app à parte, não um puxadinho. Provavelmente maior que o motor de voz.

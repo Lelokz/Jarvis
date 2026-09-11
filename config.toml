@@ -86,6 +86,54 @@ agenda_um = "Você tem um {dia}: {eventos}."
 agenda_varios = "Você tem {n} {dia}: {eventos}."
 agenda_muitos = "Você tem {n} {dia}. Os próximos {mostrados}: {eventos}."
 
+# Arquivos (Etapa 5). A confirmação diz os DOIS nomes, o atual e o novo, porque
+# é a única chance de você perceber que ele pegou o arquivo errado — a busca
+# pode ter achado um só e você nunca ouviu qual era.
+arquivo_confirmar = "Renomeio {atual} para {novo}. Pode?"
+arquivo_cancelado = "Beleza, deixa pra lá."
+
+# Ele entendeu qual arquivo mas não o nome novo. Medido: em 3 de 5 rodadas de
+# "muda o nome do print" o modelo devolve 'print' — o nome do próprio alvo —
+# com ancoragem 1.00, que a guarda não tem como barrar. Perguntar é a saída.
+arquivo_qual_nome = "Para o quê?"
+
+# Ele entendeu que era para renomear mas não qual arquivo ("renomeia esse aí").
+arquivo_qual = "Qual arquivo?"
+
+# Achou o arquivo, mas ele está fora do onde_pode_mexer. Precisa ser diferente
+# do busca_nada: dizer "não achei" seria mentira, e você ficaria repetindo o
+# nome achando que o Whisper errou.
+arquivo_fora_da_lista = "Achei, mas não está numa pasta que você liberou pra eu mexer."
+
+# Criar pasta sem dizer onde, ou dizendo um lugar que não é pasta conhecida.
+# Não guarda estado: é operação inofensiva, e pedir a frase inteira de novo
+# custa menos que mais um estado pendente no núcleo.
+arquivo_onde_criar = "Dentro de qual pasta? Fala o comando inteiro."
+
+# Você tinha uma renomeação esperando "pode" e falou de outra coisa. Mesmo
+# motivo da agenda_descartado: sumir calado faz você achar que renomeou.
+arquivo_descartado = "Descartei a renomeação de {atual}."
+
+# "desfaz" sem nada para desfazer.
+nada_para_desfazer = "Não tem nada para desfazer."
+
+[arquivos]
+# As ÚNICAS pastas onde ele pode criar pasta ou renomear arquivo. Fora daqui
+# ele recusa e diz.
+#
+# Isto é o atalhos.toml desta etapa. A busca da Etapa 2 varre a home e o HD
+# inteiros, e está certa em fazer isso: ela existe para ACHAR, e achar em todo
+# lugar é o certo. AGIR em todo lugar não é. A lista converte "pode mexer em
+# qualquer coisa da home" em "pode mexer numa lista que é sua".
+#
+# Caminho que só chegue aqui por symlink ou por ".." é recusado: a checagem
+# resolve o caminho antes de comparar.
+onde_pode_mexer = [
+    "~/Downloads",
+    "~/Documentos",
+    "~/Área de trabalho",
+]
+
 [llm]
 url = "http://localhost:11434"
 modelo = "qwen3:8b"

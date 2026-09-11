@@ -39,6 +39,14 @@ class Persona:
     agenda_um: str
     agenda_varios: str
     agenda_muitos: str
+    arquivo_confirmar: str
+    arquivo_cancelado: str
+    arquivo_qual_nome: str
+    arquivo_qual: str
+    arquivo_fora_da_lista: str
+    arquivo_onde_criar: str
+    arquivo_descartado: str
+    nada_para_desfazer: str
 
 
 @dataclass(frozen=True)
@@ -122,6 +130,11 @@ class Agenda:
 
 
 @dataclass(frozen=True)
+class Arquivos:
+    onde_pode_mexer: list[str]
+
+
+@dataclass(frozen=True)
 class Busca:
     raizes: list[str]
     ignorar: list[str]
@@ -148,6 +161,7 @@ class Config:
     wakeword: WakeWord
     ciclo: Ciclo
     agenda: Agenda
+    arquivos: Arquivos
     busca: Busca
     log: Log
     raiz: Path
@@ -177,6 +191,7 @@ _SECOES = {
     "wakeword": WakeWord,
     "ciclo": Ciclo,
     "agenda": Agenda,
+    "arquivos": Arquivos,
     "busca": Busca,
     "log": Log,
 }

@@ -33,15 +33,19 @@ FERRAMENTA_ABRIR = {
         "name": "abrir",
         "description": (
             "Abre uma coisa no computador do usuário: um site, uma pasta ou um "
-            "projeto. Use apenas quando o usuário pedir para abrir, mostrar ou "
-            "acessar alguma coisa.\n"
-            "Quem decide é o VERBO, não o assunto: 'abre', 'mostra', 'acessa' "
-            "e 'põe na tela' são abrir.\n"
+            "projeto. Use também quando ele pedir para PROCURAR uma coisa: "
+            "achar e abrir são o mesmo pedido aqui, porque procurar é o passo "
+            "que vem antes de abrir.\n"
+            "Quem decide é o VERBO, não o assunto: 'abre', 'mostra', 'acessa', "
+            "'põe na tela', 'procura', 'acha', 'encontra' e 'cadê' são abrir.\n"
+            "Mas 'procura X para renomear' é `renomear`, não isto: quando ele "
+            "diz o que quer FAZER com a coisa, quem manda é esse verbo.\n"
             "Para 'toca', 'reproduz' ou 'ouve', use `tocar`. Para 'pausa', "
             "'continua', 'próxima' ou 'volume', use `midia`. Para perguntas "
             "sobre o computador, use `status_pc`. Para 'marca', 'agenda' ou "
             "'me lembra', use `criar_evento`; para o que já está marcado, "
-            "`agenda_do_dia`.\n"
+            "`agenda_do_dia`. Para 'renomeia', 'muda o nome' ou 'troca o "
+            "nome', use `renomear`; para 'cria uma pasta', `criar_pasta`.\n"
             "'abre músicas' é abrir a pasta; 'toca uma música' não é abrir."
         ),
         "parameters": {
@@ -202,9 +206,102 @@ FERRAMENTA_AGENDA_DIA = {
 # A ordem importa pouco para o modelo, mas manter `abrir` primeiro deixa
 # explícito que ele é o mais usado.
 #
-# São SEIS agora. A lição registrada na Etapa 2 diz que cada função nova amplia
-# o que o modelo pode confundir com o que já existe — por isso o conjunto de
-# roteamento cresce junto, e é ele que decide se a etapa está de pé.
+FERRAMENTA_RENOMEAR = {
+    "type": "function",
+    "function": {
+        "name": "renomear",
+        "description": (
+            "Muda o nome de um arquivo, no lugar onde ele já está. Use para "
+            "'renomeia', 'muda o nome', 'troca o nome' e 'chama esse arquivo "
+            "de'.\n"
+            "Use ISTO, e não `abrir`, sempre que a frase contiver 'renomear' "
+            "ou 'mudar o nome' em qualquer lugar — inclusive quando ela "
+            "começar com 'procura' ou 'acha', como em 'procura o relatório e "
+            "renomeia pra proposta'. Procurar é só o passo para chegar no "
+            "arquivo; o que ele quer feito é renomear.\n"
+            "Não move o arquivo de pasta e não apaga nada."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "alvo": {
+                    "type": "string",
+                    "description": (
+                        "Qual arquivo, como o usuário falou, sem artigo e sem "
+                        "verbo. Em 'renomeia o relatório para proposta', é "
+                        "'relatório'. Vazio se ele disse só 'esse arquivo' ou "
+                        "'esse aí'."
+                    ),
+                },
+                "nome_novo": {
+                    "type": "string",
+                    "description": (
+                        "O nome novo, EXATAMENTE como o usuário falou, sem a "
+                        "palavra 'para' e sem inventar extensão. Em 'renomeia "
+                        "o relatório para proposta comercial', é 'proposta "
+                        "comercial'. Vazio se ele não disse o nome novo."
+                    ),
+                },
+            },
+            "required": ["alvo", "nome_novo"],
+        },
+    },
+}
+
+FERRAMENTA_CRIAR_PASTA = {
+    "type": "function",
+    "function": {
+        "name": "criar_pasta",
+        "description": (
+            "Cria uma pasta nova dentro de outra. Use só quando o usuário "
+            "disser PASTA ou DIRETÓRIO: 'cria uma pasta', 'faz uma pasta "
+            "chamada X'.\n"
+            "'cria um evento', 'cria um lembrete' e 'cria um compromisso' NÃO "
+            "são isto — são `criar_evento`. O verbo é o mesmo; quem decide é "
+            "a palavra 'pasta'."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "nome": {
+                    "type": "string",
+                    "description": (
+                        "O nome da pasta, como o usuário falou. Em 'cria uma "
+                        "pasta chamada notas fiscais', é 'notas fiscais'."
+                    ),
+                },
+                "dentro_de": {
+                    "type": "string",
+                    "description": (
+                        "Onde criar, como o usuário falou: 'downloads', "
+                        "'documentos'. Vazio se ele não disse onde."
+                    ),
+                },
+            },
+            "required": ["nome", "dentro_de"],
+        },
+    },
+}
+
+FERRAMENTA_DESFAZER = {
+    "type": "function",
+    "function": {
+        "name": "desfazer",
+        "description": (
+            "Desfaz a última coisa que você mexeu em arquivo, voltando o nome "
+            "anterior. Use para 'desfaz', 'desfaz isso', 'volta atrás', "
+            "'cancela o que você fez' e 'não era pra ter feito isso'."
+        ),
+        "parameters": {"type": "object", "properties": {}},
+    },
+}
+
+# São NOVE agora, e é o maior salto do projeto — de 6 para 9 de uma vez. A
+# lição registrada na Etapa 2 diz que cada função nova amplia o que o modelo
+# pode confundir com o que já existe, por isso o conjunto de roteamento cresce
+# junto e é ele que decide se a etapa está de pé. O par que mais preocupa é
+# `criar_pasta` contra `criar_evento`: mesmo verbo, destinos completamente
+# diferentes.
 FERRAMENTAS = [
     FERRAMENTA_ABRIR,
     FERRAMENTA_TOCAR,
@@ -212,6 +309,9 @@ FERRAMENTAS = [
     FERRAMENTA_STATUS,
     FERRAMENTA_CRIAR_EVENTO,
     FERRAMENTA_AGENDA_DIA,
+    FERRAMENTA_RENOMEAR,
+    FERRAMENTA_CRIAR_PASTA,
+    FERRAMENTA_DESFAZER,
 ]
 
 

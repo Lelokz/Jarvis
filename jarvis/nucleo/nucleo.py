@@ -18,7 +18,7 @@ from pathlib import Path
 from ..config import Config
 import datetime as dt
 
-from . import acoes, midia, quando as mod_quando, sistema
+from . import acoes, arquivos as mod_arquivos, midia, quando as mod_quando, sistema
 from .agenda import Agenda, ErroDaAgenda
 from .ancoragem import ancoragem
 from .atalhos import Atalho, Casamento, Desfecho, Tabela, normalizar
@@ -92,6 +92,22 @@ class Nucleo:
         # tinha dito, porque a resposta ("às 8") não carrega o dia: quem
         # resolve é a soma das duas falas.
         self._esperando_hora: tuple[str, str] | None = None
+
+        # --- Etapa 5: mexer em arquivo ------------------------------------
+        # O que fazer com o candidato que a busca escolher. None = abrir, que
+        # é o comportamento de sempre. Reusar a busca em vez de duplicá-la
+        # mantém a propriedade cara da Etapa 2: a busca sobrevive à pista ruim.
+        self._busca_para: str | None = None
+        # O nome novo atravessando a desambiguação, quando ele já foi dito.
+        self._nome_novo_pendente: str | None = None
+        # "renomeia esse aí" — falta saber qual arquivo.
+        self._esperando_qual_arquivo: str | None = None
+        # Achou o arquivo, falta o nome novo.
+        self._esperando_nome_novo: Path | None = None
+        # Renomeação resolvida esperando o "pode". É a §2.3 virando estado.
+        self._renomeacao_pendente: tuple[Path, str] | None = None
+        # (onde está agora, onde estava antes) — para o "desfaz".
+        self._ultima_renomeacao: tuple[Path, Path] | None = None
         self._diag: dict = {}
 
     # ----------------------------------------------------------------------
@@ -134,6 +150,17 @@ class Nucleo:
         if self._esperando_musica is not None:
             return self._musica_pedida(texto)
 
+        if self._renomeacao_pendente is not None:
+            return self._confirmar_renomeacao(texto)
+
+        if self._esperando_qual_arquivo is not None:
+            novo, self._esperando_qual_arquivo = self._esperando_qual_arquivo, None
+            return self._escolher_arquivo(texto, novo, {"origem": "qual arquivo"})
+
+        if self._esperando_nome_novo is not None:
+            caminho, self._esperando_nome_novo = self._esperando_nome_novo, None
+            return self._com_arquivo(caminho, texto)
+
         interpretacao = self.cerebro.interpretar(texto)
         base = {"houve_tool_call": interpretacao.funcao is not None,
                 "funcao": interpretacao.funcao, "dito": texto,
@@ -172,6 +199,23 @@ class Nucleo:
             return self._listar_agenda(
                 str(interpretacao.argumentos.get("quando") or "").strip(), base
             )
+
+        if interpretacao.funcao == "renomear":
+            return self._renomear(
+                str(interpretacao.argumentos.get("alvo") or "").strip(),
+                str(interpretacao.argumentos.get("nome_novo") or "").strip(),
+                base, texto,
+            )
+
+        if interpretacao.funcao == "criar_pasta":
+            return self._criar_pasta(
+                str(interpretacao.argumentos.get("nome") or "").strip(),
+                str(interpretacao.argumentos.get("dentro_de") or "").strip(),
+                base, texto,
+            )
+
+        if interpretacao.funcao == "desfazer":
+            return self._desfazer(base)
 
         if interpretacao.funcao == "status_pc":
             r = sistema.status_gpu()
@@ -341,6 +385,215 @@ class Nucleo:
             self._frase(chave, n=len(eventos), mostrados=len(falados),
                         dia=rotulo, eventos=lista),
             acao="agenda:listar",
+            diagnostico=diag,
+        )
+
+    # -- arquivos (Etapa 5) ------------------------------------------------
+
+    def _soltar_busca(self) -> None:
+        """Esquece a busca E o que ela ia fazer com o resultado.
+
+        Os dois juntos, sempre: uma busca que morre deixando o propósito para
+        trás faria a próxima busca — de abrir — cair no caminho de renomear.
+        """
+        self._busca = None
+        self._busca_para = None
+        self._nome_novo_pendente = None
+
+    def _pode_mexer(self, caminho: Path) -> bool:
+        return mod_arquivos.pode_mexer(caminho, self.cfg.arquivos.onde_pode_mexer)
+
+    def _renomear(self, alvo: str, nome_novo: str, diag: dict, dito: str) -> Resposta:
+        if alvo:
+            nota = ancoragem(alvo, dito)
+            diag["ancoragem_alvo"] = round(nota, 3)
+            if nota < self.cfg.llm.ancoragem_minima:
+                diag["alvo_inventado"] = alvo
+                alvo = ""
+
+        if nome_novo:
+            nota = ancoragem(nome_novo, dito)
+            diag["ancoragem_nome_novo"] = round(nota, 3)
+            if nota < self.cfg.llm.ancoragem_minima:
+                diag["nome_novo_inventado"] = nome_novo
+                nome_novo = ""
+
+        # Guarda que a ancoragem não tem como dar: o modelo copia o nome do
+        # ALVO para o campo do nome novo. Medido — "muda o nome do print"
+        # devolve nome_novo='print' em 3 de 5 rodadas, com ancoragem 1.00,
+        # porque a palavra está mesmo na frase. Nome novo igual ao alvo não é
+        # nome novo; é o modelo preenchendo campo obrigatório com o que tinha
+        # à mão.
+        if nome_novo and alvo and normalizar(nome_novo) == normalizar(alvo):
+            diag["nome_novo_copiou_alvo"] = nome_novo
+            nome_novo = ""
+
+        if alvo and mod_arquivos.aponta_sem_nomear(alvo):
+            diag["alvo_so_aponta"] = alvo
+            alvo = ""
+
+        if not alvo:
+            self._esperando_qual_arquivo = nome_novo
+            return Resposta(
+                self.cfg.persona.arquivo_qual, perguntando=True, diagnostico=diag
+            )
+
+        return self._escolher_arquivo(alvo, nome_novo, diag)
+
+    def _escolher_arquivo(self, alvo: str, nome_novo: str, diag: dict) -> Resposta:
+        """Acha o arquivo e entrega para a confirmação. Nunca age."""
+        self._termo = alvo
+        achados = self.buscador.buscar(alvo)
+        podem = [
+            a for a in achados if not a.e_pasta and self._pode_mexer(a.caminho)
+        ]
+        diag["busca"] = {
+            **self.buscador.ultimo_diagnostico,
+            "resultados": len(achados),
+            "dentro_da_lista_branca": len(podem),
+        }
+        self._diag = diag
+
+        # Achou e não pode mexer é diferente de não achar. Dizer "não achei"
+        # aqui seria mentira, e o Léo ficaria repetindo o nome achando que o
+        # Whisper errou.
+        if achados and not podem:
+            self._soltar_busca()
+            return Resposta(
+                self.cfg.persona.arquivo_fora_da_lista, diagnostico=diag
+            )
+
+        self._busca_para = "renomear"
+        self._nome_novo_pendente = nome_novo
+        return self._apresentar(podem, primeira=True)
+
+    def _com_arquivo(self, caminho: Path, nome_novo: str) -> Resposta:
+        """Tem o arquivo. Pede o nome que falta, ou monta a confirmação."""
+        diag = {"origem": "renomear", "alvo": str(caminho)}
+        final = mod_arquivos.nome_final(caminho, nome_novo)
+        if not final:
+            self._esperando_nome_novo = caminho
+            return Resposta(
+                self.cfg.persona.arquivo_qual_nome, perguntando=True, diagnostico=diag
+            )
+
+        # A extensão só é falada quando MUDA. Ela é preservada sozinha, então
+        # dizer ".pdf" toda vez é ruído que o Piper lê mal; mas trocar .txt por
+        # .md muda qual programa abre o arquivo, e isso o Léo precisa ouvir.
+        destino = caminho.parent / final
+        if destino.suffix.lower() != caminho.suffix.lower():
+            falado_novo = final
+        else:
+            falado_novo = mod_arquivos.falar_nome(destino)
+
+        diag["novo"] = final
+        self._renomeacao_pendente = (caminho, nome_novo)
+        pergunta = self._frase(
+            "arquivo_confirmar",
+            atual=mod_arquivos.falar_nome(caminho),
+            novo=falado_novo,
+        )
+        self._pergunta = pergunta
+        return Resposta(pergunta, perguntando=True, diagnostico=diag)
+
+    def _confirmar_renomeacao(self, texto: str) -> Resposta:
+        caminho, nome_novo = self._renomeacao_pendente
+        self._renomeacao_pendente = None
+        resposta = self.cerebro.confirmar(texto, self._pergunta)
+        diag = {
+            "origem": "confirmação de renomeação",
+            "dito": texto,
+            "confirmacao": resposta.name,
+            "alvo": str(caminho),
+            "novo": nome_novo,
+        }
+
+        if resposta is Confirmacao.NAO:
+            return Resposta(self.cfg.persona.arquivo_cancelado, diagnostico=diag)
+
+        if resposta is not Confirmacao.SIM:
+            # Mesma lição da Etapa 4: descartar aqui é certo, fazer isso calado
+            # não. Sumir sem avisar deixa o Léo achando que renomeou.
+            nova = self.processar(texto)
+            diag["descartado"] = str(caminho)
+            aviso = self._frase(
+                "arquivo_descartado", atual=mod_arquivos.falar_nome(caminho)
+            )
+            return Resposta(
+                f"{aviso} {nova.texto}".strip(),
+                acao=nova.acao,
+                perguntando=nova.perguntando,
+                diagnostico={**diag, "seguiu_para": nova.diagnostico},
+            )
+
+        r = mod_arquivos.renomear(
+            caminho, nome_novo, self.cfg.arquivos.onde_pode_mexer
+        )
+        diag["resultado"] = r.detalhe
+        if r.ok and r.detalhe:
+            # Guarda invertido: de onde ele está AGORA para onde estava antes.
+            self._ultima_renomeacao = (
+                Path(r.detalhe["para"]),
+                Path(r.detalhe["de"]),
+            )
+        return Resposta(
+            r.mensagem,
+            acao=f"renomear:{caminho}" if r.ok else None,
+            diagnostico=diag,
+        )
+
+    def _desfazer(self, diag: dict) -> Resposta:
+        if self._ultima_renomeacao is None:
+            return Resposta(self.cfg.persona.nada_para_desfazer, diagnostico=diag)
+
+        de, para = self._ultima_renomeacao
+        self._ultima_renomeacao = None
+        r = mod_arquivos.reverter(de, para, self.cfg.arquivos.onde_pode_mexer)
+        diag["resultado"] = r.detalhe
+        if not r.ok:
+            # Falhou: devolve o desfazer para a mesa. Alguém pode ter ocupado
+            # o nome antigo, e a saída é liberar o nome e mandar desfazer de
+            # novo — não perder a única chance.
+            self._ultima_renomeacao = (de, para)
+        return Resposta(
+            r.mensagem, acao=f"desfazer:{de}" if r.ok else None, diagnostico=diag
+        )
+
+    def _criar_pasta(
+        self, nome: str, dentro_de: str, diag: dict, dito: str
+    ) -> Resposta:
+        if nome:
+            nota = ancoragem(nome, dito)
+            diag["ancoragem_nome"] = round(nota, 3)
+            if nota < self.cfg.llm.ancoragem_minima:
+                diag["nome_inventado"] = nome
+                nome = ""
+        if not nome:
+            return Resposta(self.cfg.persona.nao_entendi, diagnostico=diag)
+
+        # O "dentro de" sai da tabela de atalhos, não da busca. Pasta do dia a
+        # dia já está lá e resolve instantâneo; e exigir CERTO (0.92) em vez de
+        # aceitar sugestão é a §2.2 — criar pasta no lugar errado é bagunça
+        # silenciosa, você só descobre quando for procurar.
+        atalho = self.tabela.casar(dentro_de).atalho if dentro_de else None
+        if (
+            atalho is None
+            or atalho.tipo != "pasta"
+            or self.tabela.casar(dentro_de).desfecho is not Desfecho.CERTO
+        ):
+            diag["dentro_de_nao_resolveu"] = dentro_de
+            return Resposta(
+                self.cfg.persona.arquivo_onde_criar, diagnostico=diag
+            )
+
+        pai = Path(atalho.alvo).expanduser()
+        r = mod_arquivos.criar_pasta(
+            nome, pai, self.cfg.arquivos.onde_pode_mexer
+        )
+        diag["resultado"] = r.detalhe
+        return Resposta(
+            r.mensagem,
+            acao=f"criar_pasta:{pai / nome}" if r.ok else None,
             diagnostico=diag,
         )
 
@@ -564,7 +817,7 @@ class Nucleo:
             interpretacao = self.cerebro.interpretar(filtro)
             if interpretacao.nome is not None:
                 diag["saida"] = "comando novo"
-                self._busca = None
+                self._soltar_busca()
                 return self._resolver_nome(interpretacao.nome, dito=filtro)
 
             diag["saida"] = "pista ruim — busca mantida"
@@ -583,15 +836,23 @@ class Nucleo:
         que devolve a escolha ao Léo com o mínimo de informação necessária.
         """
         if not achados:
-            self._busca = None
+            self._soltar_busca()
             return Resposta(
                 self._frase("busca_nada", termo=self._termo),
                 diagnostico=self._diag,
             )
 
         if len(achados) == 1:
-            self._busca = None
             achado = achados[0]
+            if self._busca_para == "renomear":
+                # Um candidato só é exatamente onde a §2.3 corria risco: abrir
+                # direto está certo para abrir, e seria fatal aqui. O Léo nunca
+                # ouviu a lista — não sabe que havia um só nem qual era. Então
+                # a busca não age: entrega para quem confirma.
+                novo = self._nome_novo_pendente or ""
+                self._soltar_busca()
+                return self._com_arquivo(achado.caminho, novo)
+            self._busca = None
             resultado = acoes.abrir_caminho(achado.caminho, self.comandos)
             return Resposta(
                 resultado.mensagem,
@@ -656,6 +917,14 @@ class Nucleo:
         self._esperando_quando = None
         self._esperando_hora = None
         self._pergunta = ""
+        self._soltar_busca()
+        self._esperando_qual_arquivo = None
+        self._esperando_nome_novo = None
+        self._renomeacao_pendente = None
+        # O desfazer morre junto, e isso é limitação conhecida: renomear, sair
+        # por 40 segundos e voltar com "desfaz" não funciona. Um histórico em
+        # disco é o que a Etapa 5.5 e a lixeira vão querer.
+        self._ultima_renomeacao = None
         self._termo = ""
         self._diag = {}
 
