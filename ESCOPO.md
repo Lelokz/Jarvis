@@ -876,13 +876,28 @@ Só a forma crua de uma palavra só, e **a falha é `None`, não ação errada**
 diz "isso eu não sei fazer" e o Léo repete. É o tipo de degradação aceitável;
 uma que trocasse de função não seria.
 
-### Duas limitações conhecidas
+### Três limitações conhecidas
 
 **O desfazer morre quando ele dorme.** O estado vive no núcleo, junto das
 confirmações pendentes, e o `reiniciar_conversa()` limpa tudo. Renomear, sair
 por 40 segundos e voltar com "desfaz" não funciona. Foi escolha consciente do
 Léo — histórico em disco é bem mais código —, e é o que a Etapa 5.5 e a lixeira
 vão querer depois.
+
+**Regressão medida e não corrigida: `"Continua."` parou de funcionar.** Achada
+montando o `medicoes/etapa5-arquivos.md`, comparando 6 contra 9 ferramentas em
+10 rodadas. Era `midia` 10/10 na Etapa 4 e virou `None` 7 de 8 — o Jarvis
+responde "isso eu ainda não sei fazer" a um comando de mídia que funcionava.
+
+**É a maiúscula pela terceira vez.** `"continua"` e `"Continua a música."`
+continuam 8/8; só a forma capitalizada de uma palavra caiu. E o Whisper sempre
+capitaliza a primeira palavra, então a forma que quebra é a que chega no uso
+real. A bateria de 5 rodadas não pegou porque `"Continua."` não estava nela, e
+porque 5 rodadas não enxergam um efeito dessa ordem.
+
+Não foi corrigida junto de propósito: mexer na lista de verbos foi o que quebrou
+`"abre música"` na Etapa 3, e isso pede rodada própria com a regressão das 15
+frases junto. O caminho provável é dar ao `midia` os verbos crus que faltam.
 
 **O `dentro_de` do `criar_pasta` resolve só pela tabela de atalhos**, não pela
 busca. Pasta que não está no `atalhos.toml` ele não sabe onde é, e responde
