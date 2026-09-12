@@ -89,26 +89,109 @@ def volume_atual() -> int | None:
     return int(achado.group(1)) if achado else None
 
 
-def ajustar_volume(alvo: str | None, passo: int = 10) -> Resultado:
-    """`alvo` pode ser um número ("50"), "mais", "menos" ou "mudo"."""
+# Volume dito por extenso. Fechada de propósito, e só os valores redondos que
+# alguém fala em voz alta — é limpeza mecânica de português, do mesmo tipo que
+# o _SUPERFLUAS do atalhos.py, e não trabalho para o modelo.
+_POR_EXTENSO = {
+    "zero": 0, "dez": 10, "quinze": 15, "vinte": 20, "trinta": 30,
+    "quarenta": 40, "cinquenta": 50, "cinquenta e cinco": 55, "sessenta": 60,
+    "setenta": 70, "oitenta": 80, "noventa": 90, "cem": 100,
+}
+
+_SOBE = ("aumenta", "aumente", "sobe", "suba", "levanta", "mais alto", "mais")
+_DESCE = ("abaixa", "abaixe", "baixa", "baixe", "diminui", "diminua",
+          "reduz", "mais baixo", "menos")
+_MUDO = ("mudo", "muda o som", "muta", "silencio", "silêncio", "sem som",
+         "tira o som")
+
+
+@dataclass(frozen=True)
+class PlanoDeVolume:
+    """O que o volume VAI virar — antes de virar.
+
+    Existe separado de aplicar porque a §2.3 precisa confirmar antes de agir, e
+    não dá para confirmar um número que só será calculado dentro de quem já
+    mexeu no som. É o mesmo desenho do evento da Etapa 4 e da renomeação da
+    Etapa 5: resolver, perguntar, e só então executar.
+    """
+
+    ok: bool
+    mensagem: str = ""  # quando não dá, a frase falável
+    novo: int = 0
+    atual: int = 0
+    caminho: str = ""  # "relativo" | "absoluto" | "mudo"
+
+
+def _numero_dito(dito: str) -> int | None:
+    """O número de volume que está DE VERDADE na fala. None se não houver.
+
+    Esta é a guarda que faltava e que deixou o volume ir a 100. O modelo
+    devolveu `valor='100'` para "Pode dar play agora." — um número que não
+    existe em lugar nenhum da frase. Procurar na transcrição, e não confiar no
+    que o modelo entregou, é a mesma ancoragem que protege nome (Etapa 1) e
+    expressão de tempo (Etapa 4).
+    """
+    texto = dito.lower()
+    achado = re.search(r"\b(\d{1,3})\b", texto)
+    if achado:
+        return max(0, min(100, int(achado.group(1))))
+    for palavra, valor in sorted(_POR_EXTENSO.items(), key=lambda x: -len(x[0])):
+        if re.search(rf"\b{palavra}\b", texto):
+            return valor
+    return None
+
+
+def planejar_volume(dito: str, passo: int = 10) -> PlanoDeVolume:
+    """Decide o volume novo a partir do que foi FALADO. Não mexe em nada.
+
+    Dois caminhos separados, e nenhum chute entre eles:
+
+      ABSOLUTO  só quando há um número na fala. "coloca no 30" -> 30.
+      RELATIVO  direção dita, um passo a partir de onde está. 50 -> 60.
+
+    Sem número e sem direção ele **não faz nada**. A versão anterior tinha
+    `(alvo or "mais")` como padrão, ou seja: na dúvida, aumentava o som. Foi
+    por esse caminho que um "pode dar play agora" virou volume 100.
+    """
     atual = volume_atual()
     if atual is None:
-        return Resultado(False, "Não consegui ler o volume.")
+        return PlanoDeVolume(False, "Não consegui ler o volume.")
 
-    texto = (alvo or "mais").strip().lower()
-    if texto in ("mudo", "mute", "silencio", "silêncio"):
-        if _pactl(["set-sink-mute", _SINK, "toggle"]) is None:
-            return Resultado(False, "Não consegui mudar o mudo.")
-        return Resultado(True, "Pronto.", {"acao": "mudo"})
+    texto = dito.lower()
+    if any(p in texto for p in _MUDO):
+        return PlanoDeVolume(True, caminho="mudo", atual=atual, novo=atual)
 
-    numero = re.search(r"\d+", texto)
-    if numero:
-        novo = max(0, min(100, int(numero.group(0))))
-    elif texto.startswith(("menos", "abaixa", "diminui", "baixa")):
-        novo = max(0, atual - passo)
-    else:
-        novo = min(100, atual + passo)
+    numero = _numero_dito(dito)
+    if numero is not None:
+        return PlanoDeVolume(True, caminho="absoluto", atual=atual, novo=numero)
 
+    sobe = any(p in texto for p in _SOBE)
+    desce = any(p in texto for p in _DESCE)
+    if sobe and not desce:
+        if atual >= 100:
+            return PlanoDeVolume(False, "O volume já está no máximo.")
+        return PlanoDeVolume(True, caminho="relativo", atual=atual,
+                             novo=min(100, atual + passo))
+    if desce and not sobe:
+        if atual <= 0:
+            return PlanoDeVolume(False, "O volume já está no mínimo.")
+        return PlanoDeVolume(True, caminho="relativo", atual=atual,
+                             novo=max(0, atual - passo))
+
+    # Nem número nem direção: não inventa.
+    return PlanoDeVolume(False, "Não entendi o que fazer com o volume.")
+
+
+def alternar_mudo() -> Resultado:
+    if _pactl(["set-sink-mute", _SINK, "toggle"]) is None:
+        return Resultado(False, "Não consegui mudar o mudo.")
+    return Resultado(True, "Pronto.", {"acao": "mudo"})
+
+
+def aplicar_volume(novo: int) -> Resultado:
+    """Executa um plano já decidido — e, quando precisa, já confirmado."""
+    atual = volume_atual()
+    novo = max(0, min(100, int(novo)))
     if _pactl(["set-sink-volume", _SINK, f"{novo}%"]) is None:
         return Resultado(False, "Não consegui mudar o volume.")
     return Resultado(True, f"Volume em {novo}.", {"de": atual, "para": novo})

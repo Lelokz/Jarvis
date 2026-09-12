@@ -5,7 +5,7 @@
 > qualquer linha. Se algo aqui conflitar com um pedido, pergunte antes de
 > implementar.
 
-Versão: 2.8. Sistema: **Linux Mint Cinnamon**.
+Versão: 3.1. Sistema: **Linux Mint Cinnamon**.
 Pasta: `~/Projetos/Jarvis`. Repositório Git privado no GitHub.
 Etapas 0 a 5 aprovadas (set/2026). Da Etapa 5.5 em diante, nada feito.
 
@@ -36,6 +36,10 @@ conveniência de implementação.
    também não é resposta aceitável.
 3. **Ação destrutiva exige confirmação falada.** Mover, renomear,
    sobrescrever ou apagar → ele diz o que vai fazer e espera "pode".
+   **A pergunta vale mais que a lista, e é obrigatória em TODA função nova:
+   *esta ação pode machucar ou destruir alguma coisa?* Se sim, passa pela
+   confirmação.** A lista acima é exemplo, não fronteira — foi por lê-la como
+   fronteira que o volume ficou de fora e foi a 100 no ouvido do Léo.
 4. **Ele não apaga arquivo.** Não nesta versão. Mover para a lixeira, no
    máximo, e só depois da Etapa 5 estar sólida.
 5. **Toda ação executada vai pro log.** Sempre dá pra saber o que ele fez.
@@ -876,7 +880,7 @@ Só a forma crua de uma palavra só, e **a falha é `None`, não ação errada**
 diz "isso eu não sei fazer" e o Léo repete. É o tipo de degradação aceitável;
 uma que trocasse de função não seria.
 
-### Três limitações conhecidas
+### Duas limitações conhecidas
 
 **O desfazer morre quando ele dorme.** O estado vive no núcleo, junto das
 confirmações pendentes, e o `reiniciar_conversa()` limpa tudo. Renomear, sair
@@ -884,26 +888,297 @@ por 40 segundos e voltar com "desfaz" não funciona. Foi escolha consciente do
 Léo — histórico em disco é bem mais código —, e é o que a Etapa 5.5 e a lixeira
 vão querer depois.
 
-**Regressão medida e não corrigida: `"Continua."` parou de funcionar.** Achada
-montando o `medicoes/etapa5-arquivos.md`, comparando 6 contra 9 ferramentas em
-10 rodadas. Era `midia` 10/10 na Etapa 4 e virou `None` 7 de 8 — o Jarvis
-responde "isso eu ainda não sei fazer" a um comando de mídia que funcionava.
-
-**É a maiúscula pela terceira vez.** `"continua"` e `"Continua a música."`
-continuam 8/8; só a forma capitalizada de uma palavra caiu. E o Whisper sempre
-capitaliza a primeira palavra, então a forma que quebra é a que chega no uso
-real. A bateria de 5 rodadas não pegou porque `"Continua."` não estava nela, e
-porque 5 rodadas não enxergam um efeito dessa ordem.
-
-Não foi corrigida junto de propósito: mexer na lista de verbos foi o que quebrou
-`"abre música"` na Etapa 3, e isso pede rodada própria com a regressão das 15
-frases junto. O caminho provável é dar ao `midia` os verbos crus que faltam.
-
 **O `dentro_de` do `criar_pasta` resolve só pela tabela de atalhos**, não pela
 busca. Pasta que não está no `atalhos.toml` ele não sabe onde é, e responde
 "dentro de qual pasta?". Foi de propósito: acrescentar uma segunda
 desambiguação a uma operação inofensiva custaria mais estado no núcleo do que
 o problema merece. Se incomodar, a saída barata é pôr a pasta no `atalhos.toml`.
+
+### O conserto do roteamento de mídia — e o que ele ensinou
+
+**Rodada própria, set/2026**, depois de um diagnóstico das 106 falas por voz
+registradas até aqui. O diagnóstico é o motivo desta seção existir e vale mais
+que o conserto: o Léo estava convencido de que o gargalo era o STT, e o número
+mostrou **roteamento por um fator de 2,6** — 21 falhas do sistema contra 8 de
+transcrição. A confusão fazia sentido: ele fala "Para", o Whisper acerta, e o
+Jarvis diz que não sabe. A sensação é idêntica à de erro de transcrição.
+
+Três comandos de mídia de uma palavra estavam quebrados, com transcrição
+perfeita nos três: `"Para!"` e `"Continua."` em `None` 5/5, e `"Dá play."` indo
+para `tocar` e perguntando "qual música?" quando ele só queria despausar.
+
+**A lição do "procura" se confirmou pela segunda vez.** A descrição do `midia`
+era renúncia pura — *"não serve para começar a tocar algo, para isso use
+`tocar`"*. Trocada por reivindicação:
+
+| | renúncia | reivindicação |
+|---|---|---|
+| `"Continua."` | 0/5 | **5/5** |
+| `"Dá play."` | 0/5 | **5/5** |
+| `"Para a música."` | `tocar` 5/5 — **ação errada** | `midia:pausar` **5/5** |
+| `"Para!"` | 0/5 | **1/5** ✗ |
+
+> **E apareceu o limite da lição.** `"Para!"` resiste à reivindicação, e o
+> motivo não é de instrução: **"para" é preposição em português**. O modelo não
+> consegue lê-la como imperativo isolado, por melhor que seja o prompt. Há
+> palavras que prompt nenhum resolve.
+
+**A segunda peça: lista fechada, antes do modelo.** Comando de mídia cru — a
+fala inteira é o comando, sem objeto — é casado contra uma tabela de 17 entradas
+em `midia.COMANDOS_CRUS`, sem passar pelo LLM. É o mesmo desenho do `_estreitar`
+da Etapa 2, pelo mesmo motivo.
+
+> **O padrão que fica: dá para consertar roteamento DIMINUINDO a superfície.**
+> Toda etapa até aqui resolvia confusão de função escrevendo mais prompt, o que
+> aumenta a superfície e foi o que custou o `"Continua."` na Etapa 5. A lista
+> faz o contrário: as falas mais frequentes param de chegar ao modelo. Quando o
+> comando é uma palavra de uma lista fechada, mandá-lo ao modelo é dar a ele
+> uma chance de errar em troca de nada.
+>
+> **Bônus medido: 0,46s de núcleo nos logs reais viraram 0,0ms.** Num comando
+> que se dá com música tocando, meio segundo é a diferença entre responder e
+> obedecer.
+
+**O que a medição impediu.** A primeira versão da lista mapeava `volta →
+anterior`. Medindo o conjunto de guarda junto, `"Volta."` ia para `desfazer`
+5/5 — e está certo, porque "volta atrás" é a frase da Etapa 5. A lista teria
+roubado o desfazer **de forma determinística**, que é a pior espécie: sem
+oscilação para denunciar. `volta` ficou de fora.
+
+**A ordem no `processar` é a defesa, e é deliberada.** A lista é consultada
+depois dos dez estados pendentes e antes do modelo. Provado, 8/8: "pausa" como
+pista de busca estreita a busca, "para" como nome novo de arquivo vira nome, e
+só com nada pendente é que viram comando de mídia. O casamento é contra a fala
+**inteira**, então `"renomeia o relatório para proposta"` nunca casa com `para`.
+
+**Medido no fechamento:** 15/15 nos três quebrados, 50/50 nas formas com frase,
+75/75 nas frases da Etapa 1, 50/50 no roteamento com 9 funções, 30/30 nos pares
+que já brigaram (incluindo `"Volta."`), 8/8 na ordem do `processar`, 23/23 no
+`comando_cru` isolado.
+
+### O volume que foi a 100, e a pergunta que faltava
+
+**Set/2026, e machucou.** O Léo disse *"Pode dar play agora."* com música
+tocando e o sistema pôs o som em **100**. O log mostra a mesma frase falhando de
+dois jeitos em 50 segundos:
+
+```
+22:22:08  'Pode dar play agora.'  ->  {acao:'volume', valor:'100'}   de 40 para 100
+22:22:58  'Pode dar play agora.'  ->  {acao:'volume', valor:'mais'}  de 50 para 60
+```
+
+`'100'` é invenção pura: não existe "100" naquela frase.
+
+**Medido: a família inteira estava quebrada.** 8 rodadas por frase, 7 de 13
+variantes de "dá play" produziam mudança de volume. E a fronteira não era
+comprimento — `"Pode dar o play agora?"` acertava 8/8 enquanto `"Dá o play."`
+errava 5/8. Era instabilidade, então enumerar formas não resolveria.
+
+**Três defeitos somados, e só o terceiro é de desenho:**
+
+1. `re.search(r"\d+")` em texto livre — qualquer dígito virava volume absoluto.
+2. `(alvo or "mais")` — sem valor, o padrão era **aumentar**.
+3. **O volume nunca passou pela máquina de confirmação.**
+
+> ### A pergunta que faltava, e que vale para toda função nova
+>
+> Os dois primeiros são bugs. O terceiro é **falha de desenho**: a máquina de
+> confirmação falada existe desde a Etapa 4, é usada para renomear arquivo
+> desde a Etapa 5, e ninguém percebeu que **volume alto merece o mesmo
+> tratamento**.
+>
+> A §2.3 lista "mover, renomear, sobrescrever ou apagar". Ler isso como
+> fronteira em vez de exemplo foi o erro. A regra passou a ser uma pergunta,
+> obrigatória em toda função nova:
+>
+> **Esta ação pode machucar ou destruir alguma coisa? Se sim, passa pela
+> confirmação.**
+>
+> Volume alto machuca. Não destrói arquivo, não é irreversível, e ainda assim é
+> a única coisa neste projeto que causou dor física. A pergunta pega isso; a
+> lista não pegava.
+
+**O conserto, em três camadas.** Roteamento (a lista fechada cresceu e cobre a
+família "dá play" inteira, 13/13 em 8 rodadas), número lido **da transcrição** e
+não do que o modelo devolveu, e confirmação falada acima de 70.
+
+**O corte é 70 porque é o número do Léo:** ele usa o volume entre **50 e 60** no
+dia a dia, e **acima de 70 já dói o ouvido**. Não é um redondo escolhido por
+estética.
+
+O parâmetro `valor` saiu do schema do `midia`. Ele não é mais lido por ninguém,
+e deixar no schema um campo ignorado é armadilha para quem ler depois — além de
+ser uma coisa a menos para o modelo inventar.
+
+### "Tocando" antes de tocar — e o aquecimento que atrapalhava em silêncio
+
+Na mesma sessão: o Léo pediu música, esperou, nada tocou, pediu outra, e **as
+duas tocaram juntas**. Depois "pausa" pausou uma e "pausa" de novo pausou a
+outra. Três processos `mpv` ainda estavam vivos 20 minutos depois.
+
+**A resposta falada não provava nada.** O `tocar_audio` chamava `Popen` e a
+linha seguinte já devolvia "Tocando {título}" — antes de o mpv resolver a URL,
+conectar ou emitir uma amostra.
+
+**E esperar o player declarar também não serve.** Medido com `--ao=null`:
+
+```
+0.45s   entra no barramento, PlaybackStatus = Playing   posição 0.00s
+3.47s   PlaybackStatus = Playing                        posição 0.00s
+6.37s   PlaybackStatus = Playing                        posição 0.10s  <- o som
+```
+
+**`PlaybackStatus` mente por ~6 segundos.** É o `CanGoNext` da Etapa 3 outra
+vez: o sinal honesto é a **posição andando**. A confirmação agora espera isso, e
+se a posição não anda ele diz que o som não saiu em vez de anunciar música.
+
+**A identidade do player estava errada.** O código gravava
+`_iniciado_por_nos = "org.mpris.MediaPlayer2.mpv"` fixo, mas só o primeiro mpv
+de uma sessão ganha esse nome — os seguintes viram `mpv.instance{PID}`. Como a
+comparação era `startswith`, "nosso" virava "qualquer mpv". O D-Bus responde
+qual **PID** é dono de cada nome, e o PID é identidade de verdade.
+
+**Substituir, não somar.** Pedir música com algo nosso tocando encerra o
+anterior. **Só o que é nosso**, pelo PID — o Brave do Léo e qualquer mpv aberto
+por ele ficam de fora por construção. Verificado com o Brave **tocando ao mesmo
+tempo**, que é o cenário que expôs o desempate alfabético na Etapa 3: o núcleo
+escolheu o nosso mpv, e o Brave continuou tocando, intocado.
+
+**E o tempo melhorou, não piorou.** Resolvendo a URL de áudio nós mesmos, o mpv
+não precisa rodar o `yt-dlp` por dentro: `tocar_audio` leva **2,8s e só fala
+depois do som sair**, contra o desenho antigo que falava em ~1,8s e só produzia
+som lá pelos 7,8s.
+
+> ### O aquecimento estava atrapalhando em silêncio desde a Etapa 3
+>
+> Os 16 segundos do primeiro comando: **10,95s de carga fria do modelo**, mais
+> 1,91s da primeira inferência com as 9 ferramentas, mais 1,76s de `yt-dlp`.
+>
+> Tentando melhorar, medi três aquecimentos, descarregando o modelo antes de
+> cada um:
+>
+> | | aquecer | 1ª inferência | total |
+> |---|---|---|---|
+> | A — como era | 11,55s | 2,94s | 14,49s |
+> | B — com tools, gerando | 17,24s | 1,06s | **18,29s** |
+> | C — com tools, `num_predict=1` | 12,74s | **1,12s** | **13,86s** |
+>
+> **B é pior que não aquecer direito**, e o motivo é o que importa: **o Ollama
+> serializa por modelo.** Um aquecimento que gera texto entra na frente do
+> comando real e o atrasa. A otimização viraria o problema.
+>
+> A versão A carregava o modelo mas deixava o schema das ferramentas fora do
+> cache — desde a Etapa 3, calada, custando ~1,9s em todo primeiro comando.
+> **C é a escolha:** carrega o modelo e o schema sem gerar nada. Confirmado
+> depois de implementar: a primeira inferência de verdade caiu para **0,98s**.
+>
+> **O padrão:** otimização em recurso serializado pode ficar na frente do que
+> ela queria acelerar. Medir o total, nunca só a parte que se quis melhorar.
+
+**O que eu não consegui provar, e não forcei.** Por que o som do primeiro mpv só
+saiu perto de quando o segundo subiu. Medi o caminho do `ytdl_hook` com
+`--ao=null`, que não abre dispositivo de áudio, e reproduzir a parte do áudio
+exigiria pôr som para fora na máquina do Léo — o que ele pediu para não fazer na
+Etapa 3. **O conserto não depende da causa:** verificando a posição andar,
+qualquer travamento — ytdl, rede, dispositivo — vira "o som não saiu" em vez de
+uma mentira.
+
+### Os 15 segundos do primeiro comando, e duas lições de método
+
+**Set/2026.** O primeiro comando depois de subir o programa custava de 10 a 50
+segundos; do segundo em diante, ~6s. O Léo trouxe cinco fatos que estreitaram o
+diagnóstico antes de eu medir qualquer coisa, e um deles foi decisivo:
+
+> *"Eu espero o programa imprimir que está pronto antes de chamar. Antes disso
+> ele não responde a nada, então o 'pronto' é verdade para o wake word e o STT
+> — os dois respondem na hora. O que atrasa é alguma coisa que só o comando
+> usa."*
+
+**Era ler 5,23 GB de modelo do disco. Praticamente só isso.** Medido no mesmo
+arquivo, esvaziando o cache de página com `posix_fadvise` entre as leituras:
+
+| | |
+|---|---|
+| disco frio | **14,8s** (354 MB/s — o SSD) |
+| em cache de página | **1,2s** (4311 MB/s — a RAM) |
+
+E o custo que o Léo sentia, do wake word até a resposta:
+
+| | cache quente | cache frio |
+|---|---|---|
+| antes | 6,1 – 6,3s | **18,0 – 19,4s** |
+| carregando na subida | 6,2 – 6,3s | **6,2 – 6,3s** |
+
+**O conserto foi mover a carga para a subida**, antes de imprimir "pronto". Não
+cria espera nova: põe os 15 segundos dentro de uma espera que já existia e que o
+Léo já respeitava. O `keep_alive` fica em 5 minutos — recarregar do cache custa
+1,2s, e isso é aceitável. E o terminal diz o que está fazendo enquanto carrega:
+ver 15 segundos parados sem explicação é diferente de ver o motivo.
+
+Ficou de fora, com motivo: `keep_alive = -1` resolveria também, mas segura ~6 GB
+de VRAM o dia todo, que é o que a §4 quer evitar por causa dos jogos.
+
+**Aprovado no teste por voz do Léo: caiu para ~7s, sem a variação de antes.**
+
+> **Fica registrado, e não é para atacar agora:** o primeiro comando ainda custa
+> mais que o dobro dos seguintes — ~7s contra 1 a 3s. Sobra a primeira
+> inferência com o schema das 9 ferramentas e o resto do caminho frio. Decisão
+> do Léo: *"de 50 para 7 já é a diferença entre irritante e aceitável."*
+
+> ### Lição 1 — medição em cache não é medição
+>
+> Na rodada anterior eu afirmei **13,86s** para este mesmo caminho. Estava
+> medindo um modelo que eu já havia carregado dezenas de vezes na mesma sessão:
+> **medi a RAM achando que media o disco.** O número honesto com cache frio é
+> 18,7s de média — quase 40% maior — e foi essa contaminação que criou a
+> contradição entre a minha medição e o que o Léo sentia.
+>
+> **Toda medição de carga de arquivo grande tem que dizer se o cache estava
+> frio ou quente.** Sem isso o número não significa nada. E o jeito de esvaziar
+> só o arquivo de interesse, sem sudo e sem mexer no resto do sistema, é
+> `posix_fadvise(POSIX_FADV_DONTNEED)`.
+>
+> *(Duas notas de honestidade: o `mincore` que eu escrevi para reportar a fração
+> em cache estava quebrado — dizia 100% antes e depois de esvaziar — e eu
+> descartei o número em vez de publicá-lo. O que prova a eficácia do
+> `fadvise` é a leitura de 14,8s contra 1,2s.)*
+
+> ### Lição 2 — "pronto" tem que incluir tudo que o primeiro uso precisa
+>
+> O `conferir()` da subida chamava `/api/tags`, que confirma que o modelo está
+> **listado** — não que está **carregado**. O wake word (16 MB) e o Whisper
+> (1,1 GB) eram carregados na subida e ficavam residentes; o `qwen3:8b` não, e
+> era justamente o único que só o comando usa.
+>
+> **"Pronto" mentia por omissão.** Não dizia nada falso: deixava de dizer que
+> faltava a peça mais cara. A regra que fica: antes de anunciar que está
+> pronto, carregue tudo que o primeiro uso vai pedir — ou diga o que ainda
+> falta.
+
+### Escolher o player por voz
+
+Com o Brave e o mpv tocando, "pausa" sempre pegava o mpv. Pedir de novo pegava o
+Brave — mas isso é a fila esvaziando, não escolha. E para voltar o Brave não
+havia jeito nenhum.
+
+| o Léo diz | age em |
+|---|---|
+| "do Brave", "da aba", "do YouTube" | o Brave |
+| "do computador", "do PC", "do player", "a tua", "a que você pôs" | o mpv que o Jarvis iniciou |
+| nada | a regra de sempre: o que o Jarvis iniciou ganha |
+
+Mora no `midia.COMANDOS_CRUS`, em Python, **sem crescer o schema do modelo** —
+"pausa a do Brave" é comando mais qualificador, as duas coisas mecânicas. E
+quando o player pedido não existe, ele diz ("não tem nada tocando no Brave") em
+vez de agir no outro: escolher errado calado é pior que dizer que não achou.
+
+**"do navegador" foi proposto e o Léo cortou:** ele usa o Brave há mais de um ano
+e não vai trocar, e sinônimo a mais é superfície a mais — a lição da rodada do
+"para", aplicada por ele.
+
+Verificado com o Brave no barramento e o nosso mpv tocando ao mesmo tempo, 12/12,
+interceptando as chamadas de método para não mexer na sessão real dele — que é o
+cenário que expôs o desempate alfabético na Etapa 3.
 
 ### Etapa 5.5 — Mover e copiar arquivo ⚠️
 O resto da Etapa 5 original. Só começa depois que a 5 estiver rodada no uso

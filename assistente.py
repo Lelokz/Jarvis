@@ -370,6 +370,31 @@ def _montar(cfg: config.Config):
     nucleo = Nucleo(cfg)
     _partida("núcleo", nucleo.descricao, time.monotonic() - inicio)
 
+    # O LLM entra na VRAM AQUI, e não no primeiro comando.
+    #
+    # O "pronto" mentia por omissão: o wake word e o Whisper ficavam
+    # residentes, mas o qwen3:8b — o único que só o comando usa — continuava no
+    # disco. O primeiro comando pagava a leitura de 5,23 GB, medida em 14,8s
+    # com cache frio contra 1,2s em cache. Do wake word até a resposta dava
+    # 18,7s de média, contra 6,2s do segundo comando em diante.
+    #
+    # Isto não cria espera nova: move os 15 segundos para dentro de uma espera
+    # que já existe. O Léo espera o "pronto" antes de falar; agora o "pronto"
+    # é verdade.
+    #
+    # A mensagem antes é de propósito. Ver o terminal parado 15 segundos sem
+    # explicação é diferente de ver o que está acontecendo.
+    aviso = "  LLM              carregando na VRAM (5 GB, pode levar ~15 s)..."
+    # No terminal o aviso é reescrito no lugar; num log ele fica como linha
+    # própria. O "\r" não apaga nada quando a saída não é um terminal, e sem
+    # esta checagem o log sai com os dois textos grudados na mesma linha.
+    terminal = sys.stdout.isatty()
+    print(aviso, end="" if terminal else "\n", flush=True)
+    segundos = nucleo.carregar()
+    if terminal:
+        print("\r" + " " * len(aviso) + "\r", end="")
+    _partida("LLM", f"{cfg.llm.modelo} na VRAM", segundos)
+
     # O cliente lê os nomes do núcleo e entrega ao Whisper como vocabulário.
     # A direção é permitida pela linha da §4: cliente conhece o núcleo, o
     # núcleo não conhece o cliente. Medido: sem vocabulário 4/15 dos nomes

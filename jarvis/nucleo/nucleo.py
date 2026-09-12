@@ -108,6 +108,9 @@ class Nucleo:
         self._renomeacao_pendente: tuple[Path, str] | None = None
         # (onde está agora, onde estava antes) — para o "desfaz".
         self._ultima_renomeacao: tuple[Path, Path] | None = None
+        # Volume acima do limite esperando o "pode". Guarda só o número: o
+        # plano já foi decidido e nada foi aplicado ainda.
+        self._volume_pendente: int | None = None
         self._diag: dict = {}
 
     # ----------------------------------------------------------------------
@@ -150,6 +153,9 @@ class Nucleo:
         if self._esperando_musica is not None:
             return self._musica_pedida(texto)
 
+        if self._volume_pendente is not None:
+            return self._confirmar_volume(texto)
+
         if self._renomeacao_pendente is not None:
             return self._confirmar_renomeacao(texto)
 
@@ -160,6 +166,27 @@ class Nucleo:
         if self._esperando_nome_novo is not None:
             caminho, self._esperando_nome_novo = self._esperando_nome_novo, None
             return self._com_arquivo(caminho, texto)
+
+        # Comando de mídia cru, sem objeto: não passa pelo modelo.
+        #
+        # Vem DEPOIS de todos os pendentes acima, e a ordem é a defesa: "pausa"
+        # dito como pista de uma busca aberta, ou como nome novo de um arquivo,
+        # já foi consumido lá em cima e nunca chega aqui. O casamento é contra
+        # a fala INTEIRA, então "renomeia o relatório para proposta" — que
+        # contém "para" — também não casa.
+        #
+        # Medido: com o núcleo em 9 funções, "Para!" caía em nada 5/5. E estas
+        # falas custavam 0,46s de núcleo nos logs reais, quase tudo o modelo
+        # decidindo algo que uma tabela de 17 entradas decide sem errar.
+        cru = midia.comando_cru(texto)
+        if cru is not None:
+            return self._midia(
+                {"acao": cru.acao, "qual": cru.qual},
+                {"origem": "comando cru de mídia", "dito": texto,
+                 "houve_tool_call": False, "funcao": "midia",
+                 "qual_player": cru.qual},
+                texto,
+            )
 
         interpretacao = self.cerebro.interpretar(texto)
         base = {"houve_tool_call": interpretacao.funcao is not None,
@@ -186,7 +213,7 @@ class Nucleo:
             return self._tocar(interpretacao, texto, base)
 
         if interpretacao.funcao == "midia":
-            return self._midia(interpretacao.argumentos, base)
+            return self._midia(interpretacao.argumentos, base, texto)
 
         if interpretacao.funcao == "criar_evento":
             return self._agendar(
@@ -662,23 +689,96 @@ class Nucleo:
             r = midia.tocar_navegador(video, self.cfg.midia)
         else:
             r = midia.tocar_audio(video, self.cfg.midia)
+        diag["tocar"] = r.detalhe
+
+        # O `tocar_audio` devolve mensagem vazia quando iniciou e o som não
+        # saiu — ele sabe o que houve, mas quem monta frase falada é aqui.
+        # Dizer "Tocando" nesse caso era a mentira que o Léo pegou: ele esperou,
+        # não veio som, e não tinha como saber se o problema era dele.
+        texto = r.mensagem
+        if not r.ok and not texto:
+            texto = self._frase("musica_nao_saiu", titulo=video.titulo)
+
         return Resposta(
-            r.mensagem,
+            texto,
             acao=f"tocar:{onde}:{video.id}" if r.ok else None,
             diagnostico=diag,
         )
 
-    def _midia(self, argumentos: dict, diag: dict) -> Resposta:
+    def _midia(self, argumentos: dict, diag: dict, dito: str) -> Resposta:
         acao = (argumentos.get("acao") or "").strip().lower()
         if acao == "volume":
-            r = sistema.ajustar_volume(
-                argumentos.get("valor"), self.cfg.midia.passo_volume
-            )
-        else:
-            r = midia.controlar(acao)
+            return self._volume(dito, diag)
+        r = midia.controlar(acao, argumentos.get("qual"))
         diag["detalhe"] = r.detalhe
         return Resposta(
             r.mensagem, acao=f"midia:{acao}" if r.ok else None, diagnostico=diag
+        )
+
+    def _volume(self, dito: str, diag: dict) -> Resposta:
+        """Volume em dois caminhos, e confirmação quando pode doer.
+
+        O `valor` que o modelo devolve **não é usado**, de propósito. Ele
+        entregou `valor='100'` para "Pode dar play agora." — um número que não
+        existe na frase — e o som foi a 100 no ouvido do Léo. O número agora sai
+        da transcrição, que é a única fonte que ele de fato falou.
+        """
+        plano = sistema.planejar_volume(dito, self.cfg.midia.passo_volume)
+        diag["volume"] = {
+            "caminho": plano.caminho, "de": plano.atual, "para": plano.novo,
+        }
+        if not plano.ok:
+            return Resposta(plano.mensagem, diagnostico=diag)
+
+        if plano.caminho == "mudo":
+            r = sistema.alternar_mudo()
+            return Resposta(r.mensagem, acao="midia:mudo" if r.ok else None,
+                            diagnostico=diag)
+
+        # A §2.3 exige confirmação para o que pode machucar. Volume alto entra
+        # nessa conta, e não entrava: a máquina de confirmação existe desde a
+        # Etapa 4 e nunca tinha sido apontada para cá.
+        if plano.novo > self.cfg.midia.limite_confirmacao:
+            self._volume_pendente = plano.novo
+            pergunta = self._frase("volume_confirmar", novo=plano.novo)
+            self._pergunta = pergunta
+            diag["pediu_confirmacao"] = True
+            return Resposta(pergunta, perguntando=True, diagnostico=diag)
+
+        r = sistema.aplicar_volume(plano.novo)
+        return Resposta(
+            r.mensagem,
+            acao=f"midia:volume:{plano.novo}" if r.ok else None,
+            diagnostico=diag,
+        )
+
+    def _confirmar_volume(self, texto: str) -> Resposta:
+        novo = self._volume_pendente
+        self._volume_pendente = None
+        resposta = self.cerebro.confirmar(texto, self._pergunta)
+        diag = {"origem": "confirmação de volume", "dito": texto,
+                "confirmacao": resposta.name, "para": novo}
+
+        if resposta is Confirmacao.NAO:
+            return Resposta(self.cfg.persona.volume_cancelado, diagnostico=diag)
+
+        if resposta is not Confirmacao.SIM:
+            # Mesma lição da Etapa 4 e da 5: descartar é certo, calado não é.
+            nova = self.processar(texto)
+            diag["descartado"] = novo
+            aviso = self.cfg.persona.volume_descartado
+            return Resposta(
+                f"{aviso} {nova.texto}".strip(),
+                acao=nova.acao,
+                perguntando=nova.perguntando,
+                diagnostico={**diag, "seguiu_para": nova.diagnostico},
+            )
+
+        r = sistema.aplicar_volume(novo)
+        diag["detalhe"] = r.detalhe
+        return Resposta(
+            r.mensagem, acao=f"midia:volume:{novo}" if r.ok else None,
+            diagnostico=diag,
         )
 
     def _resolver_nome(
@@ -897,6 +997,13 @@ class Nucleo:
 
     # ----------------------------------------------------------------------
 
+    def carregar(self) -> float:
+        """Põe o LLM na VRAM agora, esperando. Devolve quantos segundos levou.
+
+        O cliente chama na subida, ANTES de dizer que está pronto.
+        """
+        return self.cerebro.carregar()
+
     def aquecer(self) -> None:
         """Pede ao LLM que se carregue. O cliente chama ao acordar."""
         self.cerebro.aquecer()
@@ -921,6 +1028,7 @@ class Nucleo:
         self._esperando_qual_arquivo = None
         self._esperando_nome_novo = None
         self._renomeacao_pendente = None
+        self._volume_pendente = None
         # O desfazer morre junto, e isso é limitação conhecida: renomear, sair
         # por 40 segundos e voltar com "desfaz" não funciona. Um histórico em
         # disco é o que a Etapa 5.5 e a lixeira vão querer.

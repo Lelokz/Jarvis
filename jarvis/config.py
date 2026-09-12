@@ -28,6 +28,10 @@ class Persona:
     busca_nada: str
     qual_musica: str
     musica_nao_achei: str
+    musica_nao_saiu: str
+    volume_confirmar: str
+    volume_cancelado: str
+    volume_descartado: str
     agenda_confirmar: str
     agenda_criado: str
     agenda_cancelado: str
@@ -100,6 +104,8 @@ class Midia:
     comando_navegador: str
     segundos_busca: int
     passo_volume: int
+    limite_confirmacao: int
+    segundos_para_o_som: int
 
 
 @dataclass(frozen=True)

@@ -19,21 +19,156 @@ e extrair a URL de áudio (precisa da versão nova — a do apt falha com
 
 from __future__ import annotations
 
+import os
+import re
 import shutil
+import signal
 import subprocess
 import time
 from dataclasses import dataclass
 from pathlib import Path
 
 from ..config import Midia as ConfigMidia
+from .atalhos import normalizar
+
+# Comandos de mídia crus: a fala INTEIRA é o comando, sem objeto nenhum.
+#
+# Estes não passam pelo modelo, e a razão é medida. Com o núcleo em 9 funções,
+# "Para!" caía em nada 5/5 e "Dá play." ia para `tocar` 5/5, perguntando "qual
+# música?" quando o Léo só queria despausar. Pôr a reivindicação na descrição
+# do `midia` — a lição do "procura" — consertou "Continua." e "Dá play.", mas
+# "Para!" resistiu, 1/5: **"para" é preposição em português**, e o modelo não
+# consegue lê-la como imperativo isolado. Não é problema de instrução.
+#
+# É o mesmo desenho do `_estreitar`, que também não passa pelo LLM: texto
+# casado contra uma lista fechada, mais rápido e sem nada que possa errar. E
+# diminui a superfície do modelo em vez de aumentar — estas falas, que são as
+# mais frequentes de todas, param de chegar nele. Medido nos logs reais: 0,46s
+# de núcleo em média, quase tudo o modelo decidindo.
+#
+# `volta` NÃO entra, de propósito. Ele vai para `desfazer` 5/5 hoje, e está
+# certo: "volta atrás" é a frase da Etapa 5. Pôr aqui roubaria o desfazer de
+# forma determinística.
+COMANDOS_CRUS = {
+    "para": "pausar",
+    "pare": "pausar",
+    "parar": "pausar",
+    "parou": "pausar",
+    "pausa": "pausar",
+    "pause": "pausar",
+    "pausar": "pausar",
+    "continua": "continuar",
+    "continue": "continuar",
+    "continuar": "continuar",
+    "segue": "continuar",
+    "play": "continuar",
+    "despausa": "continuar",
+    "retoma": "continuar",
+    "proxima": "proxima",
+    "proximo": "proxima",
+    "pula": "proxima",
+    "anterior": "anterior",
+}
+
+
+# Como o Léo diz QUAL player, quando há mais de um tocando.
+#
+# Sem isto ele não tinha como escolher: com o Brave e o mpv tocando, "pausa"
+# sempre pegava o mpv, e o Brave só era alcançado quando o mpv já estava
+# pausado — o que é a fila esvaziando, não escolha. E para voltar o Brave não
+# havia jeito nenhum.
+#
+# "do navegador" foi proposto e o Léo cortou: ele usa o Brave há mais de um ano
+# e não vai trocar, e sinônimo a mais é superfície a mais. É a lição da rodada
+# do "para", aplicada por ele.
+QUALIFICADORES = {
+    "brave": "brave",
+    "aba": "brave",
+    "youtube": "brave",
+    "computador": "nosso",
+    "pc": "nosso",
+    "player": "nosso",
+    "tua": "nosso",
+    "sua": "nosso",
+    "pos": "nosso",  # "a que você pôs"
+}
+
+
+@dataclass(frozen=True)
+class ComandoCru:
+    acao: str
+    qual: str | None = None  # "brave" | "nosso" | None = regra de hoje
+
+
+# Enfeites de pedido educado. Tirados só DEPOIS de o casamento direto falhar,
+# e só para ver se o que sobra é um comando sozinho.
+#
+# Medido: a família "dá play" quebrava em 7 de 13 variantes, virando volume com
+# valores inventados — 'Tu pode dar play?' dava volume='mais' em 6 de 8. A
+# diferença entre as que funcionavam e as que não era só o embrulho: "Dá play."
+# acertava e "Pode dar play agora." não. Tirar o embrulho resolve a família
+# inteira de uma vez, em vez de enumerar formas.
+_ENFEITES = frozenset(
+    {
+        "pode", "podes", "poderia", "por", "favor", "agora", "ai", "la",
+        "tu", "voce", "me", "dar", "da", "ja", "entao", "so", "af", "que",
+    }
+)
+
+
+def comando_cru(falado: str) -> ComandoCru | None:
+    """A ação, quando a fala INTEIRA é um comando de mídia sem objeto.
+
+    O casamento é contra a fala toda, normalizada — nunca por substring. É isso
+    que mantém "Renomeia o relatório **para** proposta" fora daqui: a chave é
+    a frase inteira, não uma palavra dentro dela.
+
+    O `normalizar()` já resolve caixa, acento e pontuação, e ainda tira "dá"
+    como supérflua, então "Dá play." chega aqui como "play". A caixa importa
+    mais do que parece: foi ela que decidiu o `'não'` contra `'Não'` na Etapa 4
+    e o `'continua'` contra `'Continua.'` aqui — e o Whisper sempre capitaliza
+    a primeira palavra.
+    """
+    chave = normalizar(falado)
+    direto = COMANDOS_CRUS.get(chave)
+    if direto is not None:
+        return ComandoCru(direto)
+
+    # Tira o embrulho educado e vê o que sobra.
+    #
+    # UMA palavra: é o comando sozinho. "pode dar play agora" -> "play".
+    # DUAS: pode ser comando + qual player. "pausa a do brave" -> pausa, brave.
+    #
+    # Exigir uma ou duas é o que mantém "para a música" fora daqui — "musica"
+    # não é qualificador, então o par não casa e a frase vai para o modelo, que
+    # acerta essa forma. E "renomeia o relatório para proposta" sobra inteira.
+    resto = [p for p in chave.split() if p not in _ENFEITES]
+    if len(resto) == 1:
+        acao = COMANDOS_CRUS.get(resto[0])
+        return ComandoCru(acao) if acao else None
+    if len(resto) == 2:
+        for i, outro in ((0, 1), (1, 0)):
+            acao = COMANDOS_CRUS.get(resto[i])
+            qual = QUALIFICADORES.get(resto[outro])
+            if acao and qual:
+                return ComandoCru(acao, qual)
+    return None
+
 
 MPRIS_CAMINHO = "/org/mpris/MediaPlayer2"
 
-# Quem o Jarvis iniciou por último. Sem isto, o desempate entre dois players
-# era alfabético — "brave" antes de "mpv" —, então mandar tocar uma música e
-# dizer "pausa" em seguida podia pausar um vídeo do navegador em vez da
-# música que ele mesmo acabou de pôr.
-_iniciado_por_nos: str | None = None
+# O PID do mpv que NÓS criamos. Guardamos o PID, e não o nome do barramento,
+# porque o nome mente: só o primeiro mpv de uma sessão ganha
+# "org.mpris.MediaPlayer2.mpv"; os seguintes viram "mpv.instance{PID}". A
+# versão anterior gravava o nome curto fixo e comparava com `startswith`, o que
+# fazia "nosso" significar "qualquer mpv" — e o desempate pegava o mais velho.
+# No teste do Léo isso apareceu inteiro: o primeiro "pausa" pausou a música
+# antiga, e foi preciso um segundo "pausa" para calar a que ele tinha acabado
+# de pedir.
+#
+# O D-Bus responde qual PID é dono de cada nome, então o PID é identidade de
+# verdade e não precisa de adivinhação.
+_nosso_pid: int | None = None
 MPRIS_PLAYER = "org.mpris.MediaPlayer2.Player"
 
 
@@ -104,39 +239,166 @@ def buscar(termo: str, cfg: ConfigMidia) -> Video | None:
 # ---------------------------------------------------------------------------
 
 
-def _soltar(comando: list[str]) -> None:
-    """Dispara e desgruda — fechar o Jarvis não pode calar a música."""
-    subprocess.Popen(
+def _soltar(comando: list[str]) -> int | None:
+    """Dispara, desgruda e devolve o PID.
+
+    `start_new_session` desgruda o processo: fechar o Jarvis não pode calar a
+    música. O PID volta porque é a única identidade confiável do player que
+    acabamos de criar.
+    """
+    p = subprocess.Popen(
         comando,
         start_new_session=True,
+        stdin=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
+    return p.pid
+
+
+def _dono(nome: str) -> int | None:
+    """De qual processo é este nome do barramento."""
+    saida = _gdbus(
+        [
+            "call", "--session",
+            "--dest", "org.freedesktop.DBus",
+            "--object-path", "/org/freedesktop/DBus",
+            "--method", "org.freedesktop.DBus.GetConnectionUnixProcessID",
+            nome,
+        ]
+    )
+    if not saida:
+        return None
+    achado = re.search(r"uint32 (\d+)", saida)
+    return int(achado.group(1)) if achado else None
+
+
+def nosso_player() -> str | None:
+    """O nome do barramento do mpv que nós criamos, se ele ainda vive."""
+    if _nosso_pid is None:
+        return None
+    for nome in players():
+        if _dono(nome) == _nosso_pid:
+            return nome
+    return None
+
+
+def encerrar_nosso() -> bool:
+    """Encerra o mpv que NÓS criamos. Nunca toca em outro player.
+
+    A identidade é o PID que guardamos, então o Brave do Léo e qualquer mpv que
+    ele tenha aberto na mão ficam de fora por construção — não há nome nem
+    prefixo envolvido na decisão.
+    """
+    global _nosso_pid
+    if _nosso_pid is None:
+        return False
+    try:
+        os.kill(_nosso_pid, signal.SIGTERM)
+        encerrado = True
+    except (ProcessLookupError, PermissionError, OSError):
+        encerrado = False
+    _nosso_pid = None
+    return encerrado
+
+
+def _posicao(player: str) -> int | None:
+    """A posição em microssegundos. O gdbus devolve "int64 32671833"."""
+    bruto = _propriedade(player, "Position")
+    if bruto is None:
+        return None
+    achado = re.search(r"(-?\d+)", bruto)
+    return int(achado.group(1)) if achado else None
+
+
+def _esperar_o_som(pid: int, segundos: float) -> bool:
+    """Espera a POSIÇÃO andar. É a única prova de que saiu som.
+
+    `PlaybackStatus` não serve, e isso é medido: o mpv entra no barramento em
+    0,45s já dizendo "Playing" e a posição só sai do zero por volta de 6s. É o
+    mesmo `CanGoNext` da Etapa 3 — não confiar no que o player declara, e sim
+    observar. Sem isto o Jarvis anunciava "Tocando" antes de existir som, e o
+    Léo não tinha como saber se tinha tocado.
+    """
+    limite = time.monotonic() + segundos
+    while time.monotonic() < limite:
+        for nome in players():
+            if _dono(nome) != pid:
+                continue
+            pos = _posicao(nome)
+            if pos is not None and pos > 0:
+                return True
+        time.sleep(0.25)
+    return False
+
+
+def url_de_audio(video: Video, cfg: ConfigMidia) -> str | None:
+    """A URL direta do áudio, resolvida por nós.
+
+    Sem isto o yt-dlp roda DUAS vezes: uma nossa, para achar o vídeo, e outra
+    dentro do mpv, pelo `ytdl_hook`. A segunda é invisível e custa ~6s — é ela
+    que fazia o som demorar a sair enquanto o Jarvis já tinha dito "Tocando".
+    Resolvendo aqui, custa ~2,5s que a gente vê, e o mpv começa quase na hora.
+
+    None quando não dá: quem chama cai para a URL do YouTube, que ainda toca —
+    só demora mais e é menos observável.
+    """
+    try:
+        saida = subprocess.run(
+            [cfg.comando_ytdlp, "--no-warnings", "-f", "bestaudio",
+             "--get-url", video.url],
+            capture_output=True, text=True, timeout=cfg.segundos_busca,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    linha = saida.stdout.strip().splitlines()
+    return linha[0] if linha and linha[0].startswith("http") else None
 
 
 def tocar_audio(video: Video, cfg: ConfigMidia) -> Resultado:
-    """mpv tocando só o áudio: sem janela, sem aba, só som."""
+    """mpv tocando só o áudio: sem janela, sem aba, só som.
+
+    Substitui o que nós mesmos tínhamos posto para tocar, em vez de somar. No
+    teste do Léo, somar produziu duas músicas em cima da outra, três processos
+    órfãos vivos por 20 minutos, e um "pausa" que precisou ser dito duas vezes
+    para calar o que ele pediu uma vez.
+
+    **Só encerra o que é nosso**, identificado por PID. O Brave dele e qualquer
+    mpv aberto na mão ficam de fora — a lição da Etapa 3, quando eu pausei a
+    sessão real dele num teste.
+    """
+    global _nosso_pid
     if shutil.which(cfg.comando_mpv) is None:
         return Resultado(
             False,
             f"O {cfg.comando_mpv} não está instalado. "
             "Instale com: sudo apt install mpv",
         )
-    comando = [
-        cfg.comando_mpv,
-        "--no-video",
-        "--really-quiet",
-        # Um nome de instância MPRIS estável facilita achar o player depois.
-        f"--script-opts=ytdl_hook-ytdl_path={cfg.comando_ytdlp}",
-        video.url,
-    ]
+
+    direta = url_de_audio(video, cfg)
+    comando = [cfg.comando_mpv, "--no-video", "--really-quiet"]
+    if direta:
+        comando.append(direta)
+    else:
+        # Sem a URL direta, o mpv resolve por dentro: toca, mas demora mais.
+        comando.append(f"--script-opts=ytdl_hook-ytdl_path={cfg.comando_ytdlp}")
+        comando.append(video.url)
+
+    encerrar_nosso()
     try:
-        _soltar(comando)
+        pid = _soltar(comando)
     except OSError as e:
         return Resultado(False, f"Não consegui tocar: {e}")
-    global _iniciado_por_nos
-    _iniciado_por_nos = "org.mpris.MediaPlayer2.mpv"
-    return Resultado(True, f"Tocando {video.titulo}.", {"video": video.id})
+    _nosso_pid = pid
+
+    detalhe = {"video": video.id, "pid": pid, "url_direta": bool(direta)}
+    if not _esperar_o_som(pid, cfg.segundos_para_o_som):
+        # Não saiu som. Encerrar é melhor que deixar um processo mudo vivo —
+        # foi assim que três mpv ficaram pendurados na sessão do Léo.
+        encerrar_nosso()
+        return Resultado(False, "", {**detalhe, "som": False})
+
+    return Resultado(True, f"Tocando {video.titulo}.", {**detalhe, "som": True})
 
 
 def tocar_navegador(video: Video, cfg: ConfigMidia) -> Resultado:
@@ -199,8 +461,12 @@ def _propriedade(player: str, nome: str) -> str | None:
     return saida.strip("(),<> ").strip("'")
 
 
-def _escolher_player() -> str | None:
+def _escolher_player(qual: str | None = None) -> str | None:
     """Quem recebe o comando quando há mais de um player aberto.
+
+    Quando o Léo DIZ qual, é ele quem manda — e se o pedido não existe, quem
+    chama avisa em vez de agir no outro. Escolher errado em silêncio é pior
+    que dizer que não achou.
 
     A ordem foi pensada em cima do que surpreende menos:
 
@@ -216,7 +482,14 @@ def _escolher_player() -> str | None:
     if not disponiveis:
         return None
 
-    nossos = [p for p in disponiveis if _iniciado_por_nos and p.startswith(_iniciado_por_nos)]
+    if qual == "nosso":
+        return nosso_player()
+    if qual == "brave":
+        candidatos = [p for p in disponiveis if "brave" in p.lower()]
+        return candidatos[0] if candidatos else None
+
+    nosso = nosso_player()
+    nossos = [p for p in disponiveis if p == nosso]
     tocando = [p for p in disponiveis if _propriedade(p, "PlaybackStatus") == "Playing"]
 
     for candidato in (
@@ -230,8 +503,16 @@ def _escolher_player() -> str | None:
     return None
 
 
-def controlar(acao: str) -> Resultado:
-    """pausar | continuar | proxima | anterior — no player que estiver ativo."""
+NOME_FALAVEL = {"brave": "no Brave", "nosso": "no computador"}
+
+
+def controlar(acao: str, qual: str | None = None) -> Resultado:
+    """pausar | continuar | proxima | anterior — no player que estiver ativo.
+
+    `qual` vem do que o Léo falou: "pausa a do Brave", "dá play na do
+    computador". Sem `qual`, vale a regra de sempre — o que o Jarvis iniciou
+    ganha.
+    """
     metodos = {
         "pausar": ("Pause", "CanPause", "Pausei."),
         "continuar": ("Play", "CanPlay", "Voltando."),
@@ -241,8 +522,11 @@ def controlar(acao: str) -> Resultado:
     if acao not in metodos:
         return Resultado(False, f"Não sei fazer {acao}.")
 
-    player = _escolher_player()
+    player = _escolher_player(qual)
     if player is None:
+        onde = NOME_FALAVEL.get(qual or "")
+        if onde:
+            return Resultado(False, f"Não tem nada tocando {onde}.")
         return Resultado(False, "Não tem nada tocando.")
 
     metodo, capacidade, confirmacao = metodos[acao]

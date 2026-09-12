@@ -49,6 +49,18 @@ busca_nada = "Não achei nada chamado {termo}."
 qual_musica = "Qual música?"
 musica_nao_achei = "Não achei nada no YouTube com {termo}."
 
+# Achou o vídeo, mandou tocar, e o som não saiu no tempo. Precisa ser diferente
+# de "Tocando": dizer que está tocando quando não está foi exatamente o bug —
+# o Léo esperou, não veio som, e não tinha como saber se era ele ou o Jarvis.
+musica_nao_saiu = "Achei {titulo}, mas o som não saiu."
+
+# Volume acima do limite. Diz o número ANTES de mexer no som — é a única
+# chance de barrar um valor que o modelo entendeu errado antes de ele chegar
+# no seu ouvido.
+volume_confirmar = "Volume em {novo}. Pode?"
+volume_cancelado = "Beleza, deixa como está."
+volume_descartado = "Deixei o volume como estava."
+
 # Agenda (Etapa 4). A confirmação diz o DIA DA SEMANA de propósito: é assim que
 # você percebe que ele entendeu sábado quando você quis dizer segunda. Erro de
 # data é silencioso — um ISO bem formado e errado parece certo.
@@ -166,6 +178,24 @@ segundos_busca = 20
 
 # De quanto em quanto o volume sobe e desce quando você não diz um número.
 passo_volume = 10
+
+# Acima deste valor, mudar o volume pede confirmação falada — nos dois
+# caminhos, relativo e absoluto. De 65 pedindo para aumentar, confirma antes de
+# ir a 75. "Coloca no 100", confirma.
+#
+# O número é o do Léo, não um redondo qualquer: ele usa o volume entre 50 e 60
+# no dia a dia, e ACIMA DE 70 JÁ DÓI O OUVIDO. O motivo de isto existir é um
+# "pode dar play agora" que o modelo leu como volume 100 — e doeu de verdade.
+limite_confirmacao = 70
+
+# Quanto esperar o som SAIR DE VERDADE antes de dizer "tocando".
+#
+# O mpv entra no barramento em 0,45s já declarando PlaybackStatus=Playing, e a
+# posição só começa a andar por volta de 6s — ou seja, ele mente por ~6
+# segundos. Medido. Passando a URL de áudio direta, isso cai para ~1s, mas o
+# teto fica folgado porque rede ruim existe. Estourou o teto: ele diz que não
+# conseguiu, em vez de anunciar som que não saiu.
+segundos_para_o_som = 12
 
 [acoes]
 # Os executáveis de cada tipo do atalhos.toml. Ficam aqui para você trocar sem

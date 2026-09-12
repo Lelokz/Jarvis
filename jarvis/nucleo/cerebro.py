@@ -103,9 +103,26 @@ FERRAMENTA_MIDIA = {
     "type": "function",
     "function": {
         "name": "midia",
+        # A versão anterior era renúncia pura — "não serve para começar a tocar
+        # algo, para isso use `tocar`" — e a lição do "procura" (ESCOPO §5) diz
+        # que instrução de renúncia não funciona: o modelo já decidiu pela
+        # outra função quando lê o primeiro verbo. Medido: com a renúncia,
+        # "Continua." e "Dá play." davam 0/5; com a reivindicação abaixo, 5/5
+        # nas duas, e "Para a música." parou de virar `tocar` — que era ação
+        # errada, pior que não entender.
         "description": (
             "Controla o que JÁ está tocando, seja música, vídeo ou o som de um "
-            "jogo. Não serve para começar a tocar algo — para isso use `tocar`."
+            "jogo.\n"
+            "É ISTO que você usa quando ele manda parar, seguir ou pular o que "
+            "já está tocando: 'para', 'pare', 'para a música', 'pode parar', "
+            "'pausa', 'continua', 'pode continuar', 'dá play', 'segue', "
+            "'próxima', 'pula essa', 'anterior'. Mandar PARAR ou SEGUIR o que "
+            "toca é SEMPRE `midia`, nunca `tocar` — inclusive 'para a música', "
+            "que é pausar e não começar.\n"
+            "'dar play' é SEMPRE continuar o que está pausado, em qualquer "
+            "forma que ele fale: 'dá play', 'pode dar play', 'tu pode dar "
+            "play?'. Nunca é volume.\n"
+            "Só é `tocar` quando ele disser O QUE quer que comece a tocar."
         ),
         "parameters": {
             "type": "object",
@@ -120,13 +137,6 @@ FERRAMENTA_MIDIA = {
                         "volume",
                     ],
                     "description": "O que fazer com o que está tocando.",
-                },
-                "valor": {
-                    "type": "string",
-                    "description": (
-                        "Só para acao='volume': um número de 0 a 100, ou "
-                        "'mais', 'menos', 'mudo'."
-                    ),
                 },
             },
             "required": ["acao"],
@@ -373,6 +383,47 @@ class Cerebro:
     def usar_atalhos(self, nomes: list[str]) -> None:
         self._nomes = nomes
 
+    def carregar(self) -> float:
+        """Carrega o modelo na VRAM AGORA, esperando terminar. Devolve segundos.
+
+        Existe porque o `conferir()` da subida só chamava `/api/tags`, que
+        confirma que o modelo está **listado** e não que está **carregado** — e
+        o cliente imprimia "pronto" com a peça mais cara ainda no disco.
+
+        O custo é ler 5,23 GB, e ele depende inteiramente do cache de página:
+
+            disco frio   14,8s  (354 MB/s, o SSD)
+            em cache      1,2s  (4311 MB/s, a RAM)
+
+        Medido com o mesmo arquivo, esvaziando o cache com `posix_fadvise`
+        entre as leituras. Chamar isto na subida não cria espera nova: move os
+        15 segundos para dentro de uma espera que já existe, e que o Léo já
+        respeita — ele espera o "pronto" antes de falar.
+
+        As mesmas ferramentas do `aquecer()` vão junto, pelo mesmo motivo: o
+        schema entra no cache de prompt e a primeira inferência de verdade cai
+        de ~2,9s para ~1,0s.
+        """
+        inicio = time.monotonic()
+        try:
+            requests.post(
+                f"{self.cfg.url}/api/chat",
+                json={
+                    "model": self.cfg.modelo,
+                    "messages": [{"role": "user", "content": "oi"}],
+                    "tools": FERRAMENTAS,
+                    "stream": False,
+                    "options": {"num_predict": 1},
+                    "keep_alive": self.cfg.keep_alive,
+                },
+                timeout=self.cfg.timeout_s,
+            )
+        except Exception:
+            # Falhar aqui não pode derrubar a subida: sem isto o primeiro
+            # comando paga a carga, que é exatamente o que era antes.
+            pass
+        return time.monotonic() - inicio
+
     def aquecer(self) -> None:
         """Manda o Ollama carregar o modelo, sem esperar resposta.
 
@@ -384,8 +435,20 @@ class Cerebro:
         Carregar nessa janela esconde quase toda a recarga sem segurar VRAM
         enquanto ele dorme, que era o que o ESCOPO §4 queria proteger.
 
-        Requisição com `messages` vazio: o Ollama carrega o modelo e não gera
-        nada. Em thread daemon, porque isto **nunca** pode atrasar a saudação.
+        **As ferramentas vão junto, e `num_predict=1` para não gerar nada.**
+        Isto foi medido de três jeitos, descarregando o modelo antes de cada um:
+
+            A  messages=[] sem tools      aquece 11,55s + 1ª inferência 2,94s
+            B  com tools, gerando         aquece 17,24s + 1,06s  -> PIOR
+            C  com tools, num_predict=1   aquece 12,74s + 1,12s  -> escolhido
+
+        **B é pior que não aquecer direito, e o motivo importa:** o Ollama
+        serializa por modelo, então um aquecimento que gera texto entra na
+        frente do comando real e o atrasa. A versão A carregava o modelo mas
+        deixava o schema das 9 ferramentas fora do cache, e a primeira
+        inferência de verdade ainda pagava ~1,9s a mais por isso.
+
+        Em thread daemon, porque isto **nunca** pode atrasar a saudação.
         """
 
         def carregar() -> None:
@@ -394,7 +457,10 @@ class Cerebro:
                     f"{self.cfg.url}/api/chat",
                     json={
                         "model": self.cfg.modelo,
-                        "messages": [],
+                        "messages": [{"role": "user", "content": "oi"}],
+                        "tools": FERRAMENTAS,
+                        "stream": False,
+                        "options": {"num_predict": 1},
                         "keep_alive": self.cfg.keep_alive,
                     },
                     timeout=self.cfg.timeout_s,
