@@ -1543,7 +1543,10 @@ continuando a funcionar.
 | o conserto do "procura", 5 rodadas | **40/40** |
 | `abridança.ppxt` × 20 | **0 ações** |
 | `verificar_linha.py` | OK — o núcleo não conhece áudio |
-| `mídia com objeto, 10 rodadas` | **58/70** — ver a regressão abaixo |
+| `etapa0.py --autoteste` | PASSOU — TTS → VAD → STT de pé, STT em 0,30s |
+| `assistente.py --teste-ciclo` | PASSOU — dorme, acorda, escuta a janela, dorme |
+| `mídia com objeto, 10 rodadas` | **70/90** — ver a regressão abaixo |
+| `regressao.py` inteiro, versionado | **passou** — 245 a 250 de 270, com os mínimos medidos |
 
 **Nenhum arquivo real do Léo foi tocado em teste**: pasta temporária no SSD e
 pasta temporária **dentro do HD**, criada e apagada pelo próprio teste, que é a
@@ -1560,9 +1563,94 @@ pasta temporária **dentro do HD**, criada e apagada pelo próprio teste, que é
 > atravessa.
 >
 > **A regra: a regressão tem que atravessar o mesmo caminho que a voz
-> atravessa.** Medir a peça isolada responde sobre a peça, não sobre o sistema —
-> e é a terceira vez neste projeto que uma medição minha mediu outra coisa
-> (depois do cache de página e do `mincore` quebrado).
+> atravessa.** Medir a peça isolada responde sobre a peça, não sobre o sistema.
+
+### O padrão das medições que mediram outra coisa — três casos
+
+O Léo mandou registrar o **padrão**, não só o caso. São três, e todos meus:
+
+| rodada | o que eu disse que media | o que media de verdade |
+|---|---|---|
+| primeiro comando | o tempo de ler 5,23 GB do disco | a RAM — o arquivo estava 100% em cache de página |
+| eviction do cache | quanto do arquivo saiu do cache | nada: o meu instrumento `mincore` estava quebrado e dizia 100% antes e depois |
+| regressão da 5.5 | o roteamento dos comandos de mídia | uma camada que a voz não atravessa — comando cru não chega ao modelo |
+
+**O que os três têm em comum:** em nenhum deles o número saiu errado. O número
+saiu **certo sobre outra pergunta**. Medição contaminada não parece medição
+contaminada; parece resultado — e um resultado plausível é mais perigoso que um
+erro visível, porque não convida a conferir.
+
+> **A regra que fica: antes de publicar um número, diga em voz alta qual é a
+> pergunta que ele responde, e confira se é a pergunta que foi feita.** Nos três
+> casos essa frase sozinha teria pegado o erro: "isto mede o disco" (com o
+> arquivo em cache), "isto mede o cache" (com o instrumento quebrado), "isto
+> mede o roteamento de mídia" (numa camada que a mídia não usa).
+>
+> E o corolário, que é do Léo: **um número que eu não sei reproduzir não é
+> medição.** Por isso a regressão virou arquivo versionado.
+
+### E a outra lição de número: 5 rodadas não bastam para fala de uma palavra
+
+Dois números antigos foram corrigidos nesta rodada, e **a correção é da
+medição, não do código**:
+
+- **`"Abaixa."` está em 8/10, não em 10/10.** O 10/10 registrado no conserto do
+  volume veio de 5 rodadas. Com 10 rodadas dá 8/10 **nas duas configurações**,
+  9 e 11 ferramentas — então não regrediu; o número era otimista.
+- **`"Para o vídeo."` nunca funcionou**, 0/10 dos dois lados, e isso não estava
+  registrado em lugar nenhum.
+
+**É a mesma lição que a medição 6×9 já tinha ensinado, aparecendo agora do
+outro lado.** Lá ela disse que 5 rodadas não enxergam uma *queda* de 1 em 10;
+aqui ela diz que 5 rodadas também produzem um *acerto perfeito* que não existe.
+Fala de uma palavra oscila, e 5 amostras de algo que oscila dão um número
+bonito com a frequência suficiente para enganar.
+
+**A regra: toda fala curta — uma ou duas palavras, sem objeto — mede-se com 10
+rodadas, e o número entra no `regressao.py` com o mínimo explícito.** Um
+`10/10` de cinco rodadas é uma afirmação mais forte do que a evidência
+sustenta.
+
+### E a causa de tudo isso: o classificador AMOSTRA
+
+**Achado ao versionar a regressão, que é o tipo de coisa que só aparece quando
+se roda a mesma medição três vezes seguidas.** O mesmo caso deu **5/5, 4/5 e
+0/5** em três execuções — e eu ia registrar o 0/5 como regressão.
+
+O `interpretar()` não passa `temperature` ao ollama, então usa o padrão do
+modelo. **Cada roteamento é uma amostra, não uma função.** Medido, n=20:
+
+| frase | esperado | padrão | `temperature: 0` |
+|---|---|---|---|
+| `procura o relatório e renomeia pra proposta` | `renomear` | 18/20 | **20/20** |
+| `Abaixa.` | `midia` | 16/20 | **20/20** |
+| `abre o loft` | `abrir` | 20/20 | 20/20 |
+| `Pausa.` | `midia` | 20/20 | 20/20 |
+| `Para a música.` | `midia` | 0/20 | **0/20** |
+| `Para o vídeo.` | `midia` | 0/20 | **0/20** (`tocar` 20/20) |
+
+**Isto separa duas coisas que estavam misturadas em todo número deste projeto:**
+
+- **Frase que oscila** é amostragem. `"Abaixa."` e o `"procura ... e renomeia"`
+  não estão com meio defeito — estão sendo sorteados, e a temperatura 0 os leva
+  aos 20/20. Todo `8/10` e `4/5` registrado até aqui pode ser disso.
+- **Frase que não oscila** é preferência do modelo. `"Para a música."` dá 0/20
+  **com temperature 0**, indo para `abrir` 20/20. **Não é ruído, é bug** — e
+  esse é o primeiro dado do segundo mecanismo que o Léo pediu para diagnosticar
+  antes do conserto: a reivindicação por escrito não está perdendo um sorteio,
+  está perdendo a decisão.
+
+**Proposta para a rodada própria, medida e não implementada:** `temperature: 0`
+no `interpretar()`. Torna o roteamento reproduzível, que é o que faz a regressão
+valer alguma coisa — hoje um vermelho dela pode ser sorteio, e regressão que dá
+vermelho falso treina quem a roda a ignorá-la. **Não foi implementado porque é
+decisão de desenho e porque muda o significado de todos os números já
+registrados**, que precisariam ser remedidos.
+
+> **A regra: número instável não é número.** Antes de chamar uma queda de
+> regressão, rode de novo. Antes de chamar um `10/10` de garantia, rode mais
+> vezes. E o que decide se uma falha é ruído ou defeito não é o tamanho dela —
+> é ela **repetir**.
 
 ### ⚠️ A regressão que a 5.5 introduziu e NÃO consertou: `"Para a música."`
 
@@ -1585,6 +1673,18 @@ rodadas:
 que ir para `None`: `abrir` é ação, e "música" casa com atalho — pedir para
 pausar abriria a pasta de músicas. **Ação errada é pior que não entender**, e
 esta etapa a introduziu.
+
+> ### ⚠️ LIMITAÇÃO CONHECIDA, com aviso prático
+>
+> **Dizer `"para a música"` abre a pasta de músicas em vez de pausar.**
+>
+> Enquanto não estiver consertado, o Léo usa **`"pausa"` sozinho**, que é
+> casado pela lista fechada antes do modelo e não erra. `"Para o vídeo."` tem o
+> mesmo defeito, e nunca funcionou.
+>
+> Está travado no `regressao.py` com `minimo=0` e o motivo por escrito, para a
+> falha conhecida não virar ruído vermelho toda rodada — e para o dia em que
+> subir de zero aparecer como surpresa boa em vez de passar despercebido.
 
 **E o padrão da lição não explica este caso.** Nas três vezes anteriores a causa
 era ausência de dono: a descrição não reclamava a frase. Aqui a descrição do
@@ -1717,6 +1817,36 @@ Igual ao que já funciona no Claude Tracker:
 Este documento fica na raiz da pasta do projeto e é atualizado quando uma
 decisão muda. Ele é a memória do projeto — não a memória de quem estiver
 ajudando.
+
+### A regressão é versionada, e o passo 6 começa por ela
+
+```
+python3 regressao.py            # tudo
+python3 regressao.py --rapido   # pula os conjuntos de 10 rodadas
+```
+
+Mais os dois que precisam de áudio e por isso não cabem nela:
+
+```
+.venv/bin/python etapa0.py --autoteste          # a cadeia TTS -> VAD -> STT
+.venv/bin/python assistente.py --teste-ciclo    # dorme, acorda, volta a dormir
+python3 verificar_linha.py                      # o núcleo não conhece áudio
+```
+
+**Até a Etapa 5.5 a regressão morava num script de rascunho, e sumiu duas
+vezes.** Foi reconstruída das frases guardadas em `medicoes/etapa5-arquivos.md`
+— ou seja, sobreviveu **por sorte**, porque a medição estava commitada. É a
+mesma lição dos logs apagados por engano na Etapa 0.5 e do prompt antigo do
+classificador preservado na Etapa 4: *o que prova alguma coisa tem que estar
+versionado.*
+
+E o que ela pega justifica o arquivo: na rodada da 5.5 apanhou uma perda que faz
+o Jarvis **abrir a pasta de músicas quando o Léo pede para pausar**.
+
+**Cada conjunto no arquivo traz o número esperado e o motivo dele**, e toda
+falha conhecida traz um `minimo` com a explicação por escrito. Sem isso, uma
+queda no total não é atribuível — é só um número menor, e quem rodar depois não
+sabe se quebrou agora ou se sempre foi assim.
 
 Ao fim de cada etapa aprovada, commit e push:
 
