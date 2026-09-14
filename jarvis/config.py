@@ -26,6 +26,7 @@ class Persona:
     busca_muitos: str
     busca_muitos_ainda: str
     busca_nada: str
+    busca_mesmo_lugar: str
     qual_musica: str
     musica_nao_achei: str
     musica_nao_saiu: str
@@ -48,9 +49,20 @@ class Persona:
     arquivo_qual_nome: str
     arquivo_qual: str
     arquivo_fora_da_lista: str
+    arquivo_vetado: str
     arquivo_onde_criar: str
     arquivo_descartado: str
     nada_para_desfazer: str
+    desisti: str
+    arquivo_mover_confirmar: str
+    arquivo_copiar_confirmar: str
+    arquivo_movimento_cancelado: str
+    arquivo_movimento_descartado: str
+    arquivo_sem_destino: str
+    arquivo_destino_desconhecido: str
+    arquivo_destino_fora_da_lista: str
+    arquivo_destino_vetado: str
+    arquivo_qual_destino: str
 
 
 @dataclass(frozen=True)
@@ -138,6 +150,9 @@ class Agenda:
 @dataclass(frozen=True)
 class Arquivos:
     onde_pode_mexer: list[str]
+    nunca_mexer: list[str]
+    nunca_mexer_nomes: list[str]
+    nunca_mexer_extensoes: list[str]
 
 
 @dataclass(frozen=True)

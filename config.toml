@@ -45,6 +45,11 @@ busca_muitos = "Achei {n} coisas com esse nome espalhadas pelo disco. Me diz o n
 busca_muitos_ainda = "Ainda são {n} com esse nome. Me diz outra pasta do caminho pra estreitar."
 busca_nada = "Não achei nada chamado {termo}."
 
+# Os candidatos estão na MESMA pasta e só diferem pelo nome — "Trabalho sobre
+# Cuba.pdf" e "Trabalho sobre Cuba2.0.pdf". Perguntar "em qual pasta?" aqui é
+# pergunta sem resposta possível, e foi assim que a conversa travou.
+busca_mesmo_lugar = "Achei {n} no mesmo lugar, com nomes parecidos: {nomes}. Qual deles?"
+
 # Mídia (Etapa 3).
 qual_musica = "Qual música?"
 musica_nao_achei = "Não achei nada no YouTube com {termo}."
@@ -115,7 +120,16 @@ arquivo_qual = "Qual arquivo?"
 # Achou o arquivo, mas ele está fora do onde_pode_mexer. Precisa ser diferente
 # do busca_nada: dizer "não achei" seria mentira, e você ficaria repetindo o
 # nome achando que o Whisper errou.
-arquivo_fora_da_lista = "Achei, mas não está numa pasta que você liberou pra eu mexer."
+# Achou coisas com esse nome, e NENHUMA numa pasta liberada. Dizer quantas
+# importa: a frase antiga ("achei, mas não está numa pasta que você liberou")
+# descrevia o que ele achou como se fosse o que você pediu, e você entendeu que
+# a pasta de DESTINO estava barrada — quando o problema era a origem.
+arquivo_fora_da_lista = "Achei {n} com esse nome, e nenhuma numa pasta que você liberou pra eu mexer."
+# E a outra forma de "não posso", que é diferente: a pasta ESTÁ liberada e o
+# que está dentro dela é que você vetou. Dizer "nenhuma numa pasta que você
+# liberou" sobre um arquivo do ~/Projetos/Jarvis seria falso — Projetos está
+# liberada, o Jarvis é que não.
+arquivo_vetado = "Achei {n} com esse nome, mas está tudo em pasta que você mandou eu nunca mexer."
 
 # Criar pasta sem dizer onde, ou dizendo um lugar que não é pasta conhecida.
 # Não guarda estado: é operação inofensiva, e pedir a frase inteira de novo
@@ -128,6 +142,39 @@ arquivo_descartado = "Descartei a renomeação de {atual}."
 
 # "desfaz" sem nada para desfazer.
 nada_para_desfazer = "Não tem nada para desfazer."
+
+# Você mandou largar o que estava pendente. Dizer O QUE foi largado é a mesma
+# lição do descarte da Etapa 4: soltar calado faz você achar que o pedido
+# continua de pé.
+desisti = "Deixei {o_que} pra lá."
+
+# --- mover e copiar (Etapa 5.5) ----------------------------------------
+# A confirmação diz os DOIS nomes, origem e destino. É a única chance de pegar
+# o destino errado antes de o arquivo sair do lugar — e destino errado é pior
+# que nome errado, porque depois você não sabe onde procurar.
+arquivo_mover_confirmar = "Movo {origem} para {destino}. Pode?"
+arquivo_copiar_confirmar = "Copio {origem} para {destino}. Pode?"
+arquivo_movimento_cancelado = "Beleza, deixa onde está."
+arquivo_movimento_descartado = "Deixei {origem} onde estava."
+
+# Ele disse o arquivo mas não para onde.
+arquivo_sem_destino = "Para qual pasta?"
+
+# Ele disse uma pasta que não existe em lugar liberado nenhum. Precisa ser
+# diferente de "não achei o arquivo": o arquivo pode estar lá e a pasta não.
+arquivo_destino_desconhecido = "Não conheço pasta chamada {destino}."
+
+# E estas duas são a diferença entre "não existe" e "não posso", que são fatos
+# diferentes: a primeira manda você repetir o nome achando que eu ouvi errado,
+# a segunda diz que é uma linha de config. Foi o caso da Home — a recusa estava
+# certa e a frase estava errada.
+arquivo_destino_fora_da_lista = "{destino} existe, mas não está na lista que você liberou pra eu mexer."
+arquivo_destino_vetado = "{destino} está na lista do que eu nunca mexo."
+
+# Duas pastas com o mesmo nome em lugares diferentes — "Músicas" existe na casa
+# e no HD. Mesma lição da busca da Etapa 2: a frase diz que são o mesmo nome em
+# lugares distintos, e que a resposta é o lugar.
+arquivo_qual_destino = "Tem {n} pastas com esse nome, em lugares diferentes: {lugares}. Em qual delas?"
 
 [arquivos]
 # As ÚNICAS pastas onde ele pode criar pasta ou renomear arquivo. Fora daqui
@@ -143,7 +190,68 @@ nada_para_desfazer = "Não tem nada para desfazer."
 onde_pode_mexer = [
     "~/Downloads",
     "~/Documentos",
+    "~/Imagens",
+    "~/Músicas",
+    "~/Vídeos",
     "~/Área de trabalho",
+    "~/Estudos",
+    "~/Canal",
+    "~/Projetos",
+    "/mnt/cab1286d-6765-4c73-9c77-8d3119b4b644/Midia",
+    "/mnt/cab1286d-6765-4c73-9c77-8d3119b4b644/Estudio",
+]
+
+# Buracos recortados DENTRO do que a branca liberou. A negra sempre ganha.
+#
+# Estas duas listas não saíram de conversa: saíram de uma varredura do que
+# existe de verdade nas pastas liberadas, no SSD e no HD, procurando o que
+# quebra se for movido ou renomeado. O Léo decidiu item por item.
+#
+# `Jogos` do HD NÃO está aqui — está fora da branca, que é diferente e
+# deliberado: com a negra sempre ganhando, liberar depois uma pasta de mods de
+# um jogo específico seria impossível se Jogos estivesse liberada e vetada por
+# dentro. Fora da branca, liberar essa pasta é uma linha aqui em cima.
+#
+# `SteamLibrary` também não precisa de veto: fica fora das pastas liberadas do
+# HD, irmão de Midia e Estudio, não filho.
+nunca_mexer = [
+    # É ele mesmo: renomear o próprio código quebra no meio da operação.
+    "~/Projetos/Jarvis",
+    # Projetos em andamento. Renomear arquivo quebra import, e o dano só
+    # aparece na próxima vez que o projeto roda.
+    "~/Projetos/Loft",
+    "~/Projetos/City Empire",
+    "~/Projetos/Claude-tracker",
+    # O ArquivosPT1-SemFinal.kdenlive referencia 12 clipes daqui por caminho
+    # ABSOLUTO. Mover um .mov não dá erro nenhum na hora — o projeto abre
+    # quebrado horas depois, e é impossível ligar uma coisa à outra. Falha
+    # silenciosa e atrasada é a pior espécie.
+    "/mnt/cab1286d-6765-4c73-9c77-8d3119b4b644/Estudio/Gravacoes",
+]
+
+# Nome vetado em QUALQUER nível do caminho — a pasta e tudo dentro dela.
+nunca_mexer_nomes = [
+    ".git",
+    ".venv",
+    "node_modules",
+    # Estado de ferramenta, achado no Loft e no City Empire. Como padrão,
+    # pega também os lugares que eu não previ.
+    ".claude",
+    ".firebase",
+    ".verify",
+    # Lixeira: mexer nela corrompe o registro do que foi para o lixo. A de
+    # ~/Downloads não está vazia.
+    ".Trash-1000",
+]
+
+# Extensão vetada em qualquer lugar.
+nunca_mexer_extensoes = [
+    # Os 9 lançadores da área de trabalho. O Cinnamon lê por CAMINHO: renomear
+    # muda o nome do ícone, mover tira ele da tela.
+    #
+    # Vetar a extensão e não a pasta é escolha do Léo — ele liberou a Área de
+    # trabalho de propósito, e assim ela continua livre para arquivo de verdade.
+    ".desktop",
 ]
 
 [llm]

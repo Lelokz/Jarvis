@@ -142,7 +142,7 @@ class Buscador:
 
     # ----------------------------------------------------------------------
 
-    def buscar(self, termo: str) -> list[Achado]:
+    def buscar(self, termo: str, forcar_find: bool = False) -> list[Achado]:
         termo = termo.strip()
         if not termo or not self.raizes:
             return []
@@ -152,30 +152,73 @@ class Buscador:
         # distintiva e exigimos que todas apareçam no nome, com os separadores
         # tratados como espaço. Sem isto, quase toda busca de nome com mais de
         # uma palavra falharia.
-        palavras = [p for p in _sem_acento(termo).split() if p]
-        chave = max(palavras, key=len) if palavras else termo
+        # Duas formas da mesma chave, e as DUAS vão ao disco.
+        #
+        # A versão anterior tirava o acento do termo para formar a chave, mas o
+        # nome no disco mantém o acento: `find -iname "*danca*"` não casa com
+        # `dança_qq2.pptx`. Metade dos arquivos do Léo tem acento — "Dança.pptx"
+        # está na Downloads dele agora.
+        #
+        # E o pior não era falhar. Buscar "dança" devolvia UM achado, e era o
+        # arquivo errado: `danca_sem_acento.txt`, que casa com a chave sem
+        # acento. Um candidato só faz o núcleo agir **sem confirmar** — com
+        # `abrir` isso custava uma janela errada; com `mover` e `copiar`, mexe
+        # em arquivo sem o Léo nunca ouvir qual era.
+        #
+        # As palavras do filtro continuam sem acento de propósito: o
+        # `_todas_no_nome` compara contra o `_nome_falavel`, que também tira. É
+        # esse filtro que descarta o que a segunda chave trouxer a mais — foi
+        # ele que pegou o falso positivo do "dança".
+        brutas = [x for x in termo.split() if x]
+        palavras = [_sem_acento(x) for x in brutas]
+        if palavras:
+            i = max(range(len(palavras)), key=lambda k: len(palavras[k]))
+            chave, chave_acentuada = palavras[i], brutas[i]
+        else:
+            chave = chave_acentuada = termo
 
         def coletar(fonte, rotulo: str) -> list[Path]:
             crus = fonte(chave)
+            if chave_acentuada != chave:
+                ja = set(crus)
+                crus = crus + [p for p in fonte(chave_acentuada) if p not in ja]
             sob_raiz = [p for p in crus if self._sob_raiz(p)]
             aceitos = [p for p in sob_raiz if self._aceitar(p)]
             filtrados = aceitos
             if len(palavras) > 1:
                 filtrados = [p for p in aceitos if _todas_no_nome(palavras, p)]
+            # O índice aponta para caminhos que podem já ter sumido, e esta
+            # checagem precisa vir ANTES de decidir se o `find` roda.
+            #
+            # Era o furo: `Dança.pptx` foi movido para outra pasta, o plocate
+            # continuou apontando para o caminho velho, a contagem filtrada deu
+            # 1 — não-zero, então o fallback não disparou — e só depois o
+            # `exists()` derrubava tudo. Resultado: zero achados, com o arquivo
+            # ali no disco. É a mesma doença do índice desatualizado, uma
+            # camada mais fundo.
+            filtrados = [p for p in filtrados if p.exists()]
             # Guardado para o log: sem estas contagens, investigar por que uma
             # busca não achou nada exige reproduzir a sessão inteira.
             self.ultimo_diagnostico = {
                 "fonte": rotulo,
                 "termo": termo,
                 "chave": chave,
+                "chave_acentuada": chave_acentuada,
                 "cru": len(crus),
                 "apos_raizes": len(sob_raiz),
                 "apos_exclusoes": len(aceitos),
                 "apos_palavras": len(filtrados),
+                "existem": len(filtrados),
             }
             return filtrados
 
-        caminhos = coletar(self._plocate, "plocate")
+        # `forcar_find` pula o índice e vai direto ao disco. Existe porque o
+        # plocate pode devolver resultados ERRADOS em vez de nenhum: uma pasta
+        # criada há dez segundos não está no índice, mas outras coisas com o
+        # mesmo nome estão. Aí o fallback nunca dispara, porque ele só dispara
+        # quando sobra zero — e o Léo ouve "não está numa pasta liberada"
+        # falando de quatro arquivos que não são o dele.
+        caminhos = [] if forcar_find else coletar(self._plocate, "plocate")
         # A rede só vale se for lançada quando não sobrou nada **depois** de
         # filtrar. O plocate pode devolver vinte arquivos e o filtro de
         # palavras descartar todos — foi o que aconteceu com "experimento stt",
@@ -208,7 +251,13 @@ class Buscador:
         # pontua. "Download." procurava literalmente `download.`, com ponto,
         # e nunca casava com nada. Era por isso que "Achei 90. Em qual pasta?"
         # nunca estreitava.
-        palavras = [p for p in normalizar(filtro).split() if len(p) > 1]
+        # Letra solta é ruído; DÍGITO solto não é. "Cuba 2.0" vira
+        # ["cuba","2","0"], e sem os dígitos sobra só "cuba" — que casa com os
+        # dois candidatos e faz a pergunta se repetir para sempre. Foi
+        # exatamente o laço em que o Léo ficou preso.
+        palavras = [
+            p for p in normalizar(filtro).split() if len(p) > 1 or p.isdigit()
+        ]
         if not palavras:
             return achados
         return [
@@ -237,4 +286,13 @@ def pastas_que_distinguem(achados: list[Achado]) -> list[str]:
                 vistas.append(rotulo)
         if len(vistas) == len({v.lower() for v in vistas}) and len(vistas) > 1:
             return vistas
-    return vistas
+    # Nenhum nível distingue: os candidatos estão na MESMA pasta e só diferem
+    # pelo nome. Lista vazia é a resposta honesta — quem chama tem que
+    # perguntar de outro jeito.
+    #
+    # A versão anterior devolvia o último `vistas`, que nesse caso é um rótulo
+    # só e ainda por cima em forma de caminho ("home/lelokz/Downloads"). A
+    # pergunta saía prometendo "em lugares diferentes" e nomeando UM lugar —
+    # e não havia resposta que o Léo pudesse dar. Foi assim que ele entrou no
+    # laço de onde não saía.
+    return []

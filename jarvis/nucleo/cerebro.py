@@ -45,7 +45,8 @@ FERRAMENTA_ABRIR = {
             "sobre o computador, use `status_pc`. Para 'marca', 'agenda' ou "
             "'me lembra', use `criar_evento`; para o que já está marcado, "
             "`agenda_do_dia`. Para 'renomeia', 'muda o nome' ou 'troca o "
-            "nome', use `renomear`; para 'cria uma pasta', `criar_pasta`.\n"
+            "nome', use `renomear`; para 'cria uma pasta', `criar_pasta`; "
+            "para levar um arquivo para outra pasta, `mover`.\n"
             "'abre músicas' é abrir a pasta; 'toca uma música' não é abrir."
         ),
         "parameters": {
@@ -122,6 +123,10 @@ FERRAMENTA_MIDIA = {
             "'dar play' é SEMPRE continuar o que está pausado, em qualquer "
             "forma que ele fale: 'dá play', 'pode dar play', 'tu pode dar "
             "play?'. Nunca é volume.\n"
+            "VOLUME também é isto, e nada mais: 'abaixa o volume', 'abaixa o "
+            "som', 'aumenta o volume', 'diminui', 'sobe o som', 'volume 30', "
+            "'muta'. 'abaixa' e 'baixa' falando de som são SEMPRE volume — "
+            "nunca têm a ver com mover ou copiar arquivo.\n"
             "Só é `tocar` quando ele disser O QUE quer que comece a tocar."
         ),
         "parameters": {
@@ -224,6 +229,9 @@ FERRAMENTA_RENOMEAR = {
             "Muda o nome de um arquivo, no lugar onde ele já está. Use para "
             "'renomeia', 'muda o nome', 'troca o nome' e 'chama esse arquivo "
             "de'.\n"
+            "Se o que vem depois do 'para' for uma PASTA, e não um nome novo, "
+            "então é `mover` e não isto: 'move o relatório para documentos' é "
+            "mover; 'renomeia o relatório para proposta' é isto.\n"
             "Use ISTO, e não `abrir`, sempre que a frase contiver 'renomear' "
             "ou 'mudar o nome' em qualquer lugar — inclusive quando ela "
             "começar com 'procura' ou 'acha', como em 'procura o relatório e "
@@ -306,7 +314,94 @@ FERRAMENTA_DESFAZER = {
     },
 }
 
-# São NOVE agora, e é o maior salto do projeto — de 6 para 9 de uma vez. A
+FERRAMENTA_MOVER = {
+    "type": "function",
+    "function": {
+        "name": "mover",
+        "description": (
+            "Leva um arquivo para outra pasta. O arquivo sai de onde está e "
+            "passa a ficar no destino, com o mesmo nome.\n"
+            "É ISTO que você usa quando ele manda o arquivo para algum lugar: "
+            "'move', 'manda pra', 'leva pra', 'joga pra', 'guarda em', 'põe na "
+            "pasta', 'tira daqui e põe em', 'arquiva em'.\n"
+            "'guarda' e 'arquiva' são SEMPRE mover, nunca copiar — guardar uma "
+            "coisa não é ficar com duas.\n"
+            "A diferença com `renomear`: aqui o que vem depois do 'para' é uma "
+            "PASTA, e o nome do arquivo não muda. Em 'move o relatório para "
+            "documentos', 'documentos' é pasta e isto é `mover`. Em 'renomeia o "
+            "relatório para proposta', 'proposta' é o nome novo do arquivo."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "origem": {
+                    "type": "string",
+                    "description": (
+                        "Qual arquivo, como o usuário falou, sem artigo e sem "
+                        "verbo. Em 'move o relatório pra documentos', é "
+                        "'relatório'. Vazio se ele disse só 'isso' ou 'esse aí'."
+                    ),
+                },
+                "destino": {
+                    "type": "string",
+                    "description": (
+                        "A PASTA de destino, como ele falou: 'documentos', "
+                        "'estudos', 'senai'. Nunca um nome de arquivo. Vazio se "
+                        "ele não disse para onde."
+                    ),
+                },
+            },
+            "required": ["origem", "destino"],
+        },
+    },
+}
+
+FERRAMENTA_COPIAR = {
+    "type": "function",
+    "function": {
+        "name": "copiar",
+        "description": (
+            "Põe uma cópia do arquivo em outra pasta. O original FICA onde "
+            "está — depois disto existem dois.\n"
+            "É ISTO que você usa quando ele pede cópia: 'copia', 'faz uma "
+            "cópia', 'duplica', 'manda uma cópia', 'deixa uma cópia em'.\n"
+            "Só é isto quando ele disser COPIAR ou CÓPIA. Se ele só mandou o "
+            "arquivo para algum lugar, sem falar de cópia, é `mover`."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "origem": {
+                    "type": "string",
+                    "description": (
+                        "Qual arquivo, como o usuário falou, sem artigo e sem "
+                        "verbo. Em 'move o relatório pra documentos', é "
+                        "'relatório'. Vazio se ele disse só 'isso' ou 'esse aí'."
+                    ),
+                },
+                "destino": {
+                    "type": "string",
+                    "description": (
+                        "A PASTA de destino, como ele falou: 'documentos', "
+                        "'estudos', 'senai'. Nunca um nome de arquivo. Vazio se "
+                        "ele não disse para onde."
+                    ),
+                },
+            },
+            "required": ["origem", "destino"],
+        },
+    },
+}
+
+# São ONZE agora. O par novo — `mover` contra `copiar` — foi marcado como "o
+# próximo a brigar" quando a Etapa 5 fechou, e as duas descrições seguem a
+# lição do "procura": cada uma REIVINDICA os próprios verbos, e nenhuma diz
+# "não sou eu".
+#
+# O par que preocupa de verdade não é esse, é `mover` contra `renomear`: a
+# Etapa 5 ensinou o modelo que "para X" é nome novo, e "move o relatório para
+# documentos" tem a mesma forma. O sinal que separa é que destino é PASTA e
+# nome novo não — está dito nas duas descrições, e medido. — de 6 para 9 de uma vez. A
 # lição registrada na Etapa 2 diz que cada função nova amplia o que o modelo
 # pode confundir com o que já existe, por isso o conjunto de roteamento cresce
 # junto e é ele que decide se a etapa está de pé. O par que mais preocupa é
@@ -322,6 +417,8 @@ FERRAMENTAS = [
     FERRAMENTA_RENOMEAR,
     FERRAMENTA_CRIAR_PASTA,
     FERRAMENTA_DESFAZER,
+    FERRAMENTA_MOVER,
+    FERRAMENTA_COPIAR,
 ]
 
 

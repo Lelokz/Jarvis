@@ -36,6 +36,29 @@ __all__ = ["Nucleo", "Resposta", "ErroDoCerebro"]
 # por um fio, marcando um compromisso para agora sem ninguém ter pedido.
 ANCORAGEM_QUANDO = 0.75
 
+# Como o Léo manda largar o que estiver pendente.
+#
+# Existe porque a conversa travou de verdade: com uma busca aberta, ele disse
+# "para", "esquece", "aumenta o volume" e "move X pra Y", e TODAS viraram pista
+# da busca. Ficou preso até o Jarvis dormir sozinho — e como a janela de 30s
+# reinicia a cada resposta dele, e ele respondia a cada tentativa, a janela
+# nunca fechava.
+#
+# O ESCOPO da Etapa 5 já registrava "não há saída falada das perguntas
+# pendentes" como limitação, e eu escrevi que só prendia a conversa por 30
+# segundos. Estava errado: com a busca, prende até desistir de falar.
+#
+# Só dispara quando há algo pendente. Sem nada na mesa, "para" continua sendo
+# pausar a música — é a lista fechada de mídia que decide, como sempre.
+DESISTIR = frozenset(
+    {
+        "esquece", "esquece isso", "esquece disso", "deixa", "deixa isso",
+        "deixa pra la", "cancela", "cancela isso", "cancelar", "para",
+        "parar", "para com isso", "chega", "desiste", "desisto",
+        "nao quero mais", "nao importa", "tanto faz",
+    }
+)
+
 
 @dataclass(frozen=True)
 class Resposta:
@@ -106,11 +129,32 @@ class Nucleo:
         self._esperando_nome_novo: Path | None = None
         # Renomeação resolvida esperando o "pode". É a §2.3 virando estado.
         self._renomeacao_pendente: tuple[Path, str] | None = None
-        # (onde está agora, onde estava antes) — para o "desfaz".
-        self._ultima_renomeacao: tuple[Path, Path] | None = None
+        # (ação, onde está agora, onde estava antes) — para o "desfaz".
+        #
+        # **Uma ação só, e na memória.** Eu tinha proposto histórico em disco
+        # com pilha e alcance de 24 horas; o Léo desenhou contra, e o
+        # argumento derruba a proposta: para chegar num erro das três da tarde
+        # depois de mais vinte pedidos, ele teria que desfazer os vinte —
+        # desmontar uma tarde de arrumação para consertar uma coisa. O erro
+        # percebido horas depois se resolve movendo o arquivo de volta na mão,
+        # que é mais simples e mais seguro.
+        #
+        # Morrer quando o Jarvis dorme, então, não é limitação: é o desenho.
+        self._ultima_acao: tuple[str, Path, Path] | None = None
         # Volume acima do limite esperando o "pode". Guarda só o número: o
         # plano já foi decidido e nada foi aplicado ainda.
         self._volume_pendente: int | None = None
+
+        # --- Etapa 5.5: mover e copiar ------------------------------------
+        # O destino atravessa a desambiguação da origem, no molde do
+        # `_nome_novo_pendente`: o barato é resolvido primeiro e espera.
+        self._destino_pendente: Path | None = None
+        # (origem, pasta de destino, "mover"|"copiar") esperando o "pode".
+        self._movimento_pendente: tuple[Path, Path, str] | None = None
+        # Ele disse o arquivo e não o destino; a próxima fala é a pasta.
+        self._esperando_destino: tuple[str, str] | None = None
+        # Duas pastas com o mesmo nome: (candidatas, origem falada, ação).
+        self._esperando_qual_destino: tuple[list[Path], str, str] | None = None
         self._diag: dict = {}
 
     # ----------------------------------------------------------------------
@@ -119,6 +163,18 @@ class Nucleo:
         texto = texto.strip()
         if not texto:
             return Resposta("")
+
+        # Largar o que está pendente vem ANTES de tudo, senão a própria coisa
+        # que segura a conversa engole o pedido de soltar.
+        if normalizar(texto) in DESISTIR:
+            largado = self._largar_tudo()
+            if largado:
+                return Resposta(
+                    self._frase("desisti", o_que=largado),
+                    diagnostico={"origem": "desistência", "dito": texto,
+                                 "largado": largado},
+                )
+            # Nada pendente: segue o fluxo normal. "para" vira pausar.
 
         # Uma busca aberta tem prioridade: a fala seguinte é a pista que
         # estreita. Não passa pelo LLM — é texto casado contra os caminhos,
@@ -156,12 +212,31 @@ class Nucleo:
         if self._volume_pendente is not None:
             return self._confirmar_volume(texto)
 
+        if self._movimento_pendente is not None:
+            return self._confirmar_movimento(texto)
+
+        if self._esperando_qual_destino is not None:
+            candidatas, origem, acao = self._esperando_qual_destino
+            self._esperando_qual_destino = None
+            return self._escolher_destino_entre(candidatas, texto, origem, acao)
+
+        if self._esperando_destino is not None:
+            origem, acao = self._esperando_destino
+            self._esperando_destino = None
+            return self._movimentar(acao, origem, texto, {"origem_da_vez": "destino pedido"})
+
         if self._renomeacao_pendente is not None:
             return self._confirmar_renomeacao(texto)
 
         if self._esperando_qual_arquivo is not None:
             novo, self._esperando_qual_arquivo = self._esperando_qual_arquivo, None
-            return self._escolher_arquivo(texto, novo, {"origem": "qual arquivo"})
+            # O propósito vem do `_busca_para`, que o `_com_destino` já marcou.
+            # Sem isto, perguntar "qual arquivo?" no meio de um mover voltaria
+            # pelo caminho da renomeação e o destino se perderia.
+            return self._escolher_arquivo(
+                texto, novo, {"origem": "qual arquivo"},
+                para=self._busca_para or "renomear",
+            )
 
         if self._esperando_nome_novo is not None:
             caminho, self._esperando_nome_novo = self._esperando_nome_novo, None
@@ -189,6 +264,17 @@ class Nucleo:
             )
 
         interpretacao = self.cerebro.interpretar(texto)
+        return self._despachar(interpretacao, texto)
+
+    def _despachar(self, interpretacao, texto: str) -> Resposta:
+        """O que fazer com a função que o modelo escolheu.
+
+        Separado do `processar` de propósito: a saída de emergência da busca
+        precisa despachar um comando novo, e antes ela só sabia reconhecer o
+        `abrir`. Com onze funções, isso virou buraco negro — "aumenta o
+        volume", "move X pra Y" e "esquece" eram todos engolidos como pista de
+        uma busca aberta, e o Léo ficou preso até o Jarvis dormir sozinho.
+        """
         base = {"houve_tool_call": interpretacao.funcao is not None,
                 "funcao": interpretacao.funcao, "dito": texto,
                 "argumentos": interpretacao.argumentos}
@@ -238,6 +324,14 @@ class Nucleo:
             return self._criar_pasta(
                 str(interpretacao.argumentos.get("nome") or "").strip(),
                 str(interpretacao.argumentos.get("dentro_de") or "").strip(),
+                base, texto,
+            )
+
+        if interpretacao.funcao in ("mover", "copiar"):
+            return self._movimentar(
+                interpretacao.funcao,
+                str(interpretacao.argumentos.get("origem") or "").strip(),
+                str(interpretacao.argumentos.get("destino") or "").strip(),
                 base, texto,
             )
 
@@ -417,6 +511,209 @@ class Nucleo:
 
     # -- arquivos (Etapa 5) ------------------------------------------------
 
+    def _movimentar(
+        self, acao: str, origem: str, destino: str, diag: dict,
+        dito: str | None = None,
+    ) -> Resposta:
+        """Mover ou copiar: resolve o DESTINO primeiro, a origem depois.
+
+        A ordem não é arbitrária. O destino é barato — casamento de nome contra
+        as pastas em memória, sem tocar no disco de verdade. A origem é caro:
+        busca no disco com a desambiguação da Etapa 2. Resolvendo o barato
+        primeiro, o Léo não desambigua um arquivo para depois descobrir que a
+        pasta que ele falou não existe.
+        """
+        diag["acao_arquivo"] = acao
+        if dito:
+            for campo, valor in (("origem", origem), ("destino", destino)):
+                if not valor:
+                    continue
+                nota = ancoragem(valor, dito)
+                diag[f"ancoragem_{campo}"] = round(nota, 3)
+                if nota < self.cfg.llm.ancoragem_minima:
+                    diag[f"{campo}_inventado"] = valor
+                    if campo == "origem":
+                        origem = ""
+                    else:
+                        destino = ""
+
+        if origem and mod_arquivos.aponta_sem_nomear(origem):
+            diag["origem_so_aponta"] = origem
+            origem = ""
+
+        if not destino:
+            self._esperando_destino = (origem, acao)
+            return Resposta(
+                self.cfg.persona.arquivo_sem_destino, perguntando=True,
+                diagnostico=diag,
+            )
+
+        candidatas = mod_arquivos.casar_destino(destino, self.cfg.arquivos)
+        diag["destinos_que_casaram"] = [str(c) for c in candidatas]
+        if not candidatas:
+            # Diferente de "não achei o arquivo": a pasta é que não casou, e
+            # dizer a coisa errada faz o Léo repetir o nome do arquivo em vão.
+            #
+            # E "não casou" ainda tem duas causas, que também são diferentes
+            # entre si: a pasta não existe, ou existe e não está liberada.
+            # "Não conheço pasta chamada Home" mandou o Léo procurar problema
+            # onde não tinha — o comportamento estava certo e a frase mentia.
+            motivo = mod_arquivos.explicar_destino(destino, self.cfg.arquivos)
+            diag["destino_nao_casou"] = motivo or "nao_existe"
+            if motivo:
+                qual, nome = motivo
+                frase = ("arquivo_destino_vetado" if qual == "vetada"
+                         else "arquivo_destino_fora_da_lista")
+                return Resposta(
+                    self._frase(frase, destino=nome), diagnostico=diag
+                )
+            return Resposta(
+                self._frase("arquivo_destino_desconhecido", destino=destino),
+                diagnostico=diag,
+            )
+        if len(candidatas) > 1:
+            return self._perguntar_qual_destino(candidatas, origem, acao, diag)
+
+        return self._com_destino(candidatas[0], origem, acao, diag)
+
+    def _perguntar_qual_destino(
+        self, candidatas: list[Path], origem: str, acao: str, diag: dict
+    ) -> Resposta:
+        """"Músicas" existe na casa e no HD. Quem escolhe é o Léo (§2.2)."""
+        self._esperando_qual_destino = (candidatas, origem, acao)
+        lugares = ", ".join(f"uma em {c.parent.name}" for c in candidatas)
+        return Resposta(
+            self._frase("arquivo_qual_destino", n=len(candidatas), lugares=lugares),
+            perguntando=True,
+            diagnostico=diag,
+        )
+
+    def _escolher_destino_entre(
+        self, candidatas: list[Path], pista: str, origem: str, acao: str
+    ) -> Resposta:
+        """Casa a resposta dele contra o CAMINHO das candidatas.
+
+        Contra o caminho inteiro, e não só contra o nome do pai: ele pode
+        responder "no HD", "em Midia" ou o caminho todo, e as três funcionam.
+        """
+        chave = normalizar(pista)
+        diag = {"origem_da_vez": "qual destino", "pista": chave}
+        restantes = [c for c in candidatas if chave in normalizar(str(c))]
+        if len(restantes) == 1:
+            return self._com_destino(restantes[0], origem, acao, diag)
+        if not restantes:
+            return Resposta(self.cfg.persona.pista_ruim, diagnostico=diag)
+        return self._perguntar_qual_destino(restantes, origem, acao, diag)
+
+    def _com_destino(
+        self, pasta: Path, origem: str, acao: str, diag: dict
+    ) -> Resposta:
+        """Destino resolvido. Agora acha a origem, que é a parte caro."""
+        diag["destino"] = str(pasta)
+        if not origem:
+            self._esperando_qual_arquivo = ""
+            self._destino_pendente = pasta
+            self._busca_para = acao
+            return Resposta(
+                self.cfg.persona.arquivo_qual, perguntando=True, diagnostico=diag
+            )
+        self._destino_pendente = pasta
+        return self._escolher_arquivo(origem, "", diag, para=acao)
+
+    def _com_movimento(self, caminho: Path, pasta: Path, acao: str) -> Resposta:
+        """Tem origem e destino. Monta a confirmação — nunca age antes dela."""
+        diag = {"origem_da_vez": acao, "de": str(caminho), "para": str(pasta)}
+        self._movimento_pendente = (caminho, pasta, acao)
+        chave = "arquivo_mover_confirmar" if acao == "mover" else "arquivo_copiar_confirmar"
+        pergunta = self._frase(
+            chave, origem=mod_arquivos.falar_nome(caminho), destino=pasta.name
+        )
+        self._pergunta = pergunta
+        return Resposta(pergunta, perguntando=True, diagnostico=diag)
+
+    def _confirmar_movimento(self, texto: str) -> Resposta:
+        caminho, pasta, acao = self._movimento_pendente
+        self._movimento_pendente = None
+        resposta = self.cerebro.confirmar(texto, self._pergunta)
+        diag = {"origem_da_vez": f"confirmação de {acao}", "dito": texto,
+                "confirmacao": resposta.name, "de": str(caminho),
+                "para": str(pasta)}
+
+        if resposta is Confirmacao.NAO:
+            return Resposta(
+                self.cfg.persona.arquivo_movimento_cancelado, diagnostico=diag
+            )
+
+        if resposta is not Confirmacao.SIM:
+            # Descarta e AVISA, como a Etapa 5 estabeleceu.
+            nova = self.processar(texto)
+            diag["descartado"] = str(caminho)
+            aviso = self._frase(
+                "arquivo_movimento_descartado",
+                origem=mod_arquivos.falar_nome(caminho),
+            )
+            return Resposta(
+                f"{aviso} {nova.texto}".strip(), acao=nova.acao,
+                perguntando=nova.perguntando,
+                diagnostico={**diag, "seguiu_para": nova.diagnostico},
+            )
+
+        funcao = mod_arquivos.mover if acao == "mover" else mod_arquivos.copiar
+        r = funcao(caminho, pasta, self.cfg.arquivos)
+        diag["resultado"] = r.detalhe
+        if r.ok and acao == "mover" and r.detalhe:
+            # Mesma forma da renomeação: onde está AGORA, onde estava antes.
+            #
+            # **Copiar fica de fora de propósito.** Desfazer uma cópia é apagar
+            # um arquivo — destruição nova, e pior que o estrago que repara: se
+            # ele editou a cópia, o desfazer come o trabalho. Cópia sobrando é
+            # bagunça que se vê, não dano que se descobre tarde.
+            self._ultima_acao = (
+                "mover", Path(r.detalhe["para"]), Path(r.detalhe["de"])
+            )
+        return Resposta(
+            r.mensagem,
+            acao=f"{acao}:{caminho}->{pasta}" if r.ok else None,
+            diagnostico=diag,
+        )
+
+    def _largar_tudo(self) -> str | None:
+        """Solta tudo que estiver pendente. Devolve o que largou, ou None.
+
+        Dizer O QUE foi largado é a lição da Etapa 4 e da 5: descartar calado
+        faz o Léo achar que o pedido continua de pé.
+        """
+        if self._busca is not None:
+            o_que = "a busca"
+        elif self._movimento_pendente is not None:
+            o_que = "o que eu ia mover"
+        elif self._renomeacao_pendente is not None:
+            o_que = "a renomeação"
+        elif self._evento_pendente is not None:
+            o_que = "o compromisso"
+        elif self._volume_pendente is not None:
+            o_que = "o volume"
+        elif self._pendente is not None:
+            o_que = "a pergunta"
+        elif (self._esperando_nome or self._esperando_musica is not None
+              or self._esperando_quando is not None
+              or self._esperando_hora is not None
+              or self._esperando_qual_arquivo is not None
+              or self._esperando_nome_novo is not None
+              or self._esperando_destino is not None
+              or self._esperando_qual_destino is not None):
+            o_que = "a pergunta"
+        else:
+            return None
+
+        # Reusa a limpeza que o cliente já chama ao dormir, em vez de manter
+        # duas listas de estado que vão divergir no dia em que alguém esquecer
+        # de acrescentar um campo nas duas.
+        ultima = self._ultima_acao
+        self.reiniciar_conversa()
+        self._ultima_acao = ultima  # desistir não é desfazer
+        return o_que
+
     def _soltar_busca(self) -> None:
         """Esquece a busca E o que ela ia fazer com o resultado.
 
@@ -426,9 +723,10 @@ class Nucleo:
         self._busca = None
         self._busca_para = None
         self._nome_novo_pendente = None
+        self._destino_pendente = None
 
     def _pode_mexer(self, caminho: Path) -> bool:
-        return mod_arquivos.pode_mexer(caminho, self.cfg.arquivos.onde_pode_mexer)
+        return mod_arquivos.pode_mexer(caminho, self.cfg.arquivos)
 
     def _renomear(self, alvo: str, nome_novo: str, diag: dict, dito: str) -> Resposta:
         if alvo:
@@ -467,13 +765,23 @@ class Nucleo:
 
         return self._escolher_arquivo(alvo, nome_novo, diag)
 
-    def _escolher_arquivo(self, alvo: str, nome_novo: str, diag: dict) -> Resposta:
+    def _escolher_arquivo(
+        self, alvo: str, nome_novo: str, diag: dict, para: str = "renomear"
+    ) -> Resposta:
         """Acha o arquivo e entrega para a confirmação. Nunca age."""
         self._termo = alvo
         achados = self.buscador.buscar(alvo)
-        podem = [
-            a for a in achados if not a.e_pasta and self._pode_mexer(a.caminho)
-        ]
+        def liberados(lista):
+            return [a for a in lista if not a.e_pasta and self._pode_mexer(a.caminho)]
+        podem = liberados(achados)
+
+        # Achou coisas e nenhuma serve? Pode ser o índice desatualizado
+        # devolvendo os homônimos errados. Vai ao disco antes de desistir —
+        # é o que salva "cria a pasta X e move algo que está nela".
+        if achados and not podem:
+            diag["retry_find"] = True
+            achados = self.buscador.buscar(alvo, forcar_find=True)
+            podem = liberados(achados)
         diag["busca"] = {
             **self.buscador.ultimo_diagnostico,
             "resultados": len(achados),
@@ -486,11 +794,23 @@ class Nucleo:
         # Whisper errou.
         if achados and not podem:
             self._soltar_busca()
+            # Diz QUANTAS coisas achou, e não só que não pode mexer. A frase
+            # antiga descrevia o que ele achou como se fosse o que o Léo pediu,
+            # e fazia parecer que a pasta de destino é que estava barrada.
+            #
+            # E separa as duas formas de "não posso": tudo dentro de um veto da
+            # negra não é "fora das pastas que você liberou" — o ESCOPO.md mora
+            # em ~/Projetos/Jarvis, e ~/Projetos está liberada.
+            todos_vetados = all(
+                mod_arquivos.vetado(a.caminho, self.cfg.arquivos) for a in achados
+            )
+            diag["todos_vetados"] = todos_vetados
+            frase = "arquivo_vetado" if todos_vetados else "arquivo_fora_da_lista"
             return Resposta(
-                self.cfg.persona.arquivo_fora_da_lista, diagnostico=diag
+                self._frase(frase, n=len(achados)), diagnostico=diag
             )
 
-        self._busca_para = "renomear"
+        self._busca_para = para
         self._nome_novo_pendente = nome_novo
         return self._apresentar(podem, primeira=True)
 
@@ -554,12 +874,13 @@ class Nucleo:
             )
 
         r = mod_arquivos.renomear(
-            caminho, nome_novo, self.cfg.arquivos.onde_pode_mexer
+            caminho, nome_novo, self.cfg.arquivos
         )
         diag["resultado"] = r.detalhe
         if r.ok and r.detalhe:
             # Guarda invertido: de onde ele está AGORA para onde estava antes.
-            self._ultima_renomeacao = (
+            self._ultima_acao = (
+                "renomear",
                 Path(r.detalhe["para"]),
                 Path(r.detalhe["de"]),
             )
@@ -570,18 +891,30 @@ class Nucleo:
         )
 
     def _desfazer(self, diag: dict) -> Resposta:
-        if self._ultima_renomeacao is None:
+        """Volta a última ação da conversa — renomear ou mover.
+
+        As duas passam pela mesma porta porque o Léo diz a mesma palavra para
+        as duas. Cada uma é revertida pela função que a fez: renomear pelo
+        `reverter`, que devolve o nome EXATO lido do disco em vez de um nome
+        parecido reconstruído da fala; mover pelo `mover`, que é a função do
+        caminho de ida e traz a invariante e a travessia entre discos junto.
+        """
+        if self._ultima_acao is None:
             return Resposta(self.cfg.persona.nada_para_desfazer, diagnostico=diag)
 
-        de, para = self._ultima_renomeacao
-        self._ultima_renomeacao = None
-        r = mod_arquivos.reverter(de, para, self.cfg.arquivos.onde_pode_mexer)
+        acao, de, para = self._ultima_acao
+        diag["desfazendo"] = acao
+        self._ultima_acao = None
+        if acao == "mover":
+            r = mod_arquivos.desfazer_movimento(de, para.parent, self.cfg.arquivos)
+        else:
+            r = mod_arquivos.reverter(de, para, self.cfg.arquivos)
         diag["resultado"] = r.detalhe
         if not r.ok:
             # Falhou: devolve o desfazer para a mesa. Alguém pode ter ocupado
             # o nome antigo, e a saída é liberar o nome e mandar desfazer de
             # novo — não perder a única chance.
-            self._ultima_renomeacao = (de, para)
+            self._ultima_acao = (acao, de, para)
         return Resposta(
             r.mensagem, acao=f"desfazer:{de}" if r.ok else None, diagnostico=diag
         )
@@ -615,7 +948,7 @@ class Nucleo:
 
         pai = Path(atalho.alvo).expanduser()
         r = mod_arquivos.criar_pasta(
-            nome, pai, self.cfg.arquivos.onde_pode_mexer
+            nome, pai, self.cfg.arquivos
         )
         diag["resultado"] = r.detalhe
         return Resposta(
@@ -915,10 +1248,18 @@ class Nucleo:
             # Agora perguntamos ao modelo qual dos dois casos é. Errar a pista
             # é o comum; desistir no meio é o raro.
             interpretacao = self.cerebro.interpretar(filtro)
-            if interpretacao.nome is not None:
-                diag["saida"] = "comando novo"
+            if interpretacao.funcao is not None:
+                # QUALQUER função conta, não só o `abrir`.
+                #
+                # A versão anterior testava `interpretacao.nome is not None`,
+                # que só o `abrir` preenche — ela foi escrita na Etapa 2, quando
+                # `abrir` era a única função que existia. As dez acrescentadas
+                # depois eram invisíveis para ela, e a busca virou buraco
+                # negro: "aumenta o volume" e "move X pra Y" eram reconhecidos
+                # pelo modelo e ainda assim tratados como pista.
+                diag["saida"] = f"comando novo: {interpretacao.funcao}"
                 self._soltar_busca()
-                return self._resolver_nome(interpretacao.nome, dito=filtro)
+                return self._despachar(interpretacao, filtro)
 
             diag["saida"] = "pista ruim — busca mantida"
             return Resposta(
@@ -944,6 +1285,13 @@ class Nucleo:
 
         if len(achados) == 1:
             achado = achados[0]
+            if self._busca_para in ("mover", "copiar"):
+                # Mesma razão de não agir com um candidato só: o Léo nunca ouviu
+                # a lista, e mover é destrutivo do ponto de vista dele — depois
+                # ele não sabe onde procurar.
+                acao, pasta = self._busca_para, self._destino_pendente
+                self._soltar_busca()
+                return self._com_movimento(achado.caminho, pasta, acao)
             if self._busca_para == "renomear":
                 # Um candidato só é exatamente onde a §2.3 corria risco: abrir
                 # direto está certo para abrir, e seria fatal aqui. O Léo nunca
@@ -962,6 +1310,16 @@ class Nucleo:
 
         self._busca = achados
         pastas = pastas_que_distinguem(achados)
+
+        # A pasta não distingue: eles estão no mesmo lugar e diferem pelo NOME.
+        # Perguntar "em qual pasta?" aqui é uma pergunta sem resposta possível.
+        if not pastas:
+            nomes = ", ".join(mod_arquivos.falar_nome(a.caminho) for a in achados[:3])
+            return Resposta(
+                self._frase("busca_mesmo_lugar", n=len(achados), nomes=nomes),
+                perguntando=True,
+                diagnostico=self._diag,
+            )
 
         # Poucos candidatos: dizer onde cada um está já É o pedido de filtro.
         # A frase precisa carregar a explicação — a versão anterior era só
@@ -1029,10 +1387,14 @@ class Nucleo:
         self._esperando_nome_novo = None
         self._renomeacao_pendente = None
         self._volume_pendente = None
-        # O desfazer morre junto, e isso é limitação conhecida: renomear, sair
-        # por 40 segundos e voltar com "desfaz" não funciona. Um histórico em
-        # disco é o que a Etapa 5.5 e a lixeira vão querer.
-        self._ultima_renomeacao = None
+        self._movimento_pendente = None
+        self._esperando_destino = None
+        self._esperando_qual_destino = None
+        # O desfazer morre junto, e isto é o desenho — não mais uma limitação
+        # à espera de histórico em disco. A Etapa 5.5 mediu a alternativa e o
+        # Léo decidiu contra: pilha com alcance de horas obriga a desfazer
+        # vinte acertos para alcançar um erro. O desfazer é da conversa.
+        self._ultima_acao = None
         self._termo = ""
         self._diag = {}
 

@@ -5,9 +5,10 @@
 > qualquer linha. Se algo aqui conflitar com um pedido, pergunte antes de
 > implementar.
 
-Versão: 3.1. Sistema: **Linux Mint Cinnamon**.
+Versão: 3.3. Sistema: **Linux Mint Cinnamon**.
 Pasta: `~/Projetos/Jarvis`. Repositório Git privado no GitHub.
-Etapas 0 a 5 aprovadas (set/2026). Da Etapa 5.5 em diante, nada feito.
+Etapas 0 a 5.5 aprovadas (set/2026), as duas últimas com teste por voz do
+Léo. Da Etapa 6 em diante, nada feito.
 
 ---
 
@@ -656,12 +657,18 @@ propósito: data com nome de mês por voz é caso raro, e **a confirmação denu
 o erro antes de virar evento**, porque ela agora fala a hora e o dia ("hoje às
 23"). É o desenho funcionando — a confirmação existe para isto.
 
-**Não há saída falada das perguntas pendentes.** Em "Para quando?" e
-"Que horas?", a próxima fala é tratada como resposta, sempre: dizer "deixa pra
-lá" vira tentativa de data e ele pergunta de novo. Não cria nada de errado — a
-pergunta da hora bloqueia a criação —, mas prende a conversa até a janela de 30s
-fechar e o `reiniciar_conversa()` limpar o estado. O conserto seria passar essas
-falas pelo `resposta_solta()` antes de tratá-las como resposta.
+**Não havia saída falada das perguntas pendentes — e eu subestimei o estrago
+por escrito.** Escrevi aqui que isso *"não cria nada de errado, só prende a
+conversa até a janela de 30s fechar"*. **Errado, e o log da 5.5 provou.** A
+janela de 30s **reinicia a cada resposta dele** (§4), então enquanto o Léo
+continuar falando o estado pendente nunca é limpo: com uma busca aberta, a
+conversa ficou presa até ele parar de falar e desistir. Não é uma espera de 30
+segundos, é um beco sem saída.
+
+Consertado na 5.5 com a desistência falada universal, e a lição de método é
+minha: **"a limitação é pequena" é uma afirmação sobre o comportamento, e
+afirmação sobre comportamento se mede.** Eu deduzi o tamanho do estrago do
+código em vez de rodar a conversa.
 
 **Apagar e editar ficam de fora.** Marcou errado e confirmou, conserta no
 celular. Apagar é destrutivo e a §2.3 exige confirmação falada; entra quando o
@@ -884,9 +891,10 @@ uma que trocasse de função não seria.
 
 **O desfazer morre quando ele dorme.** O estado vive no núcleo, junto das
 confirmações pendentes, e o `reiniciar_conversa()` limpa tudo. Renomear, sair
-por 40 segundos e voltar com "desfaz" não funciona. Foi escolha consciente do
-Léo — histórico em disco é bem mais código —, e é o que a Etapa 5.5 e a lixeira
-vão querer depois.
+por 40 segundos e voltar com "desfaz" não funciona.
+
+*Isto deixou de ser limitação na Etapa 5.5: virou o desenho, por decisão do Léo
+e com argumento. Ver "O desfazer que NÃO virou histórico em disco", abaixo.*
 
 **O `dentro_de` do `criar_pasta` resolve só pela tabela de atalhos**, não pela
 busca. Pasta que não está no `atalhos.toml` ele não sabe onde é, e responde
@@ -1180,7 +1188,7 @@ Verificado com o Brave no barramento e o nosso mpv tocando ao mesmo tempo, 12/12
 interceptando as chamadas de método para não mexer na sessão real dele — que é o
 cenário que expôs o desempate alfabético na Etapa 3.
 
-### Etapa 5.5 — Mover e copiar arquivo ⚠️
+### Etapa 5.5 — Mover e copiar arquivo ✅
 O resto da Etapa 5 original. Só começa depois que a 5 estiver rodada no uso
 real — a confirmação falada tem que ter sido provada com o Léo errando de
 verdade, não só em teste.
@@ -1193,8 +1201,415 @@ frase só (origem **e** destino, cada uma podendo ser ambígua), travessia de
 sistema de arquivos, e a dependência do `plocate` desatualizado para achar
 pasta recém-criada. Os três problemas foram adiados de propósito.
 
-**Provavelmente é aqui que o desfazer precisa virar histórico em disco**, porque
-mover para longe é o erro que se percebe horas depois, não na hora.
+~~**Provavelmente é aqui que o desfazer precisa virar histórico em disco**,
+porque mover para longe é o erro que se percebe horas depois, não na hora.~~
+**Não se confirmou** — ver abaixo.
+
+**Os três problemas estão pagos, e nenhum do jeito que eu esperava.**
+
+**O `plocate` morreu por medição, não por engenharia.** Todo destino de um mover
+é uma **pasta**, e pasta dentro do território liberado dá para enumerar ao vivo:
+**36 no disco real, em 0,05s**. Então o destino não usa índice nenhum — pasta
+criada há dois segundos aparece, porque a resposta é o disco e não um cache. O
+`plocate` segue servindo para achar o **arquivo** de origem, que é o que ele faz
+bem. Verificado: criar pasta e mover para ela na mesma conversa funciona.
+
+**A travessia tem uma invariante:** o original nunca é apagado antes de a cópia
+verificada existir. `~/Downloads` e o HD são discos diferentes (`st_dev` 2066
+contra 2050), então `os.rename` entre eles dá EXDEV e mover vira copiar-e-apagar.
+A cópia vai primeiro para um **nome temporário** — copiando direto para o nome
+final, uma falha no meio deixa um arquivo com o nome certo e conteúdo truncado,
+que *parece* pronto. As duas falhas foram simuladas (cópia truncada e disco
+cheio) e nas duas o original ficou intacto, sem nenhum parcial.
+
+A conferência é de **tamanho**, não de hash: decisão do Léo, porque hash seria
+ler 5 GB duas vezes num HD mecânico para proteger contra um caso que
+praticamente não acontece, enquanto tamanho pega os dois que acontecem.
+
+**Duas identificações: o destino primeiro, a origem depois.** O destino é barato
+— nome contra as pastas em memória. A origem é caro — busca no disco com a
+desambiguação da Etapa 2. Resolvendo o barato primeiro, o Léo não desambigua um
+arquivo para depois descobrir que a pasta não existe.
+
+**O par que eu marquei como "o próximo a brigar" não brigou: 90/90.** Nem
+`mover` contra `copiar`, nem o que me preocupava de verdade — `mover` contra
+`renomear`. `"Move o relatório para proposta"` foi para mover e `"Renomeia o
+relatório para documentos"` foi para renomear, 5/5 cada. A reivindicação nas
+duas descrições bastou; o desempate em Python que eu tinha preparado não foi
+preciso.
+
+### A lista negra, e a varredura que a escreveu
+
+A branca cresceu para 11 pastas e ganhou buracos por dentro. **As duas listas
+não saíram de conversa** — o Léo recusou isso explicitamente: *"essas duas listas
+saíram de mim pensando de cabeça, e isso não é método."* Saíram de varrer o que
+existe de verdade, no SSD e no HD, procurando o que quebra se for movido.
+
+| veto | por quê | evidência da varredura |
+|---|---|---|
+| `Jogos` fora da branca | 4 launchers guardando caminho absoluto; o Twintail identifica jogo por **UUID de pasta** | 10.237 `.blk`, 2.160 `.usm`, 345 `.pck`, 60 `.pak`, 57 `.dll` — zero arquivo dele |
+| `Estudio/Gravacoes` | falha **silenciosa e atrasada** | o `.kdenlive` referencia 12 clipes por caminho absoluto |
+| `*.desktop` em qualquer lugar | o Cinnamon lê por caminho | é 100% do conteúdo de `~/Área de trabalho` |
+| `City Empire`, `Claude-tracker` | mesma razão do Loft | `package.json`, `src`, imports por caminho |
+| `.Trash-1000` | lixeira com conteúdo real | `expunged/ files/ info/` + um pacote OneDriveSync |
+| `.claude`, `.firebase`, `.verify` | estado de ferramenta | achados em Loft e City Empire |
+
+**`Jogos` fica FORA da branca e não dentro da negra**, e a diferença é
+deliberada: com a negra sempre ganhando, liberar depois a pasta de mods de um
+jogo específico seria impossível se `Jogos` estivesse liberada e vetada por
+dentro. Fora da branca, liberar essa pasta é uma linha.
+
+**A negra é consultada dentro do `pode_mexer`, não ao lado.** Qualquer código
+futuro que pergunte "posso mexer aqui?" já recebe as duas listas aplicadas — se
+a negra ficasse numa checagem separada, bastaria um caminho novo esquecer de
+chamá-la para abrir um buraco em silêncio.
+
+*`SteamLibrary` não precisava de veto: fica fora das pastas liberadas do HD,
+irmão de `Midia` e `Estudio`, não filho. `CityEmpireUnity` está vazia e não
+entrou — eu ia argumentar risco de Unity e conferi antes de falar.*
+
+### A busca que MENTIA: o acento
+
+Achado enquanto eu testava a 5.5, e consertado dentro dela por decisão do Léo:
+*"não fecha a 5.5 sem isso."*
+
+A busca tirava o acento do termo para formar a chave, mas **o nome no disco
+mantém o acento**: `find -iname "*danca*"` não casa com `dança_qq2.pptx`. Com um
+sósia sem acento no disco, o estrago fica visível:
+
+```
+no disco:  dança_qq2.pptx    danca_sem_acento.txt
+
+antes:  'dança'       -> 1 achado   e era o ARQUIVO ERRADO
+        'dança qq2'   -> 0 achados
+        'coração aa1' -> 0 achados  (nem candidato bruto)
+
+depois: 'dança'       -> 2 candidatos  -> ele PERGUNTA qual
+        'dança qq2'   -> 1, o certo
+        'coração aa1' -> 1, o certo
+```
+
+> ### A lição, e ela é maior que o bug
+>
+> **Busca que devolve o arquivo errado é pior que busca que não acha nada.**
+>
+> Quando não acha, o Léo repete a frase e nada acontece. Quando acha o errado
+> **com um candidato só**, o núcleo age — porque um resultado único dispensa
+> desambiguação por desenho, decidido lá na Etapa 2. Com `abrir` isso custava
+> uma janela errada. Com `mover` e `copiar` custa mexer em arquivo dele sem ele
+> nunca ouvir qual era.
+>
+> O conserto foi buscar pelas **duas formas**, com e sem acento, e unir. O
+> `_todas_no_nome` que já existia descarta o que a segunda chave traz a mais —
+> foi ele que pegou o falso positivo do `'dança'`.
+>
+> **O que fica como regra:** um resultado único não é sinal de certeza, é
+> ausência de evidência do contrário. Onde um único resultado dispensa
+> confirmação, a busca que o produziu precisa ser boa o bastante para isso — e
+> essa não era.
+
+Verificado nos **quatro** que passam pelo mesmo `buscar` — `abrir`, `renomear`,
+`mover` e `copiar` —, 12/12, com os casos que o Léo pediu: `Dança.pptx` (que
+existe na Downloads dele), acento no meio e não só no começo, e nome misto.
+As 15 frases da Etapa 1 seguem 75/75.
+
+**Limitação medida:** o caminho inverso não é coberto — falar *sem* acento um
+arquivo que *tem* acento (`"danca qq2"` para `dança_qq2.pptx`) continua não
+achando. Não foi atacado porque o Whisper escreve acento corretamente em
+português nas transcrições reais dos logs (`relatório`, `gravações`, `próxima`,
+`você`), então é a direção rara.
+
+> ### E pela TERCEIRA vez: o que não tem dono cai quando chega concorrência
+>
+> Ir de 9 para 11 funções derrubou o volume. Medido, 10 rodadas, com e sem as
+> duas funções novas:
+>
+> | | 9 ferramentas | 11 ferramentas |
+> |---|---|---|
+> | `"Abaixa o volume."` | 10/10 | **7/10** |
+> | `"abaixa o volume"` | 10/10 | **4/10** |
+> | `"Abaixa o som."` | 10/10 | **1/10** |
+> | `"Aumenta o volume."` | 10/10 | 10/10 |
+> | `"Diminui o volume."` | 10/10 | 10/10 |
+>
+> **Só "abaixa" caiu**, e a causa é a mesma das outras duas vezes: a descrição
+> do `midia` reivindicava "para", "pausa", "continua", "dá play" — e **nunca
+> tinha reivindicado os verbos de volume**. Volume existia só no `enum`, sem
+> nenhuma frase o reclamando. O que não tem dono é o que cai primeiro.
+>
+> Reivindicados, voltaram a 10/10 — e `"Abaixa."` sozinho, que era **0/10 antes
+> mesmo do salto**, passou a funcionar. O conserto pagou mais que o estrago.
+>
+> **A regra, agora com três casos** (o "procura" na Etapa 5, o `"Continua."` no
+> conserto de mídia, e o volume aqui): toda função nova é uma disputa nova, e
+> quem não reivindica perde. Antes de fechar uma etapa que acrescenta função,
+> olhe o que a lista velha **não** reclama por escrito.
+
+**Pasta não é alvo**, só arquivo — igual à renomeação, e pelo mesmo motivo.
+Fica como limitação.
+
+### O teste por voz: três defeitos, e o pior era um beco sem saída
+
+O Léo testou e os casos que justificam a etapa passaram — baixar um PDF e
+guardar em Estudos, abrir e mover arquivo com acento no nome, criar pasta e
+mover para ela na mesma conversa. **Os três problemas adiados estão pagos.**
+Mas o teste achou três coisas, e a terceira não estava prevista em lugar nenhum.
+
+#### 1. O buraco negro da busca
+
+Com uma busca aberta, **nenhum comando novo saía dela** — nem "que horas são",
+nem volume, nem mídia. Tudo virava pista de estreitamento.
+
+A saída de emergência existia desde a Etapa 2 e testava a coisa errada:
+
+```python
+if interpretacao.nome is not None:     # só `abrir` preenche `nome`
+```
+
+Escrita quando `abrir` era a única função, e correta naquele dia. Cada função
+nova depois dela — sete — nasceu sem saída, em silêncio, porque o teste era de
+um campo e não da existência de um comando. Agora é `interpretacao.funcao is
+not None`, e o despacho foi extraído do `processar` para um `_despachar` que a
+busca chama: **funções que ainda não existem já nascem com saída.**
+
+> **A regra:** guarda escrita em termos do único caso que existia é uma bomba
+> de efeito retardado. Ela não falha quando você a escreve — falha na oitava
+> função, sem mensagem de erro, e parecendo um problema de outra coisa.
+
+#### 2. Qualquer pendência precisa de uma saída falada
+
+O beco sem saída do item 1 tinha um agravante: **não havia palavra para
+desistir.** Com a busca presa e a janela de 30s reiniciando a cada resposta, a
+conversa só terminava quando o Léo parava de falar.
+
+Agora `"esquece"`, `"para"`, `"cancela"`, `"deixa pra lá"` e mais uma dúzia
+largam o que estiver na mesa — e **dizem o que largaram**: *"Deixei a busca pra
+lá."* Duas propriedades deliberadas:
+
+- a checagem vem **antes de toda pendência**, senão a própria coisa que segura
+  a conversa engole o pedido de soltar;
+- só dispara **quando há algo pendente**. Sem nada na mesa, `"para"` continua
+  sendo pausar a música — a lista fechada de mídia segue intacta.
+
+**Desistir não é desfazer:** largar tudo preserva a última ação, porque quem
+diz "esquece" está cancelando o que vem, não revertendo o que já foi.
+
+#### 3. A pergunta que não tinha resposta possível
+
+Dois arquivos com nomes parecidos **na mesma pasta** produziam *"Achei 2 em
+lugares diferentes: um em Downloads, outro em Downloads. Em qual deles?"* —
+uma pergunta sem resposta possível. O `pastas_que_distinguem` devolvia um
+fragmento de caminho quando nenhum nível distinguia.
+
+Agora ele **admite a derrota** devolvendo lista vazia, e o núcleo troca de
+pergunta: pergunta pelo **nome**, não pelo lugar.
+
+E dentro desse achado veio outro, que só apareceu porque o Léo respondeu `"Cuba
+2.0"`: o estreitamento descartava tokens de um caractere, matando o `2` e o `0`
+e reduzindo a pista a `"cuba"` — a mesma palavra que já não distinguia nada.
+**Letra solta é ruído; dígito solto não é**, porque é versão, ano ou número de
+aula. Uma condição: `len(p) > 1 or p.isdigit()`.
+
+### O índice velho, e a checagem na ordem errada
+
+Achado pela regressão, não pelo teste: `'dança'` voltou **zero** com o arquivo
+ali no disco. Dois defeitos empilhados, e o segundo era o de verdade.
+
+O `Dança.pptx` tinha sido movido no teste por voz. O `plocate` continuou
+apontando para o caminho velho — o índice atualiza uma vez por dia. A busca
+filtrava pela lista branca, contava **1** candidato, concluía que não precisava
+do `find`, e só **depois** o `exists()` derrubava o candidato fantasma. Zero.
+
+```python
+# ERRADO: decide o fallback com uma contagem que inclui caminho que sumiu
+filtrados = [...]
+if not filtrados: roda_o_find()
+filtrados = [p for p in filtrados if p.exists()]
+
+# CERTO: a existência é o que torna a contagem verdadeira
+filtrados = [p for p in filtrados if p.exists()]
+if not filtrados: roda_o_find()
+```
+
+> **A regra: a ordem entre validar e decidir não é estilo.** Uma contagem
+> calculada antes da validação é um número sobre outra coisa, e decidir com ela
+> é decidir sobre outra coisa. Aqui custou uma busca que devolvia zero com o
+> arquivo presente — o irmão do bug do acento, que devolvia o arquivo errado.
+
+E a mesma rodada acrescentou a rede: **quando a lista branca esvazia o
+resultado, a busca repete forçando o disco antes de desistir.** É o que salva
+"cria a pasta X e move para lá algo que está nela".
+
+### "Não existe" e "não posso" são fatos diferentes
+
+O Léo pediu para mover uma pasta para a Home e ouviu *"não existe pasta com
+nome home"*. **O comportamento estava certo** — a Home não está na lista branca,
+só as pastas dentro dela — **e a frase estava errada.** Nas palavras dele: *"a
+mensagem errada me fez procurar problema onde não tinha."*
+
+São três fatos, e cada um leva a uma ação diferente dele:
+
+| o que ele ouve | o que é verdade | o que ele faz |
+|---|---|---|
+| `Não conheço pasta chamada X.` | não existe mesmo | fala outro nome |
+| `X existe, mas não está na lista que você liberou.` | fora da branca | é uma linha no config |
+| `X está na lista do que eu nunca mexo.` | vetada pela negra | rever um veto que ele escreveu sabendo por quê |
+
+A auditoria que ele mandou fazer junto achou **mais um caso, do outro lado**:
+procurar por `escopo` respondia *"e nenhuma numa pasta que você liberou"* — e
+isso é **falso**, porque o `ESCOPO.md` mora em `~/Projetos/Jarvis` e
+`~/Projetos` **está** liberada. Quem barrou foi a negra.
+
+O `explicar_destino` só roda quando a resposta já vai ser não, e varre o
+**território de onde a branca recortou**: as pastas-mãe das raízes liberadas,
+que são `~` e o ponto de montagem do HD. **Dois níveis, não quatro, e o número
+saiu de medir:** quatro níveis na home custam **1,49s** e dois custam **0,07s**,
+e dois já alcançam tudo que precisa ser explicado (`~/Jogos` é nível 1,
+`~/Projetos/Jarvis` e `Estudio/Gravacoes` são nível 2). Custo total da
+explicação, com o HD junto: **0,11s**.
+
+*"Home" precisou de um apelido em Python, porque no disco ela se chama `lelokz`
+e ninguém fala isso em voz alta. A lista de apelidos só é consultada depois de a
+varredura não achar nada, então uma pasta de verdade chamada "Casa" continua
+ganhando dela.*
+
+> **A regra, que é a mesma do acento e do `arquivo_fora_da_lista`:** a mensagem
+> descreve **o que ele pediu**, nunca o estado interno de quem respondeu. Uma
+> recusa certa com a justificativa errada gasta o tempo dele procurando um
+> problema que não existe — e é mais cara que um erro visível, porque parece
+> informação.
+
+### O desfazer que NÃO virou histórico em disco
+
+A Etapa 5 previa que aqui o desfazer viraria histórico em disco, porque mover
+para longe é o erro que se percebe horas depois. **Eu propus isso — arquivo
+JSON, pilha das últimas 20 ações, alcance de 24 horas, confirmação falada para
+ação velha — e o Léo desenhou contra, com um argumento que derruba a proposta:**
+
+> *"Uma pilha com alcance de horas é inútil na prática. Se eu cometer um erro às
+> três da tarde e pedir mais vinte coisas depois, para chegar naquele erro eu
+> teria que desfazer as vinte — desmontando uma tarde inteira de arrumação para
+> consertar uma coisa. O erro que eu percebo horas depois não se resolve com
+> 'desfaz'. Se resolve eu movendo o arquivo de volta na mão, que é mais simples
+> e mais seguro."*
+
+Então: **última ação, na memória, sem confirmação, morrendo quando ele dorme.**
+Um slot só, do mesmo tamanho que o de renomear, agora guardando qual foi a ação.
+Isso deixa de ser limitação e passa a ser o desenho.
+
+> **A lição de método:** alcance maior não é capacidade maior. Um desfazer que
+> alcança a tarde inteira só é útil se o caminho até o erro estiver vazio — e
+> num assistente que você usa o dia todo ele nunca está. A funcionalidade que eu
+> propus teria custado código, estado em disco e uma confirmação nova para
+> entregar **menos** segurança que mover o arquivo na mão.
+
+**O que sobreviveu da proposta, porque não dependia do disco:**
+
+- **O desfazer de um mover é um mover** — chama o mesmo `mover()`. Escrever um
+  caminho de volta separado seria escrever uma segunda chance de errar com
+  metade da atenção, e é o caminho que ninguém testa. Chamando o original vêm
+  junto a invariante (o original nunca some antes de a cópia verificada existir)
+  e a travessia entre discos, que é justamente onde um segundo caminho erraria.
+- **Revalidação antes de agir**, que vem de graça do `_preparar`: o arquivo
+  ainda está onde o registro diz, o nome está livre na pasta antiga, e os dois
+  lados continuam passando pelo portão.
+
+**Copiar fica de fora**, e a razão é a mesma que mantém `criar_pasta` sem
+confirmação: desfazer uma cópia é **apagar um arquivo** — destruição nova, e
+pior que o estrago que repara, porque se ele editou a cópia o desfazer come o
+trabalho. Cópia sobrando é bagunça que se vê, não dano que se descobre tarde.
+
+**Aprovada por voz pelo Léo, set/2026.** Ele testou os casos que justificam a
+etapa — baixar um PDF e guardar em Estudos, abrir e mover arquivo com acento no
+nome, criar pasta e mover para ela na mesma conversa — mais os quatro consertos
+do teste anterior: desambiguação por nome com `"Cuba 2.0"`, comando novo saindo
+de uma busca aberta, `"esquece"` largando e dizendo que largou, e mover
+continuando a funcionar.
+
+### Medido no fechamento da 5.5
+
+| o quê | resultado |
+|---|---|
+| portão (branca × negra, `..`, symlink) | **26/26** |
+| `mover`/`copiar` isolados, travessia real ao HD | **24/24** |
+| desfazer de mover, isolado, com travessia e as recusas | **15/15** |
+| ciclo de vida do desfazer no núcleo | **12/12** |
+| roteamento `mover` × `copiar` × `renomear` | **90/90** |
+| o acento, nos quatro que usam a busca | **12/12** |
+| os três achados do teste por voz | **14/14** |
+| 15 frases da Etapa 1 | **75/75** |
+| roteamento com 11 funções, 5 rodadas | **65/65** |
+| comandos crus contra a lista fechada | **11/11** |
+| o conserto do "procura", 5 rodadas | **40/40** |
+| `abridança.ppxt` × 20 | **0 ações** |
+| `verificar_linha.py` | OK — o núcleo não conhece áudio |
+| `mídia com objeto, 10 rodadas` | **58/70** — ver a regressão abaixo |
+
+**Nenhum arquivo real do Léo foi tocado em teste**: pasta temporária no SSD e
+pasta temporária **dentro do HD**, criada e apagada pelo próprio teste, que é a
+única forma de exercitar a travessia de verdade.
+
+> ### O erro de medição desta rodada, registrado porque é de método
+>
+> A primeira versão desta regressão deu **89/100** nos comandos de mídia e
+> **20 ações** no `abridança.ppxt`, e os dois números eram meus, não do código:
+> eu media a camada errada. Comando cru **não passa pelo modelo** — a lista
+> fechada do `midia.COMANDOS_CRUS` é consultada no `processar` antes do LLM —, e
+> "zero ações" é uma propriedade da **ancoragem no núcleo**, não do
+> classificador. Medir com `interpretar()` media uma camada que o uso real não
+> atravessa.
+>
+> **A regra: a regressão tem que atravessar o mesmo caminho que a voz
+> atravessa.** Medir a peça isolada responde sobre a peça, não sobre o sistema —
+> e é a terceira vez neste projeto que uma medição minha mediu outra coisa
+> (depois do cache de página e do `mincore` quebrado).
+
+### ⚠️ A regressão que a 5.5 introduziu e NÃO consertou: `"Para a música."`
+
+A regressão obrigatória pegou uma perda determinística. Medida no método da
+comparação 6×9 — só frases cuja função existe nas duas configurações, 10
+rodadas:
+
+| frase | esperado | 9 ferramentas | 11 ferramentas |
+|---|---|---|---|
+| `Para a música.` | `midia` | **10/10** | **0/10** (`abrir` 10) |
+| `Pode parar a música.` | `midia` | 10/10 | 10/10 |
+| `Abaixa.` | `midia` | 8/10 | 8/10 |
+| `Abaixa o volume.` | `midia` | 10/10 | 10/10 |
+| `Abaixa o som.` | `midia` | 10/10 | 10/10 |
+| `abre músicas` | `abrir` | 10/10 | 10/10 |
+| `Toca uma música.` | `tocar` | 10/10 | 10/10 |
+| `Para o vídeo.` | `midia` | 0/10 | 0/10 |
+
+**`"Para a música."` foi de 10/10 para 0/10, e vai para `abrir`.** Isso é pior
+que ir para `None`: `abrir` é ação, e "música" casa com atalho — pedir para
+pausar abriria a pasta de músicas. **Ação errada é pior que não entender**, e
+esta etapa a introduziu.
+
+**E o padrão da lição não explica este caso.** Nas três vezes anteriores a causa
+era ausência de dono: a descrição não reclamava a frase. Aqui a descrição do
+`midia` **reclama `'para a música'` por escrito, com o caso nomeado** — e perdeu
+assim mesmo. Então existe um segundo mecanismo, ainda não diagnosticado, em que
+crescer a lista derruba uma frase **já reivindicada**.
+
+**Não foi consertado nesta rodada, de propósito**, e o precedente é o do
+`"Continua."` na Etapa 5: mexer em lista de verbos foi o que quebrou `"abre
+música"` na Etapa 3 e o que quase fez a lista de mídia roubar o `desfazer`, e
+pede rodada própria com diagnóstico antes e a regressão das 15 frases junto.
+**O caminho que eu proponho é o que já se provou: diminuir a superfície** —
+`"para a música"` e `"para o vídeo"` como frases inteiras na lista fechada do
+`midia.COMANDOS_CRUS`, que casa contra a fala toda, roda antes do modelo e
+custa 0ms. Isso consertaria junto o `"Para o vídeo."`, que **nunca funcionou**
+— 0/10 nas duas configurações, e a etapa não o quebrou.
+
+**Dois números anteriores a corrigir, e a correção é da medição, não do
+código:**
+
+- **`"Abaixa."` está em 8/10, não em 10/10.** O 10/10 registrado no conserto do
+  volume veio de 5 rodadas; com 10 ele dá 8/10 **nas duas configurações**. Não é
+  regressão — é o número antigo tendo sido otimista. Fala de uma palavra
+  oscila, e é exatamente o que a própria lição manda medir com 10 rodadas.
+- **`"Para o vídeo."` nunca funcionou**, e isso não estava registrado.
 
 ### Etapa 6 — Interface
 Um app à parte, não um puxadinho. Provavelmente maior que o motor de voz.
