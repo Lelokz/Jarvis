@@ -25,3 +25,7 @@ token_google.json
 # /tmp: em 14/set/2026 a prova de conceito inteira da Etapa 6 sumiu no
 # reinício, porque morava no /tmp. Aqui sobrevive, e não vai para o git.
 rascunho/
+
+# Memória do Jarvis: fatos pessoais do Léo, ficam só na máquina.
+memoria.txt
+memoria.tmp

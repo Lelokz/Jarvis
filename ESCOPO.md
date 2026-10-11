@@ -1872,6 +1872,52 @@ aqui", em vez de falar "bloqueando" e não bloquear.
 os testes o apontam para um programa inofensivo. **O `--lock` de verdade só o
 Léo testa** — é o único ponto que a automação não cobre.
 
+### Memória e horário (out/2026) — o primeiro passo da conversa
+
+**Que horas são / que dia é hoje.** Lista fechada antes do modelo
+(`relogio.py`), 0 ms. A hora sai do jeito que se fala ("São três e meia da
+tarde."), não "15:30", porque o Piper lê mal número com sinal no meio.
+
+**Memória.** Os fatos ficam em `memoria.txt`, na raiz: um por linha, do jeito
+que você falou. Dá pra abrir, corrigir e apagar à mão, e vale na hora, sem
+reiniciar. **Fica fora do git** (`.gitignore`), porque são coisas pessoais.
+
+| você diz | ele faz |
+|---|---|
+| "lembra que minha namorada se chama Ana" | guarda e diz "Guardei." (o fato aparece na janela) |
+| "anota aí que…", "não esquece que…", "guarda que…" | o mesmo |
+| "qual o nome da minha namorada?" | responde pelos fatos: "Ela se chama Ana." |
+| "o que você sabe sobre mim?" | resume os fatos |
+| "esquece que minha namorada se chama Ana" | acha o fato mais parecido e **pergunta** antes de apagar (§2.3) |
+
+Guardar e esquecer são lista fechada de começo de frase (`memoria.py`), antes
+do modelo: guardar é mecânico, e o modelo só teria chance de reescrever o que
+você disse. **Responder é com o modelo**, e só no último degrau: quando
+nenhuma função pegou a frase, ela vai ao modelo junto com os fatos e a hora.
+Se a resposta não estiver lá, ele diz o "não sei" de sempre, sem inventar.
+
+Medido pelo núcleo, com o modelo de verdade e uma memória de teste: as
+respostas certas para namorada, volume e cor favorita; "qual o nome do meu
+cachorro?" (não guardado) e "capital da França" deram "não sei", sem invenção.
+Responder custa **1 a 2 s**; guardar e o relógio, 0 ms.
+
+**Dois consertos que a medição pegou:**
+
+- *"Já tá tarde?"* foi respondido com *"você precisa dormir"*, que é palpite
+  sobre o estado do Léo, proibido pela Etapa 10. O prompt agora proíbe
+  conselho, opinião e comentário sobre cansaço, sono e humor.
+- *"Não, deixa."* na confirmação de esquecer caía como pedido novo. Agora,
+  sendo só uma recusa solta, mantém o fato: na dúvida, não apaga.
+
+**Limitações conhecidas:**
+
+- Frase que o Jarvis não sabe fazer **e** que não está na memória ganha ~1 s
+  a mais antes do "não sei", porque passa pelo modelo mais uma vez.
+- Para pergunta sem resposta na memória ele diz "Isso eu ainda não sei fazer",
+  que soa estranho para uma pergunta ("qual o nome do meu cachorro?").
+- O qwen3:8b usa bem uma lista curta de fatos. Com centenas, vai se perder; aí
+  a saída é mandar só os fatos parecidos com a pergunta.
+
 ### Etapa 7 — Ensinar ele a me entender
 Arquivo de contexto que o Jarvis lê antes de cada comando: apelidos,
 atalhos, jeito de falar do Léo. Quando ele erra, a correção entra ali e
@@ -2001,6 +2047,10 @@ trabalho. Ele liga o assistente e abre a janela. A janela mostra "esperando o
 Jarvis subir" por uns 20 segundos enquanto ele carrega, e depois "DORMINDO".
 Aí é só dizer "hey Jarvis".
 
+- **Ele já liga sozinho quando você entra no PC**, com a janela escondida: só
+  o ícone aparece na bandeja. Clicar no ícone (da bandeja ou do menu) abre a
+  janela. Para parar de ligar sozinho, apague `~/.config/autostart/jarvis.desktop`
+  (ou desligue "Jarvis" em Aplicativos de inicialização, no menu do Mint).
 - Clicar de novo com ele ligado só traz a janela pra frente; não liga dois.
 - **Desligar:** ícone **"Desligar Jarvis"** no menu. Fecha a janela e o
   assistente.

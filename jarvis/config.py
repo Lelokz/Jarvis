@@ -30,6 +30,12 @@ class Persona:
     bloqueando: str
     tela_sem_comando: str
     indo_dormir: str
+    memoria_guardei: str
+    memoria_ja_sabia: str
+    memoria_nao_achei: str
+    memoria_confirmar: str
+    memoria_esqueci: str
+    memoria_mantive: str
     qual_musica: str
     musica_nao_achei: str
     musica_nao_saiu: str

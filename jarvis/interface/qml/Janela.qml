@@ -15,7 +15,7 @@ Window {
     id: janela
     width: 460; height: 760
     minimumWidth: 380; minimumHeight: 520
-    visible: true
+    visible: !comecarNaBandeja
     color: "transparent"
     flags: Qt.Window | Qt.FramelessWindowHint
     title: "Jarvis"

@@ -3,6 +3,7 @@
 #
 #   ./jarvis.sh              liga o assistente (se já não estiver ligado) e abre a janela
 #   ./jarvis.sh --desligar   desliga o assistente e fecha a janela
+#   ./jarvis.sh --na-bandeja liga com a janela escondida (é o que roda ao ligar o PC)
 #
 # É o que os ícones "Jarvis" e "Desligar Jarvis" do menu chamam. O que o
 # assistente imprimiria no terminal vai para logs/assistente-terminal.log.
@@ -29,4 +30,4 @@ fi
 
 # A janela sobe na hora e mostra "esperando o Jarvis subir" enquanto o
 # assistente carrega (~20 s). Se já estiver aberta, só vem para a frente.
-exec .venv/bin/python "$PROJETO/interface.py"
+exec .venv/bin/python "$PROJETO/interface.py" "$@"

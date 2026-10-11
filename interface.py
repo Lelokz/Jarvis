@@ -15,6 +15,7 @@ ponte conta e manda texto de volta.
 from __future__ import annotations
 
 import argparse
+import signal
 import sys
 from pathlib import Path
 
@@ -136,6 +137,8 @@ def main(argv: list[str] | None = None) -> int:
                    help="diagnóstico: conta quadros com a janela visível e minimizada")
     p.add_argument("--dizer", default="",
                    help="diagnóstico: manda este texto assim que conectar e retrata a conversa")
+    p.add_argument("--na-bandeja", action="store_true",
+                   help="sobe com a janela escondida, só o ícone na bandeja (ligar com o PC)")
     p.add_argument("--retrato-da-conversa", type=Path, default=None,
                    help="onde salvar o retrato do --dizer")
     args = p.parse_args(argv)
@@ -147,6 +150,15 @@ def main(argv: list[str] | None = None) -> int:
     app.setApplicationName("Jarvis")
     # Esconder a janela na bandeja não pode encerrar o programa.
     app.setQuitOnLastWindowClosed(False)
+    # "Desligar Jarvis" manda SIGTERM. Sem isto a interface morria na hora,
+    # sem passar pelo `finally` lá embaixo, e o `xprop -spy` do vigia de tela
+    # cheia ficava órfão a cada desligar. O relógio de 300 ms existe só para o
+    # Python ganhar a vez de rodar o tratador: com o Qt no laço dele, o sinal
+    # ficaria esperando até o próximo evento.
+    signal.signal(signal.SIGTERM, lambda *_: app.quit())
+    _acorda_python = QTimer(app)
+    _acorda_python.timeout.connect(lambda: None)
+    _acorda_python.start(300)
 
     modo_normal = not (args.retratos or args.medir_quadros or args.dizer)
 
@@ -173,6 +185,10 @@ def main(argv: list[str] | None = None) -> int:
     engine = QQmlApplicationEngine()
     engine.addImportPath(str(QML))
     engine.rootContext().setContextProperty("ponte", ponte)
+    # Ligando com o PC, a janela não abre na cara: fica o ícone na bandeja.
+    # Sem bandeja ela abre assim mesmo, senão não haveria porta de entrada.
+    engine.rootContext().setContextProperty(
+        "comecarNaBandeja", bool(args.na_bandeja and Bandeja.disponivel()))
     engine.load(QUrl.fromLocalFile(str(QML / "Janela.qml")))
     if not engine.rootObjects():
         print("a janela não carregou", file=sys.stderr)

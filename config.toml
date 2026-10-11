@@ -59,6 +59,14 @@ bloqueando = "Bloqueando."
 # falar, para ele nunca dizer "bloqueando" e não bloquear.
 tela_sem_comando = "Não consigo bloquear a tela aqui."
 
+# Memória. "lembra que…" guarda em memoria.txt; "esquece que…" pergunta antes.
+memoria_guardei = "Guardei."
+memoria_ja_sabia = "Isso eu já sabia."
+memoria_nao_achei = "Não lembro de nada parecido."
+memoria_confirmar = "Esqueço isto: {fato}?"
+memoria_esqueci = "Esqueci."
+memoria_mantive = "Tá, continuo lembrando."
+
 # Quando você manda ele dormir ("dorme aí"). Curta: ele fala e volta a dormir
 # na hora, sem esperar a janela de 30s.
 indo_dormir = "Tá bom."

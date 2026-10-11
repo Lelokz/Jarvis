@@ -20,7 +20,8 @@ from collections.abc import Callable
 from ..config import Config
 import datetime as dt
 
-from . import acoes, arquivos as mod_arquivos, midia, quando as mod_quando, sistema
+from . import acoes, arquivos as mod_arquivos, midia, quando as mod_quando, relogio, sistema
+from .memoria import Memoria, pedido_de_esquecer, pedido_de_lembrar
 from .agenda import Agenda, ErroDaAgenda
 from .ancoragem import ancoragem
 from .atalhos import Atalho, Casamento, Desfecho, Tabela, normalizar
@@ -164,6 +165,11 @@ class Nucleo:
         self._esperando_destino: tuple[str, str] | None = None
         # Duas pastas com o mesmo nome: (candidatas, origem falada, ação).
         self._esperando_qual_destino: tuple[list[Path], str, str] | None = None
+
+        # --- memória ------------------------------------------------------
+        self.memoria = Memoria(cfg.raiz / "memoria.txt")
+        # O fato que ele mandou esquecer, esperando o "pode".
+        self._esquecimento_pendente: str | None = None
         self._diag: dict = {}
 
     # ----------------------------------------------------------------------
@@ -251,6 +257,9 @@ class Nucleo:
             caminho, self._esperando_nome_novo = self._esperando_nome_novo, None
             return self._com_arquivo(caminho, texto)
 
+        if self._esquecimento_pendente is not None:
+            return self._confirmar_esquecimento(texto)
+
         # Comando de mídia cru, sem objeto: não passa pelo modelo.
         #
         # Vem DEPOIS de todos os pendentes acima, e a ordem é a defesa: "pausa"
@@ -279,6 +288,20 @@ class Nucleo:
         if sistema.comando_de_tela(texto) is not None:
             return self._bloquear_tela(texto)
 
+        # Hora, data e memória: também listas fechadas, pelo mesmo motivo.
+        qual = relogio.pergunta(texto)
+        if qual is not None:
+            return Resposta(relogio.responder(qual),
+                            diagnostico={"origem": f"relógio ({qual})", "dito": texto})
+
+        fato = pedido_de_lembrar(texto)
+        if fato:
+            return self._lembrar(fato, texto)
+
+        fato = pedido_de_esquecer(texto)
+        if fato:
+            return self._esquecer(fato, texto)
+
         interpretacao = self.cerebro.interpretar(texto)
         return self._despachar(interpretacao, texto)
 
@@ -304,6 +327,16 @@ class Nucleo:
                 base["resposta_solta"] = True
                 return Resposta(self.cfg.persona.nada_pendente,
                                 diagnostico=base)
+            # Último degrau: talvez seja uma pergunta que a memória responde
+            # ("qual o nome da minha namorada?"). Não sendo, ele diz que não
+            # sabe — e não inventa.
+            fatos = self.memoria.fatos()
+            dito = self.cerebro.responder_com_memoria(
+                texto, fatos, relogio.agora_por_extenso(), self.cfg.persona.nome
+            )
+            base["memoria"] = {"fatos": len(fatos), "respondeu": dito is not None}
+            if dito:
+                return Resposta(dito, diagnostico=base)
             return Resposta(self.cfg.persona.nao_sei, diagnostico=base)
 
         if interpretacao.funcao == "abrir":
@@ -693,6 +726,49 @@ class Nucleo:
             diagnostico=diag,
         )
 
+    # -- memória -------------------------------------------------------------
+
+    def _lembrar(self, fato: str, dito: str) -> Resposta:
+        novo = self.memoria.guardar(fato)
+        diag = {"origem": "lembrar", "dito": dito, "fato": fato, "novo": novo}
+        if not novo:
+            return Resposta(self.cfg.persona.memoria_ja_sabia, diagnostico=diag)
+        return Resposta(self.cfg.persona.memoria_guardei,
+                        acao=f"lembrar:{fato}", diagnostico=diag)
+
+    def _esquecer(self, falado: str, dito: str) -> Resposta:
+        fato = self.memoria.mais_parecido(falado)
+        diag = {"origem": "esquecer", "dito": dito, "procurado": falado, "achado": fato}
+        if fato is None:
+            return Resposta(self.cfg.persona.memoria_nao_achei, diagnostico=diag)
+        # Apagar memória destrói uma coisa: passa pela confirmação (§2.3). E
+        # ele ouve o fato inteiro, porque o achado pode não ser o que ele quis.
+        self._esquecimento_pendente = fato
+        self._pergunta = self._frase("memoria_confirmar", fato=fato[:1].lower() + fato[1:])
+        return Resposta(self._pergunta, perguntando=True, diagnostico=diag)
+
+    def _confirmar_esquecimento(self, texto: str) -> Resposta:
+        fato, self._esquecimento_pendente = self._esquecimento_pendente, None
+        resposta = self.cerebro.confirmar(texto, self._pergunta)
+        diag = {"origem": "confirmação de esquecer", "dito": texto,
+                "confirmacao": resposta.name, "fato": fato}
+        if resposta is Confirmacao.SIM:
+            self.memoria.esquecer(fato)
+            return Resposta(self.cfg.persona.memoria_esqueci,
+                            acao=f"esquecer:{fato}", diagnostico=diag)
+        # "Não, deixa" às vezes vem como OUTRO. Se a fala é só uma recusa ou
+        # concordância solta, e não pedido novo, fica como está: na dúvida,
+        # não apaga.
+        if resposta is Confirmacao.NAO or self.cerebro.resposta_solta(texto):
+            return Resposta(self.cfg.persona.memoria_mantive, diagnostico=diag)
+        # Pedido novo no meio: descarta e AVISA, como nas outras confirmações.
+        nova = self.processar(texto)
+        return Resposta(
+            f"{self.cfg.persona.memoria_mantive} {nova.texto}".strip(),
+            acao=nova.acao, perguntando=nova.perguntando,
+            diagnostico={**diag, "seguiu_para": nova.diagnostico},
+        )
+
     def _largar_tudo(self) -> str | None:
         """Solta tudo que estiver pendente. Devolve o que largou, ou None.
 
@@ -709,6 +785,8 @@ class Nucleo:
             o_que = "o compromisso"
         elif self._volume_pendente is not None:
             o_que = "o volume"
+        elif self._esquecimento_pendente is not None:
+            o_que = "o esquecer"
         elif self._pendente is not None:
             o_que = "a pergunta"
         elif (self._esperando_nome or self._esperando_musica is not None
@@ -1435,6 +1513,7 @@ class Nucleo:
         self._movimento_pendente = None
         self._esperando_destino = None
         self._esperando_qual_destino = None
+        self._esquecimento_pendente = None
         # O desfazer morre junto, e isto é o desenho — não mais uma limitação
         # à espera de histórico em disco. A Etapa 5.5 mediu a alternativa e o
         # Léo decidiu contra: pilha com alcance de horas obriga a desfazer

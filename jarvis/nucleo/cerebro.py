@@ -723,6 +723,50 @@ class Cerebro:
             return Confirmacao.NAO
         return Confirmacao.OUTRO
 
+    def responder_com_memoria(
+        self, frase: str, fatos: list[str], agora: str, nome: str
+    ) -> str | None:
+        """Responde uma pergunta usando SÓ os fatos guardados e a hora.
+
+        É o último degrau antes do "isso eu não sei fazer": nenhuma função
+        pegou a frase. Devolve None quando a resposta não está nos fatos — a
+        regra de não chutar (§2.2) vale para fato sobre o Léo também.
+        """
+        lista = "\n".join(f"- {f}" for f in fatos) or "- (nenhum ainda)"
+        resposta = self._chat(
+            [
+                {
+                    "role": "system",
+                    "content": (
+                        f"Você é {nome}, assistente de voz do usuário. Agora é "
+                        f"{agora}.\n"
+                        "Fatos que o usuário te pediu para lembrar, escritos "
+                        "do jeito que ELE falou (\"eu\", \"meu\" e \"minha\" "
+                        "são ele):\n"
+                        f"{lista}\n\n"
+                        "Responda o que ele disser usando SÓ esses fatos e a "
+                        "data e hora acima. Fale com ele (\"você\", \"sua\"), "
+                        "em português falado e natural, numa frase curta: é "
+                        "voz, não texto. Sem listas, sem emoji, sem markdown. "
+                        "Exemplo: \"Qual o nome da minha irmã?\" com o fato "
+                        "\"Minha irmã se chama Bia\" -> \"Ela se chama Bia.\"\n"
+                        "Só responda o que foi perguntado. Não dê conselho, não "
+                        "dê opinião, não comente o estado dele (cansaço, sono, "
+                        "humor) e não acrescente a data se ele não perguntou.\n"
+                        "Se a resposta não estiver nos fatos nem na data e "
+                        "hora, ou se ele estiver pedindo para você FAZER "
+                        "alguma coisa, responda exatamente NAO_SEI. Nunca "
+                        "invente."
+                    ),
+                },
+                {"role": "user", "content": frase},
+            ]
+        )
+        texto = (resposta.get("message", {}).get("content") or "").strip()
+        if not texto or "NAO_SEI" in texto.upper().replace("Ã", "A"):
+            return None
+        return texto
+
     def resposta_solta(self, frase: str) -> bool:
         """Diz se a frase é só um sim ou um não, com nada pendente.
 
