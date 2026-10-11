@@ -514,6 +514,25 @@ class Ciclo:
         self.emissor.emitir("aviso", situacao=s.get("tipo", "ok"),
                             volta_em=s.get("volta_em"), uso_5h=s.get("uso_5h"))
 
+    # -- WhatsApp: chegou mensagem ------------------------------------------
+
+    def anunciar_whatsapp(self) -> None:
+        """Fala o que chegou no WhatsApp e fica ouvindo, para o Léo poder
+        responder sem dizer "hey Jarvis" ("responde que eu chego às oito")."""
+        checar = getattr(self.nucleo, "checar_whatsapp", None)
+        if checar is None:
+            return
+        falas = checar()
+        if not falas:
+            return
+        if self.estado is Estado.DORMINDO:
+            self._acordar_por_texto()
+            self.nucleo.aquecer()
+        for fala in falas:
+            self.registrador.registrar_estado("whatsapp_recebida", fala=fala)
+            self._falar(fala, acao="whatsapp:recebida")
+        self._renovar("janela aberta")
+
     # -- texto digitado (Etapa 6) ------------------------------------------
 
     def atender_texto(self, texto: str) -> None:
@@ -853,10 +872,15 @@ def conversar(cfg: config.Config) -> int:
 
             ciclo.atualizar_aviso()
             proximo_aviso = time.monotonic() + 30
+            proximo_whats = time.monotonic() + cfg.whatsapp.intervalo_s
             while True:
                 if time.monotonic() >= proximo_aviso:
                     ciclo.atualizar_aviso(conferir_internet=True)
                     proximo_aviso = time.monotonic() + 30
+                # Nunca no meio de você falando: espera a frase acabar.
+                if time.monotonic() >= proximo_whats and not ciclo.vad.falando:
+                    ciclo.anunciar_whatsapp()
+                    proximo_whats = time.monotonic() + cfg.whatsapp.intervalo_s
                 bloco = mic.ler_bloco()
                 if bloco is not None:
                     ciclo.passo(bloco)

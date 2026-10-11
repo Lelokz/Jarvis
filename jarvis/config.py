@@ -52,6 +52,15 @@ class Persona:
     limite_acabou_sem_hora: str
     sem_internet: str
     cerebro_falhou: str
+    whats_chegou: str
+    whats_chegou_sem_texto: str
+    whats_confirmar: str
+    whats_mandei: str
+    whats_nao_mandei: str
+    whats_cancelado: str
+    whats_qual_contato: str
+    whats_nao_achei: str
+    whats_desligado: str
     qual_musica: str
     musica_nao_achei: str
     musica_nao_saiu: str
@@ -214,6 +223,16 @@ class Sistema:
 
 
 @dataclass(frozen=True)
+class Whatsapp:
+    ativo: bool
+    banco: str
+    api: str
+    avisar_grupos: bool
+    ler_conteudo: bool
+    intervalo_s: float
+
+
+@dataclass(frozen=True)
 class Config:
     persona: Persona
     audio: Audio
@@ -231,6 +250,7 @@ class Config:
     log: Log
     ponte: Ponte
     sistema: Sistema
+    whatsapp: "Whatsapp"
     raiz: Path
 
     @property
@@ -263,6 +283,7 @@ _SECOES = {
     "log": Log,
     "ponte": Ponte,
     "sistema": Sistema,
+    "whatsapp": Whatsapp,
 }
 
 
