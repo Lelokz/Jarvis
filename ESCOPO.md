@@ -287,11 +287,11 @@ pacotes (**não** instalar `xapp-sn-watcher`: conflita com o Mint).
 | "bloqueia o PC" | fala "Bloqueando." e trava a tela |
 | "que horas são", "que dia é hoje" | responde na hora |
 | "lembra que…", "esquece que…" | memória em `memoria.txt` (fora do git); esquecer **pergunta antes** |
-| "qual o nome da minha namorada?" | responde pela memória; sem resposta, diz que não sabe |
+| "onde eu moro?" | responde pela memória; sem resposta, diz que não sabe |
 | "o que eu te pedi agora há pouco?", "o que a gente conversou ontem?" | lembra pela conversa ao vivo e pelo **diário de conversas** |
-| (chegou mensagem no WhatsApp) | **avisa sozinho**: "Ana mandou: tu vem jantar? Quer responder?", e fica ouvindo ("sim" → "O que eu respondo?"; "não" → "Tá.") |
-| "fala pra ela que eu chego às oito", "responde que…", "diz pra minha mãe…", "avisa a Ana…" | **manda na hora** e diz "Mandei pra Ana."; dois contatos parecidos → pergunta qual |
-| "o que chegou no WhatsApp?", "o que a Ana mandou?" | resume as conversas |
+| (chegou mensagem no WhatsApp) | **avisa sozinho**: "Fulano mandou: tu vem jantar? Quer responder?", e fica ouvindo ("sim" → "O que eu respondo?"; "não" → "Tá.") |
+| "fala pra ela que eu chego às oito", "responde que…", "diz pra minha mãe…", "avisa o Fulano…" | **manda na hora** e diz "Mandei pra Fulano."; dois contatos parecidos → pergunta qual |
+| "o que chegou no WhatsApp?", "o que o Fulano mandou?" | resume as conversas |
 | "esquece", "cancela", "deixa pra lá" | larga o que estiver pendente e diz o que largou |
 | "dorme aí", "tchau" | "Tá bom." e dorme |
 

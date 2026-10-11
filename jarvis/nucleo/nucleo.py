@@ -157,7 +157,7 @@ class Nucleo:
                 cfg.llm.claude_binario, cfg.llm.claude_modelo, cfg.llm.claude_effort,
                 cfg.llm.claude_timeout_s, cfg.persona.nome)
             # Cada mensagem leva a hora e a memória: é assim que ele responde
-            # "que dia cai sexta?" e "qual o nome da minha namorada?".
+            # "que dia cai sexta?" e "onde eu moro?".
             self.cerebro.contexto = self._contexto_do_cerebro
         else:
             self.cerebro = Cerebro(cfg.llm)
@@ -579,7 +579,7 @@ class Nucleo:
                 return Resposta(self.cfg.persona.nada_pendente,
                                 diagnostico=base)
             # Último degrau: talvez seja uma pergunta que a memória responde
-            # ("qual o nome da minha namorada?"). Não sendo, ele diz que não
+            # ("onde eu moro?"). Não sendo, ele diz que não
             # sabe — e não inventa.
             fatos = self.memoria.fatos()
             dito = self.cerebro.responder_com_memoria(

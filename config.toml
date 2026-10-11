@@ -604,7 +604,7 @@ banco = "~/.local/share/jarvis/whatsapp-mcp/whatsapp-bridge/store/messages.db"
 api = "http://127.0.0.1:8080/api/send"
 # Grupo vira barulho o dia todo: desligado. Conversa individual sempre avisa.
 avisar_grupos = false
-# true: "A Ana mandou: tu vem jantar?". false: só "Mensagem da Ana." (tem
+# true: "Fulano mandou: tu vem jantar?". false: só "Mensagem de Fulano." (tem
 # gente na casa).
 ler_conteudo = true
 # De quanto em quanto tempo olha se chegou mensagem.

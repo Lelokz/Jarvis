@@ -1886,11 +1886,11 @@ reiniciar. **Fica fora do git** (`.gitignore`), porque são coisas pessoais.
 
 | você diz | ele faz |
 |---|---|
-| "lembra que minha namorada se chama Ana" | guarda e diz "Guardei." (o fato aparece na janela) |
+| "lembra que eu moro em Florianópolis" | guarda e diz "Guardei." (o fato aparece na janela) |
 | "anota aí que…", "não esquece que…", "guarda que…" | o mesmo |
-| "qual o nome da minha namorada?" | responde pelos fatos: "Ela se chama Ana." |
+| "onde eu moro?" | responde pelos fatos: "Você mora em Florianópolis." |
 | "o que você sabe sobre mim?" | resume os fatos |
-| "esquece que minha namorada se chama Ana" | acha o fato mais parecido e **pergunta** antes de apagar (§2.3) |
+| "esquece que eu moro em Florianópolis" | acha o fato mais parecido e **pergunta** antes de apagar (§2.3) |
 
 Guardar e esquecer são lista fechada de começo de frase (`memoria.py`), antes
 do modelo: guardar é mecânico, e o modelo só teria chance de reescrever o que
@@ -1899,7 +1899,7 @@ nenhuma função pegou a frase, ela vai ao modelo junto com os fatos e a hora.
 Se a resposta não estiver lá, ele diz o "não sei" de sempre, sem inventar.
 
 Medido pelo núcleo, com o modelo de verdade e uma memória de teste: as
-respostas certas para namorada, volume e cor favorita; "qual o nome do meu
+respostas certas para os fatos de teste (fictícios), volume e cor favorita; "qual o nome do meu
 cachorro?" (não guardado) e "capital da França" deram "não sei", sem invenção.
 Responder custa **1 a 2 s**; guardar e o relógio, 0 ms.
 
