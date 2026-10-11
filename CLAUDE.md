@@ -151,12 +151,19 @@ que bater o olho e perceber "isso aqui tá estranho".
   ação que mexe no corpo dele (volume, som alto).
 - Um teste já criou 2176 processos e travou o PC inteiro. Se for rodar
   algo que pode se multiplicar, fique de olho.
-- **Não usar `gnome-screenshot -w`** (print de uma janela só). Em 11/out/2026
-  o Cinnamon caiu em `grab_window_screenshot` quando o Leo ligou o monitor,
-  depois de uma noite de prints de janela feitos para conferir a interface, e
-  subiu em modo de recuperação (barra e atalhos dele sumidos). Para conferir a
-  tela: `gnome-screenshot -f` (tela inteira) ou o retrato da própria janela do
-  Jarvis (`interface.py --dizer … --retrato-da-conversa`).
+- **Monitor desligado = não mexer em interface.** Em 11/out/2026 o Leo
+  desligou o monitor às ~02:40 para dormir (acompanhando pelo celular). O
+  Cinnamon parou de desenhar, os cliques simulados pararam de chegar e a
+  janela do Jarvis apareceu em 0,0 — e eu segui testando em vez de perguntar
+  por quê. Um `gnome-screenshot -w` (print de UMA janela, que o Cinnamon só
+  tira no próximo desenho) ficou pendente; às 11:45, quando ele ligou o
+  monitor, o Cinnamon tentou terminar o print de uma janela já fechada e caiu
+  em `grab_window_screenshot`, subindo em modo de recuperação (barra e
+  atalhos dele sumidos). Regras: antes de teste de tela, `xset q` deve dizer
+  "Monitor is On"; nunca usar `gnome-screenshot -w`; conferir a tela com
+  `gnome-screenshot -f` ou o retrato da própria janela do Jarvis
+  (`interface.py --dizer … --retrato-da-conversa`). Clique simulado que não
+  funciona é sinal para investigar a tela, não para insistir.
 - A separação núcleo/cliente (o núcleo recebe texto, decide, executa e
   devolve texto, sem saber o que é microfone ou tela) é o desenho central
   do Jarvis e o que permite o cliente de celular. Mantenha.
