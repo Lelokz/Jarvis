@@ -63,6 +63,8 @@ class Servidor:
         self._sessao = {"ev": "sessao", **sessao}
         self._ultimo_estado: dict[str, Any] | None = None
         self._ultimo_aviso: dict[str, Any] | None = None
+        # Quem responde o pedido "memoria" (o assistente põe aqui). Só lê.
+        self.provedor_memoria = None
         # O histórico da sessão, para um cliente que chega depois — ou que
         # fechou a janela e voltou. Anel de tamanho fixo: o alcance é a sessão,
         # e memória de processo que roda o dia todo não cresce sem teto.
@@ -330,6 +332,12 @@ class Servidor:
                 self._direto(cliente, {"ev": "historico", "falas": falas})
         elif tipo == "falar":
             self._pedidos.put(dados["texto"])
+        elif tipo == "memoria":
+            try:
+                conteudo = self.provedor_memoria() if self.provedor_memoria else {}
+            except Exception as e:  # um arquivo torto não derruba a ponte
+                conteudo = {"fatos": [], "conversas": [], "erro": str(e)}
+            self._direto(cliente, {"ev": "memoria", **conteudo})
 
     def _escrever_todos(self) -> None:
         with self._trava:

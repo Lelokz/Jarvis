@@ -358,6 +358,31 @@ class CerebroClaude:
         return Interpretacao(funcao, d.get("argumentos") or {} if funcao else {},
                              time.monotonic() - inicio, fala=str(d.get("fala") or "").strip())
 
+    def resumir_conversa(self, trocas: list[dict]) -> tuple[str, str] | None:
+        """Tema e resumo de um episódio, para o diário. Processo próprio e
+        de uma vez só: roda em segundo plano, em paralelo com a conversa."""
+        texto = "\n".join(
+            f"Usuário: {t['voce']}\nJarvis: {t['jarvis'] or ''}"
+            + (f" [fez: {t['acao']}]" if t.get("acao") else "") for t in trocas)
+        try:
+            saida = subprocess.run(
+                [self.binario, "-p", "--output-format", "json",
+                 "--model", self.modelo, "--effort", "low",
+                 "--system-prompt",
+                 "Você resume conversas entre um usuário e o assistente de voz dele, "
+                 "para um diário. Responda SÓ um JSON: {\"tema\": \"<3 a 6 palavras>\", "
+                 "\"resumo\": \"<uma ou duas frases: o que ele pediu, o que foi "
+                 "respondido ou feito, e qualquer detalhe que valha lembrar depois>\"}. "
+                 "Em português, na terceira pessoa (\"o usuário\").",
+                 "--tools", "", "--strict-mcp-config", "--no-session-persistence"],
+                input=texto, capture_output=True, text=True, timeout=90, cwd=_PASTA)
+            d = json.loads(saida.stdout)
+            r = _json_da_resposta(str(d.get("result") or ""))
+        except (OSError, subprocess.SubprocessError, ValueError):
+            return None
+        tema, resumo = str(r.get("tema") or "").strip(), str(r.get("resumo") or "").strip()
+        return (tema, resumo) if tema and resumo else None
+
     def detalhar_musica(self, frase: str) -> Interpretacao:
         inicio = time.monotonic()
         texto = self._avulso(

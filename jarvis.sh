@@ -17,8 +17,10 @@ if [ "${1:-}" = "--desligar" ]; then
   # socket e grava o resumo, em vez de morrer no meio.
   pkill -TERM -f "$PROJETO/assistente.py"
   pkill -f "$PROJETO/interface.py"
-  for _ in $(seq 20); do ligado || exit 0; sleep 0.5; done
-  pkill -KILL -f "$PROJETO/assistente.py"   # não saiu em 10 s: à força
+  # Até 20 s: ao desligar, o assistente resume a conversa em andamento para
+  # o diário (uma chamada ao Claude).
+  for _ in $(seq 40); do ligado || exit 0; sleep 0.5; done
+  pkill -KILL -f "$PROJETO/assistente.py"   # não saiu em 20 s: à força
   exit 0
 fi
 

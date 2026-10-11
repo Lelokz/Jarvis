@@ -29,3 +29,7 @@ rascunho/
 # Memória do Jarvis: fatos pessoais do Léo, ficam só na máquina.
 memoria.txt
 memoria.tmp
+
+# Diário de conversas do Jarvis: a vida do Léo, só na máquina.
+conversas.jsonl
+conversa-atual.jsonl

@@ -817,6 +817,10 @@ def conversar(cfg: config.Config) -> int:
     registrador = Registrador.criar(cfg, prefixo="jarvis")
     emissor = _emissor_de_terminal(cfg)
     ponte = _abrir_ponte(cfg, registrador, emissor)
+    if ponte is not None:
+        # A seção de memória da janela pede por aqui. Só lê arquivos: pode
+        # rodar na thread da ponte sem tocar no estado da conversa.
+        ponte.provedor_memoria = nucleo.memoria_para_janela
 
     mic: microfone.Microfone | None = None
     ciclo: Ciclo | None = None
@@ -881,6 +885,10 @@ def conversar(cfg: config.Config) -> int:
         if mic is not None and mic.estouros:
             print(f"  blocos perdidos pelo PortAudio: {mic.estouros}")
         print(f"  registro em {registrador.caminho_jsonl}\n")
+        # A conversa em andamento vai para o diário antes de desligar. Sem
+        # isto, "o que a gente falou ontem?" perdia o último papo do dia.
+        if hasattr(nucleo, "encerrar"):
+            nucleo.encerrar()
         if ponte is not None:
             ponte.encerrar()
     return 0

@@ -126,6 +126,27 @@ vazia: o Jarvis não fala, não reinicia os 30 s e volta a dormir no tempo de
 sempre. Na dúvida, ele responde. Testado com as duas frases do vídeo: calado
 nas duas, e a pergunta seguinte respondida.
 
+**Ele não esquece a conversa quando dorme** (pedido do Léo, out/2026). A
+conversa ao vivo com o Claude continua entre um "dorme aí" e outro; só
+recomeça depois de 3 h sem falar, ou quando o Jarvis desliga. O que garante a
+memória longa é o **diário de conversas** (`diario.py`):
+
+- cada troca vai na hora para `conversa-atual.jsonl` (nada se perde se cair);
+- 10 min depois de ele dormir sem ninguém voltar a falar, ou ao desligar, o
+  episódio é resumido pelo Claude (tema + uma ou duas frases) e vai para
+  `conversas.jsonl`, com dia e hora. Sem Claude, guarda um resumo cru;
+- os 10 últimos resumos acompanham cada mensagem ao Claude;
+- os dois arquivos ficam **fora do git**.
+
+Testado no Jarvis real: pediu miojo, "dorme aí", acordou, "o que eu te pedi
+agora há pouco?" → lembrou. Desligou e ligou o Jarvis, "o que a gente
+conversou hoje?" → lembrou pelo diário.
+
+**Na janela:** botão **"memória"** na barra de cima abre o painel com "o que
+eu sei de você" (os fatos do `memoria.txt`) e "conversas" (tema, dia e hora,
+resumo; mais nova primeiro). Pede ao assistente pelo pedido `memoria` da
+ponte. A conversa ainda aberta só aparece depois de fechar no diário.
+
 **Voltar para o qwen** é uma linha: `cerebro = "ollama"` no `[llm]` do
 `config.toml`. O Ollama continua instalado, só não carrega mais nada.
 
@@ -168,6 +189,7 @@ pacotes (**não** instalar `xapp-sn-watcher`: conflita com o Mint).
 | "que horas são", "que dia é hoje" | responde na hora |
 | "lembra que…", "esquece que…" | memória em `memoria.txt` (fora do git); esquecer **pergunta antes** |
 | "qual o nome da minha namorada?" | responde pela memória; sem resposta, diz que não sabe |
+| "o que eu te pedi agora há pouco?", "o que a gente conversou ontem?" | lembra pela conversa ao vivo e pelo **diário de conversas** |
 | "esquece", "cancela", "deixa pra lá" | larga o que estiver pendente e diz o que largou |
 | "dorme aí", "tchau" | "Tá bom." e dorme |
 

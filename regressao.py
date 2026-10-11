@@ -365,7 +365,7 @@ def main() -> int:
         print(f"    ✗ a busca acharia {SEM_SENTIDO!r} — teste não confiável")
         reprovou = True
     else:
-        nucleo = Nucleo(cfg)
+        nucleo = Nucleo(cfg, com_diario=False)
 
         # O bloqueio de tela pelo núcleo, sem NUNCA travar a tela: confere que
         # a resposta traz a ação e o `depois`, e não chama o `depois`.

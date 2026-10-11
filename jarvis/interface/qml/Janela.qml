@@ -65,6 +65,10 @@ Window {
         }
         function onHistoricoRecebido(falas) { conversa.preencher(falas) }
         function onAvisoMudou(tipo, voltaEm) { faixa.tipo = tipo; faixa.voltaEm = voltaEm }
+        function onMemoriaRecebida(fatos, conversas) {
+            painelMemoria.fatos = fatos; painelMemoria.conversas = conversas;
+            painelMemoria.carregando = false;
+        }
     }
 
     readonly property int margemSombra: 18
@@ -136,6 +140,30 @@ Window {
                 anchors.rightMargin: 14
                 spacing: 6
 
+                // "memória": o que o Jarvis sabe e do que a gente conversou.
+                Rectangle {
+                    width: textoMemoria.implicitWidth + 16
+                    height: 26
+                    radius: tema.raioBotao
+                    color: areaMemoria.containsMouse || painelMemoria.aberto ? tema.traco : "transparent"
+                    Behavior on color { ColorAnimation { duration: tema.rapido } }
+                    Text {
+                        id: textoMemoria
+                        anchors.centerIn: parent
+                        text: "memória"
+                        color: areaMemoria.containsMouse || painelMemoria.aberto ? tema.texto : tema.textoFraco
+                        font.family: tema.familia
+                        font.pixelSize: 11
+                        font.letterSpacing: 1
+                        renderType: Text.NativeRendering
+                    }
+                    MouseArea {
+                        id: areaMemoria
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        onClicked: painelMemoria.alternar()
+                    }
+                }
                 BotaoDaBarra { tema: tema; simbolo: "–"; onClicado: janela.showMinimized() }
                 BotaoDaBarra {
                     tema: tema
@@ -227,6 +255,145 @@ Window {
                 left: parent.left
                 right: parent.right
                 bottom: faixa.top
+            }
+        }
+
+        // -- o painel de memória ----------------------------------------------
+        // Por cima da esfera e da conversa. Pede a memória ao assistente toda
+        // vez que abre: o diário muda quando ele dorme.
+        Rectangle {
+            id: painelMemoria
+            objectName: "painelMemoria"
+            property bool aberto: false
+            property bool carregando: false
+            property var fatos: []
+            property var conversas: []
+            function alternar() {
+                aberto = !aberto;
+                if (aberto) {
+                    carregando = true;
+                    if (typeof ponte === "undefined" || !ponte.pedirMemoria()) {
+                        carregando = false;
+                        janela.avisar("o Jarvis não está do outro lado");
+                    }
+                }
+            }
+            z: 5
+            anchors { top: barra.bottom; left: parent.left; right: parent.right; bottom: barraDeTexto.top }
+            color: tema.fundo
+            visible: opacity > 0
+            opacity: aberto ? 1 : 0
+            Behavior on opacity { NumberAnimation { duration: tema.rapido } }
+
+            Flickable {
+                anchors.fill: parent
+                anchors.leftMargin: 22
+                anchors.rightMargin: 22
+                contentHeight: colunaMemoria.height + 24
+                clip: true
+
+                Column {
+                    id: colunaMemoria
+                    width: parent.width
+                    spacing: 10
+                    topPadding: 8
+
+                    Text {
+                        text: "O QUE EU SEI DE VOCÊ"
+                        color: tema.textoFraco
+                        font.family: tema.familia
+                        font.pixelSize: 11
+                        font.letterSpacing: 2
+                        renderType: Text.NativeRendering
+                    }
+                    Text {
+                        visible: painelMemoria.fatos.length === 0
+                        width: parent.width
+                        wrapMode: Text.WordWrap
+                        text: painelMemoria.carregando ? "carregando…" : "Nada ainda. Diga \"lembra que…\"."
+                        color: tema.textoFraco
+                        font.family: tema.familia
+                        font.pixelSize: 13
+                        renderType: Text.NativeRendering
+                    }
+                    Repeater {
+                        model: painelMemoria.fatos
+                        Text {
+                            required property var modelData
+                            width: colunaMemoria.width
+                            wrapMode: Text.WordWrap
+                            text: "•  " + modelData
+                            color: tema.texto
+                            font.family: tema.familia
+                            font.pixelSize: 13
+                            renderType: Text.NativeRendering
+                        }
+                    }
+
+                    Item { width: 1; height: 8 }
+                    Text {
+                        text: "CONVERSAS"
+                        color: tema.textoFraco
+                        font.family: tema.familia
+                        font.pixelSize: 11
+                        font.letterSpacing: 2
+                        renderType: Text.NativeRendering
+                    }
+                    Text {
+                        visible: painelMemoria.conversas.length === 0
+                        width: parent.width
+                        wrapMode: Text.WordWrap
+                        text: painelMemoria.carregando ? "carregando…"
+                              : "Nenhuma ainda. Cada conversa entra aqui quando o Jarvis dorme."
+                        color: tema.textoFraco
+                        font.family: tema.familia
+                        font.pixelSize: 13
+                        renderType: Text.NativeRendering
+                    }
+                    Repeater {
+                        model: painelMemoria.conversas
+                        Rectangle {
+                            required property var modelData
+                            width: colunaMemoria.width
+                            height: blocoConversa.height + 18
+                            radius: 12
+                            color: tema.superficie
+                            Column {
+                                id: blocoConversa
+                                anchors { left: parent.left; right: parent.right; verticalCenter: parent.verticalCenter }
+                                anchors.leftMargin: 14
+                                anchors.rightMargin: 14
+                                spacing: 4
+                                Text {
+                                    width: parent.width
+                                    wrapMode: Text.WordWrap
+                                    text: modelData.tema
+                                    color: tema.texto
+                                    font.family: tema.familia
+                                    font.pixelSize: 13
+                                    font.weight: Font.DemiBold
+                                    renderType: Text.NativeRendering
+                                }
+                                Text {
+                                    text: modelData.quando
+                                    color: "#9b7bff"
+                                    font.family: tema.familia
+                                    font.pixelSize: 11
+                                    renderType: Text.NativeRendering
+                                }
+                                Text {
+                                    width: parent.width
+                                    wrapMode: Text.WordWrap
+                                    text: modelData.resumo
+                                    color: tema.textoFraco
+                                    font.family: tema.familia
+                                    font.pixelSize: 12
+                                    renderType: Text.NativeRendering
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
 

@@ -40,10 +40,18 @@ ASSISTENTE -> CLIENTES
         `quando` é o relógio do ASSISTENTE, em segundos desde a época — os
         eventos ao vivo não têm carimbo, porque para eles "agora" é a chegada.
 
+    {"ev":"memoria", "fatos": ["..."], "conversas": [{"quando":"sáb 11/10 02:31",
+     "tema":"...", "resumo":"..."}]}
+        Só para quem pediu "memoria". O que o Jarvis sabe do Léo e o diário
+        de conversas, mais novo primeiro.
+
 CLIENTES -> ASSISTENTE
     {"pedir":"ola", "quem":"interface", "historico": 80}
         `historico` é opcional e vale 0 quando ausente: quantas falas anteriores
         o cliente quer receber ao conectar.
+
+    {"pedir":"memoria"}
+        Pede a memória (fatos e diário). Resposta: o evento "memoria".
 
     {"pedir":"falar", "texto":"abre o loft"}
         Atendido como se tivesse sido falado: acorda mesmo dormindo e a resposta
@@ -68,7 +76,7 @@ VERSAO = 1
 # (acordou, dormiu, janela, tempos...) é para o terminal e fica em casa.
 PUBLICOS = frozenset({"sessao", "estado", "nivel", "voce_disse", "jarvis_disse", "aviso"})
 ESTADOS = ("dormindo", "ouvindo", "escutando", "pensando", "falando")
-PEDIDOS = frozenset({"ola", "falar"})
+PEDIDOS = frozenset({"ola", "falar", "memoria"})
 
 # Uma linha maior que isto sem quebra é um cliente com defeito, não um pedido.
 MAX_LINHA = 64 * 1024
@@ -109,6 +117,9 @@ def ler_pedido(linha: bytes) -> tuple[str, dict[str, Any]]:
         if len(texto) > MAX_TEXTO:
             raise ErroDeProtocolo(f"texto com mais de {MAX_TEXTO} caracteres")
         return tipo, {"texto": texto}
+
+    if tipo == "memoria":
+        return tipo, {}
 
     if tipo == "ola":
         quantas = objeto.get("historico", 0)

@@ -13,6 +13,7 @@ Este módulo **não imprime e não fala**: devolve texto.
 from __future__ import annotations
 
 import re
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -23,6 +24,7 @@ import datetime as dt
 
 from . import acoes, arquivos as mod_arquivos, midia, quando as mod_quando, relogio, sistema
 from .memoria import Memoria, pedido_de_esquecer, pedido_de_lembrar
+from .diario import Diario
 from .agenda import Agenda, ErroDaAgenda
 from .ancoragem import ancoragem
 from .atalhos import Atalho, Casamento, Desfecho, Tabela, normalizar
@@ -84,6 +86,9 @@ class Resposta:
     depois: Callable[[], object] | None = None
 
 
+# Sem falar com ele por isto, a conversa ao vivo com o Claude recomeça.
+PAUSA_LONGA_S = 3 * 3600
+
 _SOLTAS = frozenset({"sim", "pode", "pode sim", "manda", "isso", "beleza", "claro",
                      "aham", "nao", "nao nao", "deixa", "deixa pra la", "nada disso",
                      "ok", "certo", "confirmo", "confirma"})
@@ -111,7 +116,9 @@ def pedido_de_abrir(falado: str) -> str | None:
 
 
 class Nucleo:
-    def __init__(self, cfg: Config) -> None:
+    def __init__(self, cfg: Config, *, com_diario: bool = True) -> None:
+        """`com_diario=False` para testes: frase de teste não vai para o
+        diário de conversas do Léo."""
         self.cfg = cfg
         self.tabela = Tabela.carregar(cfg.raiz / "atalhos.toml")
         # Programas, projetos do VS Code e favoritos do Brave, lidos do PC.
@@ -208,6 +215,13 @@ class Nucleo:
 
         # --- memória ------------------------------------------------------
         self.memoria = Memoria(cfg.raiz / "memoria.txt")
+        # O diário de conversas: o Jarvis lembra do que foi falado mesmo
+        # depois de dormir ou desligar, e a janela mostra.
+        self.diario = Diario(
+            cfg.raiz if com_diario else cfg.raiz / "rascunho" / "diario-de-teste",
+            self.cerebro.resumir_conversa if isinstance(self.cerebro, CerebroClaude)
+            else (lambda _t: None))
+        self._ultimo_uso = time.monotonic()
         # O fato que ele mandou esquecer, esperando o "pode".
         self._esquecimento_pendente: str | None = None
         # Janelas esperando o "pode" para fechar: (janelas, nome falado).
@@ -218,9 +232,17 @@ class Nucleo:
 
     def processar(self, texto: str) -> Resposta:
         """Um pedido. Limite batido ou falta de internet viram fala, nunca erro."""
+        # Muito tempo sem conversar: a conversa ao vivo com o Claude recomeça
+        # (não cresce para sempre). O que foi falado antes vem pelo diário.
+        if (isinstance(self.cerebro, CerebroClaude)
+                and time.monotonic() - self._ultimo_uso > PAUSA_LONGA_S):
+            self.cerebro.recomecar_conversa()
+            self._ultima_fala = ""
+        self._ultimo_uso = time.monotonic()
         try:
             r = self._processar(texto)
             self._ultima_fala = r.texto
+            self.diario.registrar(texto, r.texto, r.acao)
             return r
         except LimiteAtingido as e:
             self.reiniciar_conversa(papo=False)
@@ -252,6 +274,16 @@ class Nucleo:
                 (" e " if h and m else "") + (f"{m} minuto{'s' if m > 1 else ''}" if m else "")
         return self._frase("limite_acabou", hora=hora, falta=falta)
 
+    def encerrar(self) -> None:
+        """O Jarvis vai desligar: guarda a conversa em andamento no diário."""
+        self.diario.fechar_episodio(esperar=True)
+
+    def memoria_para_janela(self) -> dict:
+        """O que a seção de memória da janela mostra. Mais novo primeiro."""
+        conversas = [{"quando": Diario.quando_falado(c["inicio"]), "tema": c["tema"],
+                      "resumo": c["resumo"]} for c in reversed(self.diario.conversas(200))]
+        return {"fatos": self.memoria.fatos(), "conversas": conversas}
+
     def situacao(self) -> dict:
         """Estado do cérebro de nuvem, para o aviso na janela."""
         if isinstance(self.cerebro, CerebroClaude):
@@ -266,8 +298,11 @@ class Nucleo:
         fatos = self.memoria.fatos()
         memoria = "; ".join(fatos) if fatos else "(nada guardado ainda)"
         anterior = getattr(self, "_ultima_fala", "")
+        diario = self.diario.para_o_cerebro()
         return (f"[Agora: {relogio.agora_por_extenso()}]\n"
                 f"[Memória do usuário, escrita como ele falou: {memoria}]"
+                + (f"\n[Conversas anteriores, do diário (mais recente por último):\n{diario}]"
+                   if diario else "")
                 + (f"\n[O sistema respondeu por último: {anterior}]" if anterior else ""))
 
     def _processar(self, texto: str) -> Resposta:
@@ -1771,10 +1806,11 @@ class Nucleo:
         self._ultima_acao = None
         self._termo = ""
         self._diag = {}
-        # Dormir também zera o papo com o Claude; desistir ("esquece") não.
-        if papo and isinstance(getattr(self, "cerebro", None), CerebroClaude):
-            self.cerebro.recomecar_conversa()
-            self._ultima_fala = ""
+        # Dormir NÃO zera o papo com o Claude (pedido do Léo: acordar e
+        # perguntar "o que eu te falei agora há pouco?" tem que funcionar).
+        # Só fecha o episódio no diário, resumido em segundo plano.
+        if papo and hasattr(self, "diario"):
+            self.diario.fechar_depois()
 
     @property
     def descricao(self) -> str:

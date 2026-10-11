@@ -51,6 +51,9 @@ class Cliente:
     def enviar_texto(self, texto: str) -> None:
         self._enviar({"pedir": "falar", "texto": texto})
 
+    def pedir_memoria(self) -> None:
+        self._enviar({"pedir": "memoria"})
+
     def eventos(self) -> Iterator[dict[str, Any]]:
         """Bloqueia lendo. Termina quando o assistente fecha a conexão."""
         while True:
