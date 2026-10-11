@@ -61,6 +61,7 @@ class Persona:
     whats_nao_mandei: str
     whats_cancelado: str
     whats_qual_contato: str
+    whats_mesmo_nome: str
     whats_nao_achei: str
     whats_desligado: str
     qual_musica: str

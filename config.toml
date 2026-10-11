@@ -104,6 +104,8 @@ whats_mandei = "Mandei pra {nome}."
 whats_nao_mandei = "Não consegui mandar: {motivo}"
 whats_cancelado = "Tá, não mandei."
 whats_qual_contato = "Achei {opcoes}. Pra qual?"
+# Dois contatos salvos com o MESMO nome: o final do número separa.
+whats_mesmo_nome = "Tenho {n} {nome}: {opcoes}. Pra qual?"
 whats_nao_achei = "Não achei ninguém chamado {nome} no teu WhatsApp."
 whats_desligado = "O WhatsApp não tá conectado no Jarvis."
 

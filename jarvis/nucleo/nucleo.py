@@ -102,6 +102,10 @@ _NAO_QUERO = frozenset({"nao", "nao quero", "agora nao", "depois", "deixa", "dei
                         "nao precisa", "ignora", "esquece"})
 
 
+def _por_extenso(n: int) -> str:
+    return {2: "dois", 3: "três", 4: "quatro"}.get(n, str(n))
+
+
 def _como_mensagem(dito: str) -> str:
     """O que ele ditou, como mensagem: primeira letra maiúscula, ponto no fim."""
     t = dito.strip()
@@ -1078,13 +1082,36 @@ class Nucleo:
             return Resposta(self._frase("whats_nao_achei", nome=para), diagnostico=base)
         if len(candidatos) > 1:
             self._esperando_contato = (candidatos[:4], mensagem)
-            opcoes = ", ".join(c.nome for c in candidatos[:4])
+            nomes = [c.nome for c in candidatos[:4]]
+            if len(set(nomes)) == 1 and all(c.final for c in candidatos[:4]):
+                # Nome repetido: o final do número é o que separa um do outro.
+                finais = [f"o do final {' '.join(c.final)}" for c in candidatos[:4]]
+                lista = ", ".join(finais[:-1]) + " e " + finais[-1]
+                return Resposta(self._frase("whats_mesmo_nome", n=_por_extenso(len(finais)),
+                                            nome=nomes[0], opcoes=lista),
+                                perguntando=True, diagnostico=base)
+            opcoes = ", ".join(nomes)
             return Resposta(self._frase("whats_qual_contato", opcoes=opcoes),
                             perguntando=True, diagnostico=base)
         return self._enviar_whats(candidatos[0].jid, candidatos[0].nome, mensagem, base)
 
     def _escolher_contato(self, candidatos: list, falado: str, mensagem: str) -> Resposta:
         alvo = normalizar(falado)
+        # "o 4321", "final quatro três dois um": dígitos falados batem com o final.
+        digitos = "".join(ch for ch in re.sub(r"\b(zero|um|dois|tres|quatro|cinco|seis|sete|oito|nove)\b",
+                                              lambda m: str(["zero", "um", "dois", "tres", "quatro", "cinco",
+                                                             "seis", "sete", "oito", "nove"].index(m.group(1))),
+                                              alvo) if ch.isdigit())
+        if digitos:
+            certos = [c for c in candidatos if c.final and c.final.endswith(digitos[-4:])]
+            if len(certos) == 1:
+                c = certos[0]
+                return self._enviar_whats(c.jid, c.nome, mensagem, {"origem": "whatsapp: contato pelo final"})
+        ordinais = {"primeiro": 0, "primeira": 0, "segundo": 1, "segunda": 1, "terceiro": 2, "terceira": 2}
+        for palavra, i in ordinais.items():
+            if palavra in alvo.split() and i < len(candidatos):
+                c = candidatos[i]
+                return self._enviar_whats(c.jid, c.nome, mensagem, {"origem": "whatsapp: contato pela ordem"})
         notas = sorted(((nota(alvo, normalizar(c.nome)), c) for c in candidatos),
                        key=lambda p: -p[0])
         if not notas or notas[0][0] < 0.6:
@@ -1100,6 +1127,11 @@ class Nucleo:
         ok, motivo = self.whatsapp.enviar(jid, mensagem)
         diag = {**base, "whatsapp_para": nome, "texto": mensagem, "ok": ok}
         if ok:
+            # Com nome repetido na agenda, diz QUAL dos dois recebeu.
+            repetido = [c for c in self.whatsapp.achar_contato(nome) if c.nome == nome]
+            final = next((c.final for c in repetido if c.jid == jid), "")
+            if len(repetido) > 1 and final:
+                nome = f"{nome} do final {' '.join(final)}"
             return Resposta(self._frase("whats_mandei", nome=nome),
                             acao=f"whatsapp:{nome}:{mensagem}", diagnostico=diag)
         return Resposta(self._frase("whats_nao_mandei", motivo=motivo or "erro da ponte"),

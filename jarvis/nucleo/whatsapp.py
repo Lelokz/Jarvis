@@ -44,6 +44,9 @@ class Mensagem:
 class Contato:
     jid: str
     nome: str
+    # Últimos 4 dígitos do telefone: o que separa dois contatos com o MESMO
+    # nome salvo ("Pedro Silva, final 4321, ou final 8765?").
+    final: str = ""
 
 
 class WhatsApp:
@@ -173,22 +176,33 @@ class WhatsApp:
         return [("você" if eu else nome, texto or "(mídia)") for eu, texto in reversed(linhas)]
 
     def contatos(self) -> list[Contato]:
-        """A agenda (nome salvo no celular), mais as conversas com nome conhecido."""
-        _, pn_nome, _ = self._nomes()
-        vistos: set[str] = set()
+        """A agenda (nome salvo no celular), mais as conversas com nome conhecido.
+
+        Uma pessoa = um TELEFONE, não um nome. A primeira versão juntava por
+        nome, e dois contatos salvos com o mesmo nome viravam um só — a
+        mensagem ia para um deles sem perguntar (achado pela pergunta do Léo).
+        """
+        lid_pn, pn_nome, _ = self._nomes()
+        vistos: set[str] = set()   # telefones (ou jid, sem telefone conhecido)
         lista: list[Contato] = []
+
+        def chave(jid: str) -> str:
+            usuario, _, servidor = jid.partition("@")
+            return lid_pn.get(usuario, usuario) if servidor == "lid" else usuario
+
         for jid, nome in self._consultar(
                 "SELECT jid, name FROM chats ORDER BY last_message_time DESC"):
             if jid.endswith("@g.us") and not self.avisar_grupos:
                 continue
             n = self.nome_de(jid, nome)
-            if n != "alguém fora dos teus contatos" and n not in vistos:
-                vistos.add(n)
-                lista.append(Contato(jid, n))
+            k = chave(jid)
+            if n != "alguém fora dos teus contatos" and k not in vistos:
+                vistos.add(k)
+                lista.append(Contato(jid, n, k[-4:] if k.isdigit() else ""))
         for pn, n in pn_nome.items():
-            if n not in vistos:
-                vistos.add(n)
-                lista.append(Contato(f"{pn}@s.whatsapp.net", n))
+            if pn not in vistos:
+                vistos.add(pn)
+                lista.append(Contato(f"{pn}@s.whatsapp.net", n, pn[-4:]))
         return lista
 
     def achar_contato(self, falado: str) -> list[Contato]:

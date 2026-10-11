@@ -225,6 +225,10 @@ aceito pelo Léo (o padrasto dele usa algo assim há meses).
   dois contatos parecidos. O texto é só o que ele ditou: o Opus inventava
   "Vou sim, chego às oito" para "responde que eu chego às oito"; a instrução
   foi apertada (3/3 depois).
+- **Dois contatos com o mesmo nome:** ficam separados pelo telefone (a
+  primeira versão juntava por nome e mandava para um deles sem perguntar).
+  Pergunta "Tenho dois Lucas: o do final 8765 e o do final 4321. Pra qual?";
+  aceita "o 8765", "o primeiro"; e diz qual recebeu.
 - Depois de avisar, **oferece**: "Quer responder?" (antes, o Léo tinha que
   adivinhar). Entende "fala pra ela", "diz pra", "avisa", "manda", não só
   "responde".
