@@ -49,8 +49,12 @@ class Contato:
 class WhatsApp:
     def __init__(self, banco: Path, api: str, avisar_grupos: bool = False) -> None:
         self.banco = Path(banco).expanduser()
+        # O banco da própria biblioteca (whatsmeow): tem a agenda e o mapa
+        # LID -> telefone. Ver `_nomes`.
+        self.banco_whatsmeow = self.banco.parent / "whatsapp.db"
         self.api = api
         self.avisar_grupos = avisar_grupos
+        self._cache_nomes: tuple[float, dict, dict, dict] | None = None
 
     def disponivel(self) -> bool:
         return self.banco.is_file()
@@ -65,9 +69,69 @@ class WhatsApp:
         finally:
             con.close()
 
-    @staticmethod
-    def _nome(jid: str, nome: str | None) -> str:
-        return (nome or "").strip() or jid.split("@")[0]
+    # -- quem é quem -----------------------------------------------------------
+    #
+    # O WhatsApp passou a identificar as pessoas por "LID" (`123...@lid`), um
+    # número interno, no lugar do telefone. A ponte guarda esse número como
+    # nome da conversa, e no primeiro teste real o Jarvis anunciou "um monte
+    # de número aleatório muito rápido" em vez do nome. O nome de verdade está
+    # no banco do whatsmeow: LID -> telefone (whatsmeow_lid_map) e telefone ->
+    # nome da agenda (whatsmeow_contacts).
+
+    def _nomes(self) -> tuple[dict, dict, dict]:
+        """(lid -> telefone, telefone -> nome, lid -> nome), relido a cada minuto."""
+        import time
+        if self._cache_nomes and time.monotonic() - self._cache_nomes[0] < 60:
+            return self._cache_nomes[1:]
+        lid_pn: dict[str, str] = {}
+        pn_nome: dict[str, str] = {}
+        lid_nome: dict[str, str] = {}
+        try:
+            con = sqlite3.connect(f"file:{self.banco_whatsmeow}?mode=ro", uri=True, timeout=5)
+            try:
+                lid_pn = dict(con.execute("SELECT lid, pn FROM whatsmeow_lid_map"))
+                for jid, full, first, push, negocio in con.execute(
+                        "SELECT their_jid, full_name, first_name, push_name, business_name "
+                        "FROM whatsmeow_contacts"):
+                    nome = (full or first or push or negocio or "").strip()
+                    if not nome:
+                        continue
+                    usuario, _, servidor = jid.partition("@")
+                    (lid_nome if servidor == "lid" else pn_nome)[usuario] = nome
+            finally:
+                con.close()
+        except sqlite3.Error:
+            pass
+        self._cache_nomes = (time.monotonic(), lid_pn, pn_nome, lid_nome)
+        return lid_pn, pn_nome, lid_nome
+
+    def nome_de(self, jid: str, nome_do_chat: str | None = None) -> str:
+        lid_pn, pn_nome, lid_nome = self._nomes()
+        usuario, _, servidor = jid.partition("@")
+        if servidor == "lid":
+            nome = pn_nome.get(lid_pn.get(usuario, "")) or lid_nome.get(usuario)
+        else:
+            nome = pn_nome.get(usuario)
+        if nome:
+            return nome
+        chat = (nome_do_chat or "").strip()
+        if chat and not chat.split("@")[0].replace("+", "").isdigit():
+            return chat
+        # Nunca ler número em voz alta: além de inútil, é dado de terceiro.
+        return "alguém fora dos teus contatos"
+
+    def _jids_da_pessoa(self, jid: str) -> list[str]:
+        """O mesmo contato pode ter conversa guardada como telefone ou como LID."""
+        lid_pn, _, _ = self._nomes()
+        usuario, _, servidor = jid.partition("@")
+        if servidor == "lid":
+            pn = lid_pn.get(usuario)
+            return [jid] + ([f"{pn}@s.whatsapp.net"] if pn else [])
+        lids = [l for l, p in lid_pn.items() if p == usuario]
+        return [jid] + [f"{l}@lid" for l in lids]
+
+    def _nome(self, jid: str, nome: str | None) -> str:
+        return self.nome_de(jid, nome)
 
     @staticmethod
     def _quando(valor) -> dt.datetime:
@@ -100,17 +164,32 @@ class WhatsApp:
 
     def ultimas_da_conversa(self, jid: str, quantas: int = 8) -> list[tuple[str, str]]:
         """[(quem, texto)] da conversa, mais antiga primeiro. quem = "você" ou o nome."""
-        nome = self._nome(jid, (self._consultar(
-            "SELECT name FROM chats WHERE jid = ?", (jid,)) or [(None,)])[0][0])
+        nome = self.nome_de(jid)
+        jids = self._jids_da_pessoa(jid)
+        marcas = ",".join("?" * len(jids))
         linhas = self._consultar(
-            "SELECT is_from_me, content FROM messages WHERE chat_jid = ? "
-            "ORDER BY timestamp DESC LIMIT ?", (jid, quantas))
+            f"SELECT is_from_me, content FROM messages WHERE chat_jid IN ({marcas}) "
+            "ORDER BY timestamp DESC LIMIT ?", (*jids, quantas))
         return [("você" if eu else nome, texto or "(mídia)") for eu, texto in reversed(linhas)]
 
     def contatos(self) -> list[Contato]:
-        linhas = self._consultar("SELECT jid, name FROM chats ORDER BY last_message_time DESC")
-        return [Contato(jid, self._nome(jid, nome)) for jid, nome in linhas
-                if jid.endswith("@s.whatsapp.net") or (self.avisar_grupos and jid.endswith("@g.us"))]
+        """A agenda (nome salvo no celular), mais as conversas com nome conhecido."""
+        _, pn_nome, _ = self._nomes()
+        vistos: set[str] = set()
+        lista: list[Contato] = []
+        for jid, nome in self._consultar(
+                "SELECT jid, name FROM chats ORDER BY last_message_time DESC"):
+            if jid.endswith("@g.us") and not self.avisar_grupos:
+                continue
+            n = self.nome_de(jid, nome)
+            if n != "alguém fora dos teus contatos" and n not in vistos:
+                vistos.add(n)
+                lista.append(Contato(jid, n))
+        for pn, n in pn_nome.items():
+            if n not in vistos:
+                vistos.add(n)
+                lista.append(Contato(f"{pn}@s.whatsapp.net", n))
+        return lista
 
     def achar_contato(self, falado: str) -> list[Contato]:
         """Os contatos que casam com o nome falado, o melhor primeiro.
