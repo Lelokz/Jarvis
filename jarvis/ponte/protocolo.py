@@ -19,7 +19,7 @@ ASSISTENTE -> CLIENTES
     {"ev":"voce_disse", "texto":"abre o loft", "origem":"voz|texto"}
     {"ev":"jarvis_disse", "texto":"Abri o Loft.", "acao":"abrir:loft"|null,
      "perguntando":false}
-    {"ev":"aviso", "tipo":"ok|limite|offline", "volta_em": 1791706200|null,
+    {"ev":"aviso", "situacao":"ok|limite|offline", "volta_em": 1791706200|null,
      "uso_5h": 0.21|null}
         O estado do cérebro de nuvem (Claude). Só quando muda; o último é
         reenviado a quem acabou de dizer "ola". `volta_em` é quando o limite

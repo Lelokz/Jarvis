@@ -454,8 +454,11 @@ class Nucleo:
                 # O Opus já respondeu junto com a decisão (com a hora e a
                 # memória na mesa): é a conversa.
                 base["conversa"] = True
-                return Resposta(interpretacao.fala or self.cfg.persona.nao_sei,
-                                diagnostico=base)
+                if not interpretacao.fala:
+                    # Fala vazia = não era com ele: o cliente fica calado.
+                    base["ignorado"] = True
+                    return Resposta("", diagnostico=base)
+                return Resposta(interpretacao.fala, diagnostico=base)
             if self.cerebro.resposta_solta(texto):
                 base["resposta_solta"] = True
                 return Resposta(self.cfg.persona.nada_pendente,

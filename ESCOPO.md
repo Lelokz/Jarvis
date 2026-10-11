@@ -118,6 +118,14 @@ semana, e quando volta). Limite batido: *"Meu limite do Claude acabou. Volta
 quanto falta, que some sozinha. Sem internet: fala própria e faixa vermelha
 até a rede voltar (conferida a cada 30 s). Evento `aviso` da ponte.
 
+**Fala que não é com ele: fica calado.** O microfone fica aberto 30 s depois
+de cada resposta e pega vídeo, TV e conversa da sala — no primeiro teste real
+ele transcreveu a narração de um vídeo do YouTube tocando no Brave e
+respondeu. Agora, se a fala *claramente* não é para ele, o Opus devolve fala
+vazia: o Jarvis não fala, não reinicia os 30 s e volta a dormir no tempo de
+sempre. Na dúvida, ele responde. Testado com as duas frases do vídeo: calado
+nas duas, e a pergunta seguinte respondida.
+
 **Voltar para o qwen** é uma linha: `cerebro = "ollama"` no `[llm]` do
 `config.toml`. O Ollama continua instalado, só não carrega mais nada.
 

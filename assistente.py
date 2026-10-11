@@ -434,6 +434,13 @@ class Ciclo:
             perguntando=resposta.perguntando,
             **resposta.diagnostico,
         )
+        if not resposta.texto and not resposta.acao:
+            # O núcleo achou que não era com ele (vídeo, TV, conversa com
+            # outra pessoa): fica calado e NÃO reinicia a janela de 30 s, para
+            # voltar a dormir sozinho no tempo de sempre.
+            self.emissor.emitir("ignorado", texto=texto)
+            self._mudar_estado("ouvindo")
+            return
         fala = self._falar(
             resposta.texto, acao=resposta.acao, perguntando=resposta.perguntando
         )
@@ -503,7 +510,8 @@ class Ciclo:
         if chave == getattr(self, "_ultimo_aviso", None):
             return
         self._ultimo_aviso = chave
-        self.emissor.emitir("aviso", tipo=s.get("tipo", "ok"),
+        # "situacao", e não "tipo": o emitir() já usa `tipo` como nome do evento.
+        self.emissor.emitir("aviso", situacao=s.get("tipo", "ok"),
                             volta_em=s.get("volta_em"), uso_5h=s.get("uso_5h"))
 
     # -- texto digitado (Etapa 6) ------------------------------------------

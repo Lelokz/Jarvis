@@ -99,7 +99,7 @@ class PonteQt(QObject):
             self.jarvisDisse.emit(str(ev.get("texto", "")), str(ev.get("acao") or ""),
                                   bool(ev.get("perguntando")))
         elif tipo == "aviso":
-            self.avisoMudou.emit(str(ev.get("tipo") or "ok"), float(ev.get("volta_em") or 0))
+            self.avisoMudou.emit(str(ev.get("situacao") or "ok"), float(ev.get("volta_em") or 0))
         elif tipo == "historico":
             self.historicoRecebido.emit(list(ev.get("falas") or []))
         elif tipo == "sessao":
