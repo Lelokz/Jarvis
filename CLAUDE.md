@@ -7,32 +7,16 @@
 > vale?". Com a resposta, atualize o arquivo para o conflito não voltar.
 
 Assistente pessoal por voz em Python, rodando local na máquina do Léo
-(RTX 3060 12GB). Escopo completo, etapas e funções: leia `ESCOPO.md`
-antes de planejar qualquer etapa.
+(RTX 3060 12GB). O estado atual, as regras e o roteiro estão no `ESCOPO.md`
+(curto); o porquê de cada decisão está no `HISTORIA.md` (longo, consulte
+quando precisar).
 
-## Regras invioláveis (do Jarvis, o programa)
+## Regras do Jarvis (o programa)
 
-Valem para o que o Jarvis faz quando o Léo fala com ele. Não limitam o
-que você (Claude) faz no PC enquanto desenvolve.
-
-
-- **Comando gerado pelo modelo só com o Léo aprovando na tela** (decidido
-  em out/2026, para quando entrar a API do Claude). O caminho principal são
-  ferramentas escritas à mão e cada vez mais espertas (um "abrir" que procura
-  programa, pasta e site sozinho, em vez de lista de atalhos). Para o que
-  nenhuma ferramenta cobre, o modelo pode escrever um comando, mas o Jarvis
-  MOSTRA na janela e pergunta antes de rodar; só comando de leitura roda
-  direto. **Nunca** roda comando que veio de e-mail, página web ou outro texto
-  de fora: é a porta de entrada para alguém mandar no PC dele.
-- Atalhos e dados pessoais tendem a virar **memória local** (fora do git),
-  para o Jarvis poder ser passado a outra pessoa sem levar as coisas do Léo.
-- **Nunca** chutar intenção. Ambíguo ou busca com vários resultados →
-  perguntar em voz alta. Silêncio não é resposta.
-- Ação destrutiva (mover, renomear, sobrescrever) exige confirmação
-  falada antes de executar.
-- Não apagar arquivo. Lixeira no máximo, e só depois da Etapa 5.
-- Toda ação executada vai pro log.
-- Funcionar bem > arquitetura elegante. Latência baixa é prioridade.
+Estão no **ESCOPO §2**, num lugar só. Resumo: comando gerado pelo modelo só
+com aprovação na tela; chutar pode em coisa inofensiva, destrutiva pergunta;
+confirmação falada no que pode machucar ou destruir; lixeira pode, apagar de
+vez nunca; tudo vai pro log; nada pessoal no git.
 
 ## Método
 
@@ -81,9 +65,9 @@ Respostas curtas, é voz e não texto.
 # Como trabalhar com o Leo — projeto Jarvis
 
 ## Antes de tudo: leia o planejamento
-O ESCOPO.md é a fonte de verdade do projeto. Leia ele inteiro antes de
-começar, e atualize ao fim de cada coisa feita. Leia também os outros .md
-do projeto, o regressao.py e a pasta medicoes/. Os chats onde o projeto
+O ESCOPO.md é o estado atual do projeto. Leia ele inteiro antes de
+começar, e atualize ao fim de cada coisa feita. O HISTORIA.md, o
+regressao.py e a pasta medicoes/ guardam o porquê das decisões. Os chats onde o projeto
 foi planejado foram perdidos; o que sobrou está nesses arquivos. Se algo
 importante não estiver escrito, pergunte ao Leo.
 
