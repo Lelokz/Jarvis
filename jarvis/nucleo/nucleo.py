@@ -97,6 +97,20 @@ def _e_briefing(texto: str) -> bool:
     return normalizar(texto) in _BRIEFING
 
 
+_SIM_QUERO = frozenset({"sim", "quero", "quero sim", "bora", "pode", "responde", "isso"})
+_NAO_QUERO = frozenset({"nao", "nao quero", "agora nao", "depois", "deixa", "deixa pra la",
+                        "nao precisa", "ignora", "esquece"})
+
+
+def _como_mensagem(dito: str) -> str:
+    """O que ele ditou, como mensagem: primeira letra maiúscula, ponto no fim."""
+    t = dito.strip()
+    if not t:
+        return t
+    t = t[0].upper() + t[1:]
+    return t if t[-1] in ".!?…" else t + "."
+
+
 # Sem falar com ele por isto, a conversa ao vivo com o Claude recomeça.
 PAUSA_LONGA_S = 3 * 3600
 
@@ -242,8 +256,11 @@ class Nucleo:
         # histórico inteiro, e anunciar mil mensagens velhas seria um desastre.
         self._whats_visto = dt.datetime.now()
         self._ultima_whats = None            # a última recebida (para "responde")
-        self._whats_pendente: tuple[str, str, str] | None = None   # (jid, nome, texto)
         self._esperando_contato: tuple[list, str] | None = None    # (candidatos, texto)
+        # Acabou de avisar e perguntou "Quer responder?": "sim", "não" ou já
+        # o texto da resposta.
+        self._oferta_whats = None
+        self._esperando_resposta_whats = None   # disse "sim": a próxima fala é o texto
         # Janelas esperando o "pode" para fechar: (janelas, nome falado).
         self._fechamento_pendente: tuple[list, str] | None = None
         self._diag: dict = {}
@@ -417,8 +434,23 @@ class Nucleo:
         if self._fechamento_pendente is not None:
             return self._confirmar_fechamento(texto)
 
-        if self._whats_pendente is not None:
-            return self._confirmar_whats(texto)
+        if self._esperando_resposta_whats is not None:
+            m, self._esperando_resposta_whats = self._esperando_resposta_whats, None
+            return self._enviar_whats(m.chat, m.nome, _como_mensagem(texto),
+                                      {"origem": "whatsapp: resposta ditada", "dito": texto})
+
+        if self._oferta_whats is not None:
+            m, self._oferta_whats = self._oferta_whats, None
+            chave = normalizar(texto)
+            if chave in _NAO_QUERO:
+                return Resposta(self.cfg.persona.whats_tudo_bem,
+                                diagnostico={"origem": "whatsapp: não quis responder"})
+            if chave in _SIM_QUERO:
+                self._esperando_resposta_whats = m
+                return Resposta(self.cfg.persona.whats_o_que_responder, perguntando=True,
+                                diagnostico={"origem": "whatsapp: vai responder"})
+            # Qualquer outra coisa segue normal: "fala pra ela que…" vai ao
+            # Claude, que sabe quem mandou a última mensagem.
 
         if self._esperando_contato is not None:
             candidatos, mensagem = self._esperando_contato
@@ -1017,12 +1049,14 @@ class Nucleo:
             return []
         self._whats_visto = max(m.quando for m in novas)
         self._ultima_whats = novas[-1]
+        self._oferta_whats = novas[-1]
         falas = []
         for m in novas:
             texto = m.texto if len(m.texto) <= 220 else m.texto[:220] + "…"
             falas.append(self._frase("whats_chegou", nome=m.nome, texto=texto)
                          if self.cfg.whatsapp.ler_conteudo
                          else self._frase("whats_chegou_sem_texto", nome=m.nome))
+        falas[-1] += " " + self.cfg.persona.whats_oferta
         return falas
 
     def _mandar_whats(self, args: dict, base: dict) -> Resposta:
@@ -1032,9 +1066,9 @@ class Nucleo:
         mensagem = str(args.get("texto") or "").strip()
         if not mensagem:
             return Resposta("O que eu mando?", diagnostico=base)
-        if normalizar(para) in ("ultimo", "ultima", "") and self._ultima_whats is not None:
+        if normalizar(para) in ("ultimo", "ultima", "ele", "ela", "") and self._ultima_whats is not None:
             u = self._ultima_whats
-            return self._pedir_confirmacao_whats(u.chat, u.nome, mensagem, base)
+            return self._enviar_whats(u.chat, u.nome, mensagem, base)
         try:
             candidatos = self.whatsapp.achar_contato(para)
         except Exception as e:  # banco ocupado: avisa em vez de quebrar
@@ -1047,7 +1081,7 @@ class Nucleo:
             opcoes = ", ".join(c.nome for c in candidatos[:4])
             return Resposta(self._frase("whats_qual_contato", opcoes=opcoes),
                             perguntando=True, diagnostico=base)
-        return self._pedir_confirmacao_whats(candidatos[0].jid, candidatos[0].nome, mensagem, base)
+        return self._enviar_whats(candidatos[0].jid, candidatos[0].nome, mensagem, base)
 
     def _escolher_contato(self, candidatos: list, falado: str, mensagem: str) -> Resposta:
         alvo = normalizar(falado)
@@ -1056,34 +1090,20 @@ class Nucleo:
         if not notas or notas[0][0] < 0.6:
             return self.processar(falado)  # não respondeu qual: é pedido novo
         c = notas[0][1]
-        return self._pedir_confirmacao_whats(c.jid, c.nome, mensagem,
-                                             {"origem": "whatsapp: contato escolhido"})
+        return self._enviar_whats(c.jid, c.nome, mensagem, {"origem": "whatsapp: contato escolhido"})
 
-    def _pedir_confirmacao_whats(self, jid: str, nome: str, mensagem: str, base: dict) -> Resposta:
-        # Mensagem enviada não volta: lida em voz alta e só vai com o "pode".
-        self._whats_pendente = (jid, nome, mensagem)
-        self._pergunta = self._frase("whats_confirmar", nome=nome, texto=mensagem)
-        return Resposta(self._pergunta, perguntando=True,
-                        diagnostico={**base, "whatsapp_para": nome})
-
-    def _confirmar_whats(self, texto: str) -> Resposta:
-        (jid, nome, mensagem), self._whats_pendente = self._whats_pendente, None
-        resposta = self.cerebro.confirmar(texto, self._pergunta)
-        diag = {"origem": "confirmação de WhatsApp", "dito": texto,
-                "confirmacao": resposta.name, "para": nome}
-        if resposta is Confirmacao.SIM:
-            ok, motivo = self.whatsapp.enviar(jid, mensagem)
-            if ok:
-                return Resposta(self.cfg.persona.whats_mandei,
-                                acao=f"whatsapp:{nome}:{mensagem}", diagnostico=diag)
-            return Resposta(self._frase("whats_nao_mandei", motivo=motivo or "erro da ponte"),
-                            diagnostico=diag)
-        if resposta is Confirmacao.NAO or self.cerebro.resposta_solta(texto):
-            return Resposta(self.cfg.persona.whats_cancelado, diagnostico=diag)
-        nova = self.processar(texto)
-        return Resposta(f"{self.cfg.persona.whats_cancelado} {nova.texto}".strip(),
-                        acao=nova.acao, perguntando=nova.perguntando,
-                        diagnostico={**diag, "seguiu_para": nova.diagnostico})
+    def _enviar_whats(self, jid: str, nome: str, mensagem: str, base: dict) -> Resposta:
+        """Manda na hora: o pedido do Léo já é a confirmação (decisão dele,
+        out/2026). Só vem daqui pedido DELE — mensagem recebida nunca chega."""
+        if not mensagem:
+            return Resposta("O que eu mando?", diagnostico=base)
+        ok, motivo = self.whatsapp.enviar(jid, mensagem)
+        diag = {**base, "whatsapp_para": nome, "texto": mensagem, "ok": ok}
+        if ok:
+            return Resposta(self._frase("whats_mandei", nome=nome),
+                            acao=f"whatsapp:{nome}:{mensagem}", diagnostico=diag)
+        return Resposta(self._frase("whats_nao_mandei", motivo=motivo or "erro da ponte"),
+                        diagnostico=diag)
 
     # -- memória -------------------------------------------------------------
 
@@ -1251,7 +1271,7 @@ class Nucleo:
             o_que = "o esquecer"
         elif self._fechamento_pendente is not None:
             o_que = "o fechar"
-        elif self._whats_pendente is not None or self._esperando_contato is not None:
+        elif self._esperando_resposta_whats is not None or self._esperando_contato is not None:
             o_que = "a mensagem"
         elif self._pendente is not None:
             o_que = "a pergunta"
@@ -2004,8 +2024,9 @@ class Nucleo:
         self._esperando_qual_destino = None
         self._esquecimento_pendente = None
         self._fechamento_pendente = None
-        self._whats_pendente = None
         self._esperando_contato = None
+        self._oferta_whats = None
+        self._esperando_resposta_whats = None
         # O desfazer morre junto, e isto é o desenho — não mais uma limitação
         # à espera de histórico em disco. A Etapa 5.5 mediu a alternativa e o
         # Léo decidiu contra: pilha com alcance de horas obriga a desfazer

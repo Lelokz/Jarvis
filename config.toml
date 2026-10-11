@@ -93,8 +93,14 @@ cerebro_falhou = "Não consegui falar com o Claude agora. Tenta de novo?"
 # WhatsApp. {nome} é o contato; {texto} a mensagem.
 whats_chegou = "{nome} mandou: {texto}"
 whats_chegou_sem_texto = "Mensagem de {nome} no WhatsApp."
-whats_confirmar = "Vou mandar pra {nome}: {texto} Pode mandar?"
-whats_mandei = "Mandei."
+# Depois de avisar, ele oferece: sem isso o Léo tinha que adivinhar que podia
+# responder.
+whats_oferta = "Quer responder?"
+whats_o_que_responder = "O que eu respondo?"
+whats_tudo_bem = "Tá."
+# Enviar NÃO pede confirmação (decisão do Léo, out/2026: "eu mandar já é a
+# confirmação"). Ele só diz pra quem foi.
+whats_mandei = "Mandei pra {nome}."
 whats_nao_mandei = "Não consegui mandar: {motivo}"
 whats_cancelado = "Tá, não mandei."
 whats_qual_contato = "Achei {opcoes}. Pra qual?"

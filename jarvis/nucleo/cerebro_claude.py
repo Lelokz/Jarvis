@@ -180,10 +180,12 @@ LEITURAS = {
 ACOES_CLAUDE = {
     "mandar_whatsapp": {
         "nome": "mandar_whatsapp",
-        "descricao": "Manda uma mensagem de WhatsApp em nome do usuário. Use quando ELE "
-                     "pedir para mandar ou responder alguém (\"responde que eu chego às "
-                     "oito\", \"manda pro Pedro que amanhã não vou\"). O sistema lê a "
-                     "mensagem em voz alta e só envia depois de ele confirmar. O texto é SÓ "
+        "descricao": "Manda uma mensagem de WhatsApp em nome do usuário, na hora (ele "
+                     "já decidiu ao pedir). Use para QUALQUER jeito de pedir isso: "
+                     "\"responde que…\", \"fala pra ele/ela que…\", \"diz pra fulano…\", "
+                     "\"avisa que…\", \"manda pro Pedro que…\", \"pergunta pra ela se…\". "
+                     "\"Ele\", \"ela\" ou sem nome = quem mandou a última mensagem "
+                     "(para: \"ultimo\"). O texto é SÓ "
                      "o que ele ditou, com as palavras dele: pode ajustar a gramática "
                      "(\"que eu chego às oito\" -> \"Chego às oito.\"), mas não acrescente "
                      "nada que ele não disse — nem \"vou sim\", nem saudação, nem "

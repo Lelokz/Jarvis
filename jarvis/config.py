@@ -54,7 +54,9 @@ class Persona:
     cerebro_falhou: str
     whats_chegou: str
     whats_chegou_sem_texto: str
-    whats_confirmar: str
+    whats_oferta: str
+    whats_o_que_responder: str
+    whats_tudo_bem: str
     whats_mandei: str
     whats_nao_mandei: str
     whats_cancelado: str
