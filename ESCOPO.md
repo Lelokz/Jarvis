@@ -135,12 +135,20 @@ cada 5 min, e nunca para o git):
 - **projetos do VS Code:** toda pasta já aberta nele, falada como
   "projeto <nome>";
 - **favoritos do Brave:** o nome sai do endereço (`kabum.com.br` → "kabum",
-  `music.youtube.com` → "youtube music").
+  `music.youtube.com` → "youtube music"). Favorito novo vale em até 5 min,
+  sem reiniciar;
+- **sites mais visitados no Brave** (histórico, a partir de 3 visitas): é o que
+  faz "abre o GitHub" funcionar sem favorito. Favorito ganha do histórico.
+
+**Programa que sobe só na bandeja** (o ZapZap): se depois de abrir aparece o
+ícone na bandeja mas nenhuma janela, ele abre de novo e a janela vem. Vale para
+qualquer programa, sem lista; quem já abre com janela não é afetado. Precisa
+de `wmctrl` e `xwininfo` (vêm no Mint).
 
 Casou bem e sem concorrente, **ele abre e diz o nome** do que abriu, mesmo sem
 certeza total (abrir é inofensivo). Dois parecidos ("whatsapp": ZapZap ou
-WhatsApp Web?) → pergunta. Programa ganha de favorito com o mesmo nome
-("minecraft" é o launcher, não o site).
+WhatsApp Web?) → pergunta. Exceção: **programa ganha de site** ("whatsapp" é
+o ZapZap, "minecraft" é o launcher); "whatsapp web" dito inteiro abre o site.
 
 Arquivos editáveis à mão: `atalhos.toml` (o que ele abre), `config.toml`
 (frases, pastas liberadas e vetadas, limites), `memoria.txt` (o que ele sabe

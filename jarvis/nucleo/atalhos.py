@@ -217,6 +217,13 @@ class Tabela:
         # Empate: dois atalhos plausíveis e parecidos entre si. Perguntar qual
         # é obrigatório aqui — abrir o errado é justamente o que a §2.2 proíbe.
         if len(notas) > 1 and nota - notas[1][1] < EMPATE and notas[1][1] >= SUGESTAO:
+            # Programa contra site do catálogo: o programa ganha. "whatsapp" é
+            # o ZapZap instalado, não o WhatsApp Web dos favoritos (pedido do
+            # Léo: ele usa o programa).
+            tipos = {melhor.tipo, notas[1][0].tipo}
+            if tipos == {"app", "site"} and notas[1][0].origem == melhor.origem == "sistema":
+                app = melhor if melhor.tipo == "app" else notas[1][0]
+                return Casamento(Desfecho.CERTO, app, max(nota, notas[1][1]))
             return Casamento(
                 Desfecho.SUGESTAO, melhor, nota, empatados=(melhor, notas[1][0])
             )

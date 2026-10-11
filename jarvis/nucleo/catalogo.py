@@ -20,8 +20,10 @@ mesmo nome: é o Léo dizendo explicitamente o que quer.
 from __future__ import annotations
 
 import configparser
+import ipaddress
 import json
 import os
+import sqlite3
 import time
 from pathlib import Path
 from urllib.parse import unquote, urlparse
@@ -37,6 +39,10 @@ _PASTAS_DE_APPS = [
 ]
 _VSCODE = Path("~/.config/Code/User/workspaceStorage").expanduser()
 _BRAVE = Path("~/.config/BraveSoftware/Brave-Browser/Default/Bookmarks").expanduser()
+_HISTORICO = Path("~/.config/BraveSoftware/Brave-Browser/Default/History").expanduser()
+# Site do histórico só entra a partir de tantas visitas: uma visita solta é
+# ruído (link aberto uma vez) e só aumentaria a chance de casar errado.
+_VISITAS_MINIMAS = 3
 
 # Os próprios ícones do Jarvis: "abre o Jarvis" não deve relançar a si mesmo,
 # e "desligar Jarvis" por voz seria um desligar sem querer.
@@ -51,6 +57,15 @@ _APELIDOS_EXTRA = {
     "org.gnome.Calculator": ("calculadora",),
     "org.gnome.Terminal": ("terminal",),
     "com.rtosta.zapzap": ("whatsapp", "zap"),
+}
+
+# E de alguns sites, pelo nome que sai do endereço.
+_APELIDOS_SITE = {
+    "google mail": ("gmail", "email", "e-mail"),
+    "google drive": ("drive",),
+    "google translate": ("tradutor", "google tradutor"),
+    "google calendar": ("google agenda",),
+    "google gemini": ("gemini",),
 }
 
 # Pedaços de endereço que não são o nome do site.
@@ -135,6 +150,7 @@ def _favoritos_brave() -> list[Atalho]:
                 vistos.add(nome)
                 titulo = (no.get("name") or "").strip()
                 apelidos = (titulo,) if titulo and normalizar(titulo) != normalizar(nome) else ()
+                apelidos += _APELIDOS_SITE.get(nome, ())
                 achados.append(Atalho(nome, "site", url, apelidos=apelidos, origem="sistema"))
         for filho in no.get("children", []):
             andar(filho)
@@ -145,8 +161,50 @@ def _favoritos_brave() -> list[Atalho]:
     return achados
 
 
+def _historico_brave() -> list[Atalho]:
+    """Os sites mais visitados, para "abre o GitHub" funcionar sem favorito.
+
+    `immutable=1` lê o banco sem trancá-lo: com o Brave aberto ele está em
+    uso, e copiar ou travar o arquivo seria mexer no navegador do Léo. O
+    preço é não ver as visitas dos últimos minutos, que ainda não foram
+    gravadas — irrelevante para "sites que eu uso".
+    """
+    if not _HISTORICO.is_file():
+        return []
+    try:
+        con = sqlite3.connect(f"file:{_HISTORICO}?immutable=1", uri=True)
+        linhas = con.execute(
+            "SELECT url, visit_count FROM urls WHERE url LIKE 'http%' "
+            "ORDER BY visit_count DESC LIMIT 2000").fetchall()
+        con.close()
+    except sqlite3.Error:
+        return []
+    visitas: dict[str, int] = {}
+    raiz: dict[str, str] = {}
+    for url, n in linhas:
+        host = urlparse(url).hostname or ""
+        try:
+            ipaddress.ip_address(host)
+            continue  # 127.0.0.1 e afins não são site
+        except ValueError:
+            pass
+        nome = nome_do_site(url)
+        if not nome or host in ("localhost",):
+            continue
+        visitas[nome] = visitas.get(nome, 0) + (n or 0)
+        raiz.setdefault(nome, f"{urlparse(url).scheme}://{host}/")
+    return [Atalho(nome, "site", raiz[nome], apelidos=_APELIDOS_SITE.get(nome, ()),
+                   origem="sistema")
+            for nome, n in sorted(visitas.items(), key=lambda p: -p[1])
+            if n >= _VISITAS_MINIMAS][:150]
+
+
 def descobrir() -> list[Atalho]:
-    return _apps() + _projetos_vscode() + _favoritos_brave()
+    favoritos = _favoritos_brave()
+    ja = {normalizar(a.nome) for a in favoritos}
+    # Favorito ganha do histórico: é o endereço que o Léo escolheu guardar.
+    historico = [a for a in _historico_brave() if normalizar(a.nome) not in ja]
+    return _apps() + _projetos_vscode() + favoritos + historico
 
 
 class Catalogo:

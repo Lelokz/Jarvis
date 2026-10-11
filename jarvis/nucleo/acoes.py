@@ -13,8 +13,12 @@ montada. Não existe caminho entre a saída do modelo e um shell.
 
 from __future__ import annotations
 
+import configparser
+import re
 import shutil
 import subprocess
+import threading
+import time
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -72,6 +76,66 @@ def abrir_caminho(caminho: Path, comandos: Comandos) -> Resultado:
     return Resultado(True, f"Abrindo {caminho.name}.", comando)
 
 
+# --- programas que sobem só na bandeja -------------------------------------
+#
+# O ZapZap (e outros) abre do zero escondido: só o ícone na bandeja, sem
+# janela. O Léo tinha que abrir de novo para a janela aparecer. Medido: o
+# ícone surge ~1,7 s depois de abrir, e um segundo `gio launch` mostra a
+# janela em ~0,9 s. Programa que já rodava não precisa disto: um abrir basta.
+#
+# Geral, não uma lista: depois de abrir, se o programa aparece no X (o ícone
+# da bandeja é uma janelinha com a classe dele) mas nenhuma janela de verdade
+# surge, abre de novo. Quem abre com janela (Discord, Steam) nunca chega lá.
+
+_CLASSE = re.compile(r'\("([^"]*)" "([^"]*)"\)')
+
+
+def _classe_da_janela(desktop: str) -> str:
+    ini = configparser.RawConfigParser(strict=False, interpolation=None)
+    try:
+        ini.read(desktop, encoding="utf-8")
+        classe = ini.get("Desktop Entry", "StartupWMClass", fallback="")
+    except (configparser.Error, UnicodeDecodeError):
+        classe = ""
+    return (classe or Path(desktop).stem.split(".")[-1]).lower()
+
+
+def _no_x(classe: str) -> bool:
+    """Alguma janela do programa existe, mesmo invisível (ícone de bandeja)."""
+    try:
+        arvore = subprocess.run(["xwininfo", "-root", "-tree"], capture_output=True,
+                                text=True, timeout=3).stdout
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return any(classe in (a.lower(), b.lower()) for a, b in _CLASSE.findall(arvore))
+
+
+def _tem_janela(classe: str) -> bool:
+    """Uma janela de verdade, que o gerenciador de janelas mostra."""
+    try:
+        lista = subprocess.run(["wmctrl", "-lx"], capture_output=True,
+                               text=True, timeout=3).stdout
+    except (OSError, subprocess.SubprocessError):
+        return True  # sem como saber: não insiste
+    return any(classe in linha.split()[2].lower() for linha in lista.splitlines()
+               if len(linha.split()) > 2)
+
+
+def _trazer_da_bandeja(comando: list[str], classe: str) -> None:
+    fim = time.monotonic() + 20
+    while time.monotonic() < fim:          # espera o programa subir
+        if _tem_janela(classe):
+            return
+        if _no_x(classe):
+            break
+        time.sleep(0.25)
+    else:
+        return
+    time.sleep(1.0)                        # dá a chance de a janela vir sozinha
+    if not _tem_janela(classe):
+        _abrir(comando)
+
+
 def executar(atalho: Atalho, comandos: Comandos) -> Resultado:
     if atalho.tipo == "app":
         # Programa instalado: o `gio launch` lê o próprio .desktop do menu, do
@@ -80,10 +144,16 @@ def executar(atalho: Atalho, comandos: Comandos) -> Resultado:
         comando = ["gio", "launch", atalho.alvo]
         if shutil.which("gio") is None or not Path(atalho.alvo).is_file():
             return Resultado(False, f"Não consegui abrir {atalho.nome}.", comando)
+        classe = _classe_da_janela(atalho.alvo)
+        ja_rodava = shutil.which("xwininfo") is not None and _no_x(classe)
         try:
             _abrir(comando)
         except OSError as e:
             return Resultado(False, f"Não consegui abrir {atalho.nome}: {e}", comando)
+        if not ja_rodava and shutil.which("wmctrl") and shutil.which("xwininfo"):
+            # Em segundo plano: a resposta falada não espera os ~3 s.
+            threading.Thread(target=_trazer_da_bandeja, args=(comando, classe),
+                             daemon=True).start()
         return Resultado(True, f"Abrindo {atalho.nome}.", comando)
 
     executavel = {
