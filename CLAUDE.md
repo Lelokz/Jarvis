@@ -151,6 +151,12 @@ que bater o olho e perceber "isso aqui tá estranho".
   ação que mexe no corpo dele (volume, som alto).
 - Um teste já criou 2176 processos e travou o PC inteiro. Se for rodar
   algo que pode se multiplicar, fique de olho.
+- **Não usar `gnome-screenshot -w`** (print de uma janela só). Em 11/out/2026
+  o Cinnamon caiu em `grab_window_screenshot` quando o Leo ligou o monitor,
+  depois de uma noite de prints de janela feitos para conferir a interface, e
+  subiu em modo de recuperação (barra e atalhos dele sumidos). Para conferir a
+  tela: `gnome-screenshot -f` (tela inteira) ou o retrato da própria janela do
+  Jarvis (`interface.py --dizer … --retrato-da-conversa`).
 - A separação núcleo/cliente (o núcleo recebe texto, decide, executa e
   devolve texto, sem saber o que é microfone ou tela) é o desenho central
   do Jarvis e o que permite o cliente de celular. Mantenha.
