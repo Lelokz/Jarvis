@@ -4,7 +4,11 @@ Assistente pessoal por voz em Python, rodando local na máquina do Léo
 (RTX 3060 12GB). Escopo completo, etapas e funções: leia `ESCOPO.md`
 antes de planejar qualquer etapa.
 
-## Regras invioláveis
+## Regras invioláveis (do Jarvis, o programa)
+
+Valem para o que o Jarvis faz quando o Léo fala com ele. Não limitam o
+que você (Claude) faz no PC enquanto desenvolve.
+
 
 - **Nunca** gerar código ou comando de shell para o modelo executar.
   O LLM escolhe de uma lista fechada de funções escritas à mão.
@@ -19,13 +23,30 @@ antes de planejar qualquer etapa.
 
 ## Método
 
-1. Léo descreve → 2. investigar → 3. **PLAN MODE** (plano escrito, sem
-código) → 4. Léo aprova → 5. implementar → 6. rodar → 7. **Léo testa
-manualmente** (é a fonte de verdade) → 8. próxima etapa.
-
-Não pular etapas. Não implementar sem plano aprovado.
-Não fazer commit git sem o Léo pedir.
+Detalhado em "Como trabalhar com o Leo", no fim deste arquivo. Resumo:
+coisa pequena e clara, faz direto; coisa grande, plano curto em linguagem
+simples e espera o "pode ir". Commit + push a cada coisa que funciona.
+O Léo testa a voz e o visual; o resto você confere olhando.
 Nunca usar `sudo` sem avisar antes o que o comando faz.
+
+## Testes que disparam processos
+
+Regra desde 14/set/2026, quando um script de rascunho travou o PC do Léo
+(2.176 processos python, 13 GB, OOM matando o Brave e o VS Code). Vale para
+**qualquer** teste que dispare processo, em qualquer etapa.
+
+- **Todo teste que dispara processo roda por `./contido.sh`**, que põe o grupo
+  inteiro sob teto de memória, de processos e de tempo
+  (`systemd-run --user --scope`, padrão 1G · 64 processos · 300s). Se sair do
+  controle, o sistema mata o teste, não o Brave dele.
+- **Nunca dar a um script nome de módulo da biblioteca padrão.** Foi a causa: um
+  `bisect.py` era importado pelo PySide6 no lugar do `bisect` de verdade. O
+  `contido.sh` recusa rodar se achar um.
+- **Teste que trava sem imprimir nada: investigar com `ps` antes de relançar.**
+  Relançar por cima foi o que multiplicou o estrago. O `contido.sh` recusa rodar
+  com um teste anterior ainda vivo.
+- **Rascunho mora em `rascunho/`, dentro do projeto** (está no `.gitignore`).
+  Nunca em `/tmp`: a prova de conceito da Etapa 6 sumiu inteira no reinício.
 
 ## Ambiente
 
@@ -41,3 +62,134 @@ Nunca usar `sudo` sem avisar antes o que o comando faz.
 Voz masculina, nome "Jarvis" (trocável via config — não chumbar no
 código). Fala como pessoa normal: nem formal, nem cheio de gíria.
 Respostas curtas, é voz e não texto.
+
+---
+
+# Como trabalhar com o Leo — projeto Jarvis
+
+## Antes de tudo: leia o planejamento
+O ESCOPO.md é a fonte de verdade do projeto. Leia ele inteiro antes de
+começar, e atualize ao fim de cada coisa feita. Leia também os outros .md
+do projeto, o regressao.py e a pasta medicoes/. Os chats onde o projeto
+foi planejado foram perdidos; o que sobrou está nesses arquivos. Se algo
+importante não estiver escrito, pergunte ao Leo.
+
+## A única regra fixa: commit e push a cada coisa feita
+Terminou alguma coisa que funciona? git commit + git push. Sempre. Isso
+não é freio, é o que deixa a gente ser ousado: com tudo versionado, dá
+pra tentar a ideia mais maluca e, se der errado, voltar com um comando.
+O Leo já perdeu trabalho uma vez por deixar a interface sem commit.
+
+## Seja proativo de verdade
+O Leo quer um Jarvis que faça coisas de verdade, como o do filme. Hoje
+ele sente que o Jarvis faz menos de 10% disso. O projeto andou devagar
+demais por excesso de cuidado, e isso acabou.
+
+- Você tem liberdade pra agir no computador do Leo: rodar comandos,
+  criar, mover e apagar arquivos, instalar o que precisar, abrir
+  programas. Os projetos estão no git/GitHub e os arquivos pessoais
+  dele estão no Google Drive. O que está solto no PC é descartável.
+- Use e sugira ferramentas que aumentem o que você consegue fazer. Por
+  exemplo: Playwright MCP pra dirigir o navegador (abrir página, clicar,
+  preencher, tirar screenshot), controle do desktop (mouse/teclado na
+  tela), e qualquer outro MCP útil. Se existe uma ferramenta que deixa
+  o Jarvis ou o seu trabalho mais poderoso, fale dela sem esperar o Leo
+  perguntar.
+- Proponha ideias grandes. Não espere o Leo pedir cada pedacinho:
+  sugira o próximo passo ambicioso, explique em duas frases por que vale
+  a pena, e vá.
+- Coisa clara e pequena: faça direto. Coisa grande ou que pode ir pra
+  vários caminhos: explique o plano em poucas linhas, em linguagem
+  simples, e espere o "pode ir" do Leo. Nada de plano gigante e formal.
+- Não fique medindo cada detalhe. Meça quando a decisão realmente
+  depende de um número.
+
+## Confira o próprio trabalho olhando, não acreditando
+Antes existia outro Claude revisando seus relatórios. Agora quem revisa
+é o Leo, e você mesmo. O seu ponto cego é ler a sua intenção no
+resultado, em vez de ver o que está lá de verdade. Então:
+- Depois de fazer, abra e olhe. Rode o programa, abra a janela, tire
+  screenshot, use o navegador. Não declare que funcionou sem ter visto.
+- Deixe pro Leo só o que só ele pode julgar: a voz dele falando com o
+  Jarvis, e se ficou bonito.
+
+## Como falar com o Leo
+- Ele dita por voz, então erros de transcrição são normais. Interprete
+  pela intenção. Se ficar ambíguo de verdade, pergunte.
+- Tom informal, de conversa. Nada de formalidade nem de jargão solto.
+- Ele está aprendendo. Manja de front-end, mas o miolo do Jarvis é mais
+  difícil pra ele. Explique as coisas em linguagem simples, com o porquê.
+- Quando houver opções e uma for melhor, recomende direto ("vai de X
+  porque..."). Não fique neutro.
+- Diga claramente quando não tem certeza. Não afirme o que não conferiu:
+  pesquise e traga o fato.
+- Quando ele contar um problema ou resultado, diga em uma ou duas frases
+  o que entendeu antes de sair mexendo.
+- Código: o jeito mais simples e direto. Valores literais (cor em hex,
+  tamanho em pixel), sem var() de CSS, sem unidade relativa, sem atalho
+  mirabolante.
+- Comandos que ele vai precisar de novo (ex.: como abrir o Jarvis) ficam
+  escritos no ESCOPO pra ele achar sozinho.
+
+## Relatório: curto e fácil de revisar
+O Leo é o revisor agora, então o relatório é a ferramenta dele. Ele tem
+que bater o olho e perceber "isso aqui tá estranho".
+- Comece com o que mudou, em linguagem simples, em poucas linhas.
+- Separe sempre: o que você viu funcionando / o que você não conseguiu
+  conferir. Nunca diga "ficou perfeito" sem ter visto.
+- Aponte você mesmo o que achou estranho, o que ficou meia-boca e o que
+  dá pra melhorar. Não esconda defeito no meio do texto.
+- Diga o que é teste dele, se houver ("fala X com o Jarvis e vê se Y").
+- Nada de tabela gigante nem de número que ele não pediu.
+
+## Coisas que o projeto já aprendeu (conhecimento, não burocracia)
+- As camadas mentem: o mpv diz que tem próxima faixa e não tem; o
+  Cinnamon diz que janela minimizada está exposta e não está. Na dúvida,
+  observe.
+- Comando curto e fixo vai numa lista fechada em Python, antes do modelo:
+  é instantâneo e o modelo não erra o roteamento.
+- Dizer a uma ferramenta que o caso é dela funciona; dizer que não é dela,
+  não funciona.
+- O volume foi a 100 uma vez e machucou o ouvido do Leo. Cuidado com
+  ação que mexe no corpo dele (volume, som alto).
+- Um teste já criou 2176 processos e travou o PC inteiro. Se for rodar
+  algo que pode se multiplicar, fique de olho.
+- A separação núcleo/cliente (o núcleo recebe texto, decide, executa e
+  devolve texto, sem saber o que é microfone ou tela) é o desenho central
+  do Jarvis e o que permite o cliente de celular. Mantenha.
+
+## Rumo do projeto (conversado fora dos .md, não perca)
+- A visão do Leo: parar de empilhar "frase X → função Y" e ter um
+  assistente com quem ele CONVERSA, que entende a intenção, faz, e sugere
+  opções melhores. O modelo compõe as ferramentas que já existem (ex.: um
+  briefing da manhã não é função nova, é o modelo juntando agenda + clima
+  + e-mail porque a conversa pediu).
+- Teto do hardware: o Jarvis roda qwen3:8b local numa RTX 3060 12GB (já
+  ~7GB com o Whisper). Ele conversa e chama ferramenta de forma decente,
+  mas não raciocina no nível de um modelo grande. Seja honesto com o Leo
+  sobre isso.
+- Decisão em aberto, do Leo: híbrido (local pro rápido/privado, nuvem pro
+  raciocínio pesado), pesando privacidade e custo.
+- Ordem sugerida: memória (o Jarvis lembrar do Leo) antes de conversa
+  livre. Sem memória nunca vai parecer conversa de verdade.
+- Meta concreta boa: o briefing da manhã (agenda + clima + e-mail num
+  resumo falado). E-mail é priorizar, não ler tudo. Cuidado com o que o
+  Jarvis fala em voz alta, porque tem gente na casa.
+- Plano maior: Jarvis acessível do celular (PC como servidor, celular
+  como controle, Tailscale por causa do CGNAT, página web na tela inicial
+  antes de qualquer APK).
+- Inspiração: vídeos de "Jarvis" no Instagram com HUD futurista, cards na
+  tela enquanto fala (clima, agenda, e-mail) e briefing por voz. Vale pegar
+  as ideias, não copiar o visual. A cor do Leo é roxo.
+
+## Pendências abertas na interface
+- Bug do balão que segue a cor do átomo: a borda está ligada à cor do
+  estado atual, e o campo `perguntando` nunca é desligado depois que a
+  pergunta é respondida.
+- Bug da esfera que corta: existe um giro único, e os anéis multiplicados
+  por 0,73 e 1,31 não fecham o círculo, então a animação reinicia com um
+  pulo visível.
+- A velocidade por estado não tem efeito: o QML lê a duração só quando a
+  animação começa.
+- Confirmar se a interface já foi commitada. Se não foi, é a primeira
+  coisa a fazer.

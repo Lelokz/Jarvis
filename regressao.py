@@ -54,6 +54,7 @@ from pathlib import Path
 from jarvis.config import carregar
 from jarvis.nucleo import cerebro as mod_cerebro
 from jarvis.nucleo import midia as mod_midia
+from jarvis.nucleo import sistema as mod_sistema
 from jarvis.nucleo.atalhos import Tabela
 from jarvis.nucleo.busca import Buscador
 from jarvis.nucleo.nucleo import Nucleo
@@ -230,6 +231,20 @@ CRUS_TABELA = [
     ("Volta.", None),
 ]
 
+# O gatilho de tela (Etapa 6.6), também lista fechada e também antes do modelo.
+# Inclui as que NÃO podem casar: a palavra solta ficou de fora de propósito, e
+# "bloqueia o relatório" é o vizinho perigoso.
+TELA_TABELA = [
+    ("bloqueia o PC", "bloquear"),
+    ("Bloqueia o computador.", "bloquear"),
+    ("Trava a tela.", "bloquear"),
+    ("tranca o pc", "bloquear"),
+    ("bloqueia", None),
+    ("trava", None),
+    ("bloqueia o relatório", None),
+    ("abre o loft", None),
+]
+
 # A busca da Etapa 2 continua achando. Números do disco real do Léo, que mudam
 # com o conteúdo dele — por isso a checagem é "achou alguma coisa", não um
 # número exato. `dança` está aqui porque já falhou de duas formas diferentes:
@@ -300,6 +315,16 @@ def main() -> int:
         cru = mod_midia.comando_cru(frase)
         return (cru.acao if cru else None) == esperado
 
+    def casa_tela(frase, esperado):
+        return mod_sistema.comando_de_tela(frase) == esperado
+
+    tela_ok = sum(1 for f, e in TELA_TABELA if casa_tela(f, e))
+    print(f"  {'gatilho de tela contra a lista fechada':44} "
+          f"{tela_ok}/{len(TELA_TABELA)}")
+    for f, e in TELA_TABELA:
+        if not casa_tela(f, e):
+            print(f"    ✗ {f!r} -> {mod_sistema.comando_de_tela(f)} (esperado {e})")
+
     tabela_ok = sum(1 for f, e in CRUS_TABELA if casa(f, e))
     print(f"  {'comandos crus contra a lista fechada':44} "
           f"{tabela_ok}/{len(CRUS_TABELA)}")
@@ -317,6 +342,17 @@ def main() -> int:
         reprovou = True
     else:
         nucleo = Nucleo(cfg)
+
+        # O bloqueio de tela pelo núcleo, sem NUNCA travar a tela: confere que
+        # a resposta traz a ação e o `depois`, e não chama o `depois`.
+        bloqueio = nucleo.processar("bloqueia o pc")
+        tela_no_nucleo = (bloqueio.acao == "bloquear_tela"
+                          and bloqueio.depois is not None
+                          and bloqueio.texto == cfg.persona.bloqueando)
+        print(f"  {'bloquear a tela pelo núcleo (sem executar)':44} "
+              f"{'ok' if tela_no_nucleo else 'FALHOU'}")
+        reprovou = reprovou or not tela_no_nucleo
+
         acoes = sum(1 for _ in range(20)
                     if nucleo.processar("abridança.ppxt").acao)
         print(f"  {'abridança.ppxt x20 (ancoragem)':44} "
@@ -331,6 +367,7 @@ def main() -> int:
 
     print(f"\n  TOTAL: {acertos}/{total}")
     print("  REPROVOU\n" if reprovou else "  passou\n")
+    reprovou = reprovou or tela_ok != len(TELA_TABELA)
     return 1 if reprovou else 0
 
 

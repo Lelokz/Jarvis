@@ -20,3 +20,8 @@ modelos-wakeword/
 # autorização grava depois do primeiro consentimento.
 credenciais_google.json
 token_google.json
+
+# Rascunho de prova de conceito e de medição. Fica DENTRO do projeto, e não em
+# /tmp: em 14/set/2026 a prova de conceito inteira da Etapa 6 sumiu no
+# reinício, porque morava no /tmp. Aqui sobrevive, e não vai para o git.
+rascunho/

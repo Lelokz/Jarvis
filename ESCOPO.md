@@ -148,6 +148,12 @@ Onde a linha passa:
 O núcleo **não imprime e não fala**: devolve texto, e o cliente decide se
 sintetiza, mostra na tela ou manda notificação.
 
+**Desde a Etapa 6.6 ele também pode devolver um `depois`:** uma ação para o
+cliente disparar **depois de terminar de falar**. O cliente não sabe o que ela
+faz — só sabe que agora pode; quem executa continua sendo o núcleo. Existe
+porque há ações que precisam da fala antes, e bloquear a tela é a primeira:
+travar primeiro apagaria a tela sem o Léo saber se o comando foi entendido.
+
 **Áudio:** ao responder, abaixa o volume dos outros programas (ducking) e
 devolve depois. Ele pode falar por cima do jogo. No Linux isso é feito via
 PipeWire, ajustando o volume por fluxo (sink-input).
@@ -200,6 +206,50 @@ PipeWire, ajustando o volume por fluxo (sink-input).
 - **Busca de arquivos:** `plocate` (índice do sistema) ou `fd`
 - **Controle de volume por app (ducking):** PipeWire / `pactl`
 - **Linguagem:** Python
+
+### Dependências de SISTEMA (não são pacotes de Python)
+
+Isto não está no `requirements.txt` e não sobe com o `pip`. Numa máquina nova,
+faltando, o Jarvis funciona — e a peça some **sem erro nenhum e sem aviso**. É
+esse modo de falhar silencioso que torna a anotação necessária.
+
+| peça | do que depende | como falha |
+|---|---|---|
+| janela (Etapa 6) | pacote `libxcb-cursor0` | o Qt se recusa a abrir janela no X11 e o programa morre na subida, com erro |
+| ícone da bandeja (Etapa 6) | **um applet de ícones no painel do Cinnamon** | **em silêncio** — ver abaixo |
+| bloquear a tela (Etapa 6.6) | pacote `cinnamon-screensaver` | **com aviso**: ele confere o comando antes de falar e diz "Não consigo bloquear a tela aqui" |
+
+### A bandeja depende de uma CONFIGURAÇÃO do painel, não de um pacote
+
+**A bandeja depende de haver um applet de ícones no painel do Cinnamon**
+(`systray@cinnamon.org` e/ou `xapp-status@cinnamon.org`). **Sem ele, o vigia
+sobe passivo e nada aparece. E o modo de falhar é silencioso: nenhum erro,
+nenhum aviso, o ícone simplesmente não existe.**
+
+Isso é **mais frágil que um pacote**: some se o painel for resetado, se o tema
+for trocado, ou se o Jarvis rodar noutra máquina. Pacote a gente lista no
+`requirements` e o instalador reclama; configuração de painel não deixa rastro.
+
+Como se manifesta, medido em set/2026: `isSystemTrayAvailable()` devolve
+`False`, a janela funciona igual, e simplesmente não há ícone. O
+`xapp-sn-watcher` chega a subir — só não assume o nome
+`org.kde.StatusNotifierWatcher`, que é o que o Qt procura, enquanto não houver
+applet no painel para exibir os ícones.
+
+> ### O erro que custou uma rodada, registrado para não se repetir
+>
+> **O pacote `xapp-sn-watcher` foi instalado por uma hipótese errada: a de que
+> faltava software.** Não faltava. **O binário já vinha na máquina**, no pacote
+> `libxapp1` (`/usr/lib/x86_64-linux-gnu/xapps/xapp-sn-watcher`), com o
+> autostart e o serviço de barramento vindo do `xapps-common`. O que faltava
+> era o applet no painel.
+>
+> E a instalação nem completou: o pacote do Ubuntu **conflita** com o
+> `xapps-common` do Mint — os dois trazem o mesmo
+> `/etc/xdg/autostart/xapp-sn-watcher.desktop` — e o `dpkg` abortou no meio.
+>
+> **Não instalar esse pacote.** Se a bandeja não aparecer noutra máquina, o
+> primeiro lugar a olhar é o painel, não o gerenciador de pacotes.
 
 ---
 
@@ -1640,12 +1690,35 @@ modelo. **Cada roteamento é uma amostra, não uma função.** Medido, n=20:
   antes do conserto: a reivindicação por escrito não está perdendo um sorteio,
   está perdendo a decisão.
 
-**Proposta para a rodada própria, medida e não implementada:** `temperature: 0`
-no `interpretar()`. Torna o roteamento reproduzível, que é o que faz a regressão
-valer alguma coisa — hoje um vermelho dela pode ser sorteio, e regressão que dá
-vermelho falso treina quem a roda a ignorá-la. **Não foi implementado porque é
-decisão de desenho e porque muda o significado de todos os números já
-registrados**, que precisariam ser remedidos.
+~~**Proposta para a rodada própria:** `temperature: 0` no `interpretar()`,
+para tornar o roteamento reproduzível.~~ **ENTERRADA — não resolve.** Medido na
+Etapa 6 (set/2026), com o mesmo modelo, a mesma versão do Ollama, o mesmo
+contexto de 4096 e 37/37 camadas na GPU:
+
+| `procura o relatório e renomeia pra proposta`, `temperature: 0` | resultado |
+|---|---|
+| antes de um reinício do PC | `renomear` 20/20 |
+| **na carga que tinha acabado de atender a regressão inteira** | **`abrir` 10/10** |
+| em três cargas novas do modelo, seguidas e intercaladas | `renomear` 63/63 |
+| em carga nova, depois de 40 chamadas sorteadas da mesma frase | `renomear` 10/10 |
+
+**`temperature: 0` é determinístico dentro de uma carga do modelo, e não entre
+cargas.** Numa frase que é quase empate entre duas funções, uma carga que já
+atendeu centenas de pedidos variados decide diferente de uma recém-carregada. E
+o Jarvis real mantém o modelo carregado com `keep_alive` de 5 minutos, então é
+a carga longa que ele usa o dia inteiro.
+
+> **A regra: reprodutibilidade de roteamento não se compra com temperatura.**
+> Quem tentar de novo vai achar que resolveu porque mediu dentro da mesma carga.
+> O que existe de verdade é o quase empate: frase que fica a um fio de distância
+> entre duas funções decide pelo estado do servidor, e a saída é tirá-la do
+> empate (lista fechada antes do modelo, ou reivindicação por escrito), não
+> silenciar o sorteio.
+
+*O caso acima é o mesmo que fez a regressão reprovar ao fim da passada 2 da
+Etapa 6, com 2/5 contra o mínimo de 4. Não foi a passada 2: o roteador estava
+byte a byte igual ao commit, e a regressão chama o modelo sem passar por nada
+que ela mexeu. Vai junto com o `"Para a música."` para a rodada de roteamento.*
 
 > **A regra: número instável não é número.** Antes de chamar uma queda de
 > regressão, rode de novo. Antes de chamar um `10/10` de garantia, rode mais
@@ -1718,6 +1791,71 @@ Um app à parte, não um puxadinho. Provavelmente maior que o motor de voz.
 - Histórico de tudo que foi conversado e executado
 - Anexar arquivos
 - Roda em segundo plano, ícone na bandeja
+
+### Etapa 6.6 — Bloquear a tela ⚠️
+
+Primeira função nova de núcleo desde a Etapa 5.5. Rodada própria e pequena,
+fora da fila dos defeitos da interface.
+
+**Numerada 6.6, e não 7**, por decisão do Léo: a Etapa 7 já significa outra
+coisa neste documento, e renumerar desfaria as dezenas de referências a "a
+lição da Etapa 5", "o classificador da Etapa 4" espalhadas aqui. É o precedente
+das etapas 0.5, 0.6 e 5.5.
+
+**O que faz:** `"bloqueia o PC"` → ele fala `"Bloqueando."` e trava a tela com
+`cinnamon-screensaver-command --lock`.
+
+**O gatilho é lista fechada, antes do modelo** (`sistema.COMANDOS_DE_TELA`),
+pela lição já registrada: comando curto em tabela custa 0 ms e não dá ao modelo
+a chance de errar o roteamento — foi assim que `"para a música"` caiu no
+`abrir`. **A palavra solta ficou de fora**: `"bloqueia"` sozinho não casa,
+porque fala de uma palavra é onde o Whisper mais erra e aqui o erro apaga a
+tela no meio do trabalho. As 11 ferramentas do modelo continuam 11.
+
+**Sem confirmação falada**, e quem decide é a pergunta da §2.3: *esta ação pode
+machucar ou destruir alguma coisa?* Bloquear é reversível e não destrói nada.
+Desligar e reiniciar seriam destrutivos e exigiriam confirmação — não estão
+nesta etapa.
+
+> ### Sem desbloqueio, e isto é decisão fechada, não esquecimento
+>
+> O Jarvis **não vai ter** função de destravar a tela. Depois de travado, o
+> assistente fica do lado de dentro do bloqueio e não recebe comando — e um
+> assistente que destrava por voz é **uma senha que qualquer um grita**. O
+> desbloqueio é a senha digitada, e continua assim.
+
+#### A fala vem antes da trava, e isso mudou o contrato da Resposta
+
+O `processar()` executa a ação e devolve texto; **quem fala é o cliente,
+depois**. Travar dentro do núcleo apagaria a tela ANTES da fala — e sem a fala
+o Léo não sabe se ele entendeu o comando ou se a tela apagou sozinha.
+
+A `Resposta` ganhou um campo `depois`: uma função que **o cliente executa
+depois de falar**, sem saber o que ela faz. Quem executa continua sendo o
+núcleo — a função fechada é código de lá. Isso funciona porque o `tts.falar()`
+só retorna quando o áudio acabou de tocar: não é estimativa de duração, é o
+retorno da função.
+
+*Descartado: agendar a trava por temporizador dentro do núcleo. Chutar a
+duração da fala é frágil — ela muda com a voz e com a velocidade, que são
+config.*
+
+**A validação vem antes da fala; a execução, depois.** Sem o programa na
+máquina, ele recusa na hora de decidir e diz "Não consigo bloquear a tela
+aqui", em vez de falar "bloqueando" e não bloquear.
+
+#### Medido
+
+| | |
+|---|---|
+| `"Bloqueando."` | **0,74 s** de áudio, sintetizado em 0,28 s |
+| gatilho contra a lista fechada | 8/8, incluindo os que **não** podem casar |
+| a ordem fala → trava, no cliente | provada: "fala começou", "fala terminou", "travou" |
+| o comando | `/usr/bin/cinnamon-screensaver-command`, do pacote `cinnamon-screensaver`; daemon rodando e respondendo no barramento |
+
+**Nenhum teste automático trava tela de ninguém:** o comando sai do config, e
+os testes o apontam para um programa inofensivo. **O `--lock` de verdade só o
+Léo testa** — é o único ponto que a automação não cobre.
 
 ### Etapa 7 — Ensinar ele a me entender
 Arquivo de contexto que o Jarvis lê antes de cada comando: apelidos,
@@ -1832,6 +1970,43 @@ Mais os dois que precisam de áudio e por isso não cabem nela:
 .venv/bin/python assistente.py --teste-ciclo    # dorme, acorda, volta a dormir
 python3 verificar_linha.py                      # o núcleo não conhece áudio
 ```
+
+E os testes da interface e da ponte, da Etapa 6:
+
+```
+python3 testes/terminal_identico.py       # o terminal do Ciclo não mudou
+python3 testes/testar_ponte.py            # a ponte, e os processos de verdade
+python3 testes/testar_ciclo_eventos.py    # estados, nível e texto digitado
+```
+
+### Como ligar cada parte
+
+Em **dois terminais**, porque cada um fica rodando. **O `cd` faz parte do
+comando:** o `.venv/bin/python` é caminho relativo, e de qualquer outra pasta o
+terminal responde `.venv/bin/python: Arquivo ou diretório inexistente` — o que
+parece "o programa não existe" e não é.
+
+```
+cd ~/Projetos/Jarvis
+.venv/bin/python assistente.py      # o assistente por voz
+```
+
+```
+cd ~/Projetos/Jarvis
+.venv/bin/python interface.py       # a janela
+```
+
+De qualquer pasta, sem `cd`, com caminho absoluto:
+
+```
+~/Projetos/Jarvis/.venv/bin/python ~/Projetos/Jarvis/assistente.py
+~/Projetos/Jarvis/.venv/bin/python ~/Projetos/Jarvis/interface.py
+```
+
+**A janela sobe sozinha, sem o assistente.** Fica dizendo "esperando o Jarvis
+subir" e conecta na hora em que ele aparecer — e o contrário também vale, o
+assistente não liga para a janela existir ou não. São dois processos desde a
+Etapa 6, e é essa a diferença que se vê ao usar.
 
 **Até a Etapa 5.5 a regressão morava num script de rascunho, e sumiu duas
 vezes.** Foi reconstruída das frases guardadas em `medicoes/etapa5-arquivos.md`

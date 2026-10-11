@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import argparse
 import dataclasses
+import math
 import sys
 import time
 from datetime import datetime
@@ -28,9 +29,11 @@ from pathlib import Path
 
 import numpy as np
 
-from jarvis import config, cronometro, microfone, tts, wakeword
+from jarvis import config, cronometro, eventos, microfone, tts, wakeword
 from jarvis.cronometro import Tempos
 from jarvis.nucleo.nucleo import ErroDoCerebro, Nucleo
+from jarvis.ponte import protocolo
+from jarvis.ponte.servidor import Servidor, ServidorOcupado
 from jarvis.registro import Registrador
 from jarvis.stt import ErroDeCuda, Transcritor
 from jarvis.vad import DetectorDeFala
@@ -87,6 +90,80 @@ class _PortaoFalso:
     def abrir_portao(self) -> None: ...
 
 
+class Terminal:
+    """O terminal como UM assinante dos eventos do ciclo (Etapa 6, passada 2).
+
+    Cada linha aqui é a mesma que o `Ciclo` imprimia direto até a Etapa 5.5, no
+    mesmo instante e com o mesmo texto. A promessa da passada 2 é que o terminal
+    fica idêntico — e ela foi conferida contra uma saída gravada antes da
+    refatoração, linha a linha.
+    """
+
+    _TIPOS = frozenset({
+        "acordou", "dormiu", "janela", "quase_acerto", "nao_entendi",
+        "voce_disse", "jarvis_disse", "tempos",
+    })
+
+    def __init__(self, nome_do_jarvis: str) -> None:
+        self.nome = nome_do_jarvis
+
+    def quer(self, tipo: str) -> bool:
+        return tipo in self._TIPOS
+
+    def receber(self, ev: eventos.Evento) -> None:
+        tipo = ev["ev"]
+        if tipo == "acordou":
+            if ev.get("por") == "texto":
+                _linha("ACORDOU", "pelo texto digitado")
+            else:
+                _linha("ACORDOU", f"score {ev['score']:.2f}")
+        elif tipo == "dormiu":
+            _linha("dormiu", ev["motivo"])
+        elif tipo == "janela":
+            _linha(ev["rotulo"], f"{ev['janela_s']:g} s")
+        elif tipo == "quase_acerto":
+            _linha("quase-acerto", f"pico {ev['pico']:.2f}  (áudio gravado)")
+        elif tipo == "nao_entendi":
+            _linha("não entendi", "(nada transcrito — janela renovada)")
+        elif tipo == "voce_disse":
+            if ev.get("origem") == "texto":
+                print(f'             você (texto): "{ev["texto"]}"')
+            else:
+                print(f'             você:   "{ev["texto"]}"')
+        elif tipo == "jarvis_disse":
+            print(f"             {self.nome}: \"{ev['texto']}\"")
+        elif tipo == "tempos":
+            print(
+                f"             {'':<8}stt {ev['stt_s']:.2f}s · "
+                f"núcleo {ev['nucleo_s']:.2f}s · "
+                f"tts {ev['tts_s']:.2f}s · "
+                f"latência {ev['latencia_s']:.2f}s"
+            )
+
+
+def _emissor_de_terminal(cfg: config.Config) -> eventos.Emissor:
+    emissor = eventos.Emissor()
+    terminal = Terminal(cfg.persona.nome.lower())
+    emissor.assinar(terminal.receber, quer=terminal.quer, nome="terminal")
+    return emissor
+
+
+def _nivel(bloco: bytes) -> float:
+    """O volume de um bloco do microfone, de 0 a 1, em escala de decibéis.
+
+    Em dB e não linear porque é assim que o ouvido percebe volume: numa escala
+    linear, a diferença entre falar baixo e falar normal quase não mexeria a
+    esfera. -60 dBFS é o chão, 0 dBFS o teto.
+    """
+    amostras = np.frombuffer(bloco, dtype=np.int16).astype(np.float32) / 32768.0
+    if amostras.size == 0:
+        return 0.0
+    rms = float(np.sqrt(np.mean(amostras * amostras)))
+    if rms < 1e-6:
+        return 0.0
+    return round(min(1.0, max(0.0, (20.0 * math.log10(rms) + 60.0) / 60.0)), 3)
+
+
 # ---------------------------------------------------------------------------
 # o ciclo
 # ---------------------------------------------------------------------------
@@ -112,6 +189,7 @@ class Ciclo:
         registrador: Registrador,
         portao,
         dispositivo_saida: int | None,
+        emissor: eventos.Emissor | None = None,
     ) -> None:
         self.cfg = cfg
         self.nucleo = nucleo
@@ -122,6 +200,9 @@ class Ciclo:
         self.registrador = registrador
         self.portao = portao
         self.dispositivo_saida = dispositivo_saida
+        # Quem escuta o que o ciclo faz. Sem emissor dado, é só o terminal: o
+        # --teste-ciclo e qualquer uso antigo continuam imprimindo igual.
+        self.emissor = emissor or _emissor_de_terminal(cfg)
 
         self.estado = Estado.DORMINDO
         self.prazo = 0.0
@@ -137,6 +218,14 @@ class Ciclo:
         self.tempo_dormindo = 0.0
         self.tempo_acordado = 0.0
 
+        # O estado que os clientes MOSTRAM. Mais fino que `self.estado`, que só
+        # conhece dormindo e acordado: acordado se divide em ouvindo, escutando,
+        # pensando e falando, porque é isso que o Léo quer saber olhando, sem
+        # precisar ouvir (Etapa 6).
+        self._visivel: str | None = None
+        self._blocos_acordado = 0
+        self._mudar_estado("dormindo")
+
     # -- transições --------------------------------------------------------
 
     def _contabilizar(self) -> None:
@@ -150,7 +239,7 @@ class Ciclo:
     def acordar(self, score: float) -> None:
         self._contabilizar()
         self.despertares += 1
-        _linha("ACORDOU", f"score {score:.2f}")
+        self.emissor.emitir("acordou", score=score)
         self.registrador.registrar_estado("acordou", score=round(score, 5))
 
         # O evento do disparo ainda está juntando o pós-roll, e daqui a uma
@@ -182,22 +271,29 @@ class Ciclo:
         # Confirmação ou busca pendente não atravessam o sono: senão a
         # primeira fala do próximo despertar viraria filtro de uma busca velha.
         self.nucleo.reiniciar_conversa()
-        _linha("dormiu", motivo)
+        self._mudar_estado("dormindo")
+        self.emissor.emitir("dormiu", motivo=motivo)
         self.registrador.registrar_estado("dormiu", motivo=motivo)
 
     def _renovar(self, rotulo: str) -> None:
         self.prazo = time.monotonic() + self.cfg.ciclo.janela_s
-        _linha(rotulo, f"{self.cfg.ciclo.janela_s:g} s")
+        self.emissor.emitir("janela", rotulo=rotulo, janela_s=self.cfg.ciclo.janela_s)
         self.registrador.registrar_estado(rotulo, janela_s=self.cfg.ciclo.janela_s)
+        self._mudar_estado("ouvindo")
 
-    def _falar(self, texto: str) -> tts.TemposDaFala:
+    def _falar(
+        self, texto: str, *, acao: str | None = None, perguntando: bool = False
+    ) -> tts.TemposDaFala:
         """Fala com o portão anti-eco fechado.
 
         Sem isto o microfone pega a própria voz do Jarvis: o VAD dispara e ele
         se responde, e — pior neste etapa — o wake word pode se ouvir e acordar
         de novo em laço.
         """
-        print(f"             {self.cfg.persona.nome.lower()}: \"{texto}\"")
+        self._mudar_estado("falando")
+        self.emissor.emitir(
+            "jarvis_disse", texto=texto, acao=acao, perguntando=perguntando
+        )
         self.portao.fechar_portao()
         try:
             return tts.falar(self.voz, texto, dispositivo=self.dispositivo_saida)
@@ -234,18 +330,27 @@ class Ciclo:
         if not evento.disparou:
             # Quase-acerto: não acordou, mas chegou perto. É o dado que explica
             # um acordar indevido meses depois.
-            _linha("quase-acerto", f"pico {evento.pico:.2f}  (áudio gravado)")
+            self.emissor.emitir("quase_acerto", pico=evento.pico)
 
     def _acordado(self, bloco: bytes) -> None:
         segmento = self.vad.processar(bloco)
+        self._talvez_nivel(bloco)
 
         if segmento is None:
+            # O que os clientes mostram enquanto você fala é o VAD, não uma
+            # suposição: `falando` é atualizado a cada bloco de 32 ms.
+            if self.vad.falando:
+                self._mudar_estado("escutando")
+            elif self._visivel == "escutando":
+                # A fala era curta demais e o VAD a descartou.
+                self._mudar_estado("ouvindo")
             # Nunca dormir no meio de uma frase: se a janela vencer com o VAD
             # em fala, esperar ele fechar o segmento.
             if time.monotonic() >= self.prazo and not self.vad.falando:
                 self.dormir(f"{self.cfg.ciclo.janela_s:g} s sem fala")
             return
 
+        self._mudar_estado("pensando")
         transcricao = self.transcritor.transcrever(segmento.audio)
 
         if not transcricao.texto:
@@ -253,7 +358,7 @@ class Ciclo:
             # alucinação é regra desde a Etapa 0), mas a janela reinicia: você
             # falou, e deixar o relógio correr puniria você por uma falha dele.
             self.vazias += 1
-            _linha("não entendi", "(nada transcrito — janela renovada)")
+            self.emissor.emitir("nao_entendi")
             self.registrador.registrar_descarte(
                 "transcricao vazia",
                 {"duracao_s": round(segmento.duracao_total_s, 3)},
@@ -261,13 +366,32 @@ class Ciclo:
             self._renovar("janela reiniciada")
             return
 
-        print(f'             você:   "{transcricao.texto}"')
+        self._responder(
+            transcricao.texto, origem="voz", segmento=segmento, transcricao=transcricao
+        )
+
+    def _responder(
+        self,
+        texto: str,
+        *,
+        origem: str,
+        segmento=None,
+        transcricao=None,
+    ) -> None:
+        """Entrega o texto ao núcleo, fala a resposta e renova a janela.
+
+        Um caminho só para voz e para texto digitado. Duplicar isto para o
+        texto seria escrever uma segunda chance de divergir — e a primeira
+        divergência seria justamente num log ou numa confirmação.
+        """
+        self._mudar_estado("pensando")
+        self.emissor.emitir("voce_disse", texto=texto, origem=origem)
 
         # Aqui o cliente entrega o texto e recebe texto. Tudo o que decide e
         # executa está do outro lado da linha do ESCOPO §4 — este laço não
         # sabe o que é atalho, tabela ou LLM.
         inicio_nucleo = time.monotonic()
-        resposta = self.nucleo.processar(transcricao.texto)
+        resposta = self.nucleo.processar(texto)
         nucleo_s = time.monotonic() - inicio_nucleo
         if resposta.acao:
             self.acoes += 1
@@ -281,35 +405,102 @@ class Ciclo:
             perguntando=resposta.perguntando,
             **resposta.diagnostico,
         )
-        fala = self._falar(resposta.texto)
+        fala = self._falar(
+            resposta.texto, acao=resposta.acao, perguntando=resposta.perguntando
+        )
 
-        tempos = Tempos(
-            duracao_segmento_s=segmento.duracao_total_s,
-            espera_silencio_s=segmento.espera_silencio_s,
-            stt_s=transcricao.segundos,
-            nucleo_s=nucleo_s,
-            tts_primeiro_s=fala.primeiro_audio_s,
-            tts_total_s=fala.sintese_total_s,
-            reproducao_s=fala.reproducao_s,
-        )
-        self.frases += 1
-        self.resumo.adicionar(tempos)
-        self.registrador.registrar_frase(
-            segmento=segmento,
-            texto=transcricao.texto,
-            tempos=tempos,
-            idioma=transcricao.idioma,
-            probabilidade_idioma=transcricao.probabilidade_idioma,
-        )
-        print(
-            f"             {'':<8}stt {transcricao.segundos:.2f}s · "
-            f"núcleo {nucleo_s:.2f}s · "
-            f"tts {fala.primeiro_audio_s:.2f}s · "
-            f"latência {tempos.latencia_percebida_s:.2f}s"
-        )
+        # O que o núcleo pediu para rodar DEPOIS da fala (Etapa 6.6). Este laço
+        # não sabe o que é — só sabe que agora pode, porque o `_falar` só
+        # retorna quando o áudio acabou de tocar. É o que faz "bloqueia o PC"
+        # falar antes de a tela apagar, sem ninguém adivinhar a duração da fala.
+        if resposta.depois is not None:
+            feito = resposta.depois()
+            self.registrador.registrar_estado(
+                "depois_da_fala",
+                acao=resposta.acao,
+                ok=getattr(feito, "ok", None),
+                mensagem=getattr(feito, "mensagem", ""),
+                detalhe=getattr(feito, "detalhe", None),
+            )
+
+        # Tempos e .wav só existem para o que foi FALADO: texto digitado não
+        # tem segmento, nem Whisper, nem espera de silêncio para medir.
+        if segmento is not None and transcricao is not None:
+            tempos = Tempos(
+                duracao_segmento_s=segmento.duracao_total_s,
+                espera_silencio_s=segmento.espera_silencio_s,
+                stt_s=transcricao.segundos,
+                nucleo_s=nucleo_s,
+                tts_primeiro_s=fala.primeiro_audio_s,
+                tts_total_s=fala.sintese_total_s,
+                reproducao_s=fala.reproducao_s,
+            )
+            self.frases += 1
+            self.resumo.adicionar(tempos)
+            self.registrador.registrar_frase(
+                segmento=segmento,
+                texto=transcricao.texto,
+                tempos=tempos,
+                idioma=transcricao.idioma,
+                probabilidade_idioma=transcricao.probabilidade_idioma,
+            )
+            self.emissor.emitir(
+                "tempos",
+                stt_s=transcricao.segundos,
+                nucleo_s=nucleo_s,
+                tts_s=fala.primeiro_audio_s,
+                latencia_s=tempos.latencia_percebida_s,
+            )
         # A janela reinicia quando ELE termina de responder, não quando você
         # termina de falar.
         self._renovar("janela reiniciada")
+
+    # -- texto digitado (Etapa 6) ------------------------------------------
+
+    def atender_texto(self, texto: str) -> None:
+        """Um pedido digitado num cliente, atendido como se tivesse sido falado.
+
+        **Roda na thread de áudio, nunca na do socket.** O Nucleo guarda estado
+        de conversa — confirmação pendente, busca aberta — e duas threads nele
+        fariam uma confirmação falada e uma digitada se atropelarem.
+
+        Decisão do Léo: digitar acorda mesmo dormindo, e a resposta sai na voz.
+        Sem a saudação: ela existe para confirmar que o wake word pegou, e aqui
+        o próprio texto já é o comando.
+        """
+        if self.estado is Estado.DORMINDO:
+            self._acordar_por_texto()
+        self.registrador.registrar_estado("texto_digitado", texto=texto)
+        self._responder(texto, origem="texto")
+
+    def _acordar_por_texto(self) -> None:
+        self._contabilizar()
+        self.despertares += 1
+        self.emissor.emitir("acordou", por="texto")
+        self.registrador.registrar_estado("acordou", por="texto")
+        pendente = self.ww.fechar_pendente()
+        if pendente is not None:
+            self._registrar_evento(pendente)
+        self.vad.reiniciar()
+        self.estado = Estado.ACORDADO
+
+    # -- o que os clientes veem --------------------------------------------
+
+    def _mudar_estado(self, nome: str) -> None:
+        """Emite o estado visível só quando ele MUDA."""
+        if nome != self._visivel:
+            self._visivel = nome
+            self.emissor.emitir("estado", estado=nome)
+
+    def _talvez_nivel(self, bloco: bytes) -> None:
+        """Um nível a cada dois blocos (~15 por segundo), e só se alguém quer.
+
+        Um a cada dois porque o bloco do Silero é de 32 ms: todo bloco seriam
+        31 mensagens por segundo, mais do que uma animação precisa.
+        """
+        self._blocos_acordado += 1
+        if self._blocos_acordado % 2 == 0 and self.emissor.quer("nivel"):
+            self.emissor.emitir("nivel", v=_nivel(bloco))
 
     # -- fim ---------------------------------------------------------------
 
@@ -417,6 +608,51 @@ def _montar(cfg: config.Config):
     return detector_vad, detector_ww, transcritor, voz, nucleo
 
 
+def _abrir_ponte(
+    cfg: config.Config, registrador: Registrador, emissor: eventos.Emissor
+) -> Servidor | None:
+    """Abre o canal para os outros clientes (Etapa 6).
+
+    **Nunca impede o assistente de subir.** Desligada, ocupada por outro Jarvis
+    ou com erro, ele avisa e segue — a voz funciona igual sem cliente nenhum.
+    """
+    if not cfg.ponte.ligada:
+        _partida("ponte", "desligada no config.toml")
+        return None
+    caminho = protocolo.caminho_socket(cfg.ponte.socket)
+    servidor = Servidor(
+        caminho,
+        fila_max=cfg.ponte.fila_max,
+        sessao={
+            "v": protocolo.VERSAO,
+            "nome": cfg.persona.nome,
+            "log": str(registrador.caminho_jsonl),
+        },
+    )
+    try:
+        servidor.iniciar()
+    except ServidorOcupado:
+        servidor.encerrar()
+        _partida("ponte", "OCUPADA — outro Jarvis já responde nela; seguindo sem")
+        return None
+    except OSError as e:
+        servidor.encerrar()
+        _partida("ponte", f"não abriu ({e}); seguindo sem")
+        return None
+    except Exception as e:
+        # Defeito da própria ponte, e não do sistema. Pego aqui de propósito:
+        # o teste da passada 2 achou um — com o socket deixado por um Jarvis
+        # morto, a ponte caía em AttributeError, e esta função, que só
+        # esperava OSError, teria derrubado o assistente inteiro na subida
+        # seguinte a um travamento. É a promessa da docstring virando código.
+        servidor.encerrar()
+        _partida("ponte", f"defeito ao abrir ({e.__class__.__name__}: {e}); seguindo sem")
+        return None
+    emissor.assinar(servidor.receber, quer=servidor.quer, nome="ponte")
+    _partida("ponte", str(caminho))
+    return servidor
+
+
 # ---------------------------------------------------------------------------
 # modos
 # ---------------------------------------------------------------------------
@@ -516,6 +752,8 @@ def conversar(cfg: config.Config) -> int:
         return 1
 
     registrador = Registrador.criar(cfg, prefixo="jarvis")
+    emissor = _emissor_de_terminal(cfg)
+    ponte = _abrir_ponte(cfg, registrador, emissor)
 
     mic: microfone.Microfone | None = None
     ciclo: Ciclo | None = None
@@ -541,6 +779,7 @@ def conversar(cfg: config.Config) -> int:
                 registrador=registrador,
                 portao=mic,
                 dispositivo_saida=indice_saida,
+                emissor=emissor,
             )
             print(REGUA)
             _linha("dormindo", 'diga "hey Jarvis"  (ctrl+c encerra)')
@@ -549,6 +788,13 @@ def conversar(cfg: config.Config) -> int:
                 bloco = mic.ler_bloco()
                 if bloco is not None:
                     ciclo.passo(bloco)
+                # Texto digitado num cliente. Atendido AQUI, na thread de áudio,
+                # e só com o VAD fora de fala: quem digita enquanto fala espera
+                # a frase acabar, em vez de ter a própria voz cortada.
+                if ponte is not None and not ciclo.vad.falando:
+                    texto = ponte.proximo_texto()
+                    if texto is not None:
+                        ciclo.atender_texto(texto)
 
     except KeyboardInterrupt:
         print()
@@ -567,6 +813,8 @@ def conversar(cfg: config.Config) -> int:
         if mic is not None and mic.estouros:
             print(f"  blocos perdidos pelo PortAudio: {mic.estouros}")
         print(f"  registro em {registrador.caminho_jsonl}\n")
+        if ponte is not None:
+            ponte.encerrar()
     return 0
 
 

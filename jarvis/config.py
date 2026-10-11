@@ -27,6 +27,8 @@ class Persona:
     busca_muitos_ainda: str
     busca_nada: str
     busca_mesmo_lugar: str
+    bloqueando: str
+    tela_sem_comando: str
     qual_musica: str
     musica_nao_achei: str
     musica_nao_saiu: str
@@ -170,6 +172,18 @@ class Log:
 
 
 @dataclass(frozen=True)
+class Ponte:
+    ligada: bool
+    socket: str
+    fila_max: int
+
+
+@dataclass(frozen=True)
+class Sistema:
+    comando_bloquear: list[str]
+
+
+@dataclass(frozen=True)
 class Config:
     persona: Persona
     audio: Audio
@@ -185,6 +199,8 @@ class Config:
     arquivos: Arquivos
     busca: Busca
     log: Log
+    ponte: Ponte
+    sistema: Sistema
     raiz: Path
 
     @property
@@ -215,6 +231,8 @@ _SECOES = {
     "arquivos": Arquivos,
     "busca": Busca,
     "log": Log,
+    "ponte": Ponte,
+    "sistema": Sistema,
 }
 
 

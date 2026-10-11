@@ -51,6 +51,14 @@ busca_nada = "Não achei nada chamado {termo}."
 busca_mesmo_lugar = "Achei {n} no mesmo lugar, com nomes parecidos: {nomes}. Qual deles?"
 
 # Mídia (Etapa 3).
+# Bloquear a tela (Etapa 6.6). A fala vem ANTES do travamento: sem ela a tela
+# apaga e você não sabe se foi isso que ele entendeu. Curta de propósito — são
+# 0,74 s de áudio, medidos.
+bloqueando = "Bloqueando."
+# Quando o programa de bloquear não existe nesta máquina. Conferido antes de
+# falar, para ele nunca dizer "bloqueando" e não bloquear.
+tela_sem_comando = "Não consigo bloquear a tela aqui."
+
 qual_musica = "Qual música?"
 musica_nao_achei = "Não achei nada no YouTube com {termo}."
 
@@ -479,3 +487,34 @@ salvar_audio = true
 # Teto de arquivos em logs/audio-wake/. Ao passar do limite, o mais antigo é
 # apagado. Processo que fica ligado o dia todo não pode crescer sem limite.
 max_audios_wake = 200
+
+[ponte]
+# O canal entre o assistente e os outros clientes — a interface da Etapa 6, e o
+# celular depois. Um socket unix: sem porta, sem firewall, e só o próprio
+# usuário entra.
+#
+# Desligar aqui não muda nada no assistente de voz; ele funciona igual sem
+# cliente nenhum conectado. E se a ponte não abrir, ele avisa e sobe sem ela.
+ligada = true
+
+# Vazio = $XDG_RUNTIME_DIR/jarvis.sock (/run/user/1000/jarvis.sock).
+socket = ""
+
+# Eventos esperando por cliente antes de a ponte desistir dele. O nível do
+# microfone sai primeiro quando enche; se encher mesmo assim, o cliente não
+# está lendo e é desligado — para ele nunca segurar o laço de áudio.
+fila_max = 256
+
+
+[sistema]
+# Como travar a tela. Vem do config, e não chumbado no código, pelo mesmo
+# motivo dos comandos de abrir em [acoes]: outra máquina usa outro comando, e
+# os testes apontam isto para um programa inofensivo em vez de travar a tela
+# de verdade.
+#
+# Conferido em set/2026 nesta máquina: /usr/bin/cinnamon-screensaver-command
+# existe, vem do pacote cinnamon-screensaver, e o daemon responde no barramento.
+#
+# NÃO existe comando de destravar, e é decisão fechada: um assistente que
+# destrava por voz é uma senha que qualquer um grita.
+comando_bloquear = ["cinnamon-screensaver-command", "--lock"]

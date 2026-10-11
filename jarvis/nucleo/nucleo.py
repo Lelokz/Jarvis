@@ -15,6 +15,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from collections.abc import Callable
+
 from ..config import Config
 import datetime as dt
 
@@ -68,6 +70,13 @@ class Resposta:
     # Tudo que o cliente precisa para registrar o que aconteceu por dentro.
     # O núcleo não escreve log — devolve os dados e quem grava é quem já grava.
     diagnostico: dict = field(default_factory=dict)
+    # O que roda DEPOIS de o cliente terminar de falar (Etapa 6.6).
+    #
+    # O cliente não sabe o que é: só sabe "agora pode". Quem executa continua
+    # sendo o núcleo — a função fechada é código daqui. Bloquear a tela é o
+    # primeiro caso, e existe porque falar antes é o retorno de que ele
+    # entendeu o comando: sem isso a tela apaga e você não sabe o que houve.
+    depois: Callable[[], object] | None = None
 
 
 class Nucleo:
@@ -262,6 +271,13 @@ class Nucleo:
                  "qual_player": cru.qual},
                 texto,
             )
+
+        # Comando de tela cru (Etapa 6.6), pelo mesmo motivo da lista de mídia:
+        # gatilho fixo em tabela custa 0 ms e não dá ao modelo a chance de
+        # errar o roteamento. Vem depois da de mídia e pela mesma ordem de
+        # defesa — qualquer pendente acima já consumiu a fala.
+        if sistema.comando_de_tela(texto) is not None:
+            return self._bloquear_tela(texto)
 
         interpretacao = self.cerebro.interpretar(texto)
         return self._despachar(interpretacao, texto)
@@ -888,6 +904,35 @@ class Nucleo:
             r.mensagem,
             acao=f"renomear:{caminho}" if r.ok else None,
             diagnostico=diag,
+        )
+
+    # -- tela (Etapa 6.6) ---------------------------------------------------
+
+    def _bloquear_tela(self, texto: str) -> Resposta:
+        """Fala primeiro, tranca depois — e é por isso que a trava vai no `depois`.
+
+        O `processar()` executa e devolve texto; quem fala é o cliente, depois.
+        Travando aqui dentro, a tela apagaria ANTES da fala, que é o contrário
+        do pedido.
+
+        **Sem confirmação falada**, e a §2.3 é quem decide: *esta ação pode
+        machucar ou destruir alguma coisa?* Bloquear é reversível e não destrói
+        nada. Desligar e reiniciar seriam destrutivos, e não estão aqui.
+
+        **A validação vem antes da fala; a execução, depois.** Sem o programa na
+        máquina ele recusa agora, em vez de dizer "bloqueando" e não bloquear.
+        """
+        diag = {"origem": "comando cru de tela", "dito": texto,
+                "houve_tool_call": False, "funcao": "bloquear_tela"}
+        comando = self.cfg.sistema.comando_bloquear
+        if not sistema.pode_bloquear(comando):
+            diag["comando_ausente"] = comando[0] if comando else ""
+            return Resposta(self.cfg.persona.tela_sem_comando, diagnostico=diag)
+        return Resposta(
+            self.cfg.persona.bloqueando,
+            acao="bloquear_tela",
+            diagnostico=diag,
+            depois=lambda: sistema.bloquear_tela(comando),
         )
 
     def _desfazer(self, diag: dict) -> Resposta:

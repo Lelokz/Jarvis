@@ -17,7 +17,10 @@ from __future__ import annotations
 import re
 import shutil
 import subprocess
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
+
+from .atalhos import normalizar
 
 
 @dataclass(frozen=True)
@@ -195,3 +198,78 @@ def aplicar_volume(novo: int) -> Resultado:
     if _pactl(["set-sink-volume", _SINK, f"{novo}%"]) is None:
         return Resultado(False, "Não consegui mudar o volume.")
     return Resultado(True, f"Volume em {novo}.", {"de": atual, "para": novo})
+
+
+# ---------------------------------------------------------------------------
+# bloquear a tela (Etapa 6.6)
+# ---------------------------------------------------------------------------
+
+# A fala INTEIRA, normalizada, tem que casar — mesma regra da lista de mídia, e
+# pelo mesmo motivo: comando curto em lista fechada custa 0 ms e tira do modelo
+# a chance de errar. Foi um erro desses que fez "para a música" cair no `abrir`.
+#
+# As chaves vêm sem artigo porque o `normalizar()` já os derruba: "bloqueia o
+# PC" chega aqui como "bloqueia pc".
+#
+# **A palavra solta ficou de fora**, decisão do Léo: "bloqueia" e "trava"
+# sozinhos não casam. Fala de uma palavra é onde o Whisper mais erra, e aqui o
+# erro apaga a tela no meio do que ele estiver fazendo — é a lição do "Para!".
+COMANDOS_DE_TELA = {
+    "bloqueia pc": "bloquear",
+    "bloqueia computador": "bloquear",
+    "bloqueia tela": "bloquear",
+    "bloqueia maquina": "bloquear",
+    "bloquear pc": "bloquear",
+    "bloquear tela": "bloquear",
+    "trava pc": "bloquear",
+    "trava computador": "bloquear",
+    "trava tela": "bloquear",
+    "travar tela": "bloquear",
+    "tranca pc": "bloquear",
+    "tranca tela": "bloquear",
+}
+
+
+def comando_de_tela(falado: str) -> str | None:
+    """A ação de tela, quando a fala inteira É o comando. None quando não é.
+
+    Casamento contra a fala toda, nunca por pedaço: "bloqueia o relatório"
+    normaliza para "bloqueia relatorio" e não casa com nada.
+    """
+    return COMANDOS_DE_TELA.get(normalizar(falado))
+
+
+def pode_bloquear(comando: Sequence[str]) -> bool:
+    """Se o programa de bloquear existe nesta máquina.
+
+    Conferido ANTES de falar. O contrário — dizer "bloqueando" e não bloquear —
+    é o tipo de mentira que este projeto já corrigiu duas vezes.
+    """
+    return bool(comando) and shutil.which(comando[0]) is not None
+
+
+def bloquear_tela(
+    comando: Sequence[str],
+    executar: Callable[..., subprocess.CompletedProcess] = subprocess.run,
+) -> Resultado:
+    """Tranca a tela. **Não existe destrancar, e isso é decisão fechada.**
+
+    Depois de travado, o assistente fica do lado de dentro do bloqueio e não
+    recebe comando — e um assistente que destrava por voz é uma senha que
+    qualquer um grita. O desbloqueio é a senha digitada.
+
+    O `executar` é injetável para o teste poder provar que o comando certo
+    seria disparado **sem travar a tela de ninguém**.
+    """
+    if not pode_bloquear(comando):
+        faltando = comando[0] if comando else "(nenhum comando configurado)"
+        return Resultado(False, "Não consigo bloquear a tela aqui.",
+                         {"faltando": faltando})
+    try:
+        saida = executar(list(comando), capture_output=True, text=True, timeout=10)
+    except (OSError, subprocess.SubprocessError) as e:
+        return Resultado(False, f"Não consegui bloquear a tela: {e}")
+    if saida.returncode != 0:
+        return Resultado(False, "O bloqueio de tela recusou o comando.",
+                         {"codigo": saida.returncode})
+    return Resultado(True, "", {"comando": list(comando)})
