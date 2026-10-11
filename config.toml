@@ -443,13 +443,15 @@ motor = "kokoro"
 # Piper: pt_BR-faber-medium, pt_BR-cadu-medium, pt_BR-jeff-medium.
 voz = "pm_alex"
 
-# Maior = mais devagar.
-velocidade = 1.0
+# Maior = mais devagar (0.769 = 1,3x mais rápido, escolhido de ouvido pelo
+# Léo entre 1,15x, 1,25x, 1,3x, 1,35x e 1,5x).
+velocidade = 0.769
 
 # Só Kokoro. "jarvis" = eco curto de capacete + reforço nos graves; "" = puro.
 efeito = "jarvis"
-# Semitons; negativo = mais grave. O Léo ouviu -2, -3 e -4: graves demais.
-tom = -1
+# Semitons; negativo = mais grave. O Léo ouviu -4, -3, -2 e -1 (graves
+# demais) e 0; ficou com meio semitom abaixo.
+tom = -0.5
 
 [wakeword]
 # Escolhido e medido na Etapa 0.5: 20/20 de acerto na pronúncia inglesa

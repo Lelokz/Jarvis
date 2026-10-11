@@ -55,8 +55,8 @@ entende a intenção, faz, e sugere jeitos melhores.
 
 ## 3. Persona
 
-Nome **Jarvis**, voz masculina: **Kokoro `pm_alex` com "efeito jarvis" e 1
-semitom abaixo** (out/2026, escolhida de ouvido pelo Léo entre Piper, a voz do
+Nome **Jarvis**, voz masculina: **Kokoro `pm_alex` com "efeito jarvis", meio
+semitom abaixo e 1,3x mais rápida** (out/2026, escolhida de ouvido pelo Léo entre Piper, a voz do
 filme e Kokoro). Detalhes em §4. Fala como pessoa
 normal: nem formal, nem cheio de gíria. Respostas curtas: é voz.
 
@@ -177,8 +177,10 @@ faber):
   seria clonar um dublador real sem autorização — decidido não fazer.
 - **Efeito "jarvis"**: ecos curtos de capacete + reforço nos graves. A
   primeira versão realçava agudos e ficou "afeminada" (palavra do Léo).
-- **Tom -1 semitom**: o Kokoro fala mais rápido e o áudio é esticado de
-  volta, engrossando sem ficar lento. -2, -3 e -4 ficaram graves demais.
+- **Tom -0,5 semitom**: o Kokoro fala mais rápido e o áudio é esticado de
+  volta, engrossando sem ficar lento. -4 a -1 ficaram graves demais.
+- **Velocidade 1,3x** (`velocidade = 0.769`): a normal era lenta para o Léo;
+  ouviu 1,15x, 1,25x, 1,35x e 1,5x e ficou com 1,3x.
 - **Na GPU**: 0,27 s para 7,4 s de fala (CPU: 4,2 s); a primeira frase toca
   em ~0,3 s, as outras são geradas enquanto ela fala. `onnxruntime-gpu`
   **1.22** (CUDA 12, a do Whisper); o wake word continua no mesmo motor, pela
