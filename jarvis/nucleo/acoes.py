@@ -90,7 +90,7 @@ def abrir_caminho(caminho: Path, comandos: Comandos) -> Resultado:
 _CLASSE = re.compile(r'\("([^"]*)" "([^"]*)"\)')
 
 
-def _classe_da_janela(desktop: str) -> str:
+def classe_da_janela(desktop: str) -> str:
     ini = configparser.RawConfigParser(strict=False, interpolation=None)
     try:
         ini.read(desktop, encoding="utf-8")
@@ -144,7 +144,7 @@ def executar(atalho: Atalho, comandos: Comandos) -> Resultado:
         comando = ["gio", "launch", atalho.alvo]
         if shutil.which("gio") is None or not Path(atalho.alvo).is_file():
             return Resultado(False, f"Não consegui abrir {atalho.nome}.", comando)
-        classe = _classe_da_janela(atalho.alvo)
+        classe = classe_da_janela(atalho.alvo)
         ja_rodava = shutil.which("xwininfo") is not None and _no_x(classe)
         try:
             _abrir(comando)

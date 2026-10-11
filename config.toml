@@ -67,6 +67,13 @@ memoria_confirmar = "Esqueço isto: {fato}?"
 memoria_esqueci = "Esqueci."
 memoria_mantive = "Tá, continuo lembrando."
 
+# Fechar programas ("fecha o Discord"). Fechar é o mesmo que clicar no ×.
+fechei = "Fechei {nome}."
+fechar_nada = "Não tem nada aberto chamado {nome}."
+fechar_varias = "Tem {n} janelas de {nome} abertas. Fecho todas?"
+fechar_navegador = "Isso fecha a janela inteira do navegador, com as outras abas. Fecho?"
+fechar_mantive = "Tá, deixei aberto."
+
 # Quando você manda ele dormir ("dorme aí"). Curta: ele fala e volta a dormir
 # na hora, sem esperar a janela de 30s.
 indo_dormir = "Tá bom."

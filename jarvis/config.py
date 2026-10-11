@@ -36,6 +36,11 @@ class Persona:
     memoria_confirmar: str
     memoria_esqueci: str
     memoria_mantive: str
+    fechei: str
+    fechar_nada: str
+    fechar_varias: str
+    fechar_navegador: str
+    fechar_mantive: str
     qual_musica: str
     musica_nao_achei: str
     musica_nao_saiu: str

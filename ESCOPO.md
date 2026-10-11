@@ -110,6 +110,7 @@ pacotes (**não** instalar `xapp-sn-watcher`: conflita com o Mint).
 | você diz | o que acontece |
 |---|---|
 | "abre o Discord", "abre o Kabum", "abre o projeto Loft" | abre **qualquer programa instalado, favorito do Brave ou projeto do VS Code**, sem cadastro (ver abaixo) |
+| "fecha o Discord", "fecha a pasta Downloads", "fecha essa janela" | fecha como o × (o programa pergunta se quiser salvar); **várias janelas ou uma aba do navegador → pergunta antes** |
 | "abre gravações", "abre o loft" | o que está no `atalhos.toml` ganha de tudo |
 | "abre o relatório" | nada com esse nome: **busca** no disco e pergunta qual se achar vários |
 | "toca X", "toca X no YouTube" | toca no mpv (só áudio) ou no Brave; só diz "tocando" depois do som sair |
@@ -149,6 +150,12 @@ Casou bem e sem concorrente, **ele abre e diz o nome** do que abriu, mesmo sem
 certeza total (abrir é inofensivo). Dois parecidos ("whatsapp": ZapZap ou
 WhatsApp Web?) → pergunta. Exceção: **programa ganha de site** ("whatsapp" é
 o ZapZap, "minecraft" é o launcher); "whatsapp web" dito inteiro abre o site.
+
+**Fechar** (`janelas.py`, via `wmctrl`): o nome casa primeiro com um programa
+do catálogo (todas as janelas dele) e depois com o título das janelas ("pasta
+Downloads" → a janela do Nemo chamada Downloads). Nunca fecha a área de
+trabalho (`nemo-desktop`) nem a janela do Jarvis. Programa de bandeja (ZapZap)
+só esconde a janela e continua rodando, igual ao ×.
 
 Arquivos editáveis à mão: `atalhos.toml` (o que ele abre), `config.toml`
 (frases, pastas liberadas e vetadas, limites), `memoria.txt` (o que ele sabe

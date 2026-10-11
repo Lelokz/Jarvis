@@ -27,6 +27,7 @@ from .ancoragem import ancoragem
 from .atalhos import Atalho, Casamento, Desfecho, Tabela, normalizar
 from .busca import Achado, Buscador, pastas_que_distinguem
 from .catalogo import Catalogo
+from . import janelas
 from .cerebro import Cerebro, Confirmacao, ErroDoCerebro
 
 __all__ = ["Nucleo", "Resposta", "ErroDoCerebro"]
@@ -177,6 +178,8 @@ class Nucleo:
         self.memoria = Memoria(cfg.raiz / "memoria.txt")
         # O fato que ele mandou esquecer, esperando o "pode".
         self._esquecimento_pendente: str | None = None
+        # Janelas esperando o "pode" para fechar: (janelas, nome falado).
+        self._fechamento_pendente: tuple[list, str] | None = None
         self._diag: dict = {}
 
     # ----------------------------------------------------------------------
@@ -267,6 +270,9 @@ class Nucleo:
         if self._esquecimento_pendente is not None:
             return self._confirmar_esquecimento(texto)
 
+        if self._fechamento_pendente is not None:
+            return self._confirmar_fechamento(texto)
+
         # Comando de mídia cru, sem objeto: não passa pelo modelo.
         #
         # Vem DEPOIS de todos os pendentes acima, e a ordem é a defesa: "pausa"
@@ -308,6 +314,10 @@ class Nucleo:
         fato = pedido_de_esquecer(texto)
         if fato:
             return self._esquecer(fato, texto)
+
+        alvo = janelas.pedido_de_fechar(texto)
+        if alvo:
+            return self._fechar(alvo, texto)
 
         interpretacao = self.cerebro.interpretar(texto)
         return self._despachar(interpretacao, texto)
@@ -776,6 +786,62 @@ class Nucleo:
             diagnostico={**diag, "seguiu_para": nova.diagnostico},
         )
 
+    # -- fechar programas ----------------------------------------------------
+
+    def _fechar(self, alvo: str, dito: str) -> Resposta:
+        diag = {"origem": "fechar", "dito": dito, "alvo": alvo}
+        if janelas.e_a_janela_ativa(alvo):
+            j = janelas.ativa()
+            if j is None:
+                return Resposta(self._frase("fechar_nada", nome=alvo), diagnostico=diag)
+            return self._fechar_agora([j], j.titulo.split(" - ")[-1] or "a janela", diag)
+
+        lista, nome, por_titulo = [], alvo, False
+        casamento = self.tabela.casar(alvo)
+        a = casamento.atalho
+        if (a is not None and a.tipo == "app" and not casamento.empatados
+                and casamento.pontuacao >= CHUTE):
+            lista = janelas.da_classe(acoes.classe_da_janela(a.alvo))
+            nome = a.nome
+        if not lista:
+            lista, por_titulo = janelas.por_titulo(alvo), True
+        diag["janelas"] = [f"{j.classe} | {j.titulo}" for j in lista]
+        if not lista:
+            return Resposta(self._frase("fechar_nada", nome=alvo), diagnostico=diag)
+
+        navegador = por_titulo and any(
+            n in j.classe.lower() for j in lista for n in ("brave", "firefox", "chrom"))
+        if len(lista) == 1 and not navegador:
+            return self._fechar_agora(lista, nome, diag)
+
+        # Várias janelas, ou uma aba do navegador (que leva a janela inteira):
+        # o que se perde é mais do que ele pediu. Pergunta antes (§2.3).
+        self._fechamento_pendente = (lista, nome)
+        chave = "fechar_navegador" if navegador else "fechar_varias"
+        self._pergunta = self._frase(chave, n=len(lista), nome=nome)
+        return Resposta(self._pergunta, perguntando=True, diagnostico=diag)
+
+    def _fechar_agora(self, lista: list, nome: str, diag: dict) -> Resposta:
+        feitas = janelas.fechar(lista)
+        diag["fechadas"] = feitas
+        return Resposta(self._frase("fechei", nome=nome),
+                        acao=f"fechar:{nome} ({feitas} janela{'s' if feitas > 1 else ''})",
+                        diagnostico=diag)
+
+    def _confirmar_fechamento(self, texto: str) -> Resposta:
+        (lista, nome), self._fechamento_pendente = self._fechamento_pendente, None
+        resposta = self.cerebro.confirmar(texto, self._pergunta)
+        diag = {"origem": "confirmação de fechar", "dito": texto,
+                "confirmacao": resposta.name, "nome": nome}
+        if resposta is Confirmacao.SIM:
+            return self._fechar_agora(lista, nome, diag)
+        if resposta is Confirmacao.NAO or self.cerebro.resposta_solta(texto):
+            return Resposta(self.cfg.persona.fechar_mantive, diagnostico=diag)
+        nova = self.processar(texto)
+        return Resposta(f"{self.cfg.persona.fechar_mantive} {nova.texto}".strip(),
+                        acao=nova.acao, perguntando=nova.perguntando,
+                        diagnostico={**diag, "seguiu_para": nova.diagnostico})
+
     def _largar_tudo(self) -> str | None:
         """Solta tudo que estiver pendente. Devolve o que largou, ou None.
 
@@ -794,6 +860,8 @@ class Nucleo:
             o_que = "o volume"
         elif self._esquecimento_pendente is not None:
             o_que = "o esquecer"
+        elif self._fechamento_pendente is not None:
+            o_que = "o fechar"
         elif self._pendente is not None:
             o_que = "a pergunta"
         elif (self._esperando_nome or self._esperando_musica is not None
@@ -1529,6 +1597,7 @@ class Nucleo:
         self._esperando_destino = None
         self._esperando_qual_destino = None
         self._esquecimento_pendente = None
+        self._fechamento_pendente = None
         # O desfazer morre junto, e isto é o desenho — não mais uma limitação
         # à espera de histórico em disco. A Etapa 5.5 mediu a alternativa e o
         # Léo decidiu contra: pilha com alcance de horas obriga a desfazer
