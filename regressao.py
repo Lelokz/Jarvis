@@ -270,7 +270,14 @@ def rodar(cerebro, conjunto: Conjunto) -> tuple[int, int, list[str]]:
             # teste não pode ser lida à luz da outra. Recomeça a cada caso.
             if hasattr(cerebro, "recomecar_conversa"):
                 cerebro.recomecar_conversa()
-            vistos[cerebro.interpretar(caso.frase).funcao] += 1
+            i = cerebro.interpretar(caso.frase)
+            # No modo Claude, agenda e status do PC viraram LEITURAS (o
+            # resultado volta para ele): contam como a ferramenta de antes.
+            rotulo = i.funcao
+            if rotulo is None and getattr(i, "leituras", ()):
+                rotulo = {"agenda": "agenda_do_dia", "pc": "status_pc"}.get(
+                    i.leituras[0][0], "ler:" + i.leituras[0][0])
+            vistos[rotulo] += 1
         acertou = vistos[caso.esperado]
         minimo = conjunto.rodadas if caso.minimo is None else caso.minimo
         acertos += acertou

@@ -33,3 +33,6 @@ memoria.tmp
 # Diário de conversas do Jarvis: a vida do Léo, só na máquina.
 conversas.jsonl
 conversa-atual.jsonl
+
+# Link secreto iCal da agenda do Léo: quem tiver vê os eventos dele.
+agenda_ical.txt

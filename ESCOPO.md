@@ -147,6 +147,22 @@ eu sei de você" (os fatos do `memoria.txt`) e "conversas" (tema, dia e hora,
 resumo; mais nova primeiro). Pede ao assistente pelo pedido `memoria` da
 ponte. A conversa ainda aberta só aparece depois de fechar no diário.
 
+**Leituras: o resultado volta para o Claude** (out/2026). Agenda, clima e
+status do PC não falam mais frase pronta: o Claude pede as leituras (várias
+de uma vez, no campo `ler`), o núcleo executa e devolve, e ele responde do
+jeito dele. É o que faz "tenho algo no sábado? e vai fazer sol?" funcionar
+sem programar a frase. No "bom dia" o núcleo já sabe o que ler e vai ao
+Claude uma vez só (5,6 s → 3,5 s); ao acordar, agenda e clima já são
+baixados em segundo plano.
+
+- **Agenda por link iCal** (`agenda_ical.py`): o "endereço secreto no formato
+  iCal" do Google Agenda, em `agenda_ical.txt`, **fora do git** (quem tiver o
+  link vê os eventos). Não expira, ao contrário do login do Google. Eventos
+  que se repetem saem certos (`recurring_ical_events`). Só lê; criar evento
+  continua pelo login, que expira em 7 dias.
+- **Clima pelo Open-Meteo** (`clima.py`): grátis, sem cadastro. A cidade vem
+  da memória ("Eu moro em Florianópolis, no bairro Pantanal").
+
 **Voltar para o qwen** é uma linha: `cerebro = "ollama"` no `[llm]` do
 `config.toml`. O Ollama continua instalado, só não carrega mais nada.
 
@@ -181,7 +197,10 @@ pacotes (**não** instalar `xapp-sn-watcher`: conflita com o Mint).
 | "pausa", "continua", "próxima", "aumenta o volume" | controle de mídia; "do Brave"/"do computador" escolhe o player |
 | "volume 80" | **pergunta antes** (acima de 70) |
 | "qual a temperatura da GPU" | status da GPU |
-| "marca dentista amanhã às 15h", "o que tenho hoje" | Google Agenda: cria e lista |
+| **"bom dia"**, "como tá meu dia?" | **briefing**: agenda de hoje (o que ainda falta) + tempo, numa fala curta (~3 s) |
+| "o que eu tenho amanhã?", "vai chover sábado?", "tenho algo na terça e vai fazer sol?" | lê agenda e/ou clima e responde com as palavras dele |
+| "como tá a GPU?" | lê o status e responde |
+| "marca dentista amanhã às 15h" | Google Agenda: cria (pelo login do Google, que expira em 7 dias) |
 | "renomeia X pra Y", "move X pra Y", "copia X pra Y" | **pergunta antes**; só em pastas liberadas no `config.toml` |
 | "cria a pasta X em Y" | cria |
 | "desfaz" | desfaz a última renomeação/movimento (esquece quando ele dorme) |
@@ -296,8 +315,9 @@ Jarvis é o teste que vale; o resto se confere olhando.
   frase sem leitura possível.
 - Comando que vai ao Claude leva ~1,5 s a mais que no qwen. O que se usa
   muito deve ir para lista fechada (como foi o "abre X").
-- **A agenda expira a cada 7 dias** (app do Google em modo "Testing"); quando
-  expira, rodar `autorizar_google.py`. Saída: duas páginas no GitHub Pages
+- **Criar evento na agenda expira a cada 7 dias** (login do Google em modo
+  "Testing"); quando expira, rodar `autorizar_google.py`. Ler não depende
+  disso (vai pelo link iCal). Saída definitiva: duas páginas no GitHub Pages
   e publicar o app.
 - Data com nome de mês ("31 de dezembro") não é entendida; a confirmação
   denuncia antes de marcar.
@@ -342,9 +362,9 @@ Jarvis é o teste que vale; o resto se confere olhando.
 
 Sem ordem rígida: faz, o Léo testa o que é de voz, segue.
 
-1. **Briefing da manhã:** "bom dia" → agenda + clima + e-mails importantes
-   num resumo falado. E-mail é priorizar, não ler tudo, e cuidado com o que
-   sai em voz alta (tem gente na casa).
+1. **Briefing da manhã:** feito com agenda + clima (out/2026). Falta o
+   **e-mail** (por senha de app do Gmail, IMAP, que não expira): priorizar,
+   não ler tudo, e cuidado com o que sai em voz alta (tem gente na casa).
 2. ~~API do Claude, híbrido~~ **Feito de outro jeito (out/2026):** Opus 5.5
    pela assinatura via Claude Code, sem qwen. Ver §4.
 3. **Jarvis no celular:** PC como servidor, Tailscale (por causa do CGNAT),

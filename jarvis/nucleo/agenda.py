@@ -54,6 +54,12 @@ class Agenda:
         self.cfg = cfg
         self.credenciais = raiz / "credenciais_google.json"
         self.token = raiz / "token_google.json"
+        self.raiz = raiz
+        # Uma instância só: o cache do .ics (5 min) vive nela. Criar uma por
+        # pergunta baixava o calendário inteiro toda vez (medido: o "bom dia"
+        # levava 7 s).
+        from .agenda_ical import AgendaIcal
+        self.ical = AgendaIcal(raiz / "agenda_ical.txt", cfg.fuso)
         self._servico = None
 
     # -- autenticação ------------------------------------------------------
@@ -155,6 +161,9 @@ class Agenda:
         )
 
     def do_dia(self, dia: dt.date) -> list[Evento]:
+        # Ler pelo link iCal quando existir: não expira (o OAuth cai em 7 dias).
+        if self.ical.disponivel():
+            return self.ical.do_dia(dia)
         inicio = dt.datetime.combine(dia, dt.time.min)
         fim = dt.datetime.combine(dia, dt.time.max)
         try:

@@ -13,6 +13,7 @@ Este módulo **não imprime e não fala**: devolve texto.
 from __future__ import annotations
 
 import re
+import threading
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -30,7 +31,7 @@ from .ancoragem import ancoragem
 from .atalhos import Atalho, Casamento, Desfecho, Tabela, normalizar
 from .busca import Achado, Buscador, pastas_que_distinguem
 from .catalogo import Catalogo
-from . import janelas
+from . import clima, janelas
 from .cerebro import Cerebro, Confirmacao, ErroDoCerebro
 from .cerebro_claude import CerebroClaude, LimiteAtingido, SemInternet
 
@@ -84,6 +85,15 @@ class Resposta:
     # primeiro caso, e existe porque falar antes é o retorno de que ele
     # entendeu o comando: sem isso a tela apaga e você não sabe o que houve.
     depois: Callable[[], object] | None = None
+
+
+_BRIEFING = frozenset({"bom dia", "bom dia jarvis", "jarvis bom dia", "como ta meu dia",
+                       "como esta meu dia", "como vai ser meu dia", "o que tem pra hoje",
+                       "me fala do meu dia", "resumo do dia", "briefing"})
+
+
+def _e_briefing(texto: str) -> bool:
+    return normalizar(texto) in _BRIEFING
 
 
 # Sem falar com ele por isto, a conversa ao vivo com o Claude recomeça.
@@ -455,6 +465,16 @@ class Nucleo:
         if nome:
             return self._resolver_nome(nome, dito=texto, origem="abrir direto")
 
+        # "Bom dia": o briefing. Já se sabe o que ler (agenda de hoje e clima),
+        # então lê antes e vai ao Claude UMA vez, com os resultados junto.
+        # Duas idas (decidir + responder) davam 5,6 s; uma dá ~3 s.
+        if isinstance(self.cerebro, CerebroClaude) and _e_briefing(texto):
+            cidade = next((f.split(" em ", 1)[1] for f in self.memoria.fatos()
+                           if "moro em" in f.lower()), "")
+            leituras = (("agenda", {"quando": "hoje"}), ("clima", {"cidade": cidade, "quando": "hoje"}))
+            return self._ler_e_responder(
+                leituras, {"origem": "briefing", "dito": texto}, pedido=texto)
+
         if isinstance(self.cerebro, CerebroClaude) and normalizar(texto) in _SOLTAS:
             # "Pode" sem nada pendente: responde na hora, sem ir ao Claude.
             return Resposta(self.cfg.persona.nada_pendente,
@@ -475,6 +495,9 @@ class Nucleo:
         base = {"houve_tool_call": interpretacao.funcao is not None,
                 "funcao": interpretacao.funcao, "dito": texto,
                 "argumentos": interpretacao.argumentos}
+
+        if interpretacao.leituras:
+            return self._ler_e_responder(interpretacao.leituras, base)
 
         if interpretacao.funcao is None:
             # "Pode" sem nada na mesa não pode virar nao_sei: foi assim que um
@@ -896,6 +919,49 @@ class Nucleo:
             acao=f"{acao}:{caminho}->{pasta}" if r.ok else None,
             diagnostico=diag,
         )
+
+    # -- leituras: o resultado volta para o Claude ----------------------------
+
+    def _ler(self, funcao: str, args: dict) -> str:
+        if funcao == "agenda":
+            quando = mod_quando.resolver(str(args.get("quando") or "hoje"))
+            dia = quando.inicio.date() if quando else dt.date.today()
+            dias = max(1, min(7, int(args.get("dias") or 1)))
+            agora = dt.datetime.now()
+            linhas = []
+            for i in range(dias):
+                d = dia + dt.timedelta(days=i)
+                for e in self.agenda.do_dia(d):
+                    passou = (not e.dia_inteiro and e.inicio < agora)
+                    linhas.append(f"{relogio.data_curta(d)} {e.hora_falavel}: {e.titulo}"
+                                  + (" (já passou)" if passou else ""))
+            de = relogio.data_curta(dia) + (f" a {relogio.data_curta(dia + dt.timedelta(days=dias - 1))}"
+                                            if dias > 1 else "")
+            return f"agenda {de}: " + ("; ".join(linhas) if linhas else "nada marcado")
+        if funcao == "clima":
+            cidade = str(args.get("cidade") or "").strip()
+            if not cidade:
+                return "clima: não sei a cidade do usuário"
+            quando = mod_quando.resolver(str(args.get("quando") or "hoje"))
+            dia = quando.inicio.date() if quando else dt.date.today()
+            return "clima: " + clima.descrever(cidade, dia)
+        if funcao == "pc":
+            return "pc: " + sistema.status_gpu().mensagem
+        return f"{funcao}: leitura desconhecida"
+
+    def _ler_e_responder(self, leituras, base: dict, pedido: str = "") -> Resposta:
+        resultados = []
+        for funcao, args in leituras:
+            try:
+                resultados.append(self._ler(funcao, args))
+            except (ErroDaAgenda, clima.ErroDoClima) as e:
+                resultados.append(f"{funcao}: falhou ({str(e).splitlines()[0]})")
+            except Exception as e:  # uma leitura quebrada não derruba a conversa
+                resultados.append(f"{funcao}: falhou ({e.__class__.__name__})")
+        base["leituras"] = resultados
+        fala = self.cerebro.continuar("\n".join(resultados), pedido=pedido)
+        return Resposta(fala or self.cfg.persona.cerebro_falhou,
+                        acao="ler:" + ",".join(f for f, _ in leituras), diagnostico=base)
 
     # -- memória -------------------------------------------------------------
 
@@ -1770,8 +1836,23 @@ class Nucleo:
         return self.cerebro.carregar()
 
     def aquecer(self) -> None:
-        """Pede ao LLM que se carregue. O cliente chama ao acordar."""
+        """Pede ao LLM que se carregue. O cliente chama ao acordar.
+
+        Também já baixa a agenda e o clima em segundo plano: o "bom dia" logo
+        depois de acordar não espera rede (enquanto ele fala "Pois não?")."""
         self.cerebro.aquecer()
+        threading.Thread(target=self._pre_buscar, daemon=True).start()
+
+    def _pre_buscar(self) -> None:
+        try:
+            if self.agenda.ical.disponivel():
+                self.agenda.ical.do_dia(dt.date.today())
+            cidade = next((f.split(" em ", 1)[1] for f in self.memoria.fatos()
+                           if "moro em" in f.lower()), None)
+            if cidade:
+                clima.descrever(cidade, dt.date.today())
+        except Exception:
+            pass  # é só adiantamento: se falhar, a pergunta busca na hora
 
     def reiniciar_conversa(self, papo: bool = True) -> None:
         """Esquece confirmação e busca pendentes.

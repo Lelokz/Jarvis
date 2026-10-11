@@ -89,6 +89,11 @@ def responder(qual: str, agora: dt.datetime | None = None) -> str:
     return hora_falada(agora) if qual == "hora" else data_falada(agora)
 
 
+def data_curta(dia: dt.date) -> str:
+    """"sáb 11/10"."""
+    return f"{_SEMANA[dia.weekday()][:3]} {dia:%d/%m}"
+
+
 def agora_por_extenso(agora: dt.datetime | None = None) -> str:
     """Para pôr no prompt do modelo: dia, data e hora numa linha."""
     agora = agora or dt.datetime.now()

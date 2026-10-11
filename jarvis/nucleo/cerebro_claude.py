@@ -160,9 +160,25 @@ class _Sessao:
 
 # --- os prompts -------------------------------------------------------------
 
+# Ferramentas que só LEEM e cujo resultado volta para o Claude. Substituem,
+# no modo Claude, o `agenda_do_dia` e o `status_pc` (que falavam frase pronta).
+LEITURAS = {
+    "agenda": "Compromissos da agenda do usuário. argumentos: {\"quando\": \"hoje\" | "
+              "\"amanhã\" | \"sexta\" | \"dia 20\"..., \"dias\": quantos dias a partir dali "
+              "(1 a 7)}",
+    "clima": "Previsão do tempo. argumentos: {\"cidade\": cidade do usuário (está na "
+             "memória; se não estiver, pergunte a cidade em vez de chamar), \"quando\": "
+             "\"hoje\" | \"amanhã\" | \"sábado\"...}",
+    "pc": "Temperatura e uso da placa de vídeo do PC. argumentos: {}",
+}
+_SEM_LEITURA = {"agenda_do_dia", "status_pc"}
+
+
 def _ferramentas_em_texto() -> str:
     linhas = []
     for f in FERRAMENTAS:
+        if f["function"]["name"] in _SEM_LEITURA:
+            continue
         fn = f["function"]
         linhas.append(json.dumps({"nome": fn["name"], "descricao": fn["description"],
                                   "parametros": fn["parameters"]}, ensure_ascii=False))
@@ -198,7 +214,18 @@ def _sistema_conversa(nome: str) -> str:
         "que você sabe dele vem da memória que acompanha cada mensagem. Se ele "
         "pedir para FAZER algo que nenhuma ferramenta faz, diga em uma frase que "
         "isso você ainda não consegue fazer.\n\n"
-        "Ferramentas (uma por linha):\n" + _ferramentas_em_texto()
+        "LEITURAS: para responder sobre agenda, tempo ou o PC, peça leituras em "
+        "vez de ferramenta, no campo \"ler\" (pode pedir várias de uma vez, como "
+        "agenda e clima juntos para \"bom dia\"): "
+        '{"funcao": null, "argumentos": {}, "fala": "", "ler": [{"funcao": "<leitura>", '
+        '"argumentos": {...}}]}. O sistema devolve os resultados em [Resultados das '
+        "leituras] e aí você responde com a fala. Sem resultado não invente: diga o "
+        "que não conseguiu ver.\n"
+        "\"Bom dia\" (ou \"como tá meu dia\") é um briefing: leia agenda de hoje e "
+        "clima, e responda em poucas frases o que vem pela frente hoje e como vai "
+        "estar o tempo. Compromisso que já passou não precisa ser dito.\n"
+        "Leituras disponíveis:\n" + "\n".join(f"- {n}: {d}" for n, d in LEITURAS.items())
+        + "\n\nFerramentas (uma por linha):\n" + _ferramentas_em_texto()
     )
 
 
@@ -355,8 +382,27 @@ class CerebroClaude:
         nomes = {f["function"]["name"] for f in FERRAMENTAS}
         if funcao not in nomes:
             funcao = None
+        leituras = tuple(
+            (str(l.get("funcao")), l.get("argumentos") or {})
+            for l in (d.get("ler") or []) if isinstance(l, dict) and l.get("funcao") in LEITURAS)
         return Interpretacao(funcao, d.get("argumentos") or {} if funcao else {},
-                             time.monotonic() - inicio, fala=str(d.get("fala") or "").strip())
+                             time.monotonic() - inicio, fala=str(d.get("fala") or "").strip(),
+                             leituras=leituras)
+
+    def continuar(self, resultados: str, pedido: str = "") -> str:
+        """Devolve os resultados das leituras e pega a fala final. Com `pedido`,
+        a fala do usuário vai junto (o núcleo leu antes, sem perguntar)."""
+        if self._conversa is None or not self._conversa.viva():
+            self._conversa = self._nova(_sistema_conversa(self.nome))
+        cabeca = ""
+        if pedido:
+            extra = self.contexto()
+            cabeca = (f"{extra}\n" if extra else "") + f"Fala do usuário: {pedido}\n"
+        d = _json_da_resposta(self._registrar(
+            self._conversa.perguntar,
+            f"{cabeca}[Resultados das leituras]\n{resultados}\nAgora responda ao usuário.",
+            self.timeout_s))
+        return str(d.get("fala") or "").strip()
 
     def resumir_conversa(self, trocas: list[dict]) -> tuple[str, str] | None:
         """Tema e resumo de um episódio, para o diário. Processo próprio e

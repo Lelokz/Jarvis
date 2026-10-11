@@ -442,6 +442,9 @@ class Interpretacao:
     # O que o modelo quer dizer quando não chamou ferramenta (só o Claude
     # conversa; o qwen deixa vazio).
     fala: str = ""
+    # Leituras que o Claude pediu (agenda, clima, PC): o núcleo executa e
+    # devolve os resultados, e o Claude responde com as palavras dele.
+    leituras: tuple = ()
 
     @property
     def nome(self) -> str | None:
