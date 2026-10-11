@@ -44,3 +44,4 @@ google-auth-httplib2==0.4.2
 # Atenção: são grandes — 581MB + 751MB.
 nvidia-cublas-cu12==12.9.2.10
 nvidia-cudnn-cu12==9.25.1.1
+python-xlib==0.33          # minimizar janela de outro programa (janelas.py)

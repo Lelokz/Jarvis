@@ -319,6 +319,10 @@ class Nucleo:
         if alvo:
             return self._fechar(alvo, texto)
 
+        mexer = janelas.pedido_de_mexer(texto)
+        if mexer is not None:
+            return self._mexer_janela(*mexer, texto)
+
         interpretacao = self.cerebro.interpretar(texto)
         return self._despachar(interpretacao, texto)
 
@@ -788,23 +792,51 @@ class Nucleo:
 
     # -- fechar programas ----------------------------------------------------
 
-    def _fechar(self, alvo: str, dito: str) -> Resposta:
-        diag = {"origem": "fechar", "dito": dito, "alvo": alvo}
+    def _achar_janelas(self, alvo: str) -> tuple[list, str, bool]:
+        """(janelas, nome para falar, achou pelo título?). Lista vazia = nada.
+
+        Primeiro como programa do catálogo (todas as janelas dele); senão pelo
+        título. "essa janela" é a janela em foco."""
         if janelas.e_a_janela_ativa(alvo):
             j = janelas.ativa()
-            if j is None:
-                return Resposta(self._frase("fechar_nada", nome=alvo), diagnostico=diag)
-            return self._fechar_agora([j], j.titulo.split(" - ")[-1] or "a janela", diag)
-
-        lista, nome, por_titulo = [], alvo, False
+            return ([j], j.titulo.split(" - ")[-1] or "a janela", False) if j else ([], alvo, False)
         casamento = self.tabela.casar(alvo)
         a = casamento.atalho
         if (a is not None and a.tipo == "app" and not casamento.empatados
                 and casamento.pontuacao >= CHUTE):
             lista = janelas.da_classe(acoes.classe_da_janela(a.alvo))
-            nome = a.nome
+            if lista:
+                return lista, a.nome, False
+        lista = janelas.por_titulo(alvo)
+        nome = lista[0].titulo.split(" - ")[0][:40] if len(lista) == 1 else alvo
+        return lista, nome, True
+
+    def _mexer_janela(self, acao: str, alvo: str | None, dito: str) -> Resposta:
+        """Trazer, minimizar, maximizar, restaurar: inofensivo, não pergunta."""
+        diag = {"origem": f"janela ({acao})", "dito": dito, "alvo": alvo}
+        if acao in ("area", "area_volta"):
+            janelas.area_de_trabalho(acao == "area")
+            chave = "janela_area" if acao == "area" else "janela_area_volta"
+            return Resposta(getattr(self.cfg.persona, chave),
+                            acao=f"janela:{acao}", diagnostico=diag)
+        lista, nome, _ = self._achar_janelas(alvo or "")
+        diag["janelas"] = [f"{j.classe} | {j.titulo}" for j in lista]
         if not lista:
-            lista, por_titulo = janelas.por_titulo(alvo), True
+            return Resposta(self._frase("fechar_nada", nome=alvo), diagnostico=diag)
+        if acao == "minimizar":
+            for j in lista:            # "minimiza o Brave" leva todas as dele
+                janelas.minimizar(j)
+        else:
+            # Trazer, maximizar e restaurar valem para uma janela: a mais
+            # recente do programa.
+            {"trazer": janelas.trazer, "maximizar": janelas.maximizar,
+             "restaurar": janelas.restaurar}[acao](lista[-1])
+        return Resposta(self._frase(f"janela_{acao}", nome=nome),
+                        acao=f"janela:{acao}:{nome}", diagnostico=diag)
+
+    def _fechar(self, alvo: str, dito: str) -> Resposta:
+        diag = {"origem": "fechar", "dito": dito, "alvo": alvo}
+        lista, nome, por_titulo = self._achar_janelas(alvo)
         diag["janelas"] = [f"{j.classe} | {j.titulo}" for j in lista]
         if not lista:
             return Resposta(self._frase("fechar_nada", nome=alvo), diagnostico=diag)

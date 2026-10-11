@@ -73,6 +73,13 @@ fechar_nada = "Não tem nada aberto chamado {nome}."
 fechar_varias = "Tem {n} janelas de {nome} abertas. Fecho todas?"
 fechar_navegador = "Isso fecha a janela inteira do navegador, com as outras abas. Fecho?"
 fechar_mantive = "Tá, deixei aberto."
+# Mexer em janela. Inofensivo: não pergunta.
+janela_trazer = "{nome} na frente."
+janela_minimizar = "Minimizei {nome}."
+janela_maximizar = "Maximizei {nome}."
+janela_restaurar = "Restaurei {nome}."
+janela_area = "Pronto, área de trabalho."
+janela_area_volta = "Janelas de volta."
 
 # Quando você manda ele dormir ("dorme aí"). Curta: ele fala e volta a dormir
 # na hora, sem esperar a janela de 30s.

@@ -111,6 +111,8 @@ pacotes (**não** instalar `xapp-sn-watcher`: conflita com o Mint).
 |---|---|
 | "abre o Discord", "abre o Kabum", "abre o projeto Loft" | abre **qualquer programa instalado, favorito do Brave ou projeto do VS Code**, sem cadastro (ver abaixo) |
 | "fecha o Discord", "fecha a pasta Downloads", "fecha essa janela" | fecha como o × (o programa pergunta se quiser salvar); **várias janelas ou uma aba do navegador → pergunta antes** |
+| "põe o Discord na frente", "vai pro terminal", "minimiza o Brave", "maximiza essa janela", "restaura o terminal" | mexe na janela, sem perguntar (inofensivo) |
+| "minimiza tudo" / "mostra a área de trabalho", e "volta as janelas" | esconde tudo e traz de volta |
 | "abre gravações", "abre o loft" | o que está no `atalhos.toml` ganha de tudo |
 | "abre o relatório" | nada com esse nome: **busca** no disco e pergunta qual se achar vários |
 | "toca X", "toca X no YouTube" | toca no mpv (só áudio) ou no Brave; só diz "tocando" depois do som sair |
@@ -156,6 +158,11 @@ do catálogo (todas as janelas dele) e depois com o título das janelas ("pasta
 Downloads" → a janela do Nemo chamada Downloads). Nunca fecha a área de
 trabalho (`nemo-desktop`) nem a janela do Jarvis. Programa de bandeja (ZapZap)
 só esconde a janela e continua rodando, igual ao ×.
+
+**Mexer em janela** usa a mesma busca do fechar. Minimizar vale para todas as
+janelas do programa; trazer, maximizar e restaurar, para a mais recente.
+Minimizar não dá pelo `wmctrl` no Cinnamon (medido): usa `python-xlib` com o
+pedido padrão de minimizar (ICCCM `WM_CHANGE_STATE`).
 
 Arquivos editáveis à mão: `atalhos.toml` (o que ele abre), `config.toml`
 (frases, pastas liberadas e vetadas, limites), `memoria.txt` (o que ele sabe
@@ -231,6 +238,8 @@ Jarvis é o teste que vale; o resto se confere olhando.
 - O vocabulário do Whisper só conhece os nomes do `atalhos.toml`; nome de
   programa difícil (Kdenlive, Crunchyroll) pode sair errado na transcrição.
 - O Piper lê mal letra solta e número com vírgula.
+- Minimizar falhou **uma vez** em ~10 (a calculadora, por nome), dizendo
+  "Minimizei" sem minimizar. Não reproduziu de novo; causa desconhecida.
 - Música às vezes vem a versão errada (é o 1º resultado do YouTube).
 
 ---

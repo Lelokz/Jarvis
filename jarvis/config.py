@@ -41,6 +41,12 @@ class Persona:
     fechar_varias: str
     fechar_navegador: str
     fechar_mantive: str
+    janela_trazer: str
+    janela_minimizar: str
+    janela_maximizar: str
+    janela_restaurar: str
+    janela_area: str
+    janela_area_volta: str
     qual_musica: str
     musica_nao_achei: str
     musica_nao_saiu: str
