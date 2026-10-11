@@ -49,6 +49,17 @@ class Contato:
     final: str = ""
 
 
+# Conversa com UMA pessoa. Lista do que é permitido, e não do que é proibido:
+# a primeira versão só barrava grupo (@g.us), e canal (@newsletter) e status
+# (@broadcast) eram anunciados como "alguém fora dos teus contatos", com
+# "Quer responder?" — num canal em que ninguém além do dono escreve.
+_INDIVIDUAL = ("@s.whatsapp.net", "@lid")
+
+
+def _conversa_que_avisa(jid: str, grupos: bool) -> bool:
+    return jid.endswith(_INDIVIDUAL) or (grupos and jid.endswith("@g.us"))
+
+
 class WhatsApp:
     def __init__(self, banco: Path, api: str, avisar_grupos: bool = False) -> None:
         self.banco = Path(banco).expanduser()
@@ -159,9 +170,9 @@ class WhatsApp:
             q = self._quando(quando)
             if q <= desde:
                 continue
-            grupo = jid.endswith("@g.us")
-            if grupo and not self.avisar_grupos:
+            if not _conversa_que_avisa(jid, self.avisar_grupos):
                 continue
+            grupo = jid.endswith("@g.us")
             novas.append(Mensagem(jid, self._nome(jid, nome), texto or "(mídia)", q, grupo))
         return sorted(novas, key=lambda m: m.quando)
 
@@ -192,7 +203,7 @@ class WhatsApp:
 
         for jid, nome in self._consultar(
                 "SELECT jid, name FROM chats ORDER BY last_message_time DESC"):
-            if jid.endswith("@g.us") and not self.avisar_grupos:
+            if not _conversa_que_avisa(jid, self.avisar_grupos):
                 continue
             n = self.nome_de(jid, nome)
             k = chave(jid)
