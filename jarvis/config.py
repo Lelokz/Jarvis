@@ -123,6 +123,8 @@ class Tts:
     motor: str
     voz: str
     velocidade: float
+    efeito: str = ""
+    tom: float = 0.0  # semitons; negativo = mais grave (só Kokoro)
 
 
 @dataclass(frozen=True)

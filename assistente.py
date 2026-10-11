@@ -614,7 +614,7 @@ def _montar(cfg: config.Config):
     _partida("aquecimento", "(1ª inferência, descartada)", transcritor.aquecer())
 
     voz = tts.criar_voz(cfg.tts, cfg.dir_vozes)
-    _partida("Piper", voz.nome, voz.segundos_de_carga)
+    _partida("voz", voz.nome, voz.segundos_de_carga)
 
     inicio = time.monotonic()
     nucleo = Nucleo(cfg)

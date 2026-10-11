@@ -55,7 +55,9 @@ entende a intenção, faz, e sugere jeitos melhores.
 
 ## 3. Persona
 
-Nome **Jarvis**, voz masculina (Piper, `pt_BR-faber-medium`). Fala como pessoa
+Nome **Jarvis**, voz masculina: **Kokoro `pm_alex` com "efeito jarvis" e 1
+semitom abaixo** (out/2026, escolhida de ouvido pelo Léo entre Piper, a voz do
+filme e Kokoro). Detalhes em §4. Fala como pessoa
 normal: nem formal, nem cheio de gíria. Respostas curtas: é voz.
 
 Tudo no `config.toml` (`[persona]`), nada chumbado no código. **No futuro vira
@@ -86,7 +88,7 @@ microfone ─► wake word "hey Jarvis" (CPU) ─► "Pois não?" ─► 30 s ou
 
 **Stack:** openWakeWord `hey_jarvis` (limiar 0.50, pronúncia inglesa ou
 brasileira) · pysilero-vad · faster-whisper `large-v3-turbo` int8 na GPU ·
-**Claude Opus 5.5 pelo Claude Code, com o login da assinatura** · Piper ·
+**Claude Opus 5.5 pelo Claude Code, com o login da assinatura** · Kokoro ·
 janela em PySide6/QML.
 
 ### O cérebro: Claude Opus 5.5 pela assinatura (out/2026)
@@ -162,6 +164,31 @@ baixados em segundo plano.
   continua pelo login, que expira em 7 dias.
 - **Clima pelo Open-Meteo** (`clima.py`): grátis, sem cadastro. A cidade vem
   da memória ("Eu moro em Florianópolis, no bairro Pantanal").
+
+### A voz: Kokoro na placa de vídeo (out/2026)
+
+`VozKokoro` (`tts.py`), voz `pm_alex`, no lugar do Piper `faber`. Comparado de
+ouvido pelo Léo e pelo Whisper (que entendeu as vozes Kokoro melhor que a
+faber):
+
+- **A voz do JARVIS do filme** (modelo Piper `jgkawell/jarvis`, MIT) só existe
+  em inglês; lendo português o Whisper transcreveu "Em Forti Anópolis está no
+  blado". **Não serve.** A da dublagem brasileira não existe pronta, e criar
+  seria clonar um dublador real sem autorização — decidido não fazer.
+- **Efeito "jarvis"**: ecos curtos de capacete + reforço nos graves. A
+  primeira versão realçava agudos e ficou "afeminada" (palavra do Léo).
+- **Tom -1 semitom**: o Kokoro fala mais rápido e o áudio é esticado de
+  volta, engrossando sem ficar lento. -2, -3 e -4 ficaram graves demais.
+- **Na GPU**: 0,27 s para 7,4 s de fala (CPU: 4,2 s); a primeira frase toca
+  em ~0,3 s, as outras são geradas enquanto ela fala. `onnxruntime-gpu`
+  **1.22** (CUDA 12, a do Whisper); o wake word continua no mesmo motor, pela
+  CPU (testado: acorda com 0.99).
+- **Volume**: o Kokoro é normalizado para um pouco ABAIXO do que o Piper
+  falava (RMS 0,14 contra 0,17), nunca acima.
+- O Opus foi instruído a escrever número como se fala ("quatro e meia da
+  tarde", não "16h30"), porque tudo que ele escreve vira voz.
+
+Voltar para a voz antiga: `motor = "piper"` e `voz = "pt_BR-faber-medium"`.
 
 **Voltar para o qwen** é uma linha: `cerebro = "ollama"` no `[llm]` do
 `config.toml`. O Ollama continua instalado, só não carrega mais nada.

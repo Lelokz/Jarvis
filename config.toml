@@ -436,14 +436,20 @@ beam_size = 1
 usar_vocabulario = true
 
 [tts]
-motor = "piper"
+# "kokoro" (out/2026, escolha do Léo de ouvido) ou "piper" (a voz de antes).
+motor = "kokoro"
 
-# Vozes masculinas PT-BR baixadas: faber, cadu e jeff (todas "medium").
-# Trocar aqui e rodar de novo é o jeito de comparar as três.
-voz = "pt_BR-faber-medium"
+# Kokoro: pm_alex (escolhida), pm_santa; pf_dora para a futura personagem.
+# Piper: pt_BR-faber-medium, pt_BR-cadu-medium, pt_BR-jeff-medium.
+voz = "pm_alex"
 
-# Maior = mais devagar (é o length_scale do Piper).
+# Maior = mais devagar.
 velocidade = 1.0
+
+# Só Kokoro. "jarvis" = eco curto de capacete + reforço nos graves; "" = puro.
+efeito = "jarvis"
+# Semitons; negativo = mais grave. O Léo ouviu -2, -3 e -4: graves demais.
+tom = -1
 
 [wakeword]
 # Escolhido e medido na Etapa 0.5: 20/20 de acerto na pronúncia inglesa

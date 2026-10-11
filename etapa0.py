@@ -213,7 +213,7 @@ def conversar(cfg: config.Config) -> int:
     except FileNotFoundError as e:
         print(f"\n{e}\n")
         return 1
-    _partida("Piper", voz.nome, voz.segundos_de_carga)
+    _partida("voz", voz.nome, voz.segundos_de_carga)
     _partida("VRAM em uso", _vram())
 
     registrador = Registrador.criar(cfg)

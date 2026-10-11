@@ -47,3 +47,20 @@ nvidia-cudnn-cu12==9.25.1.1
 python-xlib==0.33          # minimizar janela de outro programa (janelas.py)
 icalendar==7.3.0          # ler a agenda pelo link secreto iCal (agenda_ical.py)
 recurring-ical-events==3.8.2  # eventos que se repetem (toda terça etc.)
+
+# Voz Kokoro na placa de vídeo (out/2026). O onnxruntime-gpu SUBSTITUI o
+# onnxruntime de processador que o faster-whisper puxa (os dois brigam pelo
+# mesmo módulo): `pip uninstall onnxruntime` antes. Versão 1.22 porque é a que
+# usa CUDA 12, a mesma do Whisper; a 1.31 pede CUDA 13. Ele também roda na CPU,
+# então o openWakeWord continua funcionando (testado: score 0.99).
+onnxruntime-gpu==1.22.0
+nvidia-cufft-cu12==11.4.1.4
+nvidia-curand-cu12==10.3.10.19
+nvidia-cuda-runtime-cu12==12.9.79
+nvidia-nvjitlink-cu12==12.9.86
+espeakng-loader==0.2.4
+phonemizer==3.4.0
+# Instalar com --no-deps: senão ele puxa o onnxruntime de processador de volta.
+#   pip install --no-deps kokoro-onnx==0.6.1
+# Modelo (vai em vozes/, fora do git): kokoro-v1.0.onnx e voices-v1.0.bin de
+# github.com/thewh1teagle/kokoro-onnx/releases/tag/model-files-v1.0
