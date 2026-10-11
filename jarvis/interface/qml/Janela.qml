@@ -220,7 +220,6 @@ Window {
         Conversa {
             id: conversa
             tema: tema
-            corDoEstado: janela.corAtual
             dica: janela.conectado ? "diga \"hey Jarvis\", ou escreva aqui embaixo" : ""
             anchors {
                 top: areaEsfera.bottom

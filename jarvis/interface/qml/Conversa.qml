@@ -6,9 +6,16 @@ import QtQuick
 Item {
     id: raiz
     property var tema
-    property color corDoEstado: "#4da3ff"
+
+    // Só a última fala pode estar perguntando: qualquer fala nova responde ou
+    // atropela a pergunta, e a borda dela apaga.
+    function _fecharPerguntas() {
+        for (var i = 0; i < falas.count; i++)
+            if (falas.get(i).perguntando) falas.setProperty(i, "perguntando", false);
+    }
 
     function acrescentar(quem, texto, acao, perguntando) {
+        _fecharPerguntas();
         falas.append({ quem: quem, texto: texto, acao: acao || "",
                        perguntando: perguntando === true, animar: true });
     }
@@ -21,7 +28,8 @@ Item {
         for (var i = 0; i < anteriores.length; i++) {
             var f = anteriores[i];
             falas.append({ quem: f.quem, texto: f.texto || "",
-                           acao: f.acao || "", perguntando: f.perguntando === true,
+                           acao: f.acao || "",
+                           perguntando: f.perguntando === true && i === anteriores.length - 1,
                            animar: false });
         }
         raiz.seguindo = true;
@@ -80,7 +88,6 @@ Item {
         // cada uma ser atribuída a si mesma.
         delegate: Mensagem {
             tema: raiz.tema
-            corDoEstado: raiz.corDoEstado
             quem: model.quem
             texto: model.texto
             acao: model.acao

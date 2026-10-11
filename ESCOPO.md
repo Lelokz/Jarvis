@@ -1792,6 +1792,21 @@ Um app à parte, não um puxadinho. Provavelmente maior que o motor de voz.
 - Anexar arquivos
 - Roda em segundo plano, ícone na bandeja
 
+**Três defeitos da esfera e do balão, corrigidos em out/2026:**
+
+- **A esfera dava um pulo a cada volta.** O giro era uma animação de 0 a 360
+  que recomeçava, e os anéis multiplicados por 0,73 e 1,31 não fecham volta
+  em 360 (pulavam 97° e 112°). Agora o giro é somado a cada quadro
+  (`FrameAnimation`) e volta a zero só em 36000, onde os três anéis fecham
+  volta inteira. **Multiplicador novo de anel precisa fechar volta em 36000.**
+- **A velocidade por estado não fazia nada.** O QML lê a duração de uma
+  animação só quando ela começa. Com o giro somado por quadro, a velocidade
+  vale no quadro seguinte. Medido: 40, 88 e 14 graus por segundo nas
+  velocidades 1, 2,2 e 0,35, que é o que o código pede.
+- **O balão da pergunta seguia a cor do átomo e nunca apagava.** Agora a borda
+  tem cor fixa (âmbar, `tema.pergunta`) e só a última fala pode estar
+  perguntando: qualquer fala nova apaga a borda das anteriores.
+
 ### Etapa 6.6 — Bloquear a tela ⚠️
 
 Primeira função nova de núcleo desde a Etapa 5.5. Rodada própria e pequena,

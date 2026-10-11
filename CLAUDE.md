@@ -183,13 +183,6 @@ que bater o olho e perceber "isso aqui tá estranho".
   as ideias, não copiar o visual. A cor do Leo é roxo.
 
 ## Pendências abertas na interface
-- Bug do balão que segue a cor do átomo: a borda está ligada à cor do
-  estado atual, e o campo `perguntando` nunca é desligado depois que a
-  pergunta é respondida.
-- Bug da esfera que corta: existe um giro único, e os anéis multiplicados
-  por 0,73 e 1,31 não fecham o círculo, então a animação reinicia com um
-  pulo visível.
-- A velocidade por estado não tem efeito: o QML lê a duração só quando a
-  animação começa.
-- Confirmar se a interface já foi commitada. Se não foi, é a primeira
-  coisa a fazer.
+- Nenhuma conhecida. Os três bugs anotados aqui (balão seguindo a cor do
+  átomo, esfera dando pulo, velocidade por estado sem efeito) foram
+  corrigidos em out/2026; ver Etapa 6 no ESCOPO.

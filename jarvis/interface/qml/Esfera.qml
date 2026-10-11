@@ -47,14 +47,20 @@ Item {
 
     // Um ângulo só para todos os anéis: cada um aplica o próprio multiplicador
     // e a própria fase. Assim as duas metades de um anel nunca saem de sincronia.
+    //
+    // O giro é SOMADO a cada quadro, e não uma animação de 0 a 360. A versão
+    // antiga tinha dois defeitos: ao voltar de 360 para 0, os anéis de 0.73 e
+    // 1.31 davam um pulo (262,8° e 471,6° não fecham volta); e a duração só era
+    // lida quando a animação começava, então trocar de estado não mudava a
+    // velocidade. Somando, a velocidade vale no quadro seguinte.
+    //
+    // A volta em 36000 é sem pulo: 36000 × 0.73 e 36000 × 1.31 são voltas
+    // inteiras (73 e 131). Um multiplicador novo precisa manter isso.
     property real giro: 0
-    // A duração É a velocidade. Estava fixa em 9 s, e com isso "pensando"
-    // giraria igual a "dormindo" — metade do que o estado precisa dizer.
-    NumberAnimation on giro {
+    FrameAnimation {
         running: raiz.animando
-        loops: Animation.Infinite
-        from: 0; to: 360
-        duration: Math.round(9000 / Math.max(0.1, raiz.velocidade))
+        // 40°/s é uma volta em 9 s na velocidade 1.
+        onTriggered: raiz.giro = (raiz.giro + frameTime * 40 * raiz.velocidade) % 36000
     }
 
     // Três anéis, cada um com velocidade, fase, raio e inclinação próprios.

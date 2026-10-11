@@ -1,8 +1,8 @@
 import QtQuick
 
 // Uma fala na conversa. A sua vem numa bolha cheia, a dele numa bolha só de
-// contorno — a diferença é de peso, não de cor, para a cor continuar sendo o
-// que diz o ESTADO.
+// contorno — a diferença é de peso, não de cor. A única cor é a borda da
+// pergunta que ainda espera resposta.
 //
 // A largura segue a regra que não cria laço: o texto pede `min(implicitWidth,
 // máximo)`, e a bolha se ajusta ao texto. Pedir a largura do pai e o pai pedir
@@ -16,7 +16,6 @@ Item {
     property string acao: ""
     property bool perguntando: false
     property bool animar: true
-    property color corDoEstado: "#4da3ff"
 
     readonly property bool minha: quem === "voce"
     readonly property real maxLargura: width * 0.86 - 28
@@ -44,7 +43,7 @@ Item {
         radius: 14
         color: raiz.minha ? raiz.tema.superficie : "transparent"
         border.width: raiz.minha ? 0 : 1
-        border.color: raiz.perguntando ? raiz.corDoEstado : raiz.tema.traco
+        border.color: raiz.perguntando ? raiz.tema.pergunta : raiz.tema.traco
         Behavior on border.color { ColorAnimation { duration: raiz.tema.normal } }
 
         Column {

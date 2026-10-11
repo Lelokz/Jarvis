@@ -9,6 +9,9 @@ QtObject {
     readonly property color texto:        "#e6ebf2"
     readonly property color textoFraco:   "#7e879b"
     readonly property color perigo:       "#ff6b6b"
+    // A borda da pergunta que ainda espera resposta. Fixa: se seguisse a cor
+    // do estado, a bolha mudaria de cor junto com o átomo.
+    readonly property color pergunta:     "#ffb454"
 
     // Uma cor por estado. É o que permite saber o que ele está fazendo sem ler
     // nada — o pedido do Léo: "quero saber em que estado ele está olhando".
