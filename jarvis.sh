@@ -12,16 +12,28 @@ PROJETO="$PWD"
 
 ligado() { pgrep -f "$PROJETO/assistente.py" > /dev/null; }
 
+# A ponte do WhatsApp (whatsapp-mcp), fora do projeto: o banco dela tem as
+# conversas do Léo. Sobe e desce junto com o Jarvis.
+PONTE_WHATS="$HOME/.local/share/jarvis/whatsapp-mcp/whatsapp-bridge"
+ponte_ligada() { pgrep -f "^./whatsapp-bridge$" > /dev/null; }
+
 if [ "${1:-}" = "--desligar" ]; then
   # O assistente trata SIGTERM como ctrl+c: fecha o microfone, apaga o
   # socket e grava o resumo, em vez de morrer no meio.
   pkill -TERM -f "$PROJETO/assistente.py"
+  pkill -TERM -f "^./whatsapp-bridge$"
   pkill -f "$PROJETO/interface.py"
   # Até 20 s: ao desligar, o assistente resume a conversa em andamento para
   # o diário (uma chamada ao Claude).
   for _ in $(seq 40); do ligado || exit 0; sleep 0.5; done
   pkill -KILL -f "$PROJETO/assistente.py"   # não saiu em 20 s: à força
   exit 0
+fi
+
+if [ -x "$PONTE_WHATS/whatsapp-bridge" ] && ! ponte_ligada; then
+  # umask 077: o que a ponte criar (banco, log) só o Léo lê.
+  ( cd "$PONTE_WHATS" && umask 077 && nohup ./whatsapp-bridge \
+      >> "$HOME/.local/share/jarvis/whatsapp-bridge.log" 2>&1 & )
 fi
 
 if ! ligado; then

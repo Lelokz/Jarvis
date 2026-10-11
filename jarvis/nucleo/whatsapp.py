@@ -57,7 +57,9 @@ class WhatsApp:
 
     def _consultar(self, sql: str, args: tuple = ()) -> list[tuple]:
         # Só leitura: a ponte é a dona do banco e escreve nele o tempo todo.
-        con = sqlite3.connect(f"file:{self.banco}?mode=ro", uri=True, timeout=2)
+        # A ponte foi alterada para WAL (ler enquanto ela grava); o timeout
+        # cobre o resto. Sem WAL, o banco travava durante a sincronização.
+        con = sqlite3.connect(f"file:{self.banco}?mode=ro", uri=True, timeout=5)
         try:
             return con.execute(sql, args).fetchall()
         finally:

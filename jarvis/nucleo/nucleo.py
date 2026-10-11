@@ -1035,7 +1035,11 @@ class Nucleo:
         if normalizar(para) in ("ultimo", "ultima", "") and self._ultima_whats is not None:
             u = self._ultima_whats
             return self._pedir_confirmacao_whats(u.chat, u.nome, mensagem, base)
-        candidatos = self.whatsapp.achar_contato(para)
+        try:
+            candidatos = self.whatsapp.achar_contato(para)
+        except Exception as e:  # banco ocupado: avisa em vez de quebrar
+            return Resposta(self._frase("whats_nao_mandei", motivo="o WhatsApp tá ocupado, tenta de novo"),
+                            diagnostico={**base, "erro": str(e)})
         if not candidatos:
             return Resposta(self._frase("whats_nao_achei", nome=para), diagnostico=base)
         if len(candidatos) > 1:

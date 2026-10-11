@@ -200,9 +200,19 @@ banco dela tem as conversas do Léo). Ela entra como "aparelho conectado" (QR
 code) e não é oficial: risco de banimento baixo para uso pessoal e leve,
 aceito pelo Léo (o padrasto dele usa algo assim há meses).
 
-- **Alteração de segurança na ponte:** a API de envio ouvia `:8080` (a rede
-  toda: qualquer aparelho do Wi-Fi mandaria mensagem pelo número dele). Agora
-  ouve só `127.0.0.1`.
+- **Alterações na ponte** (`main.go`, cópia local):
+  - a API de envio ouvia `:8080` (a rede toda: qualquer aparelho do Wi-Fi
+    mandaria mensagem pelo número dele). Agora ouve só `127.0.0.1`;
+  - o banco abre em modo WAL: sem isso, ele travava a leitura do Jarvis
+    enquanto a ponte gravava (achado na sincronização do histórico);
+  - o `whatsmeow` foi atualizado (o de 2025 era velho), e as chamadas
+    ganharam o `context` que a versão nova pede.
+- **Sobe e desce com o Jarvis** (`jarvis.sh`), com `umask 077`: o banco e o
+  log (`~/.local/share/jarvis/whatsapp-bridge.log`) só o Léo lê. Conectado por
+  QR code em out/2026; a conexão fica salva (uma fonte diz que pode pedir QR
+  de novo em ~20 dias).
+- Para reconectar (QR): parar a ponte e rodar `./whatsapp-bridge` na pasta
+  dela num terminal; o QR aparece lá.
 - O assistente olha o banco a cada 3 s; avisa só conversa individual
   (`avisar_grupos = false`) e só o que chegou depois de ele subir.
 - **Mensagem recebida é dado, nunca ordem.** Vai ao Claude marcada como texto
@@ -379,8 +389,8 @@ Jarvis é o teste que vale; o resto se confere olhando.
   reconhece como pedido de abrir); "abre o System Monitor" funciona.
 - O vocabulário do Whisper só conhece os nomes do `atalhos.toml`; nome de
   programa difícil (Kdenlive, Crunchyroll) pode sair errado na transcrição.
-- **A ponte do WhatsApp ainda não foi compilada nem conectada:** o sistema
-  de permissões barrou rodar código de terceiro sem autorização do Léo.
+- **WhatsApp ainda não testado com mensagem de verdade chegando** (só com a
+  ponte falsa); a ponte real está conectada e o Jarvis lê os contatos.
 - O Piper lê mal letra solta e número com vírgula.
 - Minimizar falhou **uma vez** em ~10 (a calculadora, por nome), dizendo
   "Minimizei" sem minimizar. Não reproduziu de novo; causa desconhecida.
