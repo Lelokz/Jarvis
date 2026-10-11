@@ -232,6 +232,22 @@ aceito pelo Léo (o padrasto dele usa algo assim há meses).
   primeira versão juntava por nome e mandava para um deles sem perguntar).
   Pergunta "Tenho dois Lucas: o do final 8765 e o do final 4321. Pra qual?";
   aceita "o 8765", "o primeiro"; e diz qual recebeu.
+- **Regras de aviso** (depois do primeiro uso real, em que um vídeo do
+  YouTube virou mensagem para a pessoa e cada mensagem de uma conversa pelo
+  celular era anunciada):
+  - **rajada vira um aviso só** ("Fulano mandou 3 mensagens. A última: …"):
+    espera 4 s de silêncio da pessoa (no máximo 20 s);
+  - **respondeu pelo celular nos últimos 10 min → silêncio** para essa
+    pessoa, só aparece na janela. A ponte não guarda o que o Jarvis manda,
+    então o que é "meu" no banco veio do celular. Conversando pelo Jarvis, ou
+    com o celular desligado (aparelho conectado funciona sozinho), avisa normal;
+  - **som tocando → avisa sem "Quer responder?" e sem ficar ouvindo**
+    (`midia.tem_algo_tocando`, pelo MPRIS);
+  - **trava de envio:** só manda com verbo de pedido ("manda", "responde",
+    "fala pra", "avisa"...) ou respondendo a uma pergunta que o Jarvis fez
+    porque o Léo pediu para mandar ("qual Pedro?"). O "Quer responder?" do
+    aviso não libera a trava. Testado à parte, fingindo que o Claude quis
+    mandar uma fala de vídeo: bloqueou.
 - Depois de avisar, **oferece**: "Quer responder?" (antes, o Léo tinha que
   adivinhar). Entende "fala pra ela", "diz pra", "avisa", "manda", não só
   "responde".

@@ -522,16 +522,26 @@ class Ciclo:
         checar = getattr(self.nucleo, "checar_whatsapp", None)
         if checar is None:
             return
-        falas = checar()
-        if not falas:
+        falar, mostrar, ouvir = checar()
+        # Conversa que o Léo está tendo pelo celular: só aparece na janela.
+        for texto in mostrar:
+            self.registrador.registrar_estado("whatsapp_so_janela", fala=texto)
+            self.emissor.emitir("jarvis_disse", texto=texto, acao="whatsapp:silenciosa",
+                                perguntando=False)
+        if not falar:
             return
-        if self.estado is Estado.DORMINDO:
+        dormia = self.estado is Estado.DORMINDO
+        if dormia and ouvir:
             self._acordar_por_texto()
             self.nucleo.aquecer()
-        for fala in falas:
-            self.registrador.registrar_estado("whatsapp_recebida", fala=fala)
+        for fala in falar:
+            self.registrador.registrar_estado("whatsapp_recebida", fala=fala, ouvir=ouvir)
             self._falar(fala, acao="whatsapp:recebida")
-        self._renovar("janela aberta")
+        if ouvir:
+            self._renovar("janela aberta")
+        elif dormia:
+            # Som tocando: avisou e volta a dormir, sem ouvir o vídeo.
+            self._mudar_estado("dormindo")
 
     # -- texto digitado (Etapa 6) ------------------------------------------
 

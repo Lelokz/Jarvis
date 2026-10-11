@@ -144,6 +144,23 @@ class WhatsApp:
         lids = [l for l, p in lid_pn.items() if p == usuario]
         return [jid] + [f"{l}@lid" for l in lids]
 
+    def pessoa(self, jid: str) -> str:
+        """Uma chave por PESSOA (o telefone), seja a conversa @lid ou @s.whatsapp.net."""
+        lid_pn, _, _ = self._nomes()
+        usuario, _, servidor = jid.partition("@")
+        return lid_pn.get(usuario, usuario) if servidor == "lid" else usuario
+
+    def eu_mandei_desde(self, jid: str, desde: dt.datetime) -> list[tuple[dt.datetime, str]]:
+        """Mensagens MINHAS nessa conversa depois de `desde`: (quando, texto).
+        A ponte não guarda o que o Jarvis manda, então o que aparece aqui veio
+        do celular (ou de outro aparelho do Léo)."""
+        jids = self._jids_da_pessoa(jid)
+        marcas = ",".join("?" * len(jids))
+        linhas = self._consultar(
+            f"SELECT timestamp, content FROM messages WHERE is_from_me = 1 "
+            f"AND chat_jid IN ({marcas}) ORDER BY timestamp DESC LIMIT 20", tuple(jids))
+        return [(q, t or "") for q, t in ((self._quando(a), b) for a, b in linhas) if q > desde]
+
     def _nome(self, jid: str, nome: str | None) -> str:
         return self.nome_de(jid, nome)
 

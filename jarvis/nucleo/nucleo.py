@@ -97,6 +97,11 @@ def _e_briefing(texto: str) -> bool:
     return normalizar(texto) in _BRIEFING
 
 
+_PEDIDO_DE_MANDAR = re.compile(
+    r"\b(manda|mande|mandar|responde|responda|responder|fala|fale|falar|diz|diga|dizer|"
+    r"avisa|avise|avisar|pergunta|pergunte|perguntar|escreve|escreva|envia|envie|enviar|"
+    r"conta|conte|contar|mensagem|recado|ve se|ver se)\b")
+
 _SIM_QUERO = frozenset({"sim", "quero", "quero sim", "bora", "pode", "responde", "isso"})
 _NAO_QUERO = frozenset({"nao", "nao quero", "agora nao", "depois", "deixa", "deixa pra la",
                         "nao precisa", "ignora", "esquece"})
@@ -265,6 +270,9 @@ class Nucleo:
         # o texto da resposta.
         self._oferta_whats = None
         self._esperando_resposta_whats = None   # disse "sim": a próxima fala é o texto
+        # O que o Jarvis mandou: (pessoa, quando, texto). Serve para separar
+        # "conversando pelo Jarvis" de "conversando pelo celular".
+        self._enviados_whats: list[tuple[str, dt.datetime, str]] = []
         # Janelas esperando o "pode" para fechar: (janelas, nome falado).
         self._fechamento_pendente: tuple[list, str] | None = None
         self._diag: dict = {}
@@ -280,6 +288,9 @@ class Nucleo:
             self.cerebro.recomecar_conversa()
             self._ultima_fala = ""
         self._ultimo_uso = time.monotonic()
+        # A marca de "diálogo de envio" vale só para a fala seguinte.
+        self._dialogo_envio_antes = getattr(self, "_dialogo_envio", False)
+        self._dialogo_envio = False
         try:
             r = self._processar(texto)
             self._ultima_fala = r.texto
@@ -569,6 +580,11 @@ class Nucleo:
                 # O Opus já respondeu junto com a decisão (com a hora e a
                 # memória na mesa): é a conversa.
                 base["conversa"] = True
+                # Ele pediu para mandar e o Claude devolveu pergunta ("qual
+                # Pedro?"): a próxima fala pode completar o pedido sem verbo.
+                if interpretacao.fala.rstrip().endswith("?") and \
+                        _PEDIDO_DE_MANDAR.search(normalizar(texto)):
+                    self._dialogo_envio = True
                 if not interpretacao.fala:
                     # Fala vazia = não era com ele: o cliente fica calado.
                     base["ignorado"] = True
@@ -1040,35 +1056,84 @@ class Nucleo:
 
     # -- WhatsApp -------------------------------------------------------------
 
-    def checar_whatsapp(self) -> list[str]:
-        """O que chegou desde a última olhada, já como fala. O cliente chama
-        de poucos em poucos segundos e fala o que vier."""
+    def checar_whatsapp(self) -> tuple[list[str], list[str], bool]:
+        """O que chegou desde a última olhada: (falar, só mostrar na janela,
+        pode ficar ouvindo?). O cliente chama de poucos em poucos segundos.
+
+        Regras (depois do primeiro uso real, out/2026):
+        - várias seguidas da mesma pessoa viram UM aviso: espera 4 s de
+          silêncio dela (no máximo 20 s) antes de falar;
+        - se o Léo respondeu essa pessoa PELO CELULAR nos últimos 10 min, ele
+          está conversando lá: só mostra na janela, não fala. Respondendo pelo
+          Jarvis (ou com o celular desligado), avisa normal;
+        - com som tocando, avisa mas não oferece resposta nem fica ouvindo:
+          o áudio de um vídeo já virou mensagem para a pessoa.
+        """
         if self.whatsapp is None or not self.whatsapp.disponivel():
-            return []
+            return [], [], False
         try:
             novas = self.whatsapp.recebidas_desde(self._whats_visto)
         except Exception:
-            return []  # banco ocupado pela ponte: tenta na próxima
+            return [], [], False  # banco ocupado pela ponte: tenta na próxima
         if not novas:
-            return []
+            return [], [], False
+        agora = dt.datetime.now()
+        if (agora - novas[-1].quando).total_seconds() < 4 and \
+                (agora - novas[0].quando).total_seconds() < 20:
+            return [], [], False  # ainda chegando: espera juntar
         self._whats_visto = max(m.quando for m in novas)
-        self._ultima_whats = novas[-1]
-        self._oferta_whats = novas[-1]
-        falas = []
+
+        por_pessoa: dict[str, list] = {}
         for m in novas:
+            por_pessoa.setdefault(self.whatsapp.pessoa(m.chat), []).append(m)
+
+        falar, mostrar, ultima = [], [], None
+        for pessoa, msgs in por_pessoa.items():
+            m = msgs[-1]
             texto = m.texto if len(m.texto) <= 220 else m.texto[:220] + "…"
-            falas.append(self._frase("whats_chegou", nome=m.nome, texto=texto)
-                         if self.cfg.whatsapp.ler_conteudo
-                         else self._frase("whats_chegou_sem_texto", nome=m.nome))
-        falas[-1] += " " + self.cfg.persona.whats_oferta
-        return falas
+            if len(msgs) == 1:
+                fala = (self._frase("whats_chegou", nome=m.nome, texto=texto)
+                        if self.cfg.whatsapp.ler_conteudo
+                        else self._frase("whats_chegou_sem_texto", nome=m.nome))
+            else:
+                fala = self._frase("whats_varias", nome=m.nome, n=len(msgs), texto=texto)
+            if self._conversando_pelo_celular(m.chat, pessoa, agora):
+                mostrar.append(fala)
+            else:
+                falar.append(fala)
+                ultima = m
+        if ultima is None:
+            return [], mostrar, False
+        self._ultima_whats = ultima
+        if midia.tem_algo_tocando():
+            return falar, mostrar, False
+        self._oferta_whats = ultima
+        falar[-1] += " " + self.cfg.persona.whats_oferta
+        return falar, mostrar, True
+
+    def _conversando_pelo_celular(self, chat: str, pessoa: str, agora: dt.datetime) -> bool:
+        minhas = self.whatsapp.eu_mandei_desde(chat, agora - dt.timedelta(minutes=10))
+        # Descarta o que o próprio Jarvis mandou (caso a ponte passe a guardar).
+        do_jarvis = {(t.strip(), p) for p, _q, t in self._enviados_whats}
+        return any((t.strip(), pessoa) not in do_jarvis for _q, t in minhas)
 
     def _mandar_whats(self, args: dict, base: dict) -> Resposta:
         if self.whatsapp is None or not self.whatsapp.disponivel():
             return Resposta(self.cfg.persona.whats_desligado, diagnostico=base)
+        # Trava: só manda com pedido CLARO de mandar. Frase solta (vídeo, TV,
+        # conversa da sala) que o Claude tenha lido como resposta, nunca vira
+        # mensagem — foi o que aconteceu com o áudio de um vídeo do YouTube.
+        # Exceção: o Léo PEDIU para mandar e o Jarvis devolveu uma pergunta
+        # ("qual Pedro?", "o que eu mando?"); a resposta ("o Souza") não tem
+        # verbo. Marca explícita, e o "Quer responder?" do aviso NÃO conta:
+        # depois dele, fala de vídeo continua barrada.
+        if not self._dialogo_envio_antes and \
+                not _PEDIDO_DE_MANDAR.search(normalizar(str(base.get("dito") or ""))):
+            return Resposta("", diagnostico={**base, "ignorado": "sem pedido claro de mandar"})
         para = str(args.get("para") or "").strip()
         mensagem = str(args.get("texto") or "").strip()
         if not mensagem:
+            self._dialogo_envio = True
             return Resposta("O que eu mando?", diagnostico=base)
         if normalizar(para) in ("ultimo", "ultima", "ele", "ela", "") and self._ultima_whats is not None:
             u = self._ultima_whats
@@ -1127,6 +1192,8 @@ class Nucleo:
         ok, motivo = self.whatsapp.enviar(jid, mensagem)
         diag = {**base, "whatsapp_para": nome, "texto": mensagem, "ok": ok}
         if ok:
+            self._enviados_whats = (self._enviados_whats + [
+                (self.whatsapp.pessoa(jid), dt.datetime.now(), mensagem)])[-50:]
             # Com nome repetido na agenda, diz QUAL dos dois recebeu.
             repetido = [c for c in self.whatsapp.achar_contato(nome) if c.nome == nome]
             final = next((c.final for c in repetido if c.jid == jid), "")

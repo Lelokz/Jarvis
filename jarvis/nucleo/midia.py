@@ -596,3 +596,17 @@ def o_que_esta_tocando() -> str | None:
         if len(pedaco) > 2 and not pedaco.startswith((":", ",", " <")):
             return pedaco
     return None
+
+
+def tem_algo_tocando() -> bool:
+    """Algum player tocando agora (YouTube no Brave, mpv...)?
+
+    Usado pelo aviso do WhatsApp: com som tocando, ele avisa mas NÃO fica
+    ouvindo — no primeiro uso real, o áudio de um vídeo virou mensagem para
+    a pessoa. O PlaybackStatus do mpv mente por uns segundos ao começar
+    (ver `_esperar_o_som`); para isto, errar para "tocando" é o lado seguro.
+    """
+    try:
+        return any(_propriedade(p, "PlaybackStatus") == "Playing" for p in players())
+    except Exception:
+        return False

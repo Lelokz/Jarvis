@@ -93,6 +93,8 @@ cerebro_falhou = "Não consegui falar com o Claude agora. Tenta de novo?"
 # WhatsApp. {nome} é o contato; {texto} a mensagem.
 whats_chegou = "{nome} mandou: {texto}"
 whats_chegou_sem_texto = "Mensagem de {nome} no WhatsApp."
+# Várias seguidas da mesma pessoa viram um aviso só.
+whats_varias = "{nome} mandou {n} mensagens. A última: {texto}"
 # Depois de avisar, ele oferece: sem isso o Léo tinha que adivinhar que podia
 # responder.
 whats_oferta = "Quer responder?"
