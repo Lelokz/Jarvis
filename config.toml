@@ -83,6 +83,13 @@ janela_area_volta = "Janelas de volta."
 # Quando não deu para pôr a janela em foco antes de encaixar (aí ele não mexe).
 janela_sem_foco = "Não consegui mexer em {nome}."
 
+# Cérebro de nuvem (Claude). {hora} é "três e vinte da tarde"; {falta} é
+# "2 horas e 10 minutos".
+limite_acabou = "Meu limite do Claude acabou. Volta {hora}, daqui a {falta}."
+limite_acabou_sem_hora = "Meu limite do Claude acabou. Ainda não sei quando volta."
+sem_internet = "Tô sem internet. Abrir, fechar e mexer nas janelas ainda funcionam; o resto espera a internet voltar."
+cerebro_falhou = "Não consegui falar com o Claude agora. Tenta de novo?"
+
 # Quando você manda ele dormir ("dorme aí"). Curta: ele fala e volta a dormir
 # na hora, sem esperar a janela de 30s.
 indo_dormir = "Tá bom."
@@ -291,6 +298,19 @@ nunca_mexer_extensoes = [
 ]
 
 [llm]
+# Qual cérebro decide e conversa. "claude" = Claude Opus 5.5 pelo Claude Code,
+# com o login da assinatura (decisão do Léo, out/2026: o qwen ocupava 1,6 GB
+# de RAM e 5,6 GB da placa). "ollama" = o qwen local de antes, que continua
+# instalado e funciona trocando só esta linha.
+cerebro = "claude"
+claude_binario = "~/.local/bin/claude"
+claude_modelo = "claude-opus-5-5"
+# Quanto o Opus pensa antes de responder. "low" para voz: mais rápido e gasta
+# menos do limite.
+claude_effort = "low"
+claude_timeout_s = 40
+
+# --- só para cerebro = "ollama" ---
 url = "http://localhost:11434"
 modelo = "qwen3:8b"
 

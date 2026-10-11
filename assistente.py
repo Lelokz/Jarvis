@@ -480,9 +480,31 @@ class Ciclo:
                 tts_s=fala.primeiro_audio_s,
                 latencia_s=tempos.latencia_percebida_s,
             )
+        self.atualizar_aviso()
         # A janela reinicia quando ELE termina de responder, não quando você
         # termina de falar.
         self._renovar("janela reiniciada")
+
+    # -- aviso do cérebro de nuvem (limite / sem internet) ---------------------
+
+    def atualizar_aviso(self, conferir_internet: bool = False) -> None:
+        """Manda para a janela o estado do Claude, só quando muda.
+
+        `conferir_internet` é o relógio de 30 s do laço: sem ele, o aviso de
+        "sem internet" só sairia no próximo pedido, mesmo com a rede de volta.
+        """
+        situacao = getattr(self.nucleo, "situacao", None)
+        if situacao is None:  # núcleo sem cérebro de nuvem: não há o que avisar
+            return
+        if conferir_internet:
+            self.nucleo.conferir_internet()
+        s = situacao()
+        chave = (s.get("tipo"), s.get("volta_em") if s.get("tipo") == "limite" else None)
+        if chave == getattr(self, "_ultimo_aviso", None):
+            return
+        self._ultimo_aviso = chave
+        self.emissor.emitir("aviso", tipo=s.get("tipo", "ok"),
+                            volta_em=s.get("volta_em"), uso_5h=s.get("uso_5h"))
 
     # -- texto digitado (Etapa 6) ------------------------------------------
 
@@ -604,7 +626,8 @@ def _montar(cfg: config.Config):
     #
     # A mensagem antes é de propósito. Ver o terminal parado 15 segundos sem
     # explicação é diferente de ver o que está acontecendo.
-    aviso = "  LLM              carregando na VRAM (5 GB, pode levar ~15 s)..."
+    aviso = ("  LLM              abrindo o Claude..." if cfg.llm.cerebro == "claude"
+             else "  LLM              carregando na VRAM (5 GB, pode levar ~15 s)...")
     # No terminal o aviso é reescrito no lugar; num log ele fica como linha
     # própria. O "\r" não apaga nada quando a saída não é um terminal, e sem
     # esta checagem o log sai com os dois textos grudados na mesma linha.
@@ -613,7 +636,10 @@ def _montar(cfg: config.Config):
     segundos = nucleo.carregar()
     if terminal:
         print("\r" + " " * len(aviso) + "\r", end="")
-    _partida("LLM", f"{cfg.llm.modelo} na VRAM", segundos)
+    if cfg.llm.cerebro == "claude":
+        _partida("LLM", f"{cfg.llm.claude_modelo} pelo Claude Code (assinatura)", segundos)
+    else:
+        _partida("LLM", f"{cfg.llm.modelo} na VRAM", segundos)
 
     # O cliente lê os nomes do núcleo e entrega ao Whisper como vocabulário.
     # A direção é permitida pela linha da §4: cliente conhece o núcleo, o
@@ -813,7 +839,12 @@ def conversar(cfg: config.Config) -> int:
             print(REGUA)
             _linha("dormindo", 'diga "hey Jarvis"  (ctrl+c encerra)')
 
+            ciclo.atualizar_aviso()
+            proximo_aviso = time.monotonic() + 30
             while True:
+                if time.monotonic() >= proximo_aviso:
+                    ciclo.atualizar_aviso(conferir_internet=True)
+                    proximo_aviso = time.monotonic() + 30
                 bloco = mic.ler_bloco()
                 if bloco is not None:
                     ciclo.passo(bloco)

@@ -266,6 +266,10 @@ def rodar(cerebro, conjunto: Conjunto) -> tuple[int, int, list[str]]:
     for caso in conjunto.casos:
         vistos: Counter = Counter()
         for _ in range(conjunto.rodadas):
+            # A conversa do Claude lembra das frases anteriores; uma frase de
+            # teste não pode ser lida à luz da outra. Recomeça a cada caso.
+            if hasattr(cerebro, "recomecar_conversa"):
+                cerebro.recomecar_conversa()
             vistos[cerebro.interpretar(caso.frase).funcao] += 1
         acertou = vistos[caso.esperado]
         minimo = conjunto.rodadas if caso.minimo is None else caso.minimo
@@ -287,16 +291,30 @@ def rodar(cerebro, conjunto: Conjunto) -> tuple[int, int, list[str]]:
     return acertos, total, avisos
 
 
+SEM_SENTIDO = "quorvelinho trapiscúdio"
+
+
 def main() -> int:
     rapido = "--rapido" in sys.argv
     cfg = carregar(Path(__file__).parent / "config.toml")
 
-    cerebro = mod_cerebro.Cerebro(cfg.llm)
+    # O cérebro configurado: desde out/2026 é o Claude (Opus 5.5 pela
+    # assinatura). Cada rodada GASTA limite da assinatura (~180 perguntas no
+    # --rapido): rode antes de commit que mexe em roteamento, não toda hora.
+    if cfg.llm.cerebro == "claude":
+        from jarvis.nucleo.cerebro_claude import CerebroClaude
+        cerebro = CerebroClaude(cfg.llm.claude_binario, cfg.llm.claude_modelo,
+                                cfg.llm.claude_effort, cfg.llm.claude_timeout_s,
+                                cfg.persona.nome)
+        cerebro.carregar()
+    else:
+        cerebro = mod_cerebro.Cerebro(cfg.llm)
     cerebro.conferir()
     tabela = Tabela.carregar(cfg.raiz / "atalhos.toml")
     cerebro.usar_atalhos([a.nome for a in tabela.atalhos])
 
-    print(f"\n=== regressão · {cfg.llm.modelo} · "
+    modelo = cfg.llm.claude_modelo if cfg.llm.cerebro == "claude" else cfg.llm.modelo
+    print(f"\n=== regressão · {modelo} · "
           f"{len(mod_cerebro.FERRAMENTAS)} ferramentas ===\n")
 
     reprovou = False
@@ -339,8 +357,12 @@ def main() -> int:
     # A ancoragem: nome que não existe não pode virar AÇÃO. A pergunta não é
     # para onde o modelo roteia — é se o núcleo age. Quem barra é a ancoragem.
     buscador = Buscador(cfg.busca)
-    if buscador.buscar("abridança.ppxt"):
-        print("    ✗ a busca acharia 'abridança.ppxt' — teste não confiável")
+    # Era "abridança.ppxt" até out/2026: o teste pegava o qwen INVENTANDO um
+    # nome ("abridança" virava "loft"). O Opus leu como "abri dança.pptx" e
+    # abriu o Dança.pptx que existe na Downloads — decifrou a transcrição, não
+    # inventou. A frase agora não tem leitura possível.
+    if buscador.buscar(SEM_SENTIDO):
+        print(f"    ✗ a busca acharia {SEM_SENTIDO!r} — teste não confiável")
         reprovou = True
     else:
         nucleo = Nucleo(cfg)
@@ -355,9 +377,19 @@ def main() -> int:
               f"{'ok' if tela_no_nucleo else 'FALHOU'}")
         reprovou = reprovou or not tela_no_nucleo
 
+        # As ações viram anotação neste teste: ele roda o núcleo de verdade, e
+        # o Opus resolvendo "tocar quorvelinho" tocaria música no PC do Léo.
+        import jarvis.nucleo.acoes as _acoes
+        import jarvis.nucleo.arquivos as _arquivos
+        import jarvis.nucleo.midia as _midia
+        def _anota(*_a, **_k):
+            return _acoes.Resultado(True, "anotado")
+        _acoes._abrir = lambda *_a, **_k: None
+        _midia.tocar_audio = _midia.tocar_navegador = _midia.controlar = _anota
+        _arquivos.criar_pasta = _anota
         acoes = sum(1 for _ in range(20)
-                    if nucleo.processar("abridança.ppxt").acao)
-        print(f"  {'abridança.ppxt x20 (ancoragem)':44} "
+                    if nucleo.processar(SEM_SENTIDO).acao)
+        print(f"  {'frase sem sentido x20 (ancoragem)':44} "
               f"{acoes} ações (exigido 0)")
         reprovou = reprovou or acoes > 0
 

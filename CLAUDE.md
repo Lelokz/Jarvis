@@ -161,12 +161,9 @@ que bater o olho e perceber "isso aqui tá estranho".
   opções melhores. O modelo compõe as ferramentas que já existem (ex.: um
   briefing da manhã não é função nova, é o modelo juntando agenda + clima
   + e-mail porque a conversa pediu).
-- Teto do hardware: o Jarvis roda qwen3:8b local numa RTX 3060 12GB (já
-  ~7GB com o Whisper). Ele conversa e chama ferramenta de forma decente,
-  mas não raciocina no nível de um modelo grande. Seja honesto com o Leo
-  sobre isso.
-- Decisão em aberto, do Leo: híbrido (local pro rápido/privado, nuvem pro
-  raciocínio pesado), pesando privacidade e custo.
+- Cérebro (decidido em out/2026): Claude Opus 5.5 pelo Claude Code com o
+  login da assinatura do Leo, no lugar do qwen local. Comando fixo continua
+  em lista fechada (rápido e sem internet). Detalhes no ESCOPO §4.
 - Ordem sugerida: memória (o Jarvis lembrar do Leo) antes de conversa
   livre. Sem memória nunca vai parecer conversa de verdade.
 - Meta concreta boa: o briefing da manhã (agenda + clima + e-mail num

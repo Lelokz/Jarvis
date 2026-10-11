@@ -64,6 +64,7 @@ Window {
             conversa.acrescentar("jarvis", texto, acao, perguntando)
         }
         function onHistoricoRecebido(falas) { conversa.preencher(falas) }
+        function onAvisoMudou(tipo, voltaEm) { faixa.tipo = tipo; faixa.voltaEm = voltaEm }
     }
 
     readonly property int margemSombra: 18
@@ -225,7 +226,64 @@ Window {
                 top: areaEsfera.bottom
                 left: parent.left
                 right: parent.right
-                bottom: barraDeTexto.top
+                bottom: faixa.top
+            }
+        }
+
+        // -- o aviso do cérebro de nuvem: limite acabou / sem internet --------
+        // Fica até a situação mudar. No limite, conta quanto falta e some
+        // sozinho quando dá a hora.
+        Rectangle {
+            id: faixa
+            property string tipo: "ok"
+            property real voltaEm: 0
+            property real agora: Date.now() / 1000
+            readonly property bool ativa: (tipo === "limite" && (voltaEm === 0 || voltaEm > agora))
+                                          || tipo === "offline"
+            anchors { left: parent.left; right: parent.right; bottom: barraDeTexto.top }
+            anchors.leftMargin: 20
+            anchors.rightMargin: 20
+            anchors.bottomMargin: ativa ? 6 : 0
+            height: ativa ? textoDaFaixa.implicitHeight + 16 : 0
+            visible: ativa
+            radius: 10
+            color: tipo === "offline" ? "#2a1618" : "#2a2114"
+            border.width: 1
+            border.color: tipo === "offline" ? "#ff6b6b" : "#ffb454"
+
+            function hora(seg) {
+                var d = new Date(seg * 1000);
+                return d.getHours() + ":" + ("0" + d.getMinutes()).slice(-2);
+            }
+            function falta(seg) {
+                var min = Math.max(1, Math.round((seg - agora) / 60));
+                var h = Math.floor(min / 60), m = min % 60;
+                return (h ? h + "h" : "") + (h && m ? ("0" + m).slice(-2) : (m + " min"));
+            }
+
+            Text {
+                id: textoDaFaixa
+                anchors.centerIn: parent
+                width: parent.width - 24
+                horizontalAlignment: Text.AlignHCenter
+                wrapMode: Text.WordWrap
+                color: faixa.tipo === "offline" ? "#ff9c9c" : "#ffcf8a"
+                font.family: tema.familia
+                font.pixelSize: 12
+                renderType: Text.NativeRendering
+                text: faixa.tipo === "offline"
+                      ? "Sem internet · só abrir, fechar e mexer nas janelas até ela voltar"
+                      : faixa.voltaEm > 0
+                        ? "Limite do Claude acabou · volta às " + faixa.hora(faixa.voltaEm)
+                          + " (falta " + faixa.falta(faixa.voltaEm) + ")"
+                        : "Limite do Claude acabou"
+            }
+
+            Timer {
+                running: faixa.tipo === "limite"
+                interval: 30000
+                repeat: true
+                onTriggered: faixa.agora = Date.now() / 1000
             }
         }
 

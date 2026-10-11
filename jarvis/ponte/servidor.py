@@ -62,6 +62,7 @@ class Servidor:
         self.fila_max = max(8, int(fila_max))
         self._sessao = {"ev": "sessao", **sessao}
         self._ultimo_estado: dict[str, Any] | None = None
+        self._ultimo_aviso: dict[str, Any] | None = None
         # O histórico da sessão, para um cliente que chega depois — ou que
         # fechou a janela e voltou. Anel de tamanho fixo: o alcance é a sessão,
         # e memória de processo que roda o dia todo não cresce sem teto.
@@ -188,6 +189,8 @@ class Servidor:
             # Guardado mesmo sem cliente: quem conectar depois precisa saber
             # onde o Jarvis está, e não esperar a próxima mudança.
             self._ultimo_estado = evento
+        elif tipo == "aviso":
+            self._ultimo_aviso = evento
         elif tipo in ("voce_disse", "jarvis_disse"):
             # Guardado ANTES de qualquer saída antecipada: o histórico existe
             # justamente para o tempo em que não havia ninguém conectado.
@@ -317,6 +320,8 @@ class Servidor:
             self._direto(cliente, self._sessao)
             if self._ultimo_estado is not None:
                 self._direto(cliente, self._ultimo_estado)
+            if self._ultimo_aviso is not None:
+                self._direto(cliente, self._ultimo_aviso)
             quantas = dados.get("historico", 0)
             if quantas:
                 # Devolve o que TEM, e não o que foi pedido: o anel pode ter

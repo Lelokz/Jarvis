@@ -79,17 +79,49 @@ microfone ─► wake word "hey Jarvis" (CPU) ─► "Pois não?" ─► 30 s ou
 - **Assistente e janela são dois processos**, ligados por um socket
   (`jarvis/ponte/`). Um não depende do outro.
 - **Dentro do núcleo, a ordem é:** pendências (confirmação, busca aberta)
-  → listas fechadas em Python (mídia, tela, hora, memória) → modelo
-  (`qwen3:8b` via Ollama, escolhe entre 11 ferramentas) → se nenhuma pegou,
-  o modelo responde com a memória → senão "Isso eu ainda não sei fazer."
+  → listas fechadas em Python, 0 ms e sem internet (abrir, fechar, janelas,
+  mídia, tela, hora, memória) → **Claude Opus 5.5**, que escolhe entre 11
+  ferramentas ou responde conversando, com a hora, a memória e a última
+  resposta do Jarvis junto.
 
 **Stack:** openWakeWord `hey_jarvis` (limiar 0.50, pronúncia inglesa ou
 brasileira) · pysilero-vad · faster-whisper `large-v3-turbo` int8 na GPU ·
-`qwen3:8b` no Ollama (`keep_alive` 5 min, carrega na subida) · Piper · janela
-em PySide6/QML.
+**Claude Opus 5.5 pelo Claude Code, com o login da assinatura** · Piper ·
+janela em PySide6/QML.
 
-**VRAM:** ~7 GB com Whisper + qwen; cai para ~1,5 GB quando o Ollama solta o
-qwen (5 min parado). Importa por causa dos jogos.
+### O cérebro: Claude Opus 5.5 pela assinatura (out/2026)
+
+Trocou o `qwen3:8b` local, decisão do Léo: o qwen ocupava **1,6 GB de RAM e
+5,6 GB da placa** (medido) e errava o roteamento em casos que o Opus acerta.
+`cerebro_claude.py` mantém o `claude -p` **aberto** em modo stream-json: a
+primeira pergunta paga ~1 s de subida, as seguintes não. Medido:
+
+- **~1,4 s** por decisão de ferramenta; conversa curta, 1,3 a 2 s;
+- **regressão de roteamento 180/180** (o qwen dava ~177); "para a música",
+  "para o vídeo" e "procura … e renomeia", que o qwen errava há semanas,
+  agora acertam;
+- subida do Jarvis: ~2 s para o cérebro, contra ~15 s do qwen.
+
+**Duas sessões:** a *conversa* (lembra do papo enquanto ele está acordado;
+recomeça quando dorme) e a *avulsa* (sim/não de confirmação, correção de
+nome; uma pergunta por processo, a próxima já sobe esperando).
+
+**O que custa:** precisa de internet; tudo que não é lista fechada vai para
+a Anthropic; e gasta o **mesmo limite** da assinatura que o Claude Code usa.
+**Uso pessoal só**: a Anthropic não permite oferecer o login do claude.ai num
+produto para outras pessoas. Soltar o Jarvis para outros exige chave de API.
+
+**Limite e sem internet viram fala e faixa na janela.** Toda resposta do
+Claude traz o estado do limite (quanto foi usado da janela de 5 h e da
+semana, e quando volta). Limite batido: *"Meu limite do Claude acabou. Volta
+às três e vinte da tarde, daqui a 1 hora."* e uma faixa âmbar com a hora e
+quanto falta, que some sozinha. Sem internet: fala própria e faixa vermelha
+até a rede voltar (conferida a cada 30 s). Evento `aviso` da ponte.
+
+**Voltar para o qwen** é uma linha: `cerebro = "ollama"` no `[llm]` do
+`config.toml`. O Ollama continua instalado, só não carrega mais nada.
+
+**VRAM:** ~1,5 GB (só o Whisper).
 
 ### Dependências de sistema (não vêm com o pip)
 
@@ -210,7 +242,7 @@ Todo teste que dispara processo roda por `./contido.sh` (teto de memória,
 processos e tempo; ver CLAUDE.md).
 
 ```
-.venv/bin/python regressao.py --rapido    # roteamento: rodar antes de cada commit
+.venv/bin/python regressao.py --rapido    # roteamento; GASTA limite da assinatura (~180 perguntas, ~8 min)
 .venv/bin/python regressao.py             # completo (mais lento)
 python3 verificar_linha.py                # o núcleo não conhece áudio
 .venv/bin/python etapa0.py --autoteste    # TTS -> VAD -> STT
@@ -227,12 +259,13 @@ Jarvis é o teste que vale; o resto se confere olhando.
 
 ## 8. Problemas conhecidos
 
-- **"Para a música" abre a pasta Músicas** em vez de pausar, e "para o vídeo"
-  nunca funcionou. Use "pausa". Conserto proposto: as duas frases na lista
-  fechada de mídia.
-- **"Procura o relatório e renomeia pra proposta"** às vezes vai para abrir:
-  frase no limite entre duas funções. Temperatura 0 não resolve (ver
-  HISTORIA).
+- **O Opus decifra transcrição torta, e às vezes isso é chute.** "abridança.ppxt"
+  (frase de teste da época do qwen, que inventava nome) ele leu como "abri
+  dança.pptx" e abriu o `Dança.pptx` da Downloads. Pela regra 2 (chutar pode em
+  coisa inofensiva) está dentro do combinado; a regressão agora testa uma
+  frase sem leitura possível.
+- Comando que vai ao Claude leva ~1,5 s a mais que no qwen. O que se usa
+  muito deve ir para lista fechada (como foi o "abre X").
 - **A agenda expira a cada 7 dias** (app do Google em modo "Testing"); quando
   expira, rodar `autorizar_google.py`. Saída: duas páginas no GitHub Pages
   e publicar o app.
@@ -282,8 +315,8 @@ Sem ordem rígida: faz, o Léo testa o que é de voz, segue.
 1. **Briefing da manhã:** "bom dia" → agenda + clima + e-mails importantes
    num resumo falado. E-mail é priorizar, não ler tudo, e cuidado com o que
    sai em voz alta (tem gente na casa).
-2. **API do Claude, híbrido:** local (qwen) para o rápido e privado, Claude
-   para conversa e raciocínio. Decisão do Léo pesando privacidade e custo.
+2. ~~API do Claude, híbrido~~ **Feito de outro jeito (out/2026):** Opus 5.5
+   pela assinatura via Claude Code, sem qwen. Ver §4.
 3. **Jarvis no celular:** PC como servidor, Tailscale (por causa do CGNAT),
    página web na tela inicial antes de qualquer APK.
 4. **Proatividade** com gatilho concreto.

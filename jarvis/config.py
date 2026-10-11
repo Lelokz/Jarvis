@@ -48,6 +48,10 @@ class Persona:
     janela_area: str
     janela_area_volta: str
     janela_sem_foco: str
+    limite_acabou: str
+    limite_acabou_sem_hora: str
+    sem_internet: str
+    cerebro_falhou: str
     qual_musica: str
     musica_nao_achei: str
     musica_nao_saiu: str
@@ -123,6 +127,11 @@ class Tts:
 
 @dataclass(frozen=True)
 class Llm:
+    cerebro: str
+    claude_binario: str
+    claude_modelo: str
+    claude_effort: str
+    claude_timeout_s: float
     url: str
     modelo: str
     keep_alive: str

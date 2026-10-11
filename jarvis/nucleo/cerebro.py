@@ -439,6 +439,9 @@ class Interpretacao:
     funcao: str | None  # None = o modelo não chamou nada
     argumentos: dict
     segundos: float
+    # O que o modelo quer dizer quando não chamou ferramenta (só o Claude
+    # conversa; o qwen deixa vazio).
+    fala: str = ""
 
     @property
     def nome(self) -> str | None:

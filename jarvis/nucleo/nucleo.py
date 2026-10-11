@@ -12,6 +12,7 @@ Este módulo **não imprime e não fala**: devolve texto.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -29,6 +30,7 @@ from .busca import Achado, Buscador, pastas_que_distinguem
 from .catalogo import Catalogo
 from . import janelas
 from .cerebro import Cerebro, Confirmacao, ErroDoCerebro
+from .cerebro_claude import CerebroClaude, LimiteAtingido, SemInternet
 
 __all__ = ["Nucleo", "Resposta", "ErroDoCerebro"]
 
@@ -82,8 +84,30 @@ class Resposta:
     depois: Callable[[], object] | None = None
 
 
+_SOLTAS = frozenset({"sim", "pode", "pode sim", "manda", "isso", "beleza", "claro",
+                     "aham", "nao", "nao nao", "deixa", "deixa pra la", "nada disso",
+                     "ok", "certo", "confirmo", "confirma"})
+
 # A partir daqui o abrir age sem perguntar (ver `_resolver`).
 CHUTE = 0.80
+
+
+_ABRIR = re.compile(
+    r"^(?:jarvis[,\s]+)?(?:(?:pode|por favor)[,\s]+)*(?:abre|abra|abrir)[,\s]+"
+    r"(?:(?:o|a|os|as|um|uma)\s+)?(.+?)(?:[,\s]+(?:pra mim|para mim|por favor|a[íi]))*[.!?]*$",
+    re.IGNORECASE)
+
+
+def pedido_de_abrir(falado: str) -> str | None:
+    """O nome em "abre o X", ou None. Frase composta ("abre X e renomeia",
+    "abre X no Y") fica com o modelo, que entende o resto."""
+    m = _ABRIR.match(falado.strip())
+    if not m:
+        return None
+    nome = m.group(1).strip()
+    if re.search(r"\s(?:e|pra|para|no|na|em|dentro)\s", f" {nome} ", re.IGNORECASE):
+        return None
+    return nome or None
 
 
 class Nucleo:
@@ -92,7 +116,15 @@ class Nucleo:
         self.tabela = Tabela.carregar(cfg.raiz / "atalhos.toml")
         # Programas, projetos do VS Code e favoritos do Brave, lidos do PC.
         self.tabela.catalogo = Catalogo()
-        self.cerebro = Cerebro(cfg.llm)
+        if cfg.llm.cerebro == "claude":
+            self.cerebro = CerebroClaude(
+                cfg.llm.claude_binario, cfg.llm.claude_modelo, cfg.llm.claude_effort,
+                cfg.llm.claude_timeout_s, cfg.persona.nome)
+            # Cada mensagem leva a hora e a memória: é assim que ele responde
+            # "que dia cai sexta?" e "qual o nome da minha namorada?".
+            self.cerebro.contexto = self._contexto_do_cerebro
+        else:
+            self.cerebro = Cerebro(cfg.llm)
         self.cerebro.conferir()
         self.cerebro.usar_atalhos([a.nome for a in self.tabela.atalhos])
         self.buscador = Buscador(cfg.busca)
@@ -185,6 +217,60 @@ class Nucleo:
     # ----------------------------------------------------------------------
 
     def processar(self, texto: str) -> Resposta:
+        """Um pedido. Limite batido ou falta de internet viram fala, nunca erro."""
+        try:
+            r = self._processar(texto)
+            self._ultima_fala = r.texto
+            return r
+        except LimiteAtingido as e:
+            self.reiniciar_conversa(papo=False)
+            return Resposta(self._fala_de_limite(e.volta_em),
+                            diagnostico={"origem": "limite do Claude", "dito": texto,
+                                         "volta_em": e.volta_em})
+        except SemInternet:
+            self.reiniciar_conversa(papo=False)
+            return Resposta(self.cfg.persona.sem_internet,
+                            diagnostico={"origem": "sem internet", "dito": texto})
+        except ErroDoCerebro as e:
+            if self.cfg.llm.cerebro != "claude":
+                raise
+            self.reiniciar_conversa(papo=False)
+            return Resposta(self.cfg.persona.cerebro_falhou,
+                            diagnostico={"origem": "erro do Claude", "dito": texto,
+                                         "erro": str(e)})
+
+    def _fala_de_limite(self, volta_em: float | None) -> str:
+        if not volta_em:
+            return self.cfg.persona.limite_acabou_sem_hora
+        volta = dt.datetime.fromtimestamp(volta_em)
+        hora = relogio.hora_falada(volta).removeprefix("É ").removeprefix("São ").rstrip(".")
+        hora = ("ao " if hora.startswith("meio-dia") else "à " if hora.startswith(("meia", "uma"))
+                else "às ") + hora
+        minutos = max(1, round((volta_em - dt.datetime.now().timestamp()) / 60))
+        h, m = divmod(minutos, 60)
+        falta = (f"{h} hora{'s' if h > 1 else ''}" if h else "") + \
+                (" e " if h and m else "") + (f"{m} minuto{'s' if m > 1 else ''}" if m else "")
+        return self._frase("limite_acabou", hora=hora, falta=falta)
+
+    def situacao(self) -> dict:
+        """Estado do cérebro de nuvem, para o aviso na janela."""
+        if isinstance(self.cerebro, CerebroClaude):
+            return self.cerebro.situacao()
+        return {"tipo": "ok"}
+
+    def conferir_internet(self) -> None:
+        if isinstance(self.cerebro, CerebroClaude):
+            self.cerebro.conferir_internet()
+
+    def _contexto_do_cerebro(self) -> str:
+        fatos = self.memoria.fatos()
+        memoria = "; ".join(fatos) if fatos else "(nada guardado ainda)"
+        anterior = getattr(self, "_ultima_fala", "")
+        return (f"[Agora: {relogio.agora_por_extenso()}]\n"
+                f"[Memória do usuário, escrita como ele falou: {memoria}]"
+                + (f"\n[O sistema respondeu por último: {anterior}]" if anterior else ""))
+
+    def _processar(self, texto: str) -> Resposta:
         texto = texto.strip()
         if not texto:
             return Resposta("")
@@ -327,6 +413,18 @@ class Nucleo:
         if mexer is not None:
             return self._mexer_janela(*mexer, texto)
 
+        # "Abre o X": o comando mais usado, resolvido sem modelo (0 ms). Com o
+        # Claude cada ida ao modelo custa ~2 s, e a tabela + catálogo + busca
+        # já resolvem o nome sozinhos.
+        nome = pedido_de_abrir(texto)
+        if nome:
+            return self._resolver_nome(nome, dito=texto, origem="abrir direto")
+
+        if isinstance(self.cerebro, CerebroClaude) and normalizar(texto) in _SOLTAS:
+            # "Pode" sem nada pendente: responde na hora, sem ir ao Claude.
+            return Resposta(self.cfg.persona.nada_pendente,
+                            diagnostico={"origem": "resposta solta", "dito": texto})
+
         interpretacao = self.cerebro.interpretar(texto)
         return self._despachar(interpretacao, texto)
 
@@ -348,6 +446,16 @@ class Nucleo:
             # dentista deixou de ser marcado sem ninguém notar — o pendente
             # tinha morrido em silêncio duas falas antes. Custa 0,07s e só
             # roda aqui, no caminho em que ele já ia desistir de qualquer jeito.
+            if isinstance(self.cerebro, CerebroClaude):
+                # Sim/não solto, sem nada esperando: lista fechada, sem modelo.
+                if normalizar(texto) in _SOLTAS:
+                    base["resposta_solta"] = True
+                    return Resposta(self.cfg.persona.nada_pendente, diagnostico=base)
+                # O Opus já respondeu junto com a decisão (com a hora e a
+                # memória na mesa): é a conversa.
+                base["conversa"] = True
+                return Resposta(interpretacao.fala or self.cfg.persona.nao_sei,
+                                diagnostico=base)
             if self.cerebro.resposta_solta(texto):
                 base["resposta_solta"] = True
                 return Resposta(self.cfg.persona.nada_pendente,
@@ -934,7 +1042,7 @@ class Nucleo:
         # duas listas de estado que vão divergir no dia em que alguém esquecer
         # de acrescentar um campo nas duas.
         ultima = self._ultima_acao
-        self.reiniciar_conversa()
+        self.reiniciar_conversa(papo=False)
         self._ultima_acao = ultima  # desistir não é desfazer
         return o_que
 
@@ -1627,7 +1735,7 @@ class Nucleo:
         """Pede ao LLM que se carregue. O cliente chama ao acordar."""
         self.cerebro.aquecer()
 
-    def reiniciar_conversa(self) -> None:
+    def reiniciar_conversa(self, papo: bool = True) -> None:
         """Esquece confirmação e busca pendentes.
 
         O cliente chama ao dormir. Necessário porque a busca agora sobrevive a
@@ -1660,7 +1768,12 @@ class Nucleo:
         self._ultima_acao = None
         self._termo = ""
         self._diag = {}
+        # Dormir também zera o papo com o Claude; desistir ("esquece") não.
+        if papo and isinstance(getattr(self, "cerebro", None), CerebroClaude):
+            self.cerebro.recomecar_conversa()
+            self._ultima_fala = ""
 
     @property
     def descricao(self) -> str:
-        return f"{self.cfg.llm.modelo} · {len(self.tabela)} atalhos"
+        modelo = self.cfg.llm.claude_modelo if self.cfg.llm.cerebro == "claude" else self.cfg.llm.modelo
+        return f"{modelo} · {len(self.tabela)} atalhos"

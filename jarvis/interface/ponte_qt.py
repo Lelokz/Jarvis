@@ -34,6 +34,7 @@ class PonteQt(QObject):
     conexaoMudou = Signal(bool)
     sessaoRecebida = Signal(str, str)      # nome do Jarvis, caminho do log
     historicoRecebido = Signal(list)       # a conversa que já existia
+    avisoMudou = Signal(str, float)        # "ok"|"limite"|"offline", volta_em (época, 0 = não sei)
 
     def __init__(self, caminho: Path, parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -97,6 +98,8 @@ class PonteQt(QObject):
         elif tipo == "jarvis_disse":
             self.jarvisDisse.emit(str(ev.get("texto", "")), str(ev.get("acao") or ""),
                                   bool(ev.get("perguntando")))
+        elif tipo == "aviso":
+            self.avisoMudou.emit(str(ev.get("tipo") or "ok"), float(ev.get("volta_em") or 0))
         elif tipo == "historico":
             self.historicoRecebido.emit(list(ev.get("falas") or []))
         elif tipo == "sessao":

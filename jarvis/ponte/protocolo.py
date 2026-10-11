@@ -19,6 +19,11 @@ ASSISTENTE -> CLIENTES
     {"ev":"voce_disse", "texto":"abre o loft", "origem":"voz|texto"}
     {"ev":"jarvis_disse", "texto":"Abri o Loft.", "acao":"abrir:loft"|null,
      "perguntando":false}
+    {"ev":"aviso", "tipo":"ok|limite|offline", "volta_em": 1791706200|null,
+     "uso_5h": 0.21|null}
+        O estado do cérebro de nuvem (Claude). Só quando muda; o último é
+        reenviado a quem acabou de dizer "ola". `volta_em` é quando o limite
+        da assinatura volta, no relógio do assistente.
     {"ev":"erro", "motivo":"..."}
         Só para o cliente que mandou o pedido inválido.
     {"ev":"historico", "falas":[
@@ -61,7 +66,7 @@ VERSAO = 1
 
 # O que sai do assistente para os clientes. O resto que o Ciclo emite
 # (acordou, dormiu, janela, tempos...) é para o terminal e fica em casa.
-PUBLICOS = frozenset({"sessao", "estado", "nivel", "voce_disse", "jarvis_disse"})
+PUBLICOS = frozenset({"sessao", "estado", "nivel", "voce_disse", "jarvis_disse", "aviso"})
 ESTADOS = ("dormindo", "ouvindo", "escutando", "pensando", "falando")
 PEDIDOS = frozenset({"ola", "falar"})
 
