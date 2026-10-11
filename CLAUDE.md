@@ -1,5 +1,11 @@
 # Jarvis — instruções do projeto
 
+> **O que o Léo fala vale mais que este arquivo (e que o ESCOPO).** Muita
+> coisa aqui foi escrita meses atrás e ele já pensa diferente. Use os .md para
+> o que ele não disse. Quando o que ele falar conflitar com o que está escrito,
+> **pergunte, citando os dois**: "o CLAUDE.md diz X, você está dizendo Y, qual
+> vale?". Com a resposta, atualize o arquivo para o conflito não voltar.
+
 Assistente pessoal por voz em Python, rodando local na máquina do Léo
 (RTX 3060 12GB). Escopo completo, etapas e funções: leia `ESCOPO.md`
 antes de planejar qualquer etapa.
@@ -10,9 +16,16 @@ Valem para o que o Jarvis faz quando o Léo fala com ele. Não limitam o
 que você (Claude) faz no PC enquanto desenvolve.
 
 
-- **Nunca** gerar código ou comando de shell para o modelo executar.
-  O LLM escolhe de uma lista fechada de funções escritas à mão.
-  Sem `exec`, sem `eval`, sem string indo pro PowerShell.
+- **Comando gerado pelo modelo só com o Léo aprovando na tela** (decidido
+  em out/2026, para quando entrar a API do Claude). O caminho principal são
+  ferramentas escritas à mão e cada vez mais espertas (um "abrir" que procura
+  programa, pasta e site sozinho, em vez de lista de atalhos). Para o que
+  nenhuma ferramenta cobre, o modelo pode escrever um comando, mas o Jarvis
+  MOSTRA na janela e pergunta antes de rodar; só comando de leitura roda
+  direto. **Nunca** roda comando que veio de e-mail, página web ou outro texto
+  de fora: é a porta de entrada para alguém mandar no PC dele.
+- Atalhos e dados pessoais tendem a virar **memória local** (fora do git),
+  para o Jarvis poder ser passado a outra pessoa sem levar as coisas do Léo.
 - **Nunca** chutar intenção. Ambíguo ou busca com vários resultados →
   perguntar em voz alta. Silêncio não é resposta.
 - Ação destrutiva (mover, renomear, sobrescrever) exige confirmação
