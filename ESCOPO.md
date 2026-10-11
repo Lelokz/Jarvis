@@ -112,6 +112,7 @@ pacotes (**não** instalar `xapp-sn-watcher`: conflita com o Mint).
 | "abre o Discord", "abre o Kabum", "abre o projeto Loft" | abre **qualquer programa instalado, favorito do Brave ou projeto do VS Code**, sem cadastro (ver abaixo) |
 | "fecha o Discord", "fecha a pasta Downloads", "fecha essa janela" | fecha como o × (o programa pergunta se quiser salvar); **várias janelas ou uma aba do navegador → pergunta antes** |
 | "põe o Discord na frente", "vai pro terminal", "minimiza o Brave", "maximiza essa janela", "restaura o terminal" | mexe na janela, sem perguntar (inofensivo) |
+| "coloca o Brave na esquerda e os arquivos na direita", "joga o terminal no canto superior direito", "divide a tela entre o Brave e o VS Code" | encaixa nas metades e quartos da tela, como arrastar até a borda |
 | "minimiza tudo" / "mostra a área de trabalho", e "volta as janelas" | esconde tudo e traz de volta |
 | "abre gravações", "abre o loft" | o que está no `atalhos.toml` ganha de tudo |
 | "abre o relatório" | nada com esse nome: **busca** no disco e pergunta qual se achar vários |
@@ -163,6 +164,12 @@ só esconde a janela e continua rodando, igual ao ×.
 janelas do programa; trazer, maximizar e restaurar, para a mais recente.
 Minimizar não dá pelo `wmctrl` no Cinnamon (medido): usa `python-xlib` com o
 pedido padrão de minimizar (ICCCM `WM_CHANGE_STATE`).
+
+**Encaixar** usa o encaixe do próprio Cinnamon (Super+seta, os atalhos
+padrão), simulando a tecla com `python-xlib`. Antes, a janela é solta numa
+posição neutra, porque o resultado do Super+seta depende de onde ela estava.
+E só aperta se a janela certa estiver em foco: senão as teclas iriam para
+outra janela. Se alguém mudar os atalhos de encaixe do Cinnamon, isto para.
 
 Arquivos editáveis à mão: `atalhos.toml` (o que ele abre), `config.toml`
 (frases, pastas liberadas e vetadas, limites), `memoria.txt` (o que ele sabe

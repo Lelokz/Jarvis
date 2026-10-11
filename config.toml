@@ -80,6 +80,8 @@ janela_maximizar = "Maximizei {nome}."
 janela_restaurar = "Restaurei {nome}."
 janela_area = "Pronto, área de trabalho."
 janela_area_volta = "Janelas de volta."
+# Quando não deu para pôr a janela em foco antes de encaixar (aí ele não mexe).
+janela_sem_foco = "Não consegui mexer em {nome}."
 
 # Quando você manda ele dormir ("dorme aí"). Curta: ele fala e volta a dormir
 # na hora, sem esperar a janela de 30s.

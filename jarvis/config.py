@@ -47,6 +47,7 @@ class Persona:
     janela_restaurar: str
     janela_area: str
     janela_area_volta: str
+    janela_sem_foco: str
     qual_musica: str
     musica_nao_achei: str
     musica_nao_saiu: str

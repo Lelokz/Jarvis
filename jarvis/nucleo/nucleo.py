@@ -319,6 +319,10 @@ class Nucleo:
         if alvo:
             return self._fechar(alvo, texto)
 
+        encaixes = janelas.pedido_de_encaixar(texto)
+        if encaixes:
+            return self._encaixar(encaixes, texto)
+
         mexer = janelas.pedido_de_mexer(texto)
         if mexer is not None:
             return self._mexer_janela(*mexer, texto)
@@ -833,6 +837,25 @@ class Nucleo:
              "restaurar": janelas.restaurar}[acao](lista[-1])
         return Resposta(self._frase(f"janela_{acao}", nome=nome),
                         acao=f"janela:{acao}:{nome}", diagnostico=diag)
+
+    def _encaixar(self, pedidos: list[tuple[str, str]], dito: str) -> Resposta:
+        """"Coloca o Brave na esquerda e os arquivos na direita". Inofensivo."""
+        diag = {"origem": "encaixar", "dito": dito, "pedidos": pedidos}
+        feitos, falhas = [], []
+        for alvo, pos in pedidos:
+            lista, nome, _ = self._achar_janelas(alvo)
+            if not lista:
+                falhas.append(self._frase("fechar_nada", nome=alvo))
+            elif janelas.encaixar(lista[-1], pos):
+                feitos.append(f"{nome} {janelas.falar_posicao(pos)}")
+            else:
+                falhas.append(self._frase("janela_sem_foco", nome=nome))
+        diag["feitos"], diag["falhas"] = feitos, falhas
+        fala = " e ".join(feitos)
+        fala = (fala[:1].upper() + fala[1:] + ".") if fala else ""
+        return Resposta(f"{fala} {' '.join(falhas)}".strip(),
+                        acao=f"janela:encaixar:{'; '.join(feitos)}" if feitos else None,
+                        diagnostico=diag)
 
     def _fechar(self, alvo: str, dito: str) -> Resposta:
         diag = {"origem": "fechar", "dito": dito, "alvo": alvo}

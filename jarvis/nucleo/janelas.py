@@ -102,6 +102,121 @@ def pedido_de_mexer(falado: str) -> tuple[str, str | None] | None:
     return None
 
 
+# --- encaixar na tela ("o Brave na esquerda, os arquivos na direita") --------
+#
+# Usa o encaixe do próprio Cinnamon, o mesmo de arrastar a janela até a borda:
+# foca a janela e aperta Super+seta (os atalhos padrão do Cinnamon). Medido:
+# o resultado depende de onde a janela já estava (→ depois de um quarto vira
+# a metade de cima), então antes de encaixar a janela é solta numa posição
+# neutra. Assim as 8 posições saem sempre iguais.
+_TECLAS = {
+    "esquerda": ("Left",), "direita": ("Right",), "cima": ("Up",), "baixo": ("Down",),
+    "cima esquerda": ("Left", "Up"), "cima direita": ("Right", "Up"),
+    "baixo esquerda": ("Left", "Down"), "baixo direita": ("Right", "Down"),
+}
+_FALA_DA_POSICAO = {
+    "esquerda": "na esquerda", "direita": "na direita", "cima": "em cima",
+    "baixo": "embaixo", "cima esquerda": "em cima à esquerda",
+    "cima direita": "em cima à direita", "baixo esquerda": "embaixo à esquerda",
+    "baixo direita": "embaixo à direita",
+}
+_VERBO_POR = re.compile(r"^(?:coloca|colocar|p[õo]e|bota|joga|manda|move|leva|deixa)[\s,]+",
+                        re.IGNORECASE)
+_LUGAR = re.compile(
+    r"^(.+?)[\s,]+(?:na|no|pra|para|em|à|a)[\s,]+(?:a\s+)?"
+    r"((?:metade|lado|parte|canto|ponta)?[\s\w]*?"
+    r"(?:direit[ao]|esquerd[ao]|cima|baixo|embaixo|topo|superior|inferior)"
+    r"[\s\w]*?)(?:[\s,]+da tela)?$", re.IGNORECASE)
+
+
+def _posicao(lugar: str) -> str | None:
+    p = normalizar(lugar).split()
+    lado = "direita" if any(w.startswith("direit") for w in p) else \
+           "esquerda" if any(w.startswith("esquerd") for w in p) else None
+    alto = "cima" if any(w in ("cima", "topo", "superior") for w in p) else \
+           "baixo" if any(w in ("baixo", "embaixo", "inferior") for w in p) else None
+    if lado and alto:
+        return f"{alto} {lado}"
+    return lado or alto
+
+
+def pedido_de_encaixar(falado: str) -> list[tuple[str, str]] | None:
+    """[(alvo, posição), ...] ou None. "coloca o Brave na esquerda e os arquivos
+    na direita" → [("Brave", "esquerda"), ("arquivos", "direita")]."""
+    texto = _limpar_fala(falado)
+    m = re.match(r"^divid[ea][\s,]+(?:a tela[\s,]+)?entre[\s,]+(.+?)[\s,]+e[\s,]+(.+)$",
+                 texto, re.IGNORECASE)
+    if m:
+        return [(_limpar_alvo(m.group(1)), "esquerda"), (_limpar_alvo(m.group(2)), "direita")]
+    if not _VERBO_POR.match(texto):
+        return None
+    texto = _VERBO_POR.sub("", texto)
+    pedidos = []
+    for parte in re.split(r"[\s,]+e[\s,]+(?=(?:o|a|os|as)\s)", texto, flags=re.IGNORECASE):
+        parte = _VERBO_POR.sub("", parte.strip())
+        m = _LUGAR.match(parte)
+        if not m:
+            return None
+        alvo, lugar = m.group(1), m.group(2)
+        # "o Brave lá em cima", "o Discord embaixo na esquerda": o que vem
+        # colado no nome é posição, não nome.
+        while True:
+            fim = re.search(r"[\s,]+(l[áa]|ali|aqui|embaixo|em cima|cima|baixo)$", alvo,
+                            re.IGNORECASE)
+            if not fim:
+                break
+            if fim.group(1).lower() not in ("lá", "la", "ali", "aqui"):
+                lugar = f"{fim.group(1)} {lugar}"
+            alvo = alvo[:fim.start()]
+        pos = _posicao(lugar)
+        alvo = _limpar_alvo(alvo)
+        if not pos or not alvo:
+            return None
+        pedidos.append((alvo, pos))
+    return pedidos or None
+
+
+def falar_posicao(pos: str) -> str:
+    return _FALA_DA_POSICAO[pos]
+
+
+def _apertar(*teclas: str) -> None:
+    from Xlib import X, XK, display
+    from Xlib.ext import xtest
+    d = display.Display()
+    codigos = [d.keysym_to_keycode(XK.string_to_keysym(t)) for t in teclas]
+    for c in codigos:
+        xtest.fake_input(d, X.KeyPress, c)
+    for c in reversed(codigos):
+        xtest.fake_input(d, X.KeyRelease, c)
+    d.sync()
+    d.close()
+
+
+def encaixar(j: Janela, pos: str) -> bool:
+    """Encaixa a janela na posição. False se não conseguiu pôr ela em foco —
+    aí NÃO aperta nada: as teclas iriam para a janela errada."""
+    import time
+    _wmctrl("-i", "-r", j.id, "-b", "remove,maximized_vert,maximized_horz")
+    _wmctrl("-i", "-r", j.id, "-e", "0,480,270,960,540")  # solta do encaixe anterior
+    time.sleep(0.3)
+    trazer(j)
+    for _ in range(10):
+        time.sleep(0.1)
+        a = ativa()
+        if a is not None and a.id == j.id:
+            break
+    else:
+        return False
+    for seta in _TECLAS[pos]:
+        try:
+            _apertar("Super_L", seta)
+        except Exception:
+            return False
+        time.sleep(0.4)
+    return True
+
+
 def pedido_de_fechar(falado: str) -> str | None:
     """O que mandaram fechar, ou None se a frase não é "fecha X"."""
     m = _FECHAR.match(falado.strip())
