@@ -26,6 +26,7 @@ from .agenda import Agenda, ErroDaAgenda
 from .ancoragem import ancoragem
 from .atalhos import Atalho, Casamento, Desfecho, Tabela, normalizar
 from .busca import Achado, Buscador, pastas_que_distinguem
+from .catalogo import Catalogo
 from .cerebro import Cerebro, Confirmacao, ErroDoCerebro
 
 __all__ = ["Nucleo", "Resposta", "ErroDoCerebro"]
@@ -80,10 +81,16 @@ class Resposta:
     depois: Callable[[], object] | None = None
 
 
+# A partir daqui o abrir age sem perguntar (ver `_resolver`).
+CHUTE = 0.80
+
+
 class Nucleo:
     def __init__(self, cfg: Config) -> None:
         self.cfg = cfg
         self.tabela = Tabela.carregar(cfg.raiz / "atalhos.toml")
+        # Programas, projetos do VS Code e favoritos do Brave, lidos do PC.
+        self.tabela.catalogo = Catalogo()
         self.cerebro = Cerebro(cfg.llm)
         self.cerebro.conferir()
         self.cerebro.usar_atalhos([a.nome for a in self.tabela.atalhos])
@@ -1292,7 +1299,15 @@ class Nucleo:
         if casamento.desfecho is Desfecho.CERTO:
             return self._executar(casamento.atalho, diag)
 
-        # SUGESTAO — pergunta antes de agir. É a §2.2: não chutar.
+        # Abrir é inofensivo: casou razoavelmente bem e sem concorrente, ele
+        # abre e diz o NOME do que abriu — se for o errado, você ouve na hora.
+        # Decisão do Léo (out/2026): chutar pode em coisa inofensiva; pergunta
+        # só no empate e no casamento fraco.
+        if not casamento.empatados and casamento.pontuacao >= CHUTE:
+            diag["chute"] = True
+            return self._executar(casamento.atalho, diag)
+
+        # Empate ou casamento fraco: pergunta.
         self._pendente = casamento.atalho
         if casamento.empatados:
             a, b = casamento.empatados

@@ -109,7 +109,9 @@ pacotes (**não** instalar `xapp-sn-watcher`: conflita com o Mint).
 
 | você diz | o que acontece |
 |---|---|
-| "abre o loft", "abre gravações" | abre pelo `atalhos.toml` (site, pasta, VS Code); fora da tabela, **busca** no disco e pergunta qual se achar vários |
+| "abre o Discord", "abre o Kabum", "abre o projeto Loft" | abre **qualquer programa instalado, favorito do Brave ou projeto do VS Code**, sem cadastro (ver abaixo) |
+| "abre gravações", "abre o loft" | o que está no `atalhos.toml` ganha de tudo |
+| "abre o relatório" | nada com esse nome: **busca** no disco e pergunta qual se achar vários |
 | "toca X", "toca X no YouTube" | toca no mpv (só áudio) ou no Brave; só diz "tocando" depois do som sair |
 | "pausa", "continua", "próxima", "aumenta o volume" | controle de mídia; "do Brave"/"do computador" escolhe o player |
 | "volume 80" | **pergunta antes** (acima de 70) |
@@ -124,6 +126,21 @@ pacotes (**não** instalar `xapp-sn-watcher`: conflita com o Mint).
 | "qual o nome da minha namorada?" | responde pela memória; sem resposta, diz que não sabe |
 | "esquece", "cancela", "deixa pra lá" | larga o que estiver pendente e diz o que largou |
 | "dorme aí", "tchau" | "Tá bom." e dorme |
+
+**De onde vem o que ele sabe abrir** (`catalogo.py`, lido do PC na hora, a
+cada 5 min, e nunca para o git):
+
+- **programas:** os ícones do menu (`.desktop`), Flatpak incluído. Também pelo
+  nome em inglês e por apelidos comuns ("vs code", "navegador", "zap");
+- **projetos do VS Code:** toda pasta já aberta nele, falada como
+  "projeto <nome>";
+- **favoritos do Brave:** o nome sai do endereço (`kabum.com.br` → "kabum",
+  `music.youtube.com` → "youtube music").
+
+Casou bem e sem concorrente, **ele abre e diz o nome** do que abriu, mesmo sem
+certeza total (abrir é inofensivo). Dois parecidos ("whatsapp": ZapZap ou
+WhatsApp Web?) → pergunta. Programa ganha de favorito com o mesmo nome
+("minecraft" é o launcher, não o site).
 
 Arquivos editáveis à mão: `atalhos.toml` (o que ele abre), `config.toml`
 (frases, pastas liberadas e vetadas, limites), `memoria.txt` (o que ele sabe
@@ -194,6 +211,10 @@ Jarvis é o teste que vale; o resto se confere olhando.
   denuncia antes de marcar.
 - A busca não acha arquivo com acento quando se fala sem acento.
 - Pergunta sem resposta na memória ouve "Isso eu ainda não sei fazer".
+- "Abre o monitor do sistema" não chega a chamar o abrir (o modelo não
+  reconhece como pedido de abrir); "abre o System Monitor" funciona.
+- O vocabulário do Whisper só conhece os nomes do `atalhos.toml`; nome de
+  programa difícil (Kdenlive, Crunchyroll) pode sair errado na transcrição.
 - O Piper lê mal letra solta e número com vírgula.
 - Música às vezes vem a versão errada (é o 1º resultado do YouTube).
 

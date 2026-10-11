@@ -73,6 +73,19 @@ def abrir_caminho(caminho: Path, comandos: Comandos) -> Resultado:
 
 
 def executar(atalho: Atalho, comandos: Comandos) -> Resultado:
+    if atalho.tipo == "app":
+        # Programa instalado: o `gio launch` lê o próprio .desktop do menu, do
+        # mesmo jeito que clicar no ícone. O alvo é o caminho do .desktop,
+        # que veio do catálogo do sistema e não do modelo.
+        comando = ["gio", "launch", atalho.alvo]
+        if shutil.which("gio") is None or not Path(atalho.alvo).is_file():
+            return Resultado(False, f"Não consegui abrir {atalho.nome}.", comando)
+        try:
+            _abrir(comando)
+        except OSError as e:
+            return Resultado(False, f"Não consegui abrir {atalho.nome}: {e}", comando)
+        return Resultado(True, f"Abrindo {atalho.nome}.", comando)
+
     executavel = {
         "site": comandos.site,
         "pasta": comandos.pasta,

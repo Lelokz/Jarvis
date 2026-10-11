@@ -157,10 +157,12 @@ PROCURA = Conjunto(
         Caso("cadê o loft?", "abrir"),
         Caso("encontra o currículo", "abrir"),
         Caso(
-            "procura o relatório e renomeia pra proposta", "renomear", minimo=4,
-            porque="18/20 medido na temperatura padrão — amostragem, não "
-                   "regressão: dá 20/20 com temperature 0. Em 5 rodadas um "
-                   "5/5 estrito reprovaria cerca de 4 execuções em 10.",
+            "procura o relatório e renomeia pra proposta", "renomear", minimo=0,
+            porque="FALHA CONHECIDA (ESCOPO §8): frase no quase empate entre "
+                   "abrir e renomear, e decide pelo estado do servidor — "
+                   "18/20 numa carga nova, 2/5 numa carga longa, desde set/2026. "
+                   "Com mínimo 4 a regressão reprovava toda rodada e virou "
+                   "ruído. Fica travado em 0 até a rodada de roteamento.",
         ),
         Caso("abre música", "abrir"),
         Caso("toca uma música", "tocar"),

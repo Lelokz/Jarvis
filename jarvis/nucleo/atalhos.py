@@ -40,11 +40,21 @@ CERTEZA = 0.92
 SUGESTAO = 0.60
 # Dois candidatos separados por menos que isto são um empate: perguntar qual.
 EMPATE = 0.08
+# Coisa descoberta no PC (programa, favorito, projeto) só entra na disputa a
+# partir disto. São ~200 nomes curtos: com o piso de 0.60, "relatório" ia
+# virar "você quis dizer Rede?" em vez de cair na busca do disco.
+MINIMO_SISTEMA = 0.75
+# O que se fala é o começo do nome: "brave" → "Brave Web Browser".
+COMECO_DO_NOME = 0.93
+# Todas as palavras faladas estão no nome, fora de ordem ou no meio:
+# "writer" → "LibreOffice Writer".
+PALAVRAS_DO_NOME = 0.88
 
 # "musica" entra na Etapa 3: o alvo é um termo de busca ou uma URL, e quem
 # executa é o midia.py, não o acoes.py. É o caso "toca aquela música" — uma
 # linha na tabela, sem sistema novo.
 TIPOS_VALIDOS = ("site", "pasta", "vscode", "musica")
+# "app" só vem do catálogo (programas instalados), nunca do atalhos.toml.
 
 
 class Desfecho(Enum):
@@ -58,6 +68,11 @@ class Atalho:
     nome: str
     tipo: str
     alvo: str
+    # Outros nomes que também casam ("discord" para "Discord", o nome em
+    # inglês de um programa). O `nome` é o que ele FALA.
+    apelidos: tuple[str, ...] = ()
+    # "tabela" = atalhos.toml (o Léo escreveu); "sistema" = descoberto no PC.
+    origem: str = "tabela"
 
 
 @dataclass(frozen=True)
@@ -90,10 +105,38 @@ def normalizar(texto: str) -> str:
     return " ".join(palavras) if palavras else limpo
 
 
+def nota(falado: str, chave: str) -> float:
+    """Quão parecido o que foi falado é com um nome, os dois já normalizados."""
+    base = difflib.SequenceMatcher(None, falado, chave).ratio()
+    if not falado or falado == chave:
+        return base
+    if chave.startswith(falado + " "):
+        return max(base, COMECO_DO_NOME)
+    palavras = falado.split()
+    if set(palavras) <= set(chave.split()):
+        return max(base, PALAVRAS_DO_NOME)
+    return base
+
+
 class Tabela:
-    def __init__(self, atalhos: list[Atalho]) -> None:
+    def __init__(self, atalhos: list[Atalho], catalogo=None) -> None:
+        # `atalhos` é só o atalhos.toml: é o que vai para o prompt do modelo e
+        # para o vocabulário do Whisper. O catálogo do PC entra só no casar.
         self.atalhos = atalhos
-        self._normalizados = [(normalizar(a.nome), a) for a in atalhos]
+        self.catalogo = catalogo
+
+    def _candidatos(self) -> list[tuple[str, Atalho, bool]]:
+        """(nome normalizado, atalho, é apelido?)"""
+        chaves = [(normalizar(a.nome), a, False) for a in self.atalhos]
+        if self.catalogo is not None:
+            # O atalhos.toml ganha: nome igual a um atalho do Léo não entra.
+            do_leo = {c for c, _, _ in chaves}
+            for a in self.catalogo.itens():
+                for i, nome in enumerate((a.nome, *a.apelidos)):
+                    c = normalizar(nome)
+                    if c and c not in do_leo:
+                        chaves.append((c, a, i > 0))
+        return chaves
 
     @classmethod
     def carregar(cls, caminho: Path) -> Tabela:
@@ -130,18 +173,43 @@ class Tabela:
     def pontuar(self, falado: str) -> list[tuple[Atalho, float]]:
         """Todos os atalhos, do mais parecido ao menos."""
         alvo = normalizar(falado)
-        notas = [
-            (atalho, difflib.SequenceMatcher(None, alvo, nome).ratio())
-            for nome, atalho in self._normalizados
-        ]
-        return sorted(notas, key=lambda p: p[1], reverse=True)
+        # Um atalho com vários apelidos fica com a melhor nota entre eles —
+        # senão "Discord" e "discord" empatariam consigo mesmos.
+        melhores: dict[int, tuple[Atalho, float]] = {}
+        for chave, atalho, apelido in self._candidatos():
+            n = nota(alvo, chave)
+            # Apelido perde por um fio do nome de verdade: "steam" é o Steam,
+            # não o "Install Steam" cujo arquivo também se chama steam.
+            if apelido:
+                n *= 0.99
+            if atalho.origem == "sistema" and n < MINIMO_SISTEMA:
+                continue
+            if id(atalho) not in melhores or n > melhores[id(atalho)][1]:
+                melhores[id(atalho)] = (atalho, n)
+        return sorted(melhores.values(), key=lambda p: p[1], reverse=True)
 
     def casar(self, falado: str) -> Casamento:
-        if not falado.strip() or not self.atalhos:
+        if not falado.strip():
             return Casamento(Desfecho.NADA, None, 0.0)
 
         notas = self.pontuar(falado)
+        if not notas:
+            return Casamento(Desfecho.NADA, None, 0.0)
         melhor, nota = notas[0]
+
+        # Programa ganha de favorito com o mesmo nome: "abre o minecraft" é o
+        # launcher, não o site minecraft.net que está nos favoritos.
+        if melhor.tipo == "site" and melhor.origem == "sistema":
+            for outro, n in notas[1:]:
+                if n < COMECO_DO_NOME:
+                    break
+                if outro.tipo == "app":
+                    return Casamento(Desfecho.CERTO, outro, n)
+
+        # Nome exato não empata com nada: "libreoffice" é o LibreOffice, mesmo
+        # existindo "LibreOffice Writer" logo atrás.
+        if nota >= 0.999:
+            return Casamento(Desfecho.CERTO, melhor, nota)
 
         if nota < SUGESTAO:
             return Casamento(Desfecho.NADA, None, nota)
