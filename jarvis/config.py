@@ -29,6 +29,7 @@ class Persona:
     busca_mesmo_lugar: str
     bloqueando: str
     tela_sem_comando: str
+    indo_dormir: str
     qual_musica: str
     musica_nao_achei: str
     musica_nao_saiu: str

@@ -21,6 +21,7 @@ from __future__ import annotations
 import argparse
 import dataclasses
 import math
+import signal
 import sys
 import time
 from datetime import datetime
@@ -31,6 +32,7 @@ import numpy as np
 
 from jarvis import config, cronometro, eventos, microfone, tts, wakeword
 from jarvis.cronometro import Tempos
+from jarvis.nucleo.atalhos import normalizar
 from jarvis.nucleo.nucleo import ErroDoCerebro, Nucleo
 from jarvis.ponte import protocolo
 from jarvis.ponte.servidor import Servidor, ServidorOcupado
@@ -139,6 +141,27 @@ class Terminal:
                 f"tts {ev['tts_s']:.2f}s · "
                 f"latência {ev['latencia_s']:.2f}s"
             )
+
+
+# "Dorme aí": ele volta a dormir na hora, sem esperar a janela de 30s. Para
+# quando você vai conversar com outra pessoa e não quer que ele responda.
+#
+# Fica no CLIENTE, e não no núcleo: dormir e acordar é o ciclo do microfone, e
+# o núcleo não sabe o que é isso (ESCOPO §4). Lista fechada contra a fala
+# INTEIRA, já normalizada (sem acento, pontuação e artigo): "dorme" casa,
+# "o arquivo dorme na pasta" não. Errar aqui custa pouco — no pior caso ele
+# dorme e você chama de novo.
+COMANDOS_DE_DORMIR = {
+    "dorme", "dorme ai", "dorme jarvis", "jarvis dorme", "vai dormir",
+    "pode dormir", "pode ir dormir", "vai dormir jarvis", "pode dormir jarvis",
+    "dormir", "descansa", "vai descansar", "pode descansar",
+    "tchau", "tchau jarvis", "valeu pode dormir", "obrigado pode dormir",
+    "volta dormir", "volta pra dormir", "volta para dormir",
+}
+
+
+def e_comando_de_dormir(texto: str) -> bool:
+    return normalizar(texto) in COMANDOS_DE_DORMIR
 
 
 def _emissor_de_terminal(cfg: config.Config) -> eventos.Emissor:
@@ -386,6 +409,12 @@ class Ciclo:
         """
         self._mudar_estado("pensando")
         self.emissor.emitir("voce_disse", texto=texto, origem=origem)
+
+        if e_comando_de_dormir(texto):
+            self.registrador.registrar_estado("pediu_para_dormir", texto=texto)
+            self._falar(self.cfg.persona.indo_dormir)
+            self.dormir("você pediu")
+            return
 
         # Aqui o cliente entrega o texto e recebe texto. Tudo o que decide e
         # executa está do outro lado da linha do ESCOPO §4 — este laço não
@@ -864,7 +893,17 @@ def listar_dispositivos() -> int:
 # ---------------------------------------------------------------------------
 
 
+def _desligar_como_ctrl_c(*_) -> None:
+    raise KeyboardInterrupt
+
+
 def main(argv: list[str] | None = None) -> int:
+    # Ligado pelo jarvis.sh, o assistente roda em segundo plano, e o bash faz
+    # programa em segundo plano IGNORAR o ctrl+c. Então o "desligar" manda
+    # SIGTERM, e ele vira o mesmo ctrl+c de sempre: fecha o microfone, apaga
+    # o socket e grava o resumo, em vez de morrer no meio.
+    signal.signal(signal.SIGINT, signal.default_int_handler)
+    signal.signal(signal.SIGTERM, _desligar_como_ctrl_c)
     p = argparse.ArgumentParser(
         description="Jarvis — assistente por voz com wake word (Etapa 0.6)."
     )

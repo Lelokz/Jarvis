@@ -1989,12 +1989,47 @@ python3 verificar_linha.py                      # o núcleo não conhece áudio
 E os testes da interface e da ponte, da Etapa 6:
 
 ```
-python3 testes/terminal_identico.py       # o terminal do Ciclo não mudou
-python3 testes/testar_ponte.py            # a ponte, e os processos de verdade
-python3 testes/testar_ciclo_eventos.py    # estados, nível e texto digitado
+.venv/bin/python testes/terminal_identico.py       # o terminal do Ciclo não mudou
+.venv/bin/python testes/testar_ponte.py            # a ponte, e os processos de verdade
+.venv/bin/python testes/testar_ciclo_eventos.py    # estados, nível e texto digitado
 ```
 
-### Como ligar cada parte
+### Como ligar o Jarvis (o jeito normal, sem terminal)
+
+**Clica no ícone "Jarvis"** — no menu do Mint (digita "Jarvis") ou na área de
+trabalho. Ele liga o assistente e abre a janela. A janela mostra "esperando o
+Jarvis subir" por uns 20 segundos enquanto ele carrega, e depois "DORMINDO".
+Aí é só dizer "hey Jarvis".
+
+- Clicar de novo com ele ligado só traz a janela pra frente; não liga dois.
+- **Desligar:** ícone **"Desligar Jarvis"** no menu. Fecha a janela e o
+  assistente.
+- Fechar a janela (×) **não** desliga o assistente: ele continua ouvindo, e o
+  ícone continua na bandeja.
+- O que o assistente escreveria no terminal vai para
+  `logs/assistente-terminal.log` — é lá que se olha quando algo der errado.
+
+Por baixo, os ícones chamam:
+
+```
+~/Projetos/Jarvis/jarvis.sh              # liga e abre a janela
+~/Projetos/Jarvis/jarvis.sh --desligar   # desliga tudo
+```
+
+Os ícones moram em `~/.local/share/applications/jarvis.desktop`,
+`jarvis-desligar.desktop` e `~/Área de trabalho/Jarvis.desktop`.
+
+### "Dorme aí": mandar ele dormir na hora
+
+Ele fica 30 s escutando depois de cada resposta. Se você vai falar com outra
+pessoa e não quer que ele responda, diga **"dorme aí"** (ou "vai dormir",
+"pode dormir", "tchau"). Ele diz "Tá bom." e volta a dormir na hora.
+
+Mora no cliente de voz (`COMANDOS_DE_DORMIR`, no `assistente.py`), não no
+núcleo: dormir é o ciclo do microfone, que o núcleo não conhece. Lista fechada
+contra a fala inteira, então "o arquivo dorme na pasta" não casa.
+
+### Ligar cada parte no terminal (para depurar)
 
 Em **dois terminais**, porque cada um fica rodando. **O `cd` faz parte do
 comando:** o `.venv/bin/python` é caminho relativo, e de qualquer outra pasta o

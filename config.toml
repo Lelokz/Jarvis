@@ -59,6 +59,10 @@ bloqueando = "Bloqueando."
 # falar, para ele nunca dizer "bloqueando" e não bloquear.
 tela_sem_comando = "Não consigo bloquear a tela aqui."
 
+# Quando você manda ele dormir ("dorme aí"). Curta: ele fala e volta a dormir
+# na hora, sem esperar a janela de 30s.
+indo_dormir = "Tá bom."
+
 qual_musica = "Qual música?"
 musica_nao_achei = "Não achei nada no YouTube com {termo}."
 
