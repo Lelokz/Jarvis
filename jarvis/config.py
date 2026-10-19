@@ -17,91 +17,16 @@ RAIZ = Path(__file__).resolve().parent.parent
 class Persona:
     nome: str
     saudacao: str
-    nao_sei: str
-    nao_entendi: str
-    o_que_entao: str
-    nada_pendente: str
-    pista_ruim: str
-    busca_poucos: str
-    busca_muitos: str
-    busca_muitos_ainda: str
-    busca_nada: str
-    busca_mesmo_lugar: str
-    bloqueando: str
-    tela_sem_comando: str
     indo_dormir: str
-    memoria_guardei: str
-    memoria_ja_sabia: str
-    memoria_nao_achei: str
-    memoria_confirmar: str
-    memoria_esqueci: str
-    memoria_mantive: str
-    fechei: str
-    fechar_nada: str
-    fechar_varias: str
-    fechar_navegador: str
-    fechar_mantive: str
-    janela_trazer: str
-    janela_minimizar: str
-    janela_maximizar: str
-    janela_restaurar: str
-    janela_area: str
-    janela_area_volta: str
-    janela_sem_foco: str
+    parei: str
     limite_acabou: str
     limite_acabou_sem_hora: str
     sem_internet: str
     cerebro_falhou: str
-    parei: str
     whats_chegou: str
     whats_chegou_sem_texto: str
     whats_varias: str
     whats_oferta: str
-    whats_o_que_responder: str
-    whats_tudo_bem: str
-    whats_mandei: str
-    whats_nao_mandei: str
-    whats_cancelado: str
-    whats_qual_contato: str
-    whats_mesmo_nome: str
-    whats_nao_achei: str
-    whats_desligado: str
-    qual_musica: str
-    musica_nao_achei: str
-    musica_nao_saiu: str
-    volume_confirmar: str
-    volume_cancelado: str
-    volume_descartado: str
-    agenda_confirmar: str
-    agenda_criado: str
-    agenda_cancelado: str
-    agenda_descartado: str
-    agenda_sem_quando: str
-    agenda_sem_hora: str
-    agenda_vazia: str
-    agenda_acabou: str
-    agenda_um: str
-    agenda_varios: str
-    agenda_muitos: str
-    arquivo_confirmar: str
-    arquivo_cancelado: str
-    arquivo_qual_nome: str
-    arquivo_qual: str
-    arquivo_fora_da_lista: str
-    arquivo_vetado: str
-    arquivo_onde_criar: str
-    arquivo_descartado: str
-    nada_para_desfazer: str
-    desisti: str
-    arquivo_mover_confirmar: str
-    arquivo_copiar_confirmar: str
-    arquivo_movimento_cancelado: str
-    arquivo_movimento_descartado: str
-    arquivo_sem_destino: str
-    arquivo_destino_desconhecido: str
-    arquivo_destino_fora_da_lista: str
-    arquivo_destino_vetado: str
-    arquivo_qual_destino: str
 
 
 @dataclass(frozen=True)
@@ -142,20 +67,6 @@ class Tts:
 
 
 @dataclass(frozen=True)
-class Llm:
-    cerebro: str
-    claude_binario: str
-    claude_modelo: str
-    claude_effort: str
-    claude_timeout_s: float
-    url: str
-    modelo: str
-    keep_alive: str
-    timeout_s: int
-    ancoragem_minima: float
-
-
-@dataclass(frozen=True)
 class Midia:
     comando_mpv: str
     comando_ytdlp: str
@@ -164,13 +75,6 @@ class Midia:
     passo_volume: int
     limite_confirmacao: int
     segundos_para_o_som: int
-
-
-@dataclass(frozen=True)
-class Acoes:
-    comando_site: str
-    comando_pasta: str
-    comando_vscode: str
 
 
 @dataclass(frozen=True)
@@ -198,29 +102,6 @@ class Agente:
 
 
 @dataclass(frozen=True)
-class Agenda:
-    fuso: str
-    duracao_padrao_min: int
-    max_eventos_falados: int
-
-
-@dataclass(frozen=True)
-class Arquivos:
-    onde_pode_mexer: list[str]
-    nunca_mexer: list[str]
-    nunca_mexer_nomes: list[str]
-    nunca_mexer_extensoes: list[str]
-
-
-@dataclass(frozen=True)
-class Busca:
-    raizes: list[str]
-    ignorar: list[str]
-    max_resultados: int
-    segundos_find: int
-
-
-@dataclass(frozen=True)
 class Log:
     salvar_audio: bool
     max_audios_wake: int
@@ -231,11 +112,6 @@ class Ponte:
     ligada: bool
     socket: str
     fila_max: int
-
-
-@dataclass(frozen=True)
-class Sistema:
-    comando_bloquear: list[str]
 
 
 @dataclass(frozen=True)
@@ -255,17 +131,11 @@ class Config:
     vad: Vad
     stt: Stt
     tts: Tts
-    llm: Llm
     midia: Midia
-    acoes: Acoes
     wakeword: WakeWord
     ciclo: Ciclo
-    agenda: Agenda
-    arquivos: Arquivos
-    busca: Busca
     log: Log
     ponte: Ponte
-    sistema: Sistema
     whatsapp: "Whatsapp"
     agente: Agente
     raiz: Path
@@ -289,17 +159,11 @@ _SECOES = {
     "vad": Vad,
     "stt": Stt,
     "tts": Tts,
-    "llm": Llm,
     "midia": Midia,
-    "acoes": Acoes,
     "wakeword": WakeWord,
     "ciclo": Ciclo,
-    "agenda": Agenda,
-    "arquivos": Arquivos,
-    "busca": Busca,
     "log": Log,
     "ponte": Ponte,
-    "sistema": Sistema,
     "whatsapp": Whatsapp,
     "agente": Agente,
 }

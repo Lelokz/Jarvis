@@ -9,350 +9,23 @@ nome = "Jarvis"
 
 # O que ele fala ao acordar. Curto: é confirmação de que ouviu, não conversa.
 saudacao = "Pois não?"
+# "Dorme aí".
+indo_dormir = "Tá bom."
+# "Para" no meio de uma tarefa do Claude.
+parei = "Parei."
 
-# Quando entendeu a frase mas não é nada que ele saiba fazer ainda.
-nao_sei = "Isso eu ainda não sei fazer."
-
-# Quando o modelo devolve um nome que não bate com o que você falou. Precisa
-# ser diferente do nao_sei, senão não dá para distinguir os dois no teste.
-nao_entendi = "Não entendi o nome, repete?"
-
-# Quando você nega uma confirmação sem dizer o que queria.
-o_que_entao = "O que você quis dizer?"
-
-# Quando você diz "pode" ou "não" e não há nada esperando confirmação.
-# Precisa ser diferente do nao_sei: cair no nao_sei fez o Léo sair de uma
-# conversa acreditando ter marcado um dentista que nunca existiu.
-nada_pendente = "Não tem nada esperando confirmação."
-
-# Quando a pista que você deu para estreitar uma busca não casa com nenhum
-# candidato. Os candidatos continuam guardados — é só tentar outra pista.
-pista_ruim = "Com essa pista não achei nada. Tenta outra?"
-
-# --- frases da desambiguação -------------------------------------------
-# Estas carregam a EXPLICAÇÃO de propósito. A versão anterior era só
-# "Achei três. Em qual pasta?" — e o Léo entendeu como "qual pasta você quer
-# de dentro daí", quando a pergunta era "em qual desses lugares está o que
-# você quer". Ele respondeu errado em todos os testes por causa disso.
-#
-# A frase precisa dizer três coisas: que são o MESMO NOME, que estão em
-# LUGARES DIFERENTES, e que a resposta esperada é o LUGAR.
-#
-# Campos disponíveis: {n} = quantos, {lugares} = a lista falada,
-# {termo} = o que você pediu.
-busca_poucos = "Achei {n} com esse nome, em lugares diferentes: {lugares}. Em qual deles?"
-busca_muitos = "Achei {n} coisas com esse nome espalhadas pelo disco. Me diz o nome de uma pasta do caminho pra estreitar."
-busca_muitos_ainda = "Ainda são {n} com esse nome. Me diz outra pasta do caminho pra estreitar."
-busca_nada = "Não achei nada chamado {termo}."
-
-# Os candidatos estão na MESMA pasta e só diferem pelo nome — "Trabalho sobre
-# Cuba.pdf" e "Trabalho sobre Cuba2.0.pdf". Perguntar "em qual pasta?" aqui é
-# pergunta sem resposta possível, e foi assim que a conversa travou.
-busca_mesmo_lugar = "Achei {n} no mesmo lugar, com nomes parecidos: {nomes}. Qual deles?"
-
-# Mídia (Etapa 3).
-# Bloquear a tela (Etapa 6.6). A fala vem ANTES do travamento: sem ela a tela
-# apaga e você não sabe se foi isso que ele entendeu. Curta de propósito — são
-# 0,74 s de áudio, medidos.
-bloqueando = "Bloqueando."
-# Quando o programa de bloquear não existe nesta máquina. Conferido antes de
-# falar, para ele nunca dizer "bloqueando" e não bloquear.
-tela_sem_comando = "Não consigo bloquear a tela aqui."
-
-# Memória. "lembra que…" guarda em memoria.txt; "esquece que…" pergunta antes.
-memoria_guardei = "Guardei."
-memoria_ja_sabia = "Isso eu já sabia."
-memoria_nao_achei = "Não lembro de nada parecido."
-memoria_confirmar = "Esqueço isto: {fato}?"
-memoria_esqueci = "Esqueci."
-memoria_mantive = "Tá, continuo lembrando."
-
-# Fechar programas ("fecha o Discord"). Fechar é o mesmo que clicar no ×.
-fechei = "Fechei {nome}."
-fechar_nada = "Não tem nada aberto chamado {nome}."
-fechar_varias = "Tem {n} janelas de {nome} abertas. Fecho todas?"
-fechar_navegador = "Isso fecha a janela inteira do navegador, com as outras abas. Fecho?"
-fechar_mantive = "Tá, deixei aberto."
-# Mexer em janela. Inofensivo: não pergunta.
-janela_trazer = "{nome} na frente."
-janela_minimizar = "Minimizei {nome}."
-janela_maximizar = "Maximizei {nome}."
-janela_restaurar = "Restaurei {nome}."
-janela_area = "Pronto, área de trabalho."
-janela_area_volta = "Janelas de volta."
-# Quando não deu para pôr a janela em foco antes de encaixar (aí ele não mexe).
-janela_sem_foco = "Não consegui mexer em {nome}."
-
-# Cérebro de nuvem (Claude). {hora} é "três e vinte da tarde"; {falta} é
-# "2 horas e 10 minutos".
+# O Claude fora do ar. O resto da fala é do próprio Claude (out/2026): ele
+# fala do jeito dele, sem frase pronta.
 limite_acabou = "Meu limite do Claude acabou. Volta {hora}, daqui a {falta}."
 limite_acabou_sem_hora = "Meu limite do Claude acabou. Ainda não sei quando volta."
 sem_internet = "Tô sem internet. Pausar, voltar e o volume ainda funcionam; o resto espera a internet voltar."
-# "Para" no meio de uma tarefa do Claude.
-parei = "Parei."
 cerebro_falhou = "Não consegui falar com o Claude agora. Tenta de novo?"
 
-# WhatsApp. {nome} é o contato; {texto} a mensagem.
+# WhatsApp que chega (o aviso é do corpo do Jarvis, sem o Claude).
 whats_chegou = "{nome} mandou: {texto}"
 whats_chegou_sem_texto = "Mensagem de {nome} no WhatsApp."
-# Várias seguidas da mesma pessoa viram um aviso só.
 whats_varias = "{nome} mandou {n} mensagens. A última: {texto}"
-# Depois de avisar, ele oferece: sem isso o Léo tinha que adivinhar que podia
-# responder.
 whats_oferta = "Quer responder?"
-whats_o_que_responder = "O que eu respondo?"
-whats_tudo_bem = "Tá."
-# Enviar NÃO pede confirmação (decisão do Léo, out/2026: "eu mandar já é a
-# confirmação"). Ele só diz pra quem foi.
-whats_mandei = "Mandei pra {nome}."
-whats_nao_mandei = "Não consegui mandar: {motivo}"
-whats_cancelado = "Tá, não mandei."
-whats_qual_contato = "Achei {opcoes}. Pra qual?"
-# Dois contatos salvos com o MESMO nome: o final do número separa.
-whats_mesmo_nome = "Tenho {n} {nome}: {opcoes}. Pra qual?"
-whats_nao_achei = "Não achei ninguém chamado {nome} no teu WhatsApp."
-whats_desligado = "O WhatsApp não tá conectado no Jarvis."
-
-# Quando você manda ele dormir ("dorme aí"). Curta: ele fala e volta a dormir
-# na hora, sem esperar a janela de 30s.
-indo_dormir = "Tá bom."
-
-qual_musica = "Qual música?"
-musica_nao_achei = "Não achei nada no YouTube com {termo}."
-
-# Achou o vídeo, mandou tocar, e o som não saiu no tempo. Precisa ser diferente
-# de "Tocando": dizer que está tocando quando não está foi exatamente o bug —
-# o Léo esperou, não veio som, e não tinha como saber se era ele ou o Jarvis.
-musica_nao_saiu = "Achei {titulo}, mas o som não saiu."
-
-# Volume acima do limite. Diz o número ANTES de mexer no som — é a única
-# chance de barrar um valor que o modelo entendeu errado antes de ele chegar
-# no seu ouvido.
-volume_confirmar = "Volume em {novo}. Pode?"
-volume_cancelado = "Beleza, deixa como está."
-volume_descartado = "Deixei o volume como estava."
-
-# Agenda (Etapa 4). A confirmação diz o DIA DA SEMANA de propósito: é assim que
-# você percebe que ele entendeu sábado quando você quis dizer segunda. Erro de
-# data é silencioso — um ISO bem formado e errado parece certo.
-agenda_confirmar = "{titulo} {quando}. Pode?"
-agenda_criado = "Marquei."
-agenda_cancelado = "Beleza, deixa pra lá."
-
-# Você tinha um evento esperando confirmação e falou de outra coisa. Ele
-# descarta e faz o que você pediu agora — mas diz o que caiu, com as mesmas
-# palavras que você tinha acabado de ouvir. Sumir calado é o que faz você
-# achar que marcou.
-agenda_descartado = "Descartei {titulo} {quando}."
-agenda_sem_quando = "Para quando?"
-
-# Ele disse o dia mas não a hora do dia. Perguntar é melhor que marcar num
-# horário que você não falou: "marca dentista amanhã" criava às 9h e
-# confirmava "dentista amanhã, sexta", sem hora — palpite invisível.
-# Período JÁ conta como hora dita: "amanhã de manhã" não cai aqui.
-agenda_sem_hora = "Que horas?"
-
-# Dia sem nenhum compromisso, do começo ao fim.
-agenda_vazia = "Você não tem nada {dia}."
-
-# Hoje tinha compromisso, mas todos já aconteceram. Precisa ser diferente do
-# agenda_vazia: "você não tem nada hoje" às 22h seria mentira sobre o dia, e
-# ler de volta o que já passou seria pior ainda.
-agenda_acabou = "Por hoje acabou, não tem mais nada."
-
-# Os três casos de lista. A separação existe porque a frase tem que dizer a
-# verdade sobre o que ela está fazendo: só o terceiro caso está resumindo, e
-# só ele anuncia o resumo. A versão anterior dizia "Os próximos:" sempre, e
-# num dia de 5 compromissos isso lia 3 sem avisar que havia mais.
-# {n} = quantos existem, {mostrados} = quantos ele vai falar.
-agenda_um = "Você tem um {dia}: {eventos}."
-agenda_varios = "Você tem {n} {dia}: {eventos}."
-agenda_muitos = "Você tem {n} {dia}. Os próximos {mostrados}: {eventos}."
-
-# Arquivos (Etapa 5). A confirmação diz os DOIS nomes, o atual e o novo, porque
-# é a única chance de você perceber que ele pegou o arquivo errado — a busca
-# pode ter achado um só e você nunca ouviu qual era.
-arquivo_confirmar = "Renomeio {atual} para {novo}. Pode?"
-arquivo_cancelado = "Beleza, deixa pra lá."
-
-# Ele entendeu qual arquivo mas não o nome novo. Medido: em 3 de 5 rodadas de
-# "muda o nome do print" o modelo devolve 'print' — o nome do próprio alvo —
-# com ancoragem 1.00, que a guarda não tem como barrar. Perguntar é a saída.
-arquivo_qual_nome = "Para o quê?"
-
-# Ele entendeu que era para renomear mas não qual arquivo ("renomeia esse aí").
-arquivo_qual = "Qual arquivo?"
-
-# Achou o arquivo, mas ele está fora do onde_pode_mexer. Precisa ser diferente
-# do busca_nada: dizer "não achei" seria mentira, e você ficaria repetindo o
-# nome achando que o Whisper errou.
-# Achou coisas com esse nome, e NENHUMA numa pasta liberada. Dizer quantas
-# importa: a frase antiga ("achei, mas não está numa pasta que você liberou")
-# descrevia o que ele achou como se fosse o que você pediu, e você entendeu que
-# a pasta de DESTINO estava barrada — quando o problema era a origem.
-arquivo_fora_da_lista = "Achei {n} com esse nome, e nenhuma numa pasta que você liberou pra eu mexer."
-# E a outra forma de "não posso", que é diferente: a pasta ESTÁ liberada e o
-# que está dentro dela é que você vetou. Dizer "nenhuma numa pasta que você
-# liberou" sobre um arquivo do ~/Projetos/Jarvis seria falso — Projetos está
-# liberada, o Jarvis é que não.
-arquivo_vetado = "Achei {n} com esse nome, mas está tudo em pasta que você mandou eu nunca mexer."
-
-# Criar pasta sem dizer onde, ou dizendo um lugar que não é pasta conhecida.
-# Não guarda estado: é operação inofensiva, e pedir a frase inteira de novo
-# custa menos que mais um estado pendente no núcleo.
-arquivo_onde_criar = "Dentro de qual pasta? Fala o comando inteiro."
-
-# Você tinha uma renomeação esperando "pode" e falou de outra coisa. Mesmo
-# motivo da agenda_descartado: sumir calado faz você achar que renomeou.
-arquivo_descartado = "Descartei a renomeação de {atual}."
-
-# "desfaz" sem nada para desfazer.
-nada_para_desfazer = "Não tem nada para desfazer."
-
-# Você mandou largar o que estava pendente. Dizer O QUE foi largado é a mesma
-# lição do descarte da Etapa 4: soltar calado faz você achar que o pedido
-# continua de pé.
-desisti = "Deixei {o_que} pra lá."
-
-# --- mover e copiar (Etapa 5.5) ----------------------------------------
-# A confirmação diz os DOIS nomes, origem e destino. É a única chance de pegar
-# o destino errado antes de o arquivo sair do lugar — e destino errado é pior
-# que nome errado, porque depois você não sabe onde procurar.
-arquivo_mover_confirmar = "Movo {origem} para {destino}. Pode?"
-arquivo_copiar_confirmar = "Copio {origem} para {destino}. Pode?"
-arquivo_movimento_cancelado = "Beleza, deixa onde está."
-arquivo_movimento_descartado = "Deixei {origem} onde estava."
-
-# Ele disse o arquivo mas não para onde.
-arquivo_sem_destino = "Para qual pasta?"
-
-# Ele disse uma pasta que não existe em lugar liberado nenhum. Precisa ser
-# diferente de "não achei o arquivo": o arquivo pode estar lá e a pasta não.
-arquivo_destino_desconhecido = "Não conheço pasta chamada {destino}."
-
-# E estas duas são a diferença entre "não existe" e "não posso", que são fatos
-# diferentes: a primeira manda você repetir o nome achando que eu ouvi errado,
-# a segunda diz que é uma linha de config. Foi o caso da Home — a recusa estava
-# certa e a frase estava errada.
-arquivo_destino_fora_da_lista = "{destino} existe, mas não está na lista que você liberou pra eu mexer."
-arquivo_destino_vetado = "{destino} está na lista do que eu nunca mexo."
-
-# Duas pastas com o mesmo nome em lugares diferentes — "Músicas" existe na casa
-# e no HD. Mesma lição da busca da Etapa 2: a frase diz que são o mesmo nome em
-# lugares distintos, e que a resposta é o lugar.
-arquivo_qual_destino = "Tem {n} pastas com esse nome, em lugares diferentes: {lugares}. Em qual delas?"
-
-[arquivos]
-# As ÚNICAS pastas onde ele pode criar pasta ou renomear arquivo. Fora daqui
-# ele recusa e diz.
-#
-# Isto é o atalhos.toml desta etapa. A busca da Etapa 2 varre a home e o HD
-# inteiros, e está certa em fazer isso: ela existe para ACHAR, e achar em todo
-# lugar é o certo. AGIR em todo lugar não é. A lista converte "pode mexer em
-# qualquer coisa da home" em "pode mexer numa lista que é sua".
-#
-# Caminho que só chegue aqui por symlink ou por ".." é recusado: a checagem
-# resolve o caminho antes de comparar.
-onde_pode_mexer = [
-    "~/Downloads",
-    "~/Documentos",
-    "~/Imagens",
-    "~/Músicas",
-    "~/Vídeos",
-    "~/Área de trabalho",
-    "~/Estudos",
-    "~/Canal",
-    "~/Projetos",
-    "/mnt/cab1286d-6765-4c73-9c77-8d3119b4b644/Midia",
-    "/mnt/cab1286d-6765-4c73-9c77-8d3119b4b644/Estudio",
-]
-
-# Buracos recortados DENTRO do que a branca liberou. A negra sempre ganha.
-#
-# Estas duas listas não saíram de conversa: saíram de uma varredura do que
-# existe de verdade nas pastas liberadas, no SSD e no HD, procurando o que
-# quebra se for movido ou renomeado. O Léo decidiu item por item.
-#
-# `Jogos` do HD NÃO está aqui — está fora da branca, que é diferente e
-# deliberado: com a negra sempre ganhando, liberar depois uma pasta de mods de
-# um jogo específico seria impossível se Jogos estivesse liberada e vetada por
-# dentro. Fora da branca, liberar essa pasta é uma linha aqui em cima.
-#
-# `SteamLibrary` também não precisa de veto: fica fora das pastas liberadas do
-# HD, irmão de Midia e Estudio, não filho.
-nunca_mexer = [
-    # É ele mesmo: renomear o próprio código quebra no meio da operação.
-    "~/Projetos/Jarvis",
-    # Projetos em andamento. Renomear arquivo quebra import, e o dano só
-    # aparece na próxima vez que o projeto roda.
-    "~/Projetos/Loft",
-    "~/Projetos/City Empire",
-    "~/Projetos/Claude-tracker",
-    # O ArquivosPT1-SemFinal.kdenlive referencia 12 clipes daqui por caminho
-    # ABSOLUTO. Mover um .mov não dá erro nenhum na hora — o projeto abre
-    # quebrado horas depois, e é impossível ligar uma coisa à outra. Falha
-    # silenciosa e atrasada é a pior espécie.
-    "/mnt/cab1286d-6765-4c73-9c77-8d3119b4b644/Estudio/Gravacoes",
-]
-
-# Nome vetado em QUALQUER nível do caminho — a pasta e tudo dentro dela.
-nunca_mexer_nomes = [
-    ".git",
-    ".venv",
-    "node_modules",
-    # Estado de ferramenta, achado no Loft e no City Empire. Como padrão,
-    # pega também os lugares que eu não previ.
-    ".claude",
-    ".firebase",
-    ".verify",
-    # Lixeira: mexer nela corrompe o registro do que foi para o lixo. A de
-    # ~/Downloads não está vazia.
-    ".Trash-1000",
-]
-
-# Extensão vetada em qualquer lugar.
-nunca_mexer_extensoes = [
-    # Os 9 lançadores da área de trabalho. O Cinnamon lê por CAMINHO: renomear
-    # muda o nome do ícone, mover tira ele da tela.
-    #
-    # Vetar a extensão e não a pasta é escolha do Léo — ele liberou a Área de
-    # trabalho de propósito, e assim ela continua livre para arquivo de verdade.
-    ".desktop",
-]
-
-[llm]
-# Qual cérebro decide e conversa. "claude" = Claude Opus 5.5 pelo Claude Code,
-# com o login da assinatura (decisão do Léo, out/2026: o qwen ocupava 1,6 GB
-# de RAM e 5,6 GB da placa). "ollama" = o qwen local de antes, que continua
-# instalado e funciona trocando só esta linha.
-cerebro = "claude"
-claude_binario = "~/.local/bin/claude"
-claude_modelo = "claude-opus-5-5"
-# Quanto o Opus pensa antes de responder. "low" para voz: mais rápido e gasta
-# menos do limite.
-claude_effort = "low"
-claude_timeout_s = 40
-
-# --- só para cerebro = "ollama" ---
-url = "http://localhost:11434"
-modelo = "qwen3:8b"
-
-# Quanto tempo o Ollama segura o modelo na VRAM depois do último comando.
-# "5m" é o padrão dele, e o meio-termo escolhido na Etapa 1: o Whisper já fica
-# residente (~1,1GB) e o qwen3:8b pesa ~6GB — segurar os dois o tempo todo
-# tiraria dos jogos a VRAM que o ESCOPO §4 queria proteger.
-# Medido: comando com o modelo quente ~0,5s; primeiro comando depois de
-# descarregado ~6s. Use "-1" para deixar residente, "0" para descarregar já.
-keep_alive = "5m"
-timeout_s = 120
-
-# Guarda contra o modelo inventar: o nome que ele devolve tem que ser
-# encontrável na transcrição. Com a lista de atalhos no prompt, ele às vezes
-# força uma entrada embaralhada para dentro da lista — "abridança.ppxt" já
-# virou "loft" e abriu o navegador, com nota 1.00 e sem confirmação.
-# Medido: normalizações legítimas ficam acima de 0.737, invenções abaixo de
-# 0.333. O corte de 0.60 tem folga dos dois lados.
-ancoragem_minima = 0.60
 
 [midia]
 # mpv toca só o áudio (sem janela); o navegador entra quando você diz
@@ -383,15 +56,6 @@ limite_confirmacao = 70
 # teto fica folgado porque rede ruim existe. Estourou o teto: ele diz que não
 # conseguiu, em vez de anunciar som que não saiu.
 segundos_para_o_som = 12
-
-[acoes]
-# Os executáveis de cada tipo do atalhos.toml. Ficam aqui para você trocar sem
-# mexer em código. O modelo NUNCA escreve nada disto: ele só devolve um nome,
-# que vira chave de busca na tabela.
-# Nesta máquina o xdg-open já abre no Brave, que é o navegador padrão.
-comando_site = "xdg-open"
-comando_pasta = "xdg-open"
-comando_vscode = "code"
 
 [audio]
 # "" usa o microfone padrão do sistema. Para fixar outro, use um trecho do
@@ -455,7 +119,7 @@ beam_size = 1
 # Alimenta o initial_prompt do Whisper com os nomes do atalhos.toml antes de
 # transcrever. Fala rápida é onde ele mais depende de contexto, e "loft" não é
 # palavra em português: sem vocabulário ele tende a inventar algo parecido.
-# A lista sai da tabela, então atalho novo já melhora a transcrição dele.
+# A lista sai do atalhos.toml, então nome novo lá já melhora a transcrição.
 usar_vocabulario = true
 
 [tts]
@@ -500,60 +164,6 @@ refratario_s = 1.5
 # de falar.
 janela_s = 30.0
 
-[agenda]
-# Fuso dos eventos criados. O calendário do Léo também tem um; este é o que
-# vai no corpo do evento.
-fuso = "America/Sao_Paulo"
-
-# Quanto dura um evento quando você não diz. "Marca dentista amanhã às 9" não
-# tem fim — uma hora é o padrão que menos surpreende.
-duracao_padrao_min = 60
-
-# Quantos compromissos ele lê em voz alta. Acima disso, diz o total e lê só os
-# primeiros — mesmo motivo dos 95 resultados da Etapa 2: lista longa falada é
-# pior que nenhuma.
-max_eventos_falados = 3
-
-[busca]
-# Onde procurar. Raiz inexistente é pulada em silêncio — o HD externo só entra
-# quando estiver montado, e não ter ele ligado não é erro.
-# TEMPORÁRIO: o HD monta com o UUID como nome. O Léo vai trocar para
-# /mnt/hd — quando trocar, atualizar aqui e no atalhos.toml.
-raizes = ["~", "/mnt/cab1286d-6765-4c73-9c77-8d3119b4b644"]
-
-# O que nunca entra no resultado. Isto é o que torna a busca usável: sem as
-# exclusões, procurar "config" devolvia 6382 resultados, 617 deles dentro
-# destas pastas.
-ignorar = [
-    "node_modules",
-    ".venv",
-    ".cache",
-    ".git",
-    "site-packages",
-    "__pycache__",
-    ".local/share/Trash",
-    # Medido numa busca real por "downloads", que devolvia 95 resultados:
-    # .icons sozinho removia 84 deles (downloads.svg de tema de ícone), e o
-    # resto era Steam e prefixo Wine. Com tudo isto, 95 viraram 2 — que eram
-    # as duas pastas Downloads de verdade.
-    ".icons",
-    "icons",
-    ".steam",
-    "steamapps",
-    "compatdata",
-    "pfx",
-]
-
-# Teto do que fica guardado para você estreitar. Um termo genérico pode deixar
-# centenas mesmo depois de filtrado; não vale carregar todas.
-max_resultados = 200
-
-# Trava do fallback com `find`. O plocate é instantâneo, mas o índice dele é
-# atualizado uma vez por dia — arquivo baixado agora só apareceria amanhã.
-# Quando ele não acha nada, varremos as raízes de verdade, com este limite
-# para a conversa não travar.
-segundos_find = 8
-
 [log]
 # Grava um .wav por segmento aprovado pelo VAD, em logs/audio/, com o mesmo
 # timestamp da linha do .jsonl. Serve para separar erro de microfone de erro
@@ -584,23 +194,10 @@ socket = ""
 # está lendo e é desligado — para ele nunca segurar o laço de áudio.
 fila_max = 256
 
-
-[sistema]
-# Como travar a tela. Vem do config, e não chumbado no código, pelo mesmo
-# motivo dos comandos de abrir em [acoes]: outra máquina usa outro comando, e
-# os testes apontam isto para um programa inofensivo em vez de travar a tela
-# de verdade.
-#
-# Conferido em set/2026 nesta máquina: /usr/bin/cinnamon-screensaver-command
-# existe, vem do pacote cinnamon-screensaver, e o daemon responde no barramento.
-#
-# NÃO existe comando de destravar, e é decisão fechada: um assistente que
-# destrava por voz é uma senha que qualquer um grita.
-comando_bloquear = ["cinnamon-screensaver-command", "--lock"]
-
 [whatsapp]
-# O Jarvis avisa as mensagens que chegam e manda o que você ditar (sempre com
-# "pode" antes). Precisa da ponte whatsapp-mcp rodando (ver ESCOPO).
+# O Jarvis avisa as mensagens que chegam, e o Claude manda o que você ditar
+# (sem "pode": pedir já é a confirmação). Precisa da ponte whatsapp-mcp
+# rodando (ver ESCOPO).
 ativo = true
 # O banco de mensagens da ponte. Fora do git: são as suas conversas.
 banco = "~/.local/share/jarvis/whatsapp-mcp/whatsapp-bridge/store/messages.db"

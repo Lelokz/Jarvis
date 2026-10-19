@@ -1,17 +1,12 @@
-"""O núcleo do Jarvis: texto entra, decisão acontece, texto sai.
+"""As mãos do Jarvis: o pouco de código que mexe direto no PC.
 
-Este pacote **não sabe o que é microfone, voz, wake word nem rede** (ESCOPO §4).
-Ele recebe uma frase já em texto, decide o que fazer, executa e devolve o que
-dizer. Quem transforma isso em som — ou em tela de celular, um dia — é o
-cliente.
+Até out/2026 isto era o núcleo que decidia tudo (roteador + 11 ferramentas).
+O cérebro agora é o Claude Code inteiro (`jarvis/agente/`), e daqui ficou só
+o que o corpo usa sem perguntar a ele: mídia e volume (os reflexos de 0 s),
+o WhatsApp (ponte, avisos, envio), o relógio falado e o `normalizar` do texto.
 
-A regra é simples e vale para tudo que entrar aqui:
+A regra continua, verificada pelo `verificar_linha.py`:
 
     nenhum módulo de jarvis/nucleo/ importa sounddevice, microfone, vad, stt,
     tts ou wakeword.
-
-Ela não é só boa intenção: há uma verificação que varre este pacote e falha se
-algum desses imports aparecer. O motivo de traçar a linha antes de precisar
-dela é que o Jarvis vai ganhar clientes remotos (celular, talvez relógio), e
-função nascida costurada dentro do loop de voz só se separa reescrevendo.
 """
