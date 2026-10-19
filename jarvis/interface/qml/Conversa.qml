@@ -16,8 +16,26 @@ Item {
 
     function acrescentar(quem, texto, acao, perguntando) {
         _fecharPerguntas();
-        falas.append({ quem: quem, texto: texto, acao: acao || "",
+        falas.append({ quem: quem, texto: texto, acao: acao || "", titulo: "",
                        perguntando: perguntando === true, animar: true });
+    }
+
+    // O que o Claude mandou para a janela: código, lista, passos. Um cartão
+    // largo, com markdown e texto que dá para selecionar e copiar.
+    function mostrar(titulo, texto) {
+        falas.append({ quem: "painel", texto: texto, acao: "", titulo: titulo || "",
+                       perguntando: false, animar: true });
+    }
+
+    // O que ele está fazendo agora. Uma linha só por sequência: cada
+    // atividade nova troca a anterior, em vez de encher a conversa de passos.
+    function atividade(texto) {
+        var ultima = falas.count - 1;
+        if (ultima >= 0 && falas.get(ultima).quem === "atividade")
+            falas.setProperty(ultima, "texto", texto);
+        else
+            falas.append({ quem: "atividade", texto: texto, acao: "", titulo: "",
+                           perguntando: false, animar: true });
     }
 
     // A conversa que JÁ existia, vinda do assistente ao conectar. Entra de uma
@@ -28,7 +46,7 @@ Item {
         for (var i = 0; i < anteriores.length; i++) {
             var f = anteriores[i];
             falas.append({ quem: f.quem, texto: f.texto || "",
-                           acao: f.acao || "",
+                           acao: f.acao || "", titulo: f.titulo || "",
                            perguntando: f.perguntando === true && i === anteriores.length - 1,
                            animar: false });
         }
@@ -91,6 +109,7 @@ Item {
             quem: model.quem
             texto: model.texto
             acao: model.acao
+            titulo: model.titulo
             perguntando: model.perguntando
             animar: model.animar
         }

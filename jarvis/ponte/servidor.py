@@ -193,7 +193,7 @@ class Servidor:
             self._ultimo_estado = evento
         elif tipo == "aviso":
             self._ultimo_aviso = evento
-        elif tipo in ("voce_disse", "jarvis_disse"):
+        elif tipo in ("voce_disse", "jarvis_disse", "mostrar"):
             # Guardado ANTES de qualquer saída antecipada: o histórico existe
             # justamente para o tempo em que não havia ninguém conectado.
             self._guardar_fala(evento)
@@ -207,13 +207,16 @@ class Servidor:
         self._acordar()
 
     def _guardar_fala(self, evento: dict[str, Any]) -> None:
+        quem = {"voce_disse": "voce", "jarvis_disse": "jarvis"}.get(evento["ev"], "painel")
         fala = {
-            "quem": "voce" if evento["ev"] == "voce_disse" else "jarvis",
+            "quem": quem,
             "texto": evento.get("texto", ""),
             "quando": round(time.time(), 3),
         }
-        if evento["ev"] == "voce_disse":
+        if quem == "voce":
             fala["origem"] = evento.get("origem", "")
+        elif quem == "painel":
+            fala["titulo"] = evento.get("titulo", "")
         else:
             fala["acao"] = evento.get("acao")
             fala["perguntando"] = bool(evento.get("perguntando"))

@@ -36,6 +36,8 @@ class PonteQt(QObject):
     historicoRecebido = Signal(list)       # a conversa que já existia
     memoriaRecebida = Signal(list, list)   # fatos, conversas (mais nova primeiro)
     avisoMudou = Signal(str, float)        # "ok"|"limite"|"offline", volta_em (época, 0 = não sei)
+    mostrar = Signal(str, str)             # título, texto em markdown (vai para a janela)
+    atividade = Signal(str)                # o que o Claude está fazendo agora
 
     def __init__(self, caminho: Path, parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -115,6 +117,10 @@ class PonteQt(QObject):
                                       list(ev.get("conversas") or []))
         elif tipo == "aviso":
             self.avisoMudou.emit(str(ev.get("situacao") or "ok"), float(ev.get("volta_em") or 0))
+        elif tipo == "mostrar":
+            self.mostrar.emit(str(ev.get("titulo") or ""), str(ev.get("texto") or ""))
+        elif tipo == "atividade":
+            self.atividade.emit(str(ev.get("texto") or ""))
         elif tipo == "historico":
             self.historicoRecebido.emit(list(ev.get("falas") or []))
         elif tipo == "sessao":

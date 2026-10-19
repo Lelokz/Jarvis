@@ -24,12 +24,19 @@ ASSISTENTE -> CLIENTES
         O estado do cérebro de nuvem (Claude). Só quando muda; o último é
         reenviado a quem acabou de dizer "ola". `volta_em` é quando o limite
         da assinatura volta, no relógio do assistente.
+    {"ev":"mostrar", "titulo":"..."|"", "texto":"<markdown>"}
+        O que o Claude mandou para a JANELA, sem voz: código, lista, passos,
+        o pedido de permissão por extenso. Entra no histórico (quem "painel").
+    {"ev":"atividade", "texto":"Bash — olhando a pasta lixo"}
+        A ferramenta que o Claude está usando agora. Descartável e fora do
+        histórico: é o "o que ele está fazendo", não o que ele disse.
     {"ev":"erro", "motivo":"..."}
         Só para o cliente que mandou o pedido inválido.
     {"ev":"historico", "falas":[
         {"quem":"voce",   "texto":"...", "origem":"voz|texto", "quando": 1758731040.2},
         {"quem":"jarvis", "texto":"...", "acao":"abrir:loft"|null,
-         "perguntando": false, "quando": 1758731041.0}]}
+         "perguntando": false, "quando": 1758731041.0},
+        {"quem":"painel", "titulo":"...", "texto":"<markdown>", "quando": ...}]}
         Resposta ao "ola" que pediu histórico, entregue logo depois de `sessao`
         e `estado`. Em ordem, do mais antigo para o mais novo.
 
@@ -74,7 +81,8 @@ VERSAO = 1
 
 # O que sai do assistente para os clientes. O resto que o Ciclo emite
 # (acordou, dormiu, janela, tempos...) é para o terminal e fica em casa.
-PUBLICOS = frozenset({"sessao", "estado", "nivel", "voce_disse", "jarvis_disse", "aviso"})
+PUBLICOS = frozenset({"sessao", "estado", "nivel", "voce_disse", "jarvis_disse", "aviso",
+                      "mostrar", "atividade"})
 ESTADOS = ("dormindo", "ouvindo", "escutando", "pensando", "falando")
 PEDIDOS = frozenset({"ola", "falar", "memoria"})
 

@@ -64,6 +64,8 @@ Window {
             conversa.acrescentar("jarvis", texto, acao, perguntando)
         }
         function onHistoricoRecebido(falas) { conversa.preencher(falas) }
+        function onMostrar(titulo, texto) { conversa.mostrar(titulo, texto) }
+        function onAtividade(texto) { conversa.atividade(texto) }
         function onAvisoMudou(tipo, voltaEm) { faixa.tipo = tipo; faixa.voltaEm = voltaEm }
         function onMemoriaRecebida(fatos, conversas) {
             painelMemoria.fatos = fatos; painelMemoria.conversas = conversas;
@@ -520,6 +522,10 @@ Window {
             conversa.acrescentar("jarvis", "Abri o Loft.", "abrir:loft", false);
             conversa.acrescentar("voce", "renomeia o relatório para proposta", "", false);
             conversa.acrescentar("jarvis", "Renomeio relatório para proposta. Pode?", "", true);
+            conversa.acrescentar("voce", "como eu listo os maiores arquivos de uma pasta?", "", false);
+            conversa.atividade("Bash — olhando o tamanho das pastas");
+            conversa.mostrar("Maiores arquivos", "Os dez maiores, do maior para o menor:\n\n```\ndu -ah ~/Downloads | sort -rh | head -n 10\n```\n\n- `du -ah` mede tudo\n- `sort -rh` ordena do maior");
+            conversa.acrescentar("jarvis", "Deixei o comando na janela.", "", false);
         }
     }
 
