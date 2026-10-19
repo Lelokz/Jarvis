@@ -77,6 +77,10 @@ def internet_ok(timeout: float = 1.5) -> bool:
         return False
 
 
+class ErroDoAgente(Exception):
+    """O Claude Code não subiu (não instalado, sem login, sem rede na subida)."""
+
+
 @dataclass
 class Saida:
     tipo: str
@@ -188,7 +192,18 @@ class Agente:
         # o Jarvis não apaga o papo); senão, começa outra.
         continuar = self._marca.exists() and \
             time.time() - self._marca.stat().st_mtime < self.cfg.recomecar_apos_h * 3600
-        self._rodar(self._conectar(continuar), espera=90)
+        if not Path(self.binario).is_file():
+            raise ErroDoAgente(f"Claude Code não encontrado em {self.binario}.\n"
+                               "  Instale: curl -fsSL https://claude.ai/install.sh | bash")
+        try:
+            self._rodar(self._conectar(continuar), espera=90)
+        except Exception as e:
+            # Sem rede na subida o Jarvis sobe assim mesmo: o primeiro pedido
+            # tenta de novo e, sem rede, vira a fala de "sem internet".
+            self._cliente = None
+            self.offline = not internet_ok()
+            if not self.offline:
+                raise ErroDoAgente(f"o Claude Code não subiu: {e}") from e
         return time.monotonic() - inicio
 
     def encerrar(self) -> None:

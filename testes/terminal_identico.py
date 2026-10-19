@@ -1,5 +1,9 @@
 """O terminal do Ciclo, linha a linha, com peças falsas.
 
+**Out/2026:** o cérebro virou o Claude Code inteiro (`jarvis/agente/`), que
+responde pela fila de saídas, e não mais na hora. O roteiro ganhou a pergunta
+falada (permissão) e as linhas esperadas foram regravadas e conferidas a olho.
+
 A passada 2 da Etapa 6 transformou cada print do `Ciclo` num evento com o
 terminal como assinante. A promessa era que o terminal ficasse IDÊNTICO — e
 promessa sobre saída se prova comparando a saída. Este roteiro roda o `Ciclo`
@@ -10,8 +14,8 @@ linhas que ele imprime.
     python3 testes/terminal_identico.py --gravar   # imprime o bloco novo
 
 **As linhas esperadas moram aqui dentro**, e não num arquivo gravado à parte,
-para o teste não depender de uma sobra de rascunho. São as 15 linhas medidas
-ANTES da refatoração, em 14/set/2026.
+para o teste não depender de uma sobra de rascunho. Regravadas em out/2026, na troca para o
+Claude Code (conferidas a olho).
 
 Normalizados: o relógio, e os dois números que são medidos de verdade — o
 tempo do núcleo e a latência, que depende dele. `stt` e `tts` são fixados
@@ -35,7 +39,9 @@ import numpy as np
 
 import assistente
 from jarvis import config, wakeword
-from jarvis.nucleo.nucleo import Resposta
+import queue
+
+from jarvis.agente.agente import Limite, Saida
 from jarvis.registro import Registrador
 from jarvis.stt import Transcricao
 from jarvis.tts import Voz
@@ -88,17 +94,36 @@ class TranscritorRoteirizado:
         return Transcricao(self.texto, 0.40, "pt", 0.99)
 
 
-class NucleoRoteirizado:
+class AgenteRoteirizado:
+    """Responde pela fila, como o Agente de verdade, com o que o roteiro mandar."""
+
     def __init__(self):
-        self.resposta = Resposta("")
+        self.saidas = queue.Queue()
+        self.ocupado = False
+        self.limite = Limite()
+        self.whatsapp = None
+        self.enviados_whats = []
+        self.resposta: Saida | None = None   # o que o próximo pedir() devolve
+        self.depois: Saida | None = None     # o que vem depois da resposta à pergunta
+        self.chamadas: list[str] = []
 
-    def processar(self, texto):
-        return self.resposta
+    def pedir(self, texto, origem="voz", contexto=""):
+        self.chamadas.append(texto)
+        if self.resposta is not None:
+            self.saidas.put(self.resposta)
 
-    def aquecer(self):
+    def responder(self, saida, falado):
+        self.chamadas.append(f"resposta: {falado}")
+        if self.depois is not None:
+            self.saidas.put(self.depois)
+
+    def interromper(self):
         pass
 
-    def reiniciar_conversa(self):
+    def situacao(self):
+        return {"tipo": "ok", "volta_em": None, "uso_5h": None}
+
+    def conferir_internet(self):
         pass
 
 
@@ -112,36 +137,44 @@ def segmento():
 
 def montar(tmp: Path):
     cfg = config.carregar(RAIZ / "config.toml")
-    vad, stt, nucleo = VadRoteirizado(), TranscritorRoteirizado(), NucleoRoteirizado()
+    vad, stt, agente = VadRoteirizado(), TranscritorRoteirizado(), AgenteRoteirizado()
     ciclo = assistente.Ciclo(
         cfg,
         detector_vad=vad,
         detector_ww=WakeWordParado(),
         transcritor=stt,
         voz=VozMuda(),
-        nucleo=nucleo,
+        agente=agente,
         registrador=Registrador(caminho_jsonl=tmp / "sessao.jsonl", dir_audio=None,
                                 dir_audio_wake=None),
         portao=assistente._PortaoFalso(),
         dispositivo_saida=None,
     )
-    return ciclo, vad, stt, nucleo
+    return ciclo, vad, stt, agente
 
 
-def roteiro_base(ciclo, vad, stt, nucleo):
+def roteiro_base(ciclo, vad, stt, agente):
     bloco = b"\x00" * 1024
 
     ciclo.acordar(0.87)
 
     vad.proximo = segmento()
     stt.texto = "abre o loft"
-    nucleo.resposta = Resposta("Abri o Loft.", acao="abrir:loft")
+    agente.resposta = Saida("fim", "Abri o Loft.")
     ciclo.passo(bloco)
+    ciclo.atender_agente()
 
     vad.proximo = segmento()
-    stt.texto = "renomeia o relatório"
-    nucleo.resposta = Resposta("Renomeio relatório para proposta. Pode?", perguntando=True)
+    stt.texto = "apaga a pasta lixo"
+    agente.resposta = Saida("perguntar", "Mando a pasta lixo pra lixeira?", opcoes=["Sim", "Não"])
+    agente.depois = Saida("fim", "Mandei pra lixeira.")
     ciclo.passo(bloco)
+    ciclo.atender_agente()
+
+    vad.proximo = segmento()
+    stt.texto = "pode"
+    ciclo.passo(bloco)
+    ciclo.atender_agente()
 
     vad.proximo = segmento()
     stt.texto = ""
@@ -161,11 +194,14 @@ ESPERADO = """\
   HH:MM:SS   janela aberta     30 s
              você:   "abre o loft"
              jarvis: "Abri o Loft."
-                     stt 0.40s · núcleo N.NNs · tts 0.00s · latência N.NNs
+                     stt 0.40s · claude N.NNs · tts 0.00s · latência N.NNs
   HH:MM:SS   janela reiniciada 30 s
-             você:   "renomeia o relatório"
-             jarvis: "Renomeio relatório para proposta. Pode?"
-                     stt 0.40s · núcleo N.NNs · tts 0.00s · latência N.NNs
+             você:   "apaga a pasta lixo"
+             jarvis: "Mando a pasta lixo pra lixeira?"
+  HH:MM:SS   pergunta feita    30 s
+             você:   "pode"
+             jarvis: "Mandei pra lixeira."
+                     stt 0.40s · claude N.NNs · tts 0.00s · latência N.NNs
   HH:MM:SS   janela reiniciada 30 s
   HH:MM:SS   não entendi       (nada transcrito — janela renovada)
   HH:MM:SS   janela reiniciada 30 s
@@ -176,7 +212,7 @@ ESPERADO = """\
 
 def normalizar(texto: str) -> str:
     texto = re.sub(r"\d{2}:\d{2}:\d{2}", "HH:MM:SS", texto)
-    texto = re.sub(r"(núcleo|latência) \d+\.\d+s", r"\1 N.NNs", texto)
+    texto = re.sub(r"(claude|latência) \d+\.\d+s", r"\1 N.NNs", texto)
     return texto
 
 
@@ -184,9 +220,9 @@ def main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
     saida = io.StringIO()
     with tempfile.TemporaryDirectory() as d:
-        ciclo, vad, stt, nucleo = montar(Path(d))
+        ciclo, vad, stt, agente = montar(Path(d))
         with contextlib.redirect_stdout(saida):
-            roteiro_base(ciclo, vad, stt, nucleo)
+            roteiro_base(ciclo, vad, stt, agente)
     obtido = normalizar(saida.getvalue())
 
     if "--gravar" in argv:

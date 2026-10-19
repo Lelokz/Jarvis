@@ -4,10 +4,11 @@
 Dorme escutando só o wake word. Ao ouvir "hey Jarvis", cumprimenta, abre uma
 janela de 30s e escuta. Sem fala, volta a dormir sozinho.
 
-**Este arquivo é um cliente, não o Jarvis** (ESCOPO §4). Ele cuida de ouvir e
-falar: microfone, wake word, VAD, Whisper, Piper e o ciclo de vida. Quem decide
-o que fazer e executa é `jarvis/nucleo/`, do outro lado da linha — este laço
-entrega texto e recebe texto, e não sabe o que é atalho, tabela ou LLM.
+**Este arquivo é o corpo, não o cérebro** (ESCOPO §4). Ele cuida de ouvir e
+falar: microfone, wake word, VAD, Whisper, voz e o ciclo de vida. Quem decide
+o que fazer e executa é o Claude Code inteiro (`jarvis/agente/`): este laço
+manda texto e recolhe o que ele devolve — fala, pergunta, coisa para a janela
+— sem nunca travar o microfone esperando.
 
 É essa divisão que vai permitir um cliente de celular depois sem reescrever
 nada: só o transporte muda.
@@ -20,10 +21,13 @@ from __future__ import annotations
 
 import argparse
 import dataclasses
+import datetime as dt
 import math
+import queue
 import signal
 import sys
 import time
+import tomllib
 from datetime import datetime
 from enum import Enum, auto
 from pathlib import Path
@@ -31,9 +35,13 @@ from pathlib import Path
 import numpy as np
 
 from jarvis import config, cronometro, eventos, microfone, tts, wakeword
+from jarvis.agente.agente import Agente, ErroDoAgente, Saida
+from jarvis.agente.avisos import AvisosWhatsApp
+from jarvis.agente.reflexos import reflexo
 from jarvis.cronometro import Tempos
+from jarvis.nucleo import relogio
 from jarvis.nucleo.atalhos import normalizar
-from jarvis.nucleo.nucleo import ErroDoCerebro, Nucleo
+from jarvis.nucleo.whatsapp import WhatsApp
 from jarvis.ponte import protocolo
 from jarvis.ponte.servidor import Servidor, ServidorOcupado
 from jarvis.registro import Registrador
@@ -103,7 +111,7 @@ class Terminal:
 
     _TIPOS = frozenset({
         "acordou", "dormiu", "janela", "quase_acerto", "nao_entendi",
-        "voce_disse", "jarvis_disse", "tempos",
+        "voce_disse", "jarvis_disse", "tempos", "atividade", "mostrar",
     })
 
     def __init__(self, nome_do_jarvis: str) -> None:
@@ -134,10 +142,17 @@ class Terminal:
                 print(f'             você:   "{ev["texto"]}"')
         elif tipo == "jarvis_disse":
             print(f"             {self.nome}: \"{ev['texto']}\"")
+        elif tipo == "atividade":
+            print(f"             {'':<8}▸ {ev['texto']}")
+        elif tipo == "mostrar":
+            linhas = ev["texto"].splitlines()
+            titulo = f"{ev['titulo']} — " if ev.get("titulo") else ""
+            print(f"             {'':<8}[janela] {titulo}{linhas[0] if linhas else ''}"
+                  + (f" (+{len(linhas) - 1} linhas)" if len(linhas) > 1 else ""))
         elif tipo == "tempos":
             print(
                 f"             {'':<8}stt {ev['stt_s']:.2f}s · "
-                f"núcleo {ev['nucleo_s']:.2f}s · "
+                f"claude {ev['nucleo_s']:.2f}s · "
                 f"tts {ev['tts_s']:.2f}s · "
                 f"latência {ev['latencia_s']:.2f}s"
             )
@@ -162,6 +177,19 @@ COMANDOS_DE_DORMIR = {
 
 def e_comando_de_dormir(texto: str) -> bool:
     return normalizar(texto) in COMANDOS_DE_DORMIR
+
+
+# "Para" com o Claude no meio de uma tarefa interrompe a tarefa. Sem tarefa,
+# "para" é o reflexo de pausar a música. A fala INTEIRA, como o "dorme aí".
+COMANDOS_DE_PARAR = {
+    "para", "parar", "para jarvis", "jarvis para", "para tudo", "cancela",
+    "cancela isso", "esquece", "esquece isso", "deixa", "deixa pra la", "chega",
+    "pode parar", "para ai", "para isso",
+}
+
+
+def e_pedido_de_parar(texto: str) -> bool:
+    return normalizar(texto) in COMANDOS_DE_PARAR
 
 
 def _emissor_de_terminal(cfg: config.Config) -> eventos.Emissor:
@@ -208,14 +236,24 @@ class Ciclo:
         detector_ww: wakeword.Detector,
         transcritor: Transcritor,
         voz: tts.Voz,
-        nucleo: Nucleo,
+        agente: Agente,
         registrador: Registrador,
         portao,
         dispositivo_saida: int | None,
         emissor: eventos.Emissor | None = None,
+        avisos: AvisosWhatsApp | None = None,
     ) -> None:
         self.cfg = cfg
-        self.nucleo = nucleo
+        self.agente = agente
+        self.avisos = avisos
+        # Pergunta do Claude esperando a resposta falada: (a saída, até quando
+        # a resposta pode COMEÇAR). Depois do prazo vale "não respondeu".
+        self._pergunta: tuple[Saida, float] | None = None
+        # Vai junto da próxima fala para o Claude (o WhatsApp que acabou de
+        # ser anunciado, para "responde que eu chego às oito").
+        self._contexto = ""
+        # O pedido em andamento, para medir o tempo quando a resposta chegar.
+        self._pedido: tuple[float, object, object] | None = None
         self.vad = detector_vad
         self.ww = detector_ww
         self.transcritor = transcritor
@@ -273,11 +311,6 @@ class Ciclo:
         if pendente is not None:
             self._registrar_evento(pendente)
 
-        # Manda o LLM se carregar agora, em segundo plano. A saudação leva
-        # 1-2s e você ainda vai levar mais alguns falando o comando — tempo
-        # que já está sendo gasto e que esconde a recarga de ~7,5s.
-        self.nucleo.aquecer()
-
         self._falar(self.cfg.persona.saudacao)
         self.estado = Estado.ACORDADO
         self._renovar("janela aberta")
@@ -291,9 +324,10 @@ class Ciclo:
         # laço, sem o microfone ter captado nada.
         self.ww.reiniciar()
         self.vad.reiniciar()
-        # Confirmação ou busca pendente não atravessam o sono: senão a
-        # primeira fala do próximo despertar viraria filtro de uma busca velha.
-        self.nucleo.reiniciar_conversa()
+        # A conversa com o Claude NÃO recomeça (pedido do Léo): ele lembra do
+        # papo entre um "dorme aí" e outro. O contexto do WhatsApp anunciado,
+        # sim, não atravessa o sono.
+        self._contexto = ""
         self._mudar_estado("dormindo")
         self.emissor.emitir("dormiu", motivo=motivo)
         self.registrador.registrar_estado("dormiu", motivo=motivo)
@@ -366,10 +400,21 @@ class Ciclo:
                 self._mudar_estado("escutando")
             elif self._visivel == "escutando":
                 # A fala era curta demais e o VAD a descartou.
-                self._mudar_estado("ouvindo")
-            # Nunca dormir no meio de uma frase: se a janela vencer com o VAD
-            # em fala, esperar ele fechar o segmento.
-            if time.monotonic() >= self.prazo and not self.vad.falando:
+                self._mudar_estado("pensando" if self.agente.ocupado else "ouvindo")
+            agora = time.monotonic()
+            # A pergunta do Claude venceu sem resposta: vale "não respondeu".
+            # Com o VAD em fala, espera a frase: ela começou dentro do prazo.
+            if self._pergunta is not None and agora >= self._pergunta[1] \
+                    and not self.vad.falando:
+                saida, _ = self._pergunta
+                self._pergunta = None
+                self.registrador.registrar_estado("pergunta_sem_resposta", pergunta=saida.texto)
+                self.agente.responder(saida, None)
+                self._mudar_estado("pensando")
+            # Nunca dormir no meio de uma frase, nem com o Claude trabalhando
+            # ou esperando resposta: a resposta dele tem que ser ouvida.
+            if agora >= self.prazo and not self.vad.falando and \
+                    not self.agente.ocupado and self._pergunta is None:
                 self.dormir(f"{self.cfg.ciclo.janela_s:g} s sem fala")
             return
 
@@ -401,72 +446,136 @@ class Ciclo:
         segmento=None,
         transcricao=None,
     ) -> None:
-        """Entrega o texto ao núcleo, fala a resposta e renova a janela.
+        """Entrega a fala ao Claude (ou a um reflexo) e volta a ouvir.
 
-        Um caminho só para voz e para texto digitado. Duplicar isto para o
-        texto seria escrever uma segunda chance de divergir — e a primeira
-        divergência seria justamente num log ou numa confirmação.
+        Um caminho só para voz e para texto digitado. **Não espera a
+        resposta:** uma tarefa pode levar minutos e perguntar no meio, e o
+        microfone tem que continuar ouvindo ("para", a resposta da pergunta).
+        O que o Claude devolve chega por `atender_agente()`.
         """
         self._mudar_estado("pensando")
         self.emissor.emitir("voce_disse", texto=texto, origem=origem)
 
+        # 1. A resposta a uma pergunta dele (permissão, dúvida).
+        if self._pergunta is not None:
+            saida, _ = self._pergunta
+            self._pergunta = None
+            self.registrador.registrar_estado("resposta_a_pergunta",
+                                              pergunta=saida.texto, resposta=texto)
+            self.agente.responder(saida, texto)
+            self._mudar_estado("pensando")
+            return
+
+        # 2. "Dorme aí". Com tarefa em andamento ela continua, e o resultado
+        #    acorda o Jarvis para ser dito.
         if e_comando_de_dormir(texto):
             self.registrador.registrar_estado("pediu_para_dormir", texto=texto)
             self._falar(self.cfg.persona.indo_dormir)
             self.dormir("você pediu")
             return
 
-        # Aqui o cliente entrega o texto e recebe texto. Tudo o que decide e
-        # executa está do outro lado da linha do ESCOPO §4 — este laço não
-        # sabe o que é atalho, tabela ou LLM.
-        inicio_nucleo = time.monotonic()
-        resposta = self.nucleo.processar(texto)
-        nucleo_s = time.monotonic() - inicio_nucleo
-        if resposta.acao:
+        # 3. Com o Claude trabalhando: "para" interrompe; o resto entra na
+        #    tarefa (medido: ele incorpora a fala nova).
+        if self.agente.ocupado:
+            if e_pedido_de_parar(texto):
+                self.registrador.registrar_estado("interrompeu", texto=texto)
+                self.agente.interromper()
+            else:
+                self.registrador.registrar_estado("fala_no_meio", texto=texto)
+                self.agente.pedir(texto, origem)
+            self._mudar_estado("pensando")
+            return
+
+        # 4. Reflexo: pausa, volta, volume. 0 s, sem o Claude.
+        r = reflexo(texto, self.cfg.midia.limite_confirmacao, self.cfg.midia.passo_volume)
+        if r is not None:
+            self.acoes += 1 if r.acao else 0
+            self.registrador.registrar_estado("decisao", resposta=r.fala, acao=r.acao,
+                                              origem="reflexo", dito=texto)
+            self._falar(r.fala, acao=r.acao)
+            self._renovar("janela reiniciada")
+            return
+
+        # 5. O Claude.
+        contexto, self._contexto = self._contexto, ""
+        self.registrador.registrar_estado("pedido", texto=texto, origem=origem,
+                                          contexto=contexto or None)
+        self._pedido = (time.monotonic(), segmento, transcricao)
+        self.agente.pedir(texto, origem, contexto)
+
+    # -- o que o Claude devolve --------------------------------------------
+
+    def atender_agente(self) -> None:
+        """Recolhe o que o Claude mandou. Chamado a cada volta do laço."""
+        while True:
+            try:
+                saida = self.agente.saidas.get_nowait()
+            except queue.Empty:
+                return
+            self._saida(saida)
+
+    def _saida(self, s: Saida) -> None:
+        if s.tipo == "atividade":
             self.acoes += 1
-        # O diagnóstico do núcleo vai inteiro para o log. Sem ele, investigar
-        # por que um comando falhou obrigava a reproduzir a sessão fala por
-        # fala — foi o que aconteceu depois do primeiro teste com voz real.
-        self.registrador.registrar_estado(
-            "decisao",
-            resposta=resposta.texto,
-            acao=resposta.acao,
-            perguntando=resposta.perguntando,
-            **resposta.diagnostico,
-        )
-        if not resposta.texto and not resposta.acao:
-            # O núcleo achou que não era com ele (vídeo, TV, conversa com
+            self.registrador.registrar_estado("atividade", texto=s.texto)
+            self.emissor.emitir("atividade", texto=s.texto)
+        elif s.tipo == "mostrar":
+            self.registrador.registrar_estado("mostrar", titulo=s.titulo, texto=s.texto)
+            self.emissor.emitir("mostrar", titulo=s.titulo, texto=s.texto)
+        elif s.tipo == "falar":
+            self._acordar_se_dormindo()
+            self.registrador.registrar_estado("fala_no_meio_da_tarefa", fala=s.texto)
+            self._falar(s.texto)
+            self._mudar_estado("pensando")
+        elif s.tipo == "perguntar":
+            self._acordar_se_dormindo()
+            fala = _pergunta_falada(s.texto, s.opcoes)
+            self.registrador.registrar_estado("pergunta", fala=fala, opcoes=s.opcoes)
+            self._falar(fala, perguntando=True)
+            # O prazo conta de quando ele TERMINA de perguntar.
+            self._pergunta = (s, time.monotonic() + self.cfg.agente.validade_pergunta_s)
+            self._renovar("pergunta feita")
+        elif s.tipo == "fim":
+            self._fim(s)
+        elif s.tipo == "erro":
+            fala = {"limite": self._fala_de_limite(self.agente.limite.volta_em),
+                    "offline": self.cfg.persona.sem_internet}.get(
+                        s.texto, self.cfg.persona.cerebro_falhou)
+            self.registrador.registrar_estado("erro_do_claude", tipo=s.texto, detalhe=s.titulo)
+            self._pedido = None
+            self._acordar_se_dormindo()
+            self._falar(fala)
+            self.atualizar_aviso()
+            self._renovar("janela reiniciada")
+
+    def _fim(self, s: Saida) -> None:
+        pedido, self._pedido = self._pedido, None
+        claude_s = time.monotonic() - pedido[0] if pedido else 0.0
+        if s.janela:
+            self.emissor.emitir("mostrar", titulo="", texto=s.janela)
+        fala_texto = self.cfg.persona.parei if s.interrompido else s.texto
+        self.registrador.registrar_estado("resposta", fala=fala_texto, janela=s.janela,
+                                          interrompido=s.interrompido, claude_s=round(claude_s, 2))
+        if not fala_texto:
+            # O Claude achou que não era com ele (vídeo, TV, conversa com
             # outra pessoa): fica calado e NÃO reinicia a janela de 30 s, para
             # voltar a dormir sozinho no tempo de sempre.
-            self.emissor.emitir("ignorado", texto=texto)
-            self._mudar_estado("ouvindo")
+            self.emissor.emitir("ignorado", texto="")
+            if self.estado is Estado.ACORDADO:
+                self._mudar_estado("ouvindo")
             return
-        fala = self._falar(
-            resposta.texto, acao=resposta.acao, perguntando=resposta.perguntando
-        )
-
-        # O que o núcleo pediu para rodar DEPOIS da fala (Etapa 6.6). Este laço
-        # não sabe o que é — só sabe que agora pode, porque o `_falar` só
-        # retorna quando o áudio acabou de tocar. É o que faz "bloqueia o PC"
-        # falar antes de a tela apagar, sem ninguém adivinhar a duração da fala.
-        if resposta.depois is not None:
-            feito = resposta.depois()
-            self.registrador.registrar_estado(
-                "depois_da_fala",
-                acao=resposta.acao,
-                ok=getattr(feito, "ok", None),
-                mensagem=getattr(feito, "mensagem", ""),
-                detalhe=getattr(feito, "detalhe", None),
-            )
+        self._acordar_se_dormindo()
+        fala = self._falar(fala_texto)
 
         # Tempos e .wav só existem para o que foi FALADO: texto digitado não
         # tem segmento, nem Whisper, nem espera de silêncio para medir.
-        if segmento is not None and transcricao is not None:
+        if pedido and pedido[1] is not None and pedido[2] is not None:
+            segmento, transcricao = pedido[1], pedido[2]
             tempos = Tempos(
                 duracao_segmento_s=segmento.duracao_total_s,
                 espera_silencio_s=segmento.espera_silencio_s,
                 stt_s=transcricao.segundos,
-                nucleo_s=nucleo_s,
+                nucleo_s=claude_s,
                 tts_primeiro_s=fala.primeiro_audio_s,
                 tts_total_s=fala.sintese_total_s,
                 reproducao_s=fala.reproducao_s,
@@ -483,7 +592,7 @@ class Ciclo:
             self.emissor.emitir(
                 "tempos",
                 stt_s=transcricao.segundos,
-                nucleo_s=nucleo_s,
+                nucleo_s=claude_s,
                 tts_s=fala.primeiro_audio_s,
                 latencia_s=tempos.latencia_percebida_s,
             )
@@ -491,6 +600,26 @@ class Ciclo:
         # A janela reinicia quando ELE termina de responder, não quando você
         # termina de falar.
         self._renovar("janela reiniciada")
+
+    def _acordar_se_dormindo(self) -> None:
+        """O Claude terminou ou perguntou com o Jarvis dormindo (o Léo disse
+        "dorme aí" no meio da tarefa): acorda sem saudação para dizer."""
+        if self.estado is Estado.DORMINDO:
+            self._acordar_por_texto()
+
+    def _fala_de_limite(self, volta_em: float | None) -> str:
+        p = self.cfg.persona
+        if not volta_em:
+            return p.limite_acabou_sem_hora
+        volta = dt.datetime.fromtimestamp(volta_em)
+        hora = relogio.hora_falada(volta).removeprefix("É ").removeprefix("São ").rstrip(".")
+        hora = ("ao " if hora.startswith("meio-dia") else "à " if hora.startswith(("meia", "uma"))
+                else "às ") + hora
+        minutos = max(1, round((volta_em - dt.datetime.now().timestamp()) / 60))
+        h, m = divmod(minutos, 60)
+        falta = (f"{h} hora{'s' if h > 1 else ''}" if h else "") + \
+                (" e " if h and m else "") + (f"{m} minuto{'s' if m > 1 else ''}" if m else "")
+        return p.limite_acabou.format(hora=hora, falta=falta)
 
     # -- aviso do cérebro de nuvem (limite / sem internet) ---------------------
 
@@ -500,12 +629,9 @@ class Ciclo:
         `conferir_internet` é o relógio de 30 s do laço: sem ele, o aviso de
         "sem internet" só sairia no próximo pedido, mesmo com a rede de volta.
         """
-        situacao = getattr(self.nucleo, "situacao", None)
-        if situacao is None:  # núcleo sem cérebro de nuvem: não há o que avisar
-            return
         if conferir_internet:
-            self.nucleo.conferir_internet()
-        s = situacao()
+            self.agente.conferir_internet()
+        s = self.agente.situacao()
         chave = (s.get("tipo"), s.get("volta_em") if s.get("tipo") == "limite" else None)
         if chave == getattr(self, "_ultimo_aviso", None):
             return
@@ -519,25 +645,28 @@ class Ciclo:
     def anunciar_whatsapp(self) -> None:
         """Fala o que chegou no WhatsApp e fica ouvindo, para o Léo poder
         responder sem dizer "hey Jarvis" ("responde que eu chego às oito")."""
-        checar = getattr(self.nucleo, "checar_whatsapp", None)
-        if checar is None:
+        # Com uma pergunta do Claude no ar, o aviso espera: a próxima fala do
+        # Léo é a resposta dela, e um aviso no meio embaralharia as duas.
+        if self.avisos is None or self._pergunta is not None:
             return
-        falar, mostrar, ouvir = checar()
+        aviso = self.avisos.checar()
+        if aviso is None:
+            return
         # Conversa que o Léo está tendo pelo celular: só aparece na janela.
-        for texto in mostrar:
+        for texto in aviso.mostrar:
             self.registrador.registrar_estado("whatsapp_so_janela", fala=texto)
             self.emissor.emitir("jarvis_disse", texto=texto, acao="whatsapp:silenciosa",
                                 perguntando=False)
-        if not falar:
+        if not aviso.falar:
             return
+        self._contexto = aviso.contexto
         dormia = self.estado is Estado.DORMINDO
-        if dormia and ouvir:
+        if dormia and aviso.ouvir:
             self._acordar_por_texto()
-            self.nucleo.aquecer()
-        for fala in falar:
-            self.registrador.registrar_estado("whatsapp_recebida", fala=fala, ouvir=ouvir)
+        for fala in aviso.falar:
+            self.registrador.registrar_estado("whatsapp_recebida", fala=fala, ouvir=aviso.ouvir)
             self._falar(fala, acao="whatsapp:recebida")
-        if ouvir:
+        if aviso.ouvir:
             self._renovar("janela aberta")
         elif dormia:
             # Som tocando: avisou e volta a dormir, sem ouvir o vídeo.
@@ -548,9 +677,9 @@ class Ciclo:
     def atender_texto(self, texto: str) -> None:
         """Um pedido digitado num cliente, atendido como se tivesse sido falado.
 
-        **Roda na thread de áudio, nunca na do socket.** O Nucleo guarda estado
-        de conversa — confirmação pendente, busca aberta — e duas threads nele
-        fariam uma confirmação falada e uma digitada se atropelarem.
+        **Roda na thread de áudio, nunca na do socket.** O ciclo guarda estado
+        de conversa — a pergunta do Claude esperando resposta — e duas threads
+        nele fariam uma resposta falada e uma digitada se atropelarem.
 
         Decisão do Léo: digitar acorda mesmo dormindo, e a resposta sai na voz.
         Sem a saudação: ela existe para confirmar que o wake word pegou, e aqui
@@ -645,44 +774,29 @@ def _montar(cfg: config.Config):
     voz = tts.criar_voz(cfg.tts, cfg.dir_vozes)
     _partida("voz", voz.nome, voz.segundos_de_carga)
 
-    inicio = time.monotonic()
-    nucleo = Nucleo(cfg)
-    _partida("núcleo", nucleo.descricao, time.monotonic() - inicio)
+    w = cfg.whatsapp
+    whatsapp = WhatsApp(w.banco, w.api, w.avisar_grupos) if w.ativo else None
+    agente = Agente(cfg.agente, cfg.persona.nome, whatsapp=whatsapp, persona_cfg=cfg.persona)
 
-    # O LLM entra na VRAM AQUI, e não no primeiro comando.
-    #
-    # O "pronto" mentia por omissão: o wake word e o Whisper ficavam
-    # residentes, mas o qwen3:8b — o único que só o comando usa — continuava no
-    # disco. O primeiro comando pagava a leitura de 5,23 GB, medida em 14,8s
-    # com cache frio contra 1,2s em cache. Do wake word até a resposta dava
-    # 18,7s de média, contra 6,2s do segundo comando em diante.
-    #
-    # Isto não cria espera nova: move os 15 segundos para dentro de uma espera
-    # que já existe. O Léo espera o "pronto" antes de falar; agora o "pronto"
-    # é verdade.
-    #
-    # A mensagem antes é de propósito. Ver o terminal parado 15 segundos sem
-    # explicação é diferente de ver o que está acontecendo.
-    aviso = ("  LLM              abrindo o Claude..." if cfg.llm.cerebro == "claude"
-             else "  LLM              carregando na VRAM (5 GB, pode levar ~15 s)...")
+    # O Claude Code sobe AQUI, e não no primeiro pedido: o "pronto" tem que
+    # ser verdade. A mensagem antes é de propósito (terminal parado sem
+    # explicação parece travado).
+    aviso = "  Claude           abrindo o Claude Code..."
     # No terminal o aviso é reescrito no lugar; num log ele fica como linha
     # própria. O "\r" não apaga nada quando a saída não é um terminal, e sem
     # esta checagem o log sai com os dois textos grudados na mesma linha.
     terminal = sys.stdout.isatty()
     print(aviso, end="" if terminal else "\n", flush=True)
-    segundos = nucleo.carregar()
+    segundos = agente.iniciar()
     if terminal:
         print("\r" + " " * len(aviso) + "\r", end="")
-    if cfg.llm.cerebro == "claude":
-        _partida("LLM", f"{cfg.llm.claude_modelo} pelo Claude Code (assinatura)", segundos)
-    else:
-        _partida("LLM", f"{cfg.llm.modelo} na VRAM", segundos)
+    _partida("Claude", f"{cfg.agente.modelo} ({cfg.agente.effort}), Claude Code inteiro, "
+                       f"modo {cfg.agente.modo_permissao}", segundos)
 
-    # O cliente lê os nomes do núcleo e entrega ao Whisper como vocabulário.
-    # A direção é permitida pela linha da §4: cliente conhece o núcleo, o
-    # núcleo não conhece o cliente. Medido: sem vocabulário 4/15 dos nomes
-    # sobrevivem à fala rápida, com vocabulário 9/15, sem custo de latência.
-    nomes = [a.nome for a in nucleo.tabela.atalhos]
+    # Os nomes do atalhos.toml vão para o Whisper como vocabulário. Medido:
+    # sem vocabulário 4/15 dos nomes sobrevivem à fala rápida, com 9/15, sem
+    # custo de latência.
+    nomes = _nomes_do_vocabulario(cfg.raiz / "atalhos.toml")
     transcritor.usar_vocabulario(nomes)
     _partida(
         "vocabulário",
@@ -697,7 +811,26 @@ def _montar(cfg: config.Config):
     _partida("VRAM em uso", f"{_vram()}   (residente)")
     _partida("janela", f"{cfg.ciclo.janela_s:g} s")
 
-    return detector_vad, detector_ww, transcritor, voz, nucleo
+    return detector_vad, detector_ww, transcritor, voz, agente
+
+
+def _nomes_do_vocabulario(caminho: Path) -> list[str]:
+    try:
+        with caminho.open("rb") as f:
+            return list(tomllib.load(f).keys())
+    except (OSError, tomllib.TOMLDecodeError):
+        return []
+
+
+def _pergunta_falada(pergunta: str, opcoes: list[str]) -> str:
+    """A pergunta, com as opções ditas quando ela não as diz sozinha."""
+    nomes = [o for o in opcoes if o]
+    simples = {normalizar(o) for o in nomes} <= {"sim", "nao", "pode", "cancelar", "nao pode"}
+    ditas = all(normalizar(o) in normalizar(pergunta) for o in nomes)
+    if not nomes or simples or ditas:
+        return pergunta
+    lista = ", ".join(nomes[:-1]) + " ou " + nomes[-1] if len(nomes) > 1 else nomes[0]
+    return f"{pergunta} {lista}?"
 
 
 def _abrir_ponte(
@@ -762,8 +895,8 @@ def teste_ciclo(cfg: config.Config) -> int:
     cfg = dataclasses.replace(cfg, ciclo=config.Ciclo(janela_s=janela_curta))
 
     try:
-        detector_vad, detector_ww, transcritor, voz, nucleo = _montar(cfg)
-    except (ErroDeCuda, ErroDoCerebro, wakeword.ModeloAusente, FileNotFoundError) as e:
+        detector_vad, detector_ww, transcritor, voz, agente = _montar(cfg)
+    except (ErroDeCuda, ErroDoAgente, wakeword.ModeloAusente, FileNotFoundError) as e:
         print(f"\n{e}\n", file=sys.stderr)
         return 1
 
@@ -773,7 +906,7 @@ def teste_ciclo(cfg: config.Config) -> int:
         detector_ww=detector_ww,
         transcritor=transcritor,
         voz=voz,
-        nucleo=nucleo,
+        agente=agente,
         registrador=Registrador.criar(cfg, prefixo="teste-ciclo"),
         portao=_PortaoFalso(),
         dispositivo_saida=None,
@@ -835,11 +968,11 @@ def conversar(cfg: config.Config) -> int:
     _partida("microfone", microfone.nome_do_dispositivo(indice_entrada, entrada=True))
 
     try:
-        detector_vad, detector_ww, transcritor, voz, nucleo = _montar(cfg)
+        detector_vad, detector_ww, transcritor, voz, agente = _montar(cfg)
     except ErroDeCuda as e:
         print(f"\nCUDA não subiu:\n{e}\n", file=sys.stderr)
         return 1
-    except (ErroDoCerebro, wakeword.ModeloAusente, FileNotFoundError) as e:
+    except (ErroDoAgente, wakeword.ModeloAusente, FileNotFoundError) as e:
         print(f"\n{e}\n", file=sys.stderr)
         return 1
 
@@ -849,7 +982,7 @@ def conversar(cfg: config.Config) -> int:
     if ponte is not None:
         # A seção de memória da janela pede por aqui. Só lê arquivos: pode
         # rodar na thread da ponte sem tocar no estado da conversa.
-        ponte.provedor_memoria = nucleo.memoria_para_janela
+        ponte.provedor_memoria = agente.memoria_para_janela
 
     mic: microfone.Microfone | None = None
     ciclo: Ciclo | None = None
@@ -871,11 +1004,13 @@ def conversar(cfg: config.Config) -> int:
                 detector_ww=detector_ww,
                 transcritor=transcritor,
                 voz=voz,
-                nucleo=nucleo,
+                agente=agente,
                 registrador=registrador,
                 portao=mic,
                 dispositivo_saida=indice_saida,
                 emissor=emissor,
+                avisos=AvisosWhatsApp(agente.whatsapp, cfg.persona, cfg.whatsapp.ler_conteudo,
+                                      lambda: agente.enviados_whats),
             )
             print(REGUA)
             _linha("dormindo", 'diga "hey Jarvis"  (ctrl+c encerra)')
@@ -894,6 +1029,10 @@ def conversar(cfg: config.Config) -> int:
                 bloco = mic.ler_bloco()
                 if bloco is not None:
                     ciclo.passo(bloco)
+                # O que o Claude devolveu (fala, pergunta, janela). Nunca no
+                # meio de você falando: espera a frase acabar.
+                if not ciclo.vad.falando:
+                    ciclo.atender_agente()
                 # Texto digitado num cliente. Atendido AQUI, na thread de áudio,
                 # e só com o VAD fora de fala: quem digita enquanto fala espera
                 # a frase acabar, em vez de ter a própria voz cortada.
@@ -919,10 +1058,9 @@ def conversar(cfg: config.Config) -> int:
         if mic is not None and mic.estouros:
             print(f"  blocos perdidos pelo PortAudio: {mic.estouros}")
         print(f"  registro em {registrador.caminho_jsonl}\n")
-        # A conversa em andamento vai para o diário antes de desligar. Sem
-        # isto, "o que a gente falou ontem?" perdia o último papo do dia.
-        if hasattr(nucleo, "encerrar"):
-            nucleo.encerrar()
+        # Fecha o Claude Code. A conversa fica salva por ele: ligando de novo
+        # em menos de 3 h, ela continua.
+        agente.encerrar()
         if ponte is not None:
             ponte.encerrar()
     return 0

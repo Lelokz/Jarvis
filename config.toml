@@ -87,7 +87,9 @@ janela_sem_foco = "Não consegui mexer em {nome}."
 # "2 horas e 10 minutos".
 limite_acabou = "Meu limite do Claude acabou. Volta {hora}, daqui a {falta}."
 limite_acabou_sem_hora = "Meu limite do Claude acabou. Ainda não sei quando volta."
-sem_internet = "Tô sem internet. Abrir, fechar e mexer nas janelas ainda funcionam; o resto espera a internet voltar."
+sem_internet = "Tô sem internet. Pausar, voltar e o volume ainda funcionam; o resto espera a internet voltar."
+# "Para" no meio de uma tarefa do Claude.
+parei = "Parei."
 cerebro_falhou = "Não consegui falar com o Claude agora. Tenta de novo?"
 
 # WhatsApp. {nome} é o contato; {texto} a mensagem.

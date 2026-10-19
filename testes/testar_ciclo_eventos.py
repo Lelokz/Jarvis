@@ -29,7 +29,7 @@ sys.path.insert(0, str(RAIZ))
 import assistente  # noqa: E402
 import terminal_identico as ti  # noqa: E402
 from jarvis import config, eventos  # noqa: E402
-from jarvis.nucleo.nucleo import Resposta  # noqa: E402
+from jarvis.agente.agente import Saida  # noqa: E402
 from jarvis.ponte.cliente import Cliente  # noqa: E402
 from jarvis.registro import Registrador  # noqa: E402
 
@@ -68,16 +68,6 @@ class Gravador:
         self.eventos = []
 
 
-class NucleoContador(ti.NucleoRoteirizado):
-    def __init__(self):
-        super().__init__()
-        self.chamadas = []
-
-    def processar(self, texto):
-        self.chamadas.append(texto)
-        return self.resposta
-
-
 def montar(tmp, gravador, *, cfg=None, emissor=None, com_terminal=False):
     cfg = cfg or config.carregar(RAIZ / "config.toml")
     if emissor is None:
@@ -86,15 +76,18 @@ def montar(tmp, gravador, *, cfg=None, emissor=None, com_terminal=False):
             t = assistente.Terminal(cfg.persona.nome.lower())
             emissor.assinar(t.receber, quer=t.quer, nome="terminal")
     emissor.assinar(gravador.receber, quer=gravador.quer, nome="gravador")
-    vad, stt, nucleo = ti.VadRoteirizado(), ti.TranscritorRoteirizado(), NucleoContador()
+    vad, stt, agente = ti.VadRoteirizado(), ti.TranscritorRoteirizado(), ti.AgenteRoteirizado()
     reg = Registrador(caminho_jsonl=tmp / f"s-{time.monotonic_ns()}.jsonl",
                       dir_audio=None, dir_audio_wake=None)
     ciclo = assistente.Ciclo(
         cfg, detector_vad=vad, detector_ww=ti.WakeWordParado(), transcritor=stt,
-        voz=ti.VozMuda(), nucleo=nucleo, registrador=reg,
+        voz=ti.VozMuda(), agente=agente, registrador=reg,
         portao=assistente._PortaoFalso(), dispositivo_saida=None, emissor=emissor,
     )
-    return cfg, ciclo, vad, stt, nucleo, reg
+    # O conversar() anuncia o estado do Claude ("ok") na subida, antes de
+    # qualquer pedido; aqui ninguém sobe, então fica marcado como anunciado.
+    ciclo._ultimo_aviso = ("ok", None)
+    return cfg, ciclo, vad, stt, agente, reg
 
 
 def jsonl(reg):
@@ -110,12 +103,13 @@ def seno_bloco(rms_alvo: float) -> bytes:
 def rodar(tmp: Path) -> None:
     print("-- E1. a sequência de estados numa conversa --")
     g = Gravador()
-    cfg, ciclo, vad, stt, nucleo, _ = montar(tmp, g)
+    cfg, ciclo, vad, stt, agente, _ = montar(tmp, g)
     with contextlib.redirect_stdout(io.StringIO()):
-        ti.roteiro_base(ciclo, vad, stt, nucleo)
+        ti.roteiro_base(ciclo, vad, stt, agente)
     esperado_estados = ["dormindo", "falando", "ouvindo",
                         "pensando", "falando", "ouvindo",
-                        "pensando", "falando", "ouvindo",
+                        "pensando", "falando", "ouvindo",      # a pergunta falada
+                        "pensando", "falando", "ouvindo",      # a resposta "pode"
                         "pensando", "ouvindo",
                         "dormindo"]
     checa("os estados saem na ordem de uma conversa real", g.estados() == esperado_estados,
@@ -123,6 +117,7 @@ def rodar(tmp: Path) -> None:
     esperado_tipos = [
         "estado", "acordou", "estado", "jarvis_disse", "janela", "estado",
         "estado", "voce_disse", "estado", "jarvis_disse", "tempos", "janela", "estado",
+        "estado", "voce_disse", "estado", "jarvis_disse", "janela", "estado",
         "estado", "voce_disse", "estado", "jarvis_disse", "tempos", "janela", "estado",
         "estado", "nao_entendi", "janela", "estado",
         "quase_acerto",
@@ -130,14 +125,17 @@ def rodar(tmp: Path) -> None:
     ]
     checa("e cada evento no seu lugar", g.tipos() == esperado_tipos, g.tipos())
     ditos = [e for e in g.eventos if e["ev"] == "jarvis_disse"]
-    checa("a ação e a pergunta pendente atravessam",
-          ditos[1]["acao"] == "abrir:loft" and ditos[2]["perguntando"] is True, ditos)
+    checa("a pergunta do Claude sai marcada como pergunta",
+          ditos[2]["perguntando"] is True and ditos[3]["perguntando"] is False, ditos)
+    checa("e a resposta falada a ela chega no Claude",
+          agente.chamadas == ["abre o loft", "apaga a pasta lixo", "resposta: pode"],
+          agente.chamadas)
     checa("nenhum estado repetido em sequência",
           all(a != b for a, b in zip(g.estados(), g.estados()[1:])), g.estados())
 
     print("-- E2. escutando vem do VAD, sem piscar --")
     g = Gravador()
-    cfg, ciclo, vad, stt, nucleo, _ = montar(tmp, g)
+    cfg, ciclo, vad, stt, agente, _ = montar(tmp, g)
     with contextlib.redirect_stdout(io.StringIO()):
         ciclo.acordar(0.9)
         g.limpar()
@@ -151,19 +149,21 @@ def rodar(tmp: Path) -> None:
         vad.falando = False
         vad.proximo = ti.segmento()
         stt.texto = "abre o loft"
-        nucleo.resposta = Resposta("Abri o Loft.", acao="abrir:loft")
+        agente.resposta = Saida("fim", "Abri o Loft.")
         ciclo.passo(SILENCIO)          # o segmento fecha
+        ciclo.atender_agente()
     checa("fala → escutando; fala descartada → ouvindo; segmento → pensando direto",
           g.estados() == ["escutando", "ouvindo", "escutando", "pensando", "falando", "ouvindo"],
           g.estados())
 
     print("-- E3. texto digitado com o Jarvis dormindo --")
     g = Gravador()
-    cfg, ciclo, vad, stt, nucleo, reg = montar(tmp, g, com_terminal=True)
-    nucleo.resposta = Resposta("São cinco da tarde.")
+    cfg, ciclo, vad, stt, agente, reg = montar(tmp, g, com_terminal=True)
+    agente.resposta = Saida("fim", "São cinco da tarde.")
     saida = io.StringIO()
     with contextlib.redirect_stdout(saida):
         ciclo.atender_texto("que horas são?")
+        ciclo.atender_agente()
     out = saida.getvalue()
     checa("acorda pelo texto", ciclo.estado is assistente.Estado.ACORDADO and ciclo.despertares == 1)
     checa("eventos: acordou, pensando, você disse, falando, resposta, janela, ouvindo",
@@ -173,16 +173,16 @@ def rodar(tmp: Path) -> None:
     checa("a origem vai como texto", g.eventos[3].get("origem") == "texto", g.eventos[3])
     checa("SEM a saudação", not any(e["ev"] == "jarvis_disse" and e["texto"] == cfg.persona.saudacao
                                     for e in g.eventos) and cfg.persona.saudacao not in out, out)
-    checa("o núcleo recebeu exatamente o texto", nucleo.chamadas == ["que horas são?"],
-          nucleo.chamadas)
+    checa("o núcleo recebeu exatamente o texto", agente.chamadas == ["que horas são?"],
+          agente.chamadas)
     checa("texto não conta como frase falada, nem gera linha de tempos",
           ciclo.frases == 0 and "stt " not in out, out)
     checa("o terminal mostra 'pelo texto digitado' e 'você (texto)'",
           "pelo texto digitado" in out and 'você (texto): "que horas são?"' in out, out)
     linhas = jsonl(reg)
     estados_log = [l.get("estado") for l in linhas if l.get("tipo") == "estado"]
-    checa("o log registra: acordou pelo texto → texto digitado → decisão, nesta ordem",
-          estados_log[:3] == ["acordou", "texto_digitado", "decisao"]
+    checa("o log registra: acordou pelo texto → texto digitado → pedido, nesta ordem",
+          estados_log[:3] == ["acordou", "texto_digitado", "pedido"]
           and linhas[0].get("por") == "texto" and linhas[1].get("texto") == "que horas são?",
           linhas[:3])
 
@@ -203,7 +203,7 @@ def rodar(tmp: Path) -> None:
     assistente._nivel = contando
     try:
         g = Gravador(quer_nivel=True)
-        cfg, ciclo, vad, stt, nucleo, _ = montar(tmp, g)
+        cfg, ciclo, vad, stt, agente, _ = montar(tmp, g)
         with contextlib.redirect_stdout(io.StringIO()):
             ciclo.acordar(0.9)
             g.limpar()
@@ -220,7 +220,7 @@ def rodar(tmp: Path) -> None:
 
         contagem[0] = 0
         g = Gravador(quer_nivel=False)
-        cfg, ciclo, vad, stt, nucleo, _ = montar(tmp, g, com_terminal=True)
+        cfg, ciclo, vad, stt, agente, _ = montar(tmp, g, com_terminal=True)
         with contextlib.redirect_stdout(io.StringIO()):
             ciclo.acordar(0.9)
             for _ in range(20):
@@ -246,7 +246,7 @@ def rodar(tmp: Path) -> None:
               ponte is not None and str(caminho) in montagem.getvalue(), montagem.getvalue())
         g = Gravador()
         with contextlib.redirect_stdout(io.StringIO()):
-            _, ciclo, vad, stt, nucleo, _ = montar(tmp, g, cfg=cfg, emissor=emissor)
+            _, ciclo, vad, stt, agente, _ = montar(tmp, g, cfg=cfg, emissor=emissor)
 
         cli = Cliente(caminho, quem="teste")
         cli.conectar()
@@ -258,7 +258,7 @@ def rodar(tmp: Path) -> None:
         checa("e o estado atual, dormindo", estado0 == {"ev": "estado", "estado": "dormindo"},
               estado0)
 
-        nucleo.resposta = Resposta("Abri o Loft.", acao="abrir:loft")
+        agente.resposta = Saida("fim", "Abri o Loft.")
         cli.enviar_texto("abre o loft")
         fim = time.monotonic() + 3
         while ponte._pedidos.qsize() == 0 and time.monotonic() < fim:
@@ -269,6 +269,8 @@ def rodar(tmp: Path) -> None:
                 texto = ponte.proximo_texto()
                 if texto is not None:
                     ciclo.atender_texto(texto)
+            if not ciclo.vad.falando:
+                ciclo.atender_agente()
 
         saida = io.StringIO()
         with contextlib.redirect_stdout(saida):
@@ -276,19 +278,19 @@ def rodar(tmp: Path) -> None:
             for _ in range(20):
                 uma_volta()
             checa("com você falando, o texto ESPERA na fila",
-                  nucleo.chamadas == [] and ponte._pedidos.qsize() == 1,
-                  (nucleo.chamadas, ponte._pedidos.qsize()))
+                  agente.chamadas == [] and ponte._pedidos.qsize() == 1,
+                  (agente.chamadas, ponte._pedidos.qsize()))
             vad.falando = False
             uma_volta()
-        checa("com a fala terminada, é atendido", nucleo.chamadas == ["abre o loft"],
-              nucleo.chamadas)
+        checa("com a fala terminada, é atendido", agente.chamadas == ["abre o loft"],
+              agente.chamadas)
         chegou = [next(fluxo) for _ in range(5)]
-        checa("o cliente vê: pensando, você disse, falando, resposta com ação, ouvindo",
+        checa("o cliente vê: pensando, você disse, falando, resposta, ouvindo",
               [e["ev"] for e in chegou] == ["estado", "voce_disse", "estado", "jarvis_disse", "estado"]
               and [e.get("estado") for e in chegou if e["ev"] == "estado"]
                   == ["pensando", "falando", "ouvindo"]
               and chegou[1] == {"ev": "voce_disse", "texto": "abre o loft", "origem": "texto"}
-              and chegou[3].get("acao") == "abrir:loft", chegou)
+              and chegou[3].get("texto") == "Abri o Loft.", chegou)
         checa("e o terminal do assistente mostrou o mesmo pedido",
               'você (texto): "abre o loft"' in saida.getvalue(), saida.getvalue())
 
@@ -330,8 +332,8 @@ def rodar(tmp: Path) -> None:
     erro = None
     try:
         with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(erros):
-            _, ciclo, vad, stt, nucleo, _ = montar(tmp, g, emissor=emissor)
-            ti.roteiro_base(ciclo, vad, stt, nucleo)
+            _, ciclo, vad, stt, agente, _ = montar(tmp, g, emissor=emissor)
+            ti.roteiro_base(ciclo, vad, stt, agente)
     except Exception as e:  # noqa: BLE001
         erro = e
     checa("o ciclo inteiro roda com um assinante quebrando em todo evento", erro is None, erro)
@@ -398,65 +400,6 @@ def rodar(tmp: Path) -> None:
         checa("e a ponte quebrada não ficou assinando eventos", not emissor.quer("nivel"))
     finally:
         assistente.Servidor.iniciar = original
-
-
-    print("-- E10. bloquear a tela: a FALA vem antes da trava --")
-    ordem = []
-
-    class VozQueAnota(ti.VozMuda):
-        """Anota quando a fala termina.
-
-        O `tts.falar` consome o gerador até o fim; o que vem depois do `yield`
-        roda exatamente quando a síntese acaba, dentro do laço dele. É o
-        instante que o teste precisa comparar com o da trava.
-        """
-
-        def sintetizar(self, texto):
-            ordem.append("fala começou")
-            if False:  # noqa: SIM223  — mantém isto como gerador
-                yield
-            ordem.append("fala terminou")
-
-    g = Gravador()
-    cfg = config.carregar(RAIZ / "config.toml")
-    emissor = eventos.Emissor()
-    emissor.assinar(g.receber, quer=g.quer, nome="gravador")
-    reg = Registrador(caminho_jsonl=tmp / "tela.jsonl", dir_audio=None,
-                      dir_audio_wake=None)
-    nucleo = NucleoContador()
-    # O núcleo de verdade devolve um `depois` que trancaria a tela. Aqui ele é
-    # trocado por um que só anota: NENHUM teste automático trava tela de
-    # ninguém.
-    nucleo.resposta = Resposta("Bloqueando.", acao="bloquear_tela",
-                               depois=lambda: ordem.append("travou"))
-    ciclo = assistente.Ciclo(
-        cfg, detector_vad=ti.VadRoteirizado(), detector_ww=ti.WakeWordParado(),
-        transcritor=ti.TranscritorRoteirizado(), voz=VozQueAnota(), nucleo=nucleo,
-        registrador=reg, portao=assistente._PortaoFalso(), dispositivo_saida=None,
-        emissor=emissor,
-    )
-    with contextlib.redirect_stdout(io.StringIO()):
-        ciclo.atender_texto("bloqueia o pc")
-    checa("a trava acontece DEPOIS de a fala terminar",
-          ordem == ["fala começou", "fala terminou", "travou"], ordem)
-    checa("o núcleo recebeu o comando", nucleo.chamadas == ["bloqueia o pc"],
-          nucleo.chamadas)
-    linhas = jsonl(reg)
-    depois_no_log = [l for l in linhas if l.get("estado") == "depois_da_fala"]
-    checa("e o que rodou depois da fala foi registrado",
-          len(depois_no_log) == 1 and depois_no_log[0].get("acao") == "bloquear_tela",
-          depois_no_log)
-
-    print("-- E11. sem `depois`, nada muda no caminho de sempre --")
-    ordem.clear()
-    nucleo.resposta = Resposta("Abri o Loft.", acao="abrir:loft")
-    with contextlib.redirect_stdout(io.StringIO()):
-        ciclo.atender_texto("abre o loft")
-    checa("resposta comum não dispara nada depois da fala",
-          ordem == ["fala começou", "fala terminou"], ordem)
-    checa("e não registra linha de 'depois'",
-          len([l for l in jsonl(reg) if l.get("estado") == "depois_da_fala"]) == 1,
-          "registrou a mais")
 
 
 def main() -> int:

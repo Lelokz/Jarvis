@@ -52,6 +52,7 @@ class Persona:
     limite_acabou_sem_hora: str
     sem_internet: str
     cerebro_falhou: str
+    parei: str
     whats_chegou: str
     whats_chegou_sem_texto: str
     whats_varias: str
