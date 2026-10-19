@@ -13,10 +13,12 @@ quando precisar).
 
 ## Regras do Jarvis (o programa)
 
-Estão no **ESCOPO §2**, num lugar só. Resumo: comando gerado pelo modelo só
-com aprovação na tela; chutar pode em coisa inofensiva, destrutiva pergunta;
-confirmação falada no que pode machucar ou destruir; lixeira pode, apagar de
-vez nunca; tudo vai pro log; nada pessoal no git.
+Estão no **ESCOPO §2**, num lugar só. Desde out/2026 o Jarvis É o Claude
+Code (Agent SDK): o julgamento dele substitui as regras fixas, e o que ele
+deve fazer está em `jarvis/agente/persona.md`. Travas de código que ficam:
+pergunta falada com prazo de 10 s (nunca pop-up), WhatsApp só com pedido de
+mandar na fala do Léo, volume acima de 70 não é reflexo, tudo vai pro log,
+nada pessoal no git.
 
 ## Método
 
@@ -67,7 +69,7 @@ Respostas curtas, é voz e não texto.
 ## Antes de tudo: leia o planejamento
 O ESCOPO.md é o estado atual do projeto. Leia ele inteiro antes de
 começar, e atualize ao fim de cada coisa feita. O HISTORIA.md, o
-regressao.py e a pasta medicoes/ guardam o porquê das decisões. Os chats onde o projeto
+git e a pasta medicoes/ guardam o porquê das decisões. Os chats onde o projeto
 foi planejado foram perdidos; o que sobrou está nesses arquivos. Se algo
 importante não estiver escrito, pergunte ao Leo.
 
@@ -164,9 +166,10 @@ que bater o olho e perceber "isso aqui tá estranho".
   `gnome-screenshot -f` ou o retrato da própria janela do Jarvis
   (`interface.py --dizer … --retrato-da-conversa`). Clique simulado que não
   funciona é sinal para investigar a tela, não para insistir.
-- A separação núcleo/cliente (o núcleo recebe texto, decide, executa e
-  devolve texto, sem saber o que é microfone ou tela) é o desenho central
-  do Jarvis e o que permite o cliente de celular. Mantenha.
+- A separação cérebro/corpo (o agente recebe texto e devolve fala, pergunta
+  ou cartão pela fila, sem saber o que é microfone ou tela; `jarvis/nucleo/`
+  ficou só com as mãos que o corpo usa) é o desenho central do Jarvis e o
+  que permite o cliente de celular. Mantenha.
 
 ## Rumo do projeto (conversado fora dos .md, não perca)
 - A visão do Leo: parar de empilhar "frase X → função Y" e ter um
@@ -174,9 +177,10 @@ que bater o olho e perceber "isso aqui tá estranho".
   opções melhores. O modelo compõe as ferramentas que já existem (ex.: um
   briefing da manhã não é função nova, é o modelo juntando agenda + clima
   + e-mail porque a conversa pediu).
-- Cérebro (decidido em out/2026): Claude Opus 5.5 pelo Claude Code com o
-  login da assinatura do Leo, no lugar do qwen local. Comando fixo continua
-  em lista fechada (rápido e sem internet). Detalhes no ESCOPO §4.
+- Cérebro (decidido em out/2026, segunda vez): o Claude Code INTEIRO pelo
+  Agent SDK, com todas as ferramentas, no lugar do roteador com 11 funções.
+  "Quero que o Jarvis SEJA o Claude Code." Só pausa/volta/volume ficaram
+  como reflexo de 0 s. Detalhes no ESCOPO §4.
 - Ordem sugerida: memória (o Jarvis lembrar do Leo) antes de conversa
   livre. Sem memória nunca vai parecer conversa de verdade.
 - Meta concreta boa: o briefing da manhã (agenda + clima + e-mail num

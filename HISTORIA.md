@@ -2132,3 +2132,48 @@ git add .
 git commit -m "Etapa N: <o que foi feito>"
 git push
 ```
+
+---
+
+## Out/2026 (19/10): o Jarvis vira o Claude Code
+
+**O pedido do Léo:** "Hoje o Jarvis é amador: o Whisper transcreve, o Claude
+escolhe uma entre 11 funções fechadas e, se nenhuma serve, só conversa. É o
+Claude preso em mil correntes. Quero que o Jarvis SEJA o Claude Code." O
+julgamento do Claude substitui as regras fixas; do Jarvis fica o corpo.
+
+**O que mudou:**
+- `jarvis/agente/` (novo): o `ClaudeSDKClient` do `claude-agent-sdk` 0.2.168,
+  usando o `claude` instalado (login da assinatura), modo de permissão
+  "auto", sessão aberta numa thread com asyncio. O ciclo de voz manda a fala
+  e recolhe saídas por uma fila: nunca mais trava o microfone esperando.
+- Saiu o núcleo inteiro (roteador, 11 ferramentas, busca de arquivos,
+  catálogo, janelas, agenda, clima, diário, memória) e a regressão de
+  roteamento. As receitas difíceis (minimizar no Cinnamon, encaixe por
+  Super+seta, catálogo do Brave) ficam apontadas no `CLAUDE.md` da casa, no
+  commit `3e7b5bb`.
+- Reflexos de 0 s: só pausa/volta/próxima e volume até 70.
+
+**O que foi medido antes de decidir:**
+- Subida da sessão: 0,8 s, com os 6 MCPs do Léo e 122 ferramentas; ~400 MB.
+- Pedido com uma ferramenta: ~4 s (Opus 5.5, esforço alto).
+- Modo "default": pede licença até para criar arquivo — por voz, inviável.
+  Modo "auto": o classificador decide sozinho e nunca pergunta; a pergunta
+  séria vem da `AskUserQuestion`, que **passa pelo `can_use_tool` mesmo no
+  modo auto** (testado), e vira voz.
+- Fala nova no meio da tarefa entra na MESMA tarefa (ele contou até cinco e
+  respondeu "7 vezes 8" junto, um resultado só). `interrupt()` para na hora
+  e a sessão segue viva.
+- "Pausa a música" pelo agente: 14 s, investigando MPRIS do zero. Por isso o
+  reflexo ficou.
+- Um teste meu mandava o agente apagar uma pasta real (`rascunho/vozes`)
+  confiando no meu callback para negar; no modo auto o callback nem é
+  chamado. O classificador do Claude Code barrou o comando. Lição: teste
+  destrutivo só em pasta criada para o teste.
+
+**Voz (Etapa 5, mesmo dia):** o Qwen3-TTS (Apache, fala português) soou
+promissor, mas o `qwen-tts` 0.1.1 gera mais lento que o tempo real aqui:
+RTF 4,0 com 3 núcleos e 2,2 sem limite, com a GPU parada (o gargalo é a
+biblioteca). Kokoro: RTF 0,04. Amostras em `rascunho/vozes-novas/`. O
+download do modelo 1,7B encheu o disco (0 bytes livres); o ambiente do teste
+foi apagado em seguida.
