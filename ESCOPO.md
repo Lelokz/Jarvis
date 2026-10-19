@@ -149,8 +149,12 @@ faber):
 
 - **A voz do JARVIS do filme** (modelo Piper `jgkawell/jarvis`, MIT) só existe
   em inglês; lendo português o Whisper transcreveu "Em Forti Anópolis está no
-  blado". **Não serve.** A da dublagem brasileira não existe pronta, e criar
-  seria clonar um dublador real sem autorização — decidido não fazer.
+  blado". **Não serve.** A da dublagem brasileira não existe pronta para baixar
+  (out/2026: só em serviço pago, a Fish Audio). **Decisão do Léo (19/10/2026):
+  pode clonar a voz do JARVIS dublado para uso PESSOAL**, só no PC dele. O
+  "não fazer" de antes pensava no Jarvis indo para outras pessoas. Regras: o
+  modelo e o áudio de referência ficam FORA do git; se o Jarvis um dia for
+  para alguém, vai com a Kokoro.
 - **Efeito "jarvis"**: ecos curtos de capacete + reforço nos graves. A
   primeira versão realçava agudos e ficou "afeminada" (palavra do Léo).
 - **Tom -0,5 semitom**: o Kokoro fala mais rápido e o áudio é esticado de
