@@ -64,6 +64,7 @@ class Tts:
     velocidade: float
     efeito: str = ""
     tom: float = 0.0  # semitons; negativo = mais grave (só Kokoro)
+    socket_f5: str = "jarvis-voz.sock"  # o servidor_voz.py (motor "f5")
 
 
 @dataclass(frozen=True)

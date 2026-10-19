@@ -17,11 +17,17 @@ ligado() { pgrep -f "$PROJETO/assistente.py" > /dev/null; }
 PONTE_WHATS="$HOME/.local/share/jarvis/whatsapp-mcp/whatsapp-bridge"
 ponte_ligada() { pgrep -f "^./whatsapp-bridge$" > /dev/null; }
 
+# A voz do JARVIS dublado (servidor_voz.py), na venv da voz, FORA do projeto:
+# o modelo é pessoal (ESCOPO §4). Sem a pasta, o Jarvis fala com a Kokoro.
+VOZ="$HOME/.local/share/jarvis/voz-jarvis"
+voz_ligada() { pgrep -f "$PROJETO/servidor_voz.py" > /dev/null; }
+
 if [ "${1:-}" = "--desligar" ]; then
   # O assistente trata SIGTERM como ctrl+c: fecha o microfone, apaga o
   # socket e grava o resumo, em vez de morrer no meio.
   pkill -TERM -f "$PROJETO/assistente.py"
   pkill -TERM -f "^./whatsapp-bridge$"
+  pkill -TERM -f "$PROJETO/servidor_voz.py"
   pkill -f "$PROJETO/interface.py"
   # Até 20 s: ao desligar, o assistente resume a conversa em andamento para
   # o diário (uma chamada ao Claude).
@@ -34,6 +40,15 @@ if [ -x "$PONTE_WHATS/whatsapp-bridge" ] && ! ponte_ligada; then
   # umask 077: o que a ponte criar (banco, log) só o Léo lê.
   ( cd "$PONTE_WHATS" && umask 077 && nohup ./whatsapp-bridge \
       >> "$HOME/.local/share/jarvis/whatsapp-bridge.log" 2>&1 & )
+fi
+
+if [ -f "$VOZ/modelo/jarvis-dublado.safetensors" ] && ! voz_ligada; then
+  mkdir -p logs
+  # O ffmpeg estático do Estúdio no PATH: a biblioteca de áudio do F5 procura.
+  PATH="$HOME/.local/share/lelokz-estudio/ffmpeg:$PATH" nohup "$VOZ/venv/bin/python" -u \
+      "$PROJETO/servidor_voz.py" --modelo "$VOZ/modelo/jarvis-dublado.safetensors" \
+      --ref "$VOZ/ref/bomdia.wav" --ref-texto "$(cat "$VOZ/ref/bomdia.txt")" \
+      >> logs/servidor-voz.log 2>&1 &
 fi
 
 if ! ligado; then

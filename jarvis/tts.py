@@ -264,9 +264,92 @@ def falar(
             stream.close()
 
 
+class VozF5(Voz):
+    """A voz do JARVIS dublado (out/2026): F5-TTS treinado com 93 falas do
+    filme, rodando no `servidor_voz.py` (outra venv, com PyTorch).
+
+    Pede a fala pelo socket e toca frase por frase, conforme chegam: a
+    primeira já toca enquanto o servidor gera a próxima (~1 s por frase
+    curta, medido com 16 passos). **Se o servidor não responder, fala com a
+    Kokoro** (`reserva`): o Jarvis nunca fica mudo por causa da voz.
+    """
+
+    _RMS_ALVO = VozKokoro._RMS_ALVO  # o mesmo volume da Kokoro, nunca acima
+
+    def __init__(self, cfg: ConfigTts, reserva: Voz, espera_s: float = 45.0) -> None:
+        import os
+
+        self.cfg = cfg
+        self.reserva = reserva
+        self.caminho = cfg.socket_f5 if cfg.socket_f5.startswith("/") else os.path.join(
+            os.environ.get("XDG_RUNTIME_DIR", "/tmp"), cfg.socket_f5)
+        # O servidor sobe junto (jarvis.sh) e leva ~10 s carregando o modelo:
+        # espera um pouco na partida em vez de começar já na reserva.
+        inicio = time.monotonic()
+        while not self._vivo() and time.monotonic() - inicio < espera_s:
+            time.sleep(0.5)
+        self.segundos_de_carga = reserva.segundos_de_carga + time.monotonic() - inicio
+
+    def _vivo(self) -> bool:
+        import json
+        import socket
+
+        try:
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
+                s.settimeout(2)
+                s.connect(self.caminho)
+                s.sendall(b'{"ping": true}\n')
+                return json.loads(s.makefile("rb").readline() or b"{}").get("ok") is True
+        except (OSError, ValueError):
+            return False
+
+    @property
+    def nome(self) -> str:
+        estado = "servidor no ar" if self._vivo() else "SERVIDOR FORA: falando com a reserva"
+        return f"jarvis dublado (F5, {estado}); reserva {self.reserva.nome}"
+
+    def sintetizar(self, texto: str) -> Iterator[Trecho]:
+        import json
+        import socket
+
+        import numpy as np
+
+        entregou = False
+        try:
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
+                s.settimeout(2)
+                s.connect(self.caminho)
+                s.settimeout(30)
+                s.sendall(json.dumps({"texto": texto}, ensure_ascii=False).encode() + b"\n")
+                arq = s.makefile("rb")
+                while True:
+                    cab = json.loads(arq.readline() or b'{"erro": "conexao fechada"}')
+                    if cab.get("fim"):
+                        return
+                    if "erro" in cab:
+                        raise OSError(cab["erro"])
+                    bruto = arq.read(cab["n"])
+                    audio = np.frombuffer(bruto, dtype=np.int16).astype(np.float32) / 32768
+                    rms = float(np.sqrt(np.mean(audio ** 2))) or 1.0
+                    ganho = min(self._RMS_ALVO / rms,
+                                0.95 / max(float(np.max(np.abs(audio))), 1e-6))
+                    pcm = np.clip(audio * ganho, -1.0, 1.0)
+                    pcm = np.concatenate([pcm, np.zeros(int(cab["taxa"] * 0.12), dtype=np.float32)])
+                    entregou = True
+                    yield Trecho(pcm=(pcm * 32767).astype(np.int16).tobytes(),
+                                 taxa=cab["taxa"], canais=1)
+        except (OSError, ValueError, KeyError):
+            if entregou:
+                return  # caiu no meio: o que já foi dito fica, sem repetir
+        yield from self.reserva.sintetizar(texto)
+
+
 def criar_voz(cfg: ConfigTts, dir_vozes: Path) -> Voz:
     if cfg.motor == "piper":
         return VozPiper(cfg, dir_vozes)
     if cfg.motor == "kokoro":
         return VozKokoro(cfg, dir_vozes)
-    raise ValueError(f'motor de TTS desconhecido: "{cfg.motor}" (existem "piper" e "kokoro")')
+    if cfg.motor == "f5":
+        # A reserva é a Kokoro com as mesmas configurações de [tts].
+        return VozF5(cfg, reserva=VozKokoro(cfg, dir_vozes))
+    raise ValueError(f'motor de TTS desconhecido: "{cfg.motor}" (existem "piper", "kokoro" e "f5")')

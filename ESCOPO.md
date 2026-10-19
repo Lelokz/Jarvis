@@ -67,9 +67,9 @@ O que é **instrução** para o julgamento dele (`persona.md`), e não trava:
 
 ## 3. Persona
 
-Nome **Jarvis**, voz masculina: **Kokoro `pm_alex` com "efeito jarvis", meio
-semitom abaixo e 1,3x mais rápida** (out/2026, escolhida de ouvido pelo Léo entre Piper, a voz do
-filme e Kokoro). Detalhes em §4. Fala como pessoa
+Nome **Jarvis**, voz masculina: **a voz do JARVIS da dublagem brasileira**,
+clonada e treinada no PC do Léo para uso pessoal (19/10/2026, "ficou muito
+bom"). Reserva: Kokoro `pm_alex`, efeito suave, 1,15x. Detalhes em §4. Fala como pessoa
 normal: nem formal, nem cheio de gíria. Respostas curtas: é voz.
 
 Tudo no `config.toml` (`[persona]`), nada chumbado no código. **No futuro vira
@@ -106,7 +106,8 @@ microfone ─► wake word "hey Jarvis" (CPU) ─► "Pois não?" ─► 30 s ou
 
 **Stack:** openWakeWord `hey_jarvis` · pysilero-vad · faster-whisper
 `large-v3-turbo` int8 na GPU · **Claude Code pelo `claude-agent-sdk`, Opus 5.5
-no esforço alto, login da assinatura** · Kokoro · janela em PySide6/QML.
+no esforço alto, login da assinatura** · voz do JARVIS dublado (F5-TTS treinado,
+`servidor_voz.py`), Kokoro de reserva · janela em PySide6/QML.
 
 ### O cérebro: o Claude Code inteiro (out/2026)
 
@@ -141,7 +142,37 @@ instalado, com o login da assinatura) e a mantém aberta numa thread própria.
 - **Uso pessoal só**: a Anthropic não permite oferecer o login do claude.ai
   num produto para outras pessoas.
 
-### A voz: Kokoro na placa de vídeo (out/2026)
+### A voz do JARVIS dublado (19/10/2026)
+
+**F5-TTS** com o modelo PT-BR da comunidade (`firstpixel/F5-TTS-pt-br`,
+CC-BY-NC: uso pessoal) **treinado com a voz do JARVIS dublado**. Aprovado pelo
+Léo de ouvido ("ficou muito bom"). Pessoal: modelo, áudios e referência FORA
+do git (decisão do Léo; se o Jarvis um dia for para alguém, vai com a Kokoro).
+
+- **Como saiu o material:** 110 cenas dubladas baixadas do YouTube → voz
+  separada da música e dos efeitos (Demucs) → frases transcritas (Whisper) →
+  só as frases cuja "impressão digital" de voz (ECAPA, SpeechBrain) bate com
+  falas conhecidas do JARVIS no Homem de Ferro 1 (corte 0,55; o Tony dá até
+  0,34). Resultado: **93 frases, 5 min**. Corte 0,45 deixava entrar Tony e
+  vilão.
+- **Treino:** 250 épocas, 4.250 passos, ~45 min na 3060 (lote de 1.800
+  quadros: o de 3.200 não cabia com o Jarvis ligado; **2 workers de dados**:
+  com o padrão de 16, a RAM e o swap encheram e o PC se arrastou).
+- **Semelhança com o JARVIS do filme** (ECAPA, 0 a 1): Kokoro 0,25 · clone
+  sem treino (5 s de referência) 0,53 · **treinado 0,73** · falas reais
+  0,55 a 0,85.
+- **Como roda:** `servidor_voz.py` na venv da voz
+  (`~/.local/share/jarvis/voz-jarvis`, com PyTorch), socket
+  `$XDG_RUNTIME_DIR/jarvis-voz.sock`; sobe e desce no `jarvis.sh`. O
+  `VozF5` (`tts.py`) pede a fala e toca frase por frase. **16 passos de
+  difusão** (metade do tempo de 32, mesma nota): ~1 s até o primeiro som numa
+  frase nova; frase curta repetida ("Pois não?", "Parei.") sai na hora, da
+  memória do servidor. ~1,5 GB a mais de VRAM (4,1 GB no total).
+- **Sem o servidor, fala com a Kokoro** (testado): nunca fica mudo.
+- Arquivos do treino (cenas, dataset, checkpoints): HD,
+  `Arquivo/Jarvis - Treino da voz dublada/`. Scripts em `rascunho/voz_jarvis/`.
+
+### A reserva: Kokoro na placa de vídeo (out/2026)
 
 `VozKokoro` (`tts.py`), voz `pm_alex`, no lugar do Piper `faber`. Comparado de
 ouvido pelo Léo e pelo Whisper (que entendeu as vozes Kokoro melhor que a
@@ -155,12 +186,14 @@ faber):
   "não fazer" de antes pensava no Jarvis indo para outras pessoas. Regras: o
   modelo e o áudio de referência ficam FORA do git; se o Jarvis um dia for
   para alguém, vai com a Kokoro.
-- **Efeito "jarvis"**: ecos curtos de capacete + reforço nos graves. A
+- **Efeito "suave"** (19/10/2026, o Léo achou a voz robotizada): só reforço
+  nos graves. O "jarvis" (ecos curtos de capacete + graves) continua no
+  código; os ecos somados são um filtro pente, e é deles o som metálico. A
   primeira versão realçava agudos e ficou "afeminada" (palavra do Léo).
 - **Tom -0,5 semitom**: o Kokoro fala mais rápido e o áudio é esticado de
   volta, engrossando sem ficar lento. -4 a -1 ficaram graves demais.
-- **Velocidade 1,3x** (`velocidade = 0.769`): a normal era lenta para o Léo;
-  ouviu 1,15x, 1,25x, 1,35x e 1,5x e ficou com 1,3x.
+- **Velocidade 1,15x** (`velocidade = 0.87`, 19/10/2026: "1,15 é mais
+  bonitinha"). Antes era 1,3x.
 - **Na GPU**: 0,27 s para 7,4 s de fala (CPU: 4,2 s); a primeira frase toca
   em ~0,3 s, as outras são geradas enquanto ela fala. `onnxruntime-gpu`
   **1.22** (CUDA 12, a do Whisper); o wake word continua no mesmo motor, pela
@@ -384,10 +417,8 @@ Sem ordem rígida: faz, o Léo testa o que é de voz, segue.
 
 1. **Testar o Jarvis-Claude Code por voz** e ajustar a `persona.md` com o
    que aparecer (o que fala demais, o que pergunta demais ou de menos).
-2. **Voz nova** (out/2026, em andamento): o Qwen3-TTS soa bem mas gera mais
-   lento que o tempo real nesta máquina (medido: 2,2 s por segundo de fala;
-   a Kokoro faz 0,04). Próximo passo: ouvir pagas (ElevenLabs, Cartesia,
-   Google Chirp) se o Léo quiser.
+2. **Voz:** feita (JARVIS dublado, §4). Se quiser ainda mais fiel: juntar
+   mais falas (filmes inteiros dariam muito mais que 5 min) ou RVC.
 3. **Briefing da manhã:** agora é instrução no `CLAUDE.md` da casa; o e-mail
    entra pelo Gmail (cuidado com o que sai em voz alta, tem gente na casa).
 4. **Jarvis no celular:** PC como servidor, Tailscale (por causa do CGNAT),

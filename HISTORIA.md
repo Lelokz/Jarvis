@@ -2177,3 +2177,24 @@ RTF 4,0 com 3 núcleos e 2,2 sem limite, com a GPU parada (o gargalo é a
 biblioteca). Kokoro: RTF 0,04. Amostras em `rascunho/vozes-novas/`. O
 download do modelo 1,7B encheu o disco (0 bytes livres); o ambiente do teste
 foi apagado em seguida.
+
+### A voz do JARVIS dublado (19/10/2026, noite)
+
+O Léo pediu a voz da dublagem brasileira ("é impossível ninguém ter posto na
+internet"). Pronta para baixar não havia; só no Fish Audio, pago (ele não quis
+API nem gasto). Decisão dele: clonar para uso PESSOAL — o "não clonar dublador"
+do ESCOPO antigo pensava no Jarvis indo para outras pessoas.
+
+- **Teste 1:** F5-TTS PT-BR, sem treino, com 5,5 s do "Bom dia. São sete da
+  manhã. Em Malibu..." (Homem de Ferro 1). Bom, "mas não tá fiel". Nota 0,53.
+- **Teste 2:** 110 cenas dubladas → Demucs → Whisper → filtro por impressão
+  digital de voz (ECAPA) calibrado com falas conhecidas do JARVIS e do Tony no
+  mesmo vídeo → 93 frases, 5 min → ajuste fino de 4.250 passos. Nota 0,73.
+  **"Ficou muito bom."** Ligado no Jarvis no mesmo dia.
+- **O que deu errado no caminho:** o `.safetensors` PT-BR vem sem o prefixo
+  `ema_model.` que o treinador espera (convertido); com o Jarvis ligado o
+  lote de 3.200 quadros não coube na placa (1.800); e os 16 workers de dados
+  padrão encheram RAM e swap — o treino caiu de 1,8 para 0,2 passo/s e o PC
+  se arrastou. Parado e refeito com 2 workers e cerca de 7 GB.
+- O resultado foi mandado ao Léo pelo WhatsApp (ponte do Jarvis, para o
+  próprio número) porque ele já tinha saído para o SENAI.

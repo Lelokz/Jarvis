@@ -123,8 +123,10 @@ beam_size = 1
 usar_vocabulario = true
 
 [tts]
-# "kokoro" (out/2026, escolha do Léo de ouvido) ou "piper" (a voz de antes).
-motor = "kokoro"
+# "f5" = a voz do JARVIS dublado (out/2026, aprovada pelo Léo: "ficou muito
+# bom"), pelo servidor_voz.py; sem o servidor, fala com a Kokoro abaixo.
+# "kokoro" = a Kokoro sozinha; "piper" = a voz de antes.
+motor = "f5"
 
 # Kokoro: pm_alex (escolhida), pm_santa; pf_dora para a futura personagem.
 # Piper: pt_BR-faber-medium, pt_BR-cadu-medium, pt_BR-jeff-medium.
@@ -140,6 +142,8 @@ efeito = "suave"
 # Semitons; negativo = mais grave. O Léo ouviu -4, -3, -2 e -1 (graves
 # demais) e 0; ficou com meio semitom abaixo.
 tom = -0.5
+# Só "f5": onde o servidor_voz.py atende (em $XDG_RUNTIME_DIR).
+socket_f5 = "jarvis-voz.sock"
 
 [wakeword]
 # Escolhido e medido na Etapa 0.5: 20/20 de acerto na pronúncia inglesa
