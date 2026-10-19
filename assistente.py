@@ -189,7 +189,10 @@ COMANDOS_DE_PARAR = {
 
 
 def e_pedido_de_parar(texto: str) -> bool:
-    return normalizar(texto) in COMANDOS_DE_PARAR
+    # "Para, para." repetido também vale (aconteceu no primeiro teste por voz).
+    palavras = normalizar(texto).split()
+    sem_repetir = [p for i, p in enumerate(palavras) if i == 0 or p != palavras[i - 1]]
+    return " ".join(sem_repetir) in COMANDOS_DE_PARAR
 
 
 def _emissor_de_terminal(cfg: config.Config) -> eventos.Emissor:

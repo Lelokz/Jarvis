@@ -151,6 +151,8 @@ class VozKokoro(Voz):
                                   np.arange(len(audio)), audio).astype(np.float32)
             if self.cfg.efeito == "jarvis":
                 audio = efeito_jarvis(audio, taxa)
+            elif self.cfg.efeito == "suave":
+                audio = efeito_suave(audio, taxa)
             rms = float(np.sqrt(np.mean(audio ** 2))) or 1.0
             ganho = min(self._RMS_ALVO / rms, 0.95 / max(float(np.max(np.abs(audio))), 1e-6))
             pcm = np.clip(audio * ganho, -1.0, 1.0)
@@ -176,6 +178,17 @@ def efeito_jarvis(audio, taxa: int):
     janela = max(1, int(taxa * 0.002))
     graves = np.convolve(saida, np.ones(janela, dtype=np.float32) / janela, mode="same")
     return saida + 0.45 * graves
+
+
+def efeito_suave(audio, taxa: int):
+    """Só corpo nos graves, sem os ecos do "jarvis" (out/2026, pedido do Léo:
+    "menos robotizada"). Os ecos curtos somados à voz são um filtro pente:
+    é deles o som metálico de máquina."""
+    import numpy as np
+
+    janela = max(1, int(taxa * 0.002))
+    graves = np.convolve(audio, np.ones(janela, dtype=np.float32) / janela, mode="same")
+    return audio + 0.30 * graves
 
 
 def falar(

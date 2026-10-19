@@ -130,12 +130,13 @@ motor = "kokoro"
 # Piper: pt_BR-faber-medium, pt_BR-cadu-medium, pt_BR-jeff-medium.
 voz = "pm_alex"
 
-# Maior = mais devagar (0.769 = 1,3x mais rápido, escolhido de ouvido pelo
-# Léo entre 1,15x, 1,25x, 1,3x, 1,35x e 1,5x).
-velocidade = 0.769
+# Maior = mais devagar. 0.87 = 1,15x mais rápido (out/2026, pedido do Léo:
+# "1,15 é mais bonitinha"; antes era 0.769 = 1,3x).
+velocidade = 0.87
 
-# Só Kokoro. "jarvis" = eco curto de capacete + reforço nos graves; "" = puro.
-efeito = "jarvis"
+# Só Kokoro. "suave" = só corpo nos graves (out/2026: o Léo achou a voz
+# robotizada); "jarvis" = eco curto de capacete + graves; "" = puro.
+efeito = "suave"
 # Semitons; negativo = mais grave. O Léo ouviu -4, -3, -2 e -1 (graves
 # demais) e 0; ficou com meio semitom abaixo.
 tom = -0.5
