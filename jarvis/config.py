@@ -186,6 +186,17 @@ class Ciclo:
 
 
 @dataclass(frozen=True)
+class Agente:
+    binario: str
+    modelo: str
+    effort: str
+    modo_permissao: str
+    casa: str
+    recomecar_apos_h: float
+    validade_pergunta_s: float
+
+
+@dataclass(frozen=True)
 class Agenda:
     fuso: str
     duracao_padrao_min: int
@@ -255,6 +266,7 @@ class Config:
     ponte: Ponte
     sistema: Sistema
     whatsapp: "Whatsapp"
+    agente: Agente
     raiz: Path
 
     @property
@@ -288,6 +300,7 @@ _SECOES = {
     "ponte": Ponte,
     "sistema": Sistema,
     "whatsapp": Whatsapp,
+    "agente": Agente,
 }
 
 

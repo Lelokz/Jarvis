@@ -611,3 +611,23 @@ avisar_grupos = false
 ler_conteudo = true
 # De quanto em quanto tempo olha se chegou mensagem.
 intervalo_s = 3
+
+[agente]
+# O cérebro (out/2026, decisão do Léo): o Claude Code INTEIRO, pelo Agent SDK
+# e com o login da assinatura. Mesmas ferramentas do VS Code (Bash, arquivos,
+# Playwright, Gmail, Agenda, Drive...), sem roteador nem lista de funções.
+binario = "~/.local/bin/claude"
+modelo = "claude-opus-5-5"
+# "high" por pedido do Léo; medir a latência e, se ficar lento, testar "medium".
+effort = "high"
+# "auto": o próprio Claude julga o que roda direto (como no VS Code do Léo).
+# O que ele achar sério vira pergunta FALADA, nunca pop-up.
+modo_permissao = "auto"
+# A pasta de trabalho dele: memória e anotações do Léo. FORA do git.
+casa = "~/.local/share/jarvis/casa"
+# A conversa sobrevive ao "dorme aí"; recomeça depois de tanto tempo parada.
+recomecar_apos_h = 3.0
+# Uma pergunta dele (permissão, dúvida) só aceita resposta que COMECE até
+# tantos segundos depois de ele terminar de perguntar. Passou, vale "não":
+# um "pode" de um vídeo minutos depois não aprova nada.
+validade_pergunta_s = 10.0

@@ -64,3 +64,7 @@ phonemizer==3.4.0
 #   pip install --no-deps kokoro-onnx==0.6.1
 # Modelo (vai em vozes/, fora do git): kokoro-v1.0.onnx e voices-v1.0.bin de
 # github.com/thewh1teagle/kokoro-onnx/releases/tag/model-files-v1.0
+
+# O cérebro (out/2026): o Claude Code inteiro pelo Agent SDK. Usa o `claude`
+# instalado (login da assinatura), não o que vem embutido no pacote.
+claude-agent-sdk==0.2.168
