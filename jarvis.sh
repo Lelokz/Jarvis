@@ -25,6 +25,9 @@ voz_ligada() { pgrep -f "$PROJETO/servidor_voz.py" > /dev/null; }
 # (no HD, junto do treino), troca o timbre pelo do JARVIS.
 APPLIO="/mnt/cab1286d-6765-4c73-9c77-8d3119b4b644/Arquivo/Jarvis - Treino da voz dublada/applio"
 rvc_ligado() { pgrep -f "$PROJETO/servidor_rvc.py" > /dev/null; }
+# A porta do celular (porta_remota.py): só em 127.0.0.1; o `tailscale serve`
+# a leva para os aparelhos do Léo.
+porta_ligada() { pgrep -f "$PROJETO/porta_remota.py" > /dev/null; }
 MOTOR="$(sed -n 's/^motor *= *"\(.*\)".*/\1/p' config.toml | head -1)"
 
 if [ "${1:-}" = "--desligar" ]; then
@@ -34,6 +37,7 @@ if [ "${1:-}" = "--desligar" ]; then
   pkill -TERM -f "^./whatsapp-bridge$"
   pkill -TERM -f "$PROJETO/servidor_voz.py"
   pkill -TERM -f "$PROJETO/servidor_rvc.py"
+  pkill -TERM -f "$PROJETO/porta_remota.py"
   pkill -f "$PROJETO/interface.py"
   # Até 20 s: ao desligar, o assistente resume a conversa em andamento para
   # o diário (uma chamada ao Claude).
@@ -71,6 +75,11 @@ if ! ligado; then
   mkdir -p logs
   echo "=== $(date '+%F %T') ligando ===" >> logs/assistente-terminal.log
   nohup .venv/bin/python -u "$PROJETO/assistente.py" >> logs/assistente-terminal.log 2>&1 &
+fi
+
+if ! porta_ligada; then
+  mkdir -p logs
+  nohup .venv/bin/python -u "$PROJETO/porta_remota.py" >> logs/porta-remota.log 2>&1 &
 fi
 
 # A janela sobe na hora e mostra "esperando o Jarvis subir" enquanto o

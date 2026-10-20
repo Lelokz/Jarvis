@@ -203,6 +203,16 @@ socket = ""
 # está lendo e é desligado — para ele nunca segurar o laço de áudio.
 fila_max = 256
 
+[remoto]
+# A porta do celular (out/2026): o porta_remota.py traduz entre o app (ou a
+# página de teste) e a ponte acima. Escuta SÓ em 127.0.0.1; quem a leva para
+# o celular é o `tailscale serve`, com HTTPS e só para os aparelhos do Léo. E
+# além disso o aparelho tem que apresentar a chave.
+ligada = true
+porta = 8765
+# Criada na primeira vez (0600). `porta_remota.py --endereco` mostra o link.
+chave = "~/.local/share/jarvis/remoto-chave"
+
 [whatsapp]
 # O Jarvis avisa as mensagens que chegam, e o Claude manda o que você ditar
 # (sem "pode": pedir já é a confirmação). Precisa da ponte whatsapp-mcp

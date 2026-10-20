@@ -20,6 +20,7 @@ e o `--autoteste`, que é o primeiro diagnóstico quando algo aqui quebrar.
 from __future__ import annotations
 
 import argparse
+import base64
 import dataclasses
 import datetime as dt
 import math
@@ -43,7 +44,7 @@ from jarvis.nucleo import relogio
 from jarvis.nucleo.atalhos import normalizar
 from jarvis.nucleo.whatsapp import WhatsApp
 from jarvis.ponte import protocolo
-from jarvis.ponte.servidor import Servidor, ServidorOcupado
+from jarvis.ponte.servidor import Pedido, Servidor, ServidorOcupado
 from jarvis.registro import Registrador
 from jarvis.stt import ErroDeCuda, Transcritor
 from jarvis.vad import DetectorDeFala
@@ -257,6 +258,10 @@ class Ciclo:
         self._contexto = ""
         # O pedido em andamento, para medir o tempo quando a resposta chegar.
         self._pedido: tuple[float, object, object] | None = None
+        # Onde a voz sai: None = a caixa de som do PC; um número = o cliente
+        # da ponte que é um "corpo" (o celular) e fez o último pedido. Volta
+        # para o PC quando alguém fala com ele aqui (wake word, janela).
+        self._corpo: int | None = None
         self.vad = detector_vad
         self.ww = detector_ww
         self.transcritor = transcritor
@@ -301,6 +306,7 @@ class Ciclo:
         self._desde = agora
 
     def acordar(self, score: float) -> None:
+        self._corpo = None  # chamaram aqui no PC: a voz volta para a caixa de som
         self._contabilizar()
         self.despertares += 1
         self.emissor.emitir("acordou", score=score)
@@ -336,6 +342,11 @@ class Ciclo:
         self.registrador.registrar_estado("dormiu", motivo=motivo)
 
     def _renovar(self, rotulo: str) -> None:
+        if self._corpo is not None and self.estado is Estado.DORMINDO:
+            # Conversa pelo celular: o microfone do PC continua dormindo (ele
+            # pode estar fora, com outras pessoas em casa).
+            self._mudar_estado("dormindo")
+            return
         self.prazo = time.monotonic() + self.cfg.ciclo.janela_s
         self.emissor.emitir("janela", rotulo=rotulo, janela_s=self.cfg.ciclo.janela_s)
         self.registrador.registrar_estado(rotulo, janela_s=self.cfg.ciclo.janela_s)
@@ -350,6 +361,8 @@ class Ciclo:
         se responde, e — pior neste etapa — o wake word pode se ouvir e acordar
         de novo em laço.
         """
+        if self._corpo is not None:
+            return self._falar_no_corpo(texto, acao=acao, perguntando=perguntando)
         self.portao.fechar_portao()
 
         def ao_comecar() -> None:
@@ -368,6 +381,33 @@ class Ciclo:
             self.portao.abrir_portao()
             self.ww.reiniciar()
             self.vad.reiniciar()
+
+    def _falar_no_corpo(
+        self, texto: str, *, acao: str | None, perguntando: bool
+    ) -> tts.TemposDaFala:
+        """A voz vai para o celular, pedaço por pedaço, pelos eventos "voz"
+        da ponte. Sem portão: o microfone do PC não ouve o celular."""
+        inicio = time.monotonic()
+        primeiro: float | None = None
+        duracao = 0.0
+        try:
+            for trecho in self.voz.sintetizar(texto):
+                if primeiro is None:
+                    primeiro = time.monotonic() - inicio
+                    self._mudar_estado("falando")
+                    self.emissor.emitir("jarvis_disse", texto=texto, acao=acao,
+                                        perguntando=perguntando)
+                self.emissor.emitir("voz", para=self._corpo, taxa=trecho.taxa,
+                                    pcm=base64.b64encode(trecho.pcm).decode("ascii"))
+                duracao += len(trecho.pcm) / 2 / trecho.taxa
+        finally:
+            if primeiro is None:  # a voz falhou: o texto chega mesmo assim
+                self.emissor.emitir("jarvis_disse", texto=texto, acao=acao,
+                                    perguntando=perguntando)
+            self.emissor.emitir("voz", para=self._corpo, fim=True)
+        total = time.monotonic() - inicio
+        return tts.TemposDaFala(primeiro_audio_s=primeiro or 0.0, sintese_total_s=total,
+                                reproducao_s=0.0, duracao_audio_s=duracao)
 
     # -- laço --------------------------------------------------------------
 
@@ -444,6 +484,7 @@ class Ciclo:
             self._renovar("janela reiniciada")
             return
 
+        self._corpo = None
         self._responder(
             transcricao.texto, origem="voz", segmento=segmento, transcricao=transcricao
         )
@@ -613,8 +654,9 @@ class Ciclo:
 
     def _acordar_se_dormindo(self) -> None:
         """O Claude terminou ou perguntou com o Jarvis dormindo (o Léo disse
-        "dorme aí" no meio da tarefa): acorda sem saudação para dizer."""
-        if self.estado is Estado.DORMINDO:
+        "dorme aí" no meio da tarefa): acorda sem saudação para dizer. Na
+        conversa pelo celular, não: a resposta vai para lá."""
+        if self.estado is Estado.DORMINDO and self._corpo is None:
             self._acordar_por_texto()
 
     def _fala_de_limite(self, volta_em: float | None) -> str:
@@ -695,10 +737,47 @@ class Ciclo:
         Sem a saudação: ela existe para confirmar que o wake word pegou, e aqui
         o próprio texto já é o comando.
         """
+        self._corpo = None
         if self.estado is Estado.DORMINDO:
             self._acordar_por_texto()
         self.registrador.registrar_estado("texto_digitado", texto=texto)
         self._responder(texto, origem="texto")
+
+    def atender_pedido(self, pedido: Pedido) -> None:
+        """Um pedido da ponte. Da janela (sem voz própria), é o texto
+        digitado de sempre. De um corpo (o celular), é atendido LÁ: a voz sai
+        nele e o PC continua dormindo. Roda na thread de áudio."""
+        if not pedido.voz:
+            if pedido.tipo == "falar":
+                self.atender_texto(pedido.valor)
+            return
+        self._corpo = pedido.cliente
+        if pedido.tipo == "falar":
+            self.registrador.registrar_estado("texto_do_celular", texto=pedido.valor)
+            self._responder(pedido.valor, origem="celular")
+            return
+        # "ouvir": a fala gravada no celular, num arquivo que a porta remota
+        # deixou na pasta da ponte. Lê, apaga e transcreve.
+        caminho = Path(pedido.valor)
+        try:
+            pcm = caminho.read_bytes()
+        except OSError:
+            pcm = b""
+        finally:
+            caminho.unlink(missing_ok=True)
+        audio = np.frombuffer(pcm[: len(pcm) // 2 * 2], dtype=np.int16).astype(np.float32) / 32768
+        self._mudar_estado("pensando")
+        transcricao = self.transcritor.transcrever(audio) if len(audio) >= 1600 else None
+        if transcricao is None or not transcricao.texto:
+            self.vazias += 1
+            self.registrador.registrar_descarte("audio do celular vazio",
+                                                {"duracao_s": round(len(audio) / 16000, 3)})
+            self._falar("Não peguei o áudio. Fala de novo?")
+            self._mudar_estado("dormindo" if self.estado is Estado.DORMINDO else "ouvindo")
+            return
+        self.registrador.registrar_estado("fala_do_celular", texto=transcricao.texto,
+                                          stt_s=round(transcricao.segundos, 2))
+        self._responder(transcricao.texto, origem="celular")
 
     def _acordar_por_texto(self) -> None:
         self._contabilizar()
@@ -1047,9 +1126,9 @@ def conversar(cfg: config.Config) -> int:
                 # e só com o VAD fora de fala: quem digita enquanto fala espera
                 # a frase acabar, em vez de ter a própria voz cortada.
                 if ponte is not None and not ciclo.vad.falando:
-                    texto = ponte.proximo_texto()
-                    if texto is not None:
-                        ciclo.atender_texto(texto)
+                    pedido = ponte.proximo_pedido()
+                    if pedido is not None:
+                        ciclo.atender_pedido(pedido)
 
     except KeyboardInterrupt:
         print()

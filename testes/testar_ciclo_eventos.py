@@ -402,10 +402,85 @@ def rodar(tmp: Path) -> None:
         assistente.Servidor.iniciar = original
 
 
+def rodar_celular(tmp: Path) -> None:
+    """O celular é um corpo: o que ele pede é respondido LÁ, sem acordar o
+    microfone do PC nem tocar na caixa de som."""
+    from jarvis import tts
+    from jarvis.ponte import protocolo
+    from jarvis.ponte.servidor import Pedido
+
+    class VozDeUmTrecho(tts.Voz):
+        nome = "um trecho"
+
+        def sintetizar(self, texto):
+            yield tts.Trecho(pcm=b"\x01\x00" * 4000, taxa=40000, canais=1)
+
+    class PortaoContado:
+        fechou = 0
+
+        def fechar_portao(self):
+            PortaoContado.fechou += 1
+
+        def abrir_portao(self):
+            pass
+
+    falas_no_pc = []
+    original = tts.falar
+    tts.falar = lambda voz, texto, **k: falas_no_pc.append(texto) or original(voz, texto, **k)
+    try:
+        print("-- E10. pedido do celular: a voz vai para ele, e o PC dorme --")
+        g = Gravador()
+        _, ciclo, _, stt, agente, _ = montar(tmp, g)
+        ciclo.voz, ciclo.portao = VozDeUmTrecho(), PortaoContado()
+        agente.resposta = Saida("fim", texto="São três da tarde.")
+        ciclo.atender_pedido(Pedido("falar", "que horas são", cliente=7, voz=True))
+        ciclo.atender_agente()
+        disse = [e for e in g.eventos if e["ev"] == "voce_disse"]
+        vozes = [e for e in g.eventos if e["ev"] == "voz"]
+        checa("o pedido chega ao Claude marcado como do celular",
+              agente.chamadas == ["que horas são"] and disse and disse[0]["origem"] == "celular",
+              (agente.chamadas, disse))
+        checa("a voz sai em eventos 'voz' para o cliente 7, com o fim",
+              len(vozes) == 2 and all(v["para"] == 7 for v in vozes) and vozes[0]["taxa"] == 40000
+              and vozes[-1].get("fim") is True, vozes)
+        checa("o texto da resposta também vai (jarvis_disse)",
+              any(e["ev"] == "jarvis_disse" and e["texto"] == "São três da tarde." for e in g.eventos))
+        checa("e nada toca no PC, nem o portão fecha", falas_no_pc == [] and PortaoContado.fechou == 0,
+              (falas_no_pc, PortaoContado.fechou))
+        checa("o microfone do PC continua dormindo",
+              ciclo.estado is assistente.Estado.DORMINDO and "acordou" not in g.tipos()
+              and g.estados()[-1] == "dormindo", g.estados())
+
+        print("-- E11. fala gravada no celular: transcrita, apagada, respondida lá --")
+        g.limpar()
+        pasta = protocolo.pasta_audio()
+        pasta.mkdir(mode=0o700, exist_ok=True)
+        arquivo = pasta / f"teste-{time.monotonic_ns()}.pcm"
+        arquivo.write_bytes(b"\x00\x00" * 16000)
+        stt.texto = "toca uma música"
+        agente.resposta = Saida("fim", texto="Tocando.")
+        ciclo.atender_pedido(Pedido("ouvir", str(arquivo), cliente=7, voz=True))
+        ciclo.atender_agente()
+        checa("o arquivo é apagado depois de lido", not arquivo.exists())
+        checa("a transcrição vai ao Claude e a voz ao celular",
+              agente.chamadas[-1] == "toca uma música"
+              and any(e["ev"] == "voz" and e.get("pcm") for e in g.eventos), agente.chamadas)
+
+        print("-- E12. depois, falar no PC devolve a voz para a caixa de som --")
+        g.limpar()
+        ciclo.atender_pedido(Pedido("falar", "e agora?", cliente=1, voz=False))
+        ciclo.atender_agente()
+        checa("o texto da janela acorda o PC e fala nele",
+              "acordou" in g.tipos() and "voz" not in g.tipos() and falas_no_pc, (g.tipos(), falas_no_pc))
+    finally:
+        tts.falar = original
+
+
 def main() -> int:
     tmp = Path(tempfile.mkdtemp(prefix="jarvis-ciclo-"))
     try:
         rodar(tmp)
+        rodar_celular(tmp)
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
     print(f"\n  {ok} passaram, {falhou} falharam")

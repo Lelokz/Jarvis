@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b1016">
+<title>Jarvis</title>
+<!-- A página de teste do celular (etapa 1 do app). O app de verdade (Kotlin)
+     fala o mesmo protocolo: jarvis/ponte/protocolo.py e porta_remota.py. -->
+<style>
+  :root {
+    --fundo: #0b1016; --painel: #121a23; --borda: #1f2b38; --texto: #e6edf3;
+    --fraco: #8b98a5; --jarvis: #16324a; --voce: #1d2a36; --destaque: #4fb3ff;
+    --erro: #ff7b72;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--fundo); color: var(--texto);
+    font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    display: flex; flex-direction: column;
+  }
+  header {
+    display: flex; align-items: center; gap: 10px; padding: 12px 16px;
+    border-bottom: 1px solid var(--borda); background: var(--painel);
+    padding-top: max(12px, env(safe-area-inset-top));
+  }
+  header h1 { font-size: 18px; margin: 0; font-weight: 600; }
+  #estado { margin-left: auto; font-size: 13px; color: var(--fraco); display: flex; align-items: center; gap: 6px; }
+  #luz { width: 9px; height: 9px; border-radius: 50%; background: var(--fraco); }
+  #luz.ok { background: #3fb950; } #luz.ocupado { background: var(--destaque); } #luz.erro { background: var(--erro); }
+  #conversa { flex: 1; overflow-y: auto; padding: 12px 16px; display: flex; flex-direction: column; gap: 8px; }
+  .fala { max-width: 85%; padding: 8px 12px; border-radius: 14px; white-space: pre-wrap; word-wrap: break-word; }
+  .jarvis { background: var(--jarvis); align-self: flex-start; border-bottom-left-radius: 4px; }
+  .voce { background: var(--voce); align-self: flex-end; border-bottom-right-radius: 4px; }
+  .painel { background: var(--painel); border: 1px solid var(--borda); align-self: stretch; max-width: 100%;
+            font-size: 14px; border-radius: 10px; }
+  .painel b { display: block; margin-bottom: 4px; }
+  .atividade, .aviso { align-self: center; font-size: 12px; color: var(--fraco); text-align: center; }
+  .aviso { color: var(--erro); }
+  footer {
+    display: flex; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--borda); background: var(--painel);
+    padding-bottom: max(10px, env(safe-area-inset-bottom));
+  }
+  #texto {
+    flex: 1; min-width: 0; padding: 10px 14px; border-radius: 22px; border: 1px solid var(--borda);
+    background: var(--fundo); color: var(--texto); font: inherit;
+  }
+  button {
+    border: 0; border-radius: 22px; min-width: 44px; height: 44px; padding: 0 14px;
+    background: var(--jarvis); color: var(--texto); font: inherit; cursor: pointer;
+  }
+  #falar { background: var(--destaque); color: #04121f; font-weight: 600; touch-action: none; user-select: none; -webkit-user-select: none; }
+  #falar.gravando { background: var(--erro); }
+  #entrada { position: fixed; inset: 0; background: var(--fundo); display: none; align-items: center; justify-content: center; padding: 16px; }
+  #entrada div { width: 100%; max-width: 360px; display: flex; flex-direction: column; gap: 10px; }
+  #entrada input { padding: 12px; border-radius: 10px; border: 1px solid var(--borda); background: var(--painel); color: var(--texto); font: inherit; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Jarvis</h1>
+  <span id="estado"><span id="luz"></span><span id="estado-texto">conectando…</span></span>
+</header>
+<main id="conversa" aria-live="polite"></main>
+<footer>
+  <input id="texto" type="text" placeholder="Escreve pro Jarvis…" autocomplete="off" enterkeyhint="send">
+  <button id="enviar" aria-label="Enviar">➤</button>
+  <button id="falar" aria-label="Segura para falar">Falar</button>
+</footer>
+<div id="entrada">
+  <div>
+    <p>Cola a chave do Jarvis (no PC: <code>porta_remota.py --endereco</code>).</p>
+    <input id="chave" type="password" placeholder="chave">
+    <button id="salvar">Entrar</button>
+  </div>
+</div>
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+const conversa = $("conversa");
+const NOMES_ESTADO = { dormindo: "pronto", ouvindo: "ouvindo", escutando: "escutando",
+                       pensando: "pensando…", falando: "falando" };
+
+// A chave vem no link (#chave=...) na primeira vez e fica guardada no aparelho.
+function lerChave() {
+  const m = location.hash.match(/chave=([^&]+)/);
+  if (m) {
+    try { localStorage.setItem("jarvis-chave", decodeURIComponent(m[1])); } catch (_) {}
+    history.replaceState(null, "", location.pathname);
+    return decodeURIComponent(m[1]);
+  }
+  try { return localStorage.getItem("jarvis-chave") || ""; } catch (_) { return ""; }
+}
+
+function rolar() { conversa.scrollTop = conversa.scrollHeight; }
+function acrescentar(classe, texto, titulo) {
+  const el = document.createElement("div");
+  el.className = "fala " + classe;
+  if (titulo) { const b = document.createElement("b"); b.textContent = titulo; el.appendChild(b); }
+  el.appendChild(document.createTextNode(texto));
+  conversa.appendChild(el);
+  rolar();
+  return el;
+}
+let linhaAtividade = null;
+function atividade(texto) {
+  if (!linhaAtividade) { linhaAtividade = document.createElement("div"); linhaAtividade.className = "atividade"; }
+  linhaAtividade.textContent = "▸ " + texto;
+  conversa.appendChild(linhaAtividade);
+  rolar();
+}
+function estado(nome, classe) {
+  $("estado-texto").textContent = nome;
+  $("luz").className = classe || "";
+}
+
+// ---- voz: os pedaços chegam em PCM int16 e tocam em fila, sem buraco ----
+let audio = null, proximoInicio = 0;
+function destravarAudio() {
+  if (!audio) audio = new (window.AudioContext || window.webkitAudioContext)();
+  if (audio.state === "suspended") audio.resume();
+}
+function tocar(taxa, b64) {
+  destravarAudio();
+  const bin = atob(b64);
+  const n = bin.length >> 1;
+  const buf = audio.createBuffer(1, n, taxa);
+  const canal = buf.getChannelData(0);
+  for (let i = 0; i < n; i++) {
+    let v = bin.charCodeAt(2 * i) | (bin.charCodeAt(2 * i + 1) << 8);
+    if (v >= 32768) v -= 65536;
+    canal[i] = v / 32768;
+  }
+  const fonte = audio.createBufferSource();
+  fonte.buffer = buf;
+  fonte.connect(audio.destination);
+  proximoInicio = Math.max(proximoInicio, audio.currentTime + 0.05);
+  fonte.start(proximoInicio);
+  proximoInicio += buf.duration;
+}
+
+// ---- conexão ----
+let ws = null, espera = 1000, chave = lerChave();
+function conectar() {
+  if (!chave) { $("entrada").style.display = "flex"; return; }
+  const url = (location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/ws";
+  ws = new WebSocket(url);
+  ws.onopen = () => {
+    espera = 1000;
+    conversa.textContent = "";
+    linhaAtividade = null;
+    ws.send(JSON.stringify({ chave, historico: 80, quem: "celular-navegador" }));
+  };
+  ws.onmessage = (m) => {
+    let ev; try { ev = JSON.parse(m.data); } catch (_) { return; }
+    switch (ev.ev) {
+      case "sessao": estado("pronto", "ok"); break;
+      case "estado": estado(NOMES_ESTADO[ev.estado] || ev.estado,
+                            ev.estado === "dormindo" || ev.estado === "ouvindo" ? "ok" : "ocupado"); break;
+      case "historico":
+        for (const f of ev.falas || []) {
+          if (f.quem === "voce") acrescentar("voce", f.texto);
+          else if (f.quem === "jarvis") acrescentar("jarvis", f.texto);
+          else acrescentar("painel", f.texto, f.titulo);
+        }
+        break;
+      case "voce_disse": acrescentar("voce", ev.texto); break;
+      case "jarvis_disse": acrescentar("jarvis", ev.texto); break;
+      case "mostrar": acrescentar("painel", ev.texto, ev.titulo); break;
+      case "atividade": atividade(ev.texto); break;
+      case "voz": if (ev.pcm) tocar(ev.taxa, ev.pcm); break;
+      case "aviso":
+        if (ev.situacao === "limite") acrescentar("aviso", "O limite do Claude acabou por agora.");
+        else if (ev.situacao === "offline") acrescentar("aviso", "O PC está sem internet.");
+        break;
+      case "erro":
+        if (ev.motivo === "chave errada") {
+          try { localStorage.removeItem("jarvis-chave"); } catch (_) {}
+          chave = "";
+        }
+        acrescentar("aviso", ev.motivo);
+        break;
+    }
+  };
+  ws.onclose = () => {
+    estado("sem conexão — tentando de novo", "erro");
+    setTimeout(conectar, espera);
+    espera = Math.min(espera * 2, 15000);
+  };
+}
+
+function enviarTexto() {
+  const t = $("texto").value.trim();
+  if (!t || !ws || ws.readyState !== 1) return;
+  destravarAudio();
+  ws.send(JSON.stringify({ pedir: "falar", texto: t }));
+  $("texto").value = "";
+}
+$("enviar").onclick = enviarTexto;
+$("texto").addEventListener("keydown", (e) => { if (e.key === "Enter") enviarTexto(); });
+$("salvar").onclick = () => {
+  chave = $("chave").value.trim();
+  try { localStorage.setItem("jarvis-chave", chave); } catch (_) {}
+  $("entrada").style.display = "none";
+  conectar();
+};
+
+// ---- segurar para falar ----
+let gravador = null, pedacos = [], segurando = false;
+async function comecarGravacao(e) {
+  e.preventDefault();
+  segurando = true;
+  destravarAudio();
+  if (!navigator.mediaDevices || !window.MediaRecorder) {
+    acrescentar("aviso", "Este navegador não grava aqui (precisa de HTTPS: o link do Tailscale).");
+    return;
+  }
+  try {
+    const fluxo = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+    pedacos = [];
+    gravador = new MediaRecorder(fluxo);
+    gravador.ondataavailable = (ev) => { if (ev.data.size) pedacos.push(ev.data); };
+    gravador.onstop = async () => {
+      fluxo.getTracks().forEach((t) => t.stop());
+      const blob = new Blob(pedacos, { type: gravador.mimeType });
+      if (blob.size > 2000 && ws && ws.readyState === 1) ws.send(await blob.arrayBuffer());
+      gravador = null;
+    };
+    gravador.start();
+    // Soltou antes do microfone abrir (a 1ª vez pede permissão): para já.
+    if (!segurando) { gravador.stop(); return; }
+    $("falar").classList.add("gravando");
+    $("falar").textContent = "Solta";
+  } catch (err) {
+    acrescentar("aviso", "Sem acesso ao microfone: " + err.message);
+  }
+}
+function pararGravacao() {
+  segurando = false;
+  $("falar").classList.remove("gravando");
+  $("falar").textContent = "Falar";
+  if (gravador && gravador.state === "recording") gravador.stop();
+}
+$("falar").addEventListener("pointerdown", comecarGravacao);
+$("falar").addEventListener("pointerup", pararGravacao);
+$("falar").addEventListener("pointercancel", pararGravacao);
+$("falar").addEventListener("pointerleave", pararGravacao);
+
+conectar();
+</script>
+</body>
+</html>

@@ -2221,3 +2221,19 @@ antes da voz.
   medidor de tom e o índice — 1,5 s jogados fora por frase. Guardados na
   memória, a voz nova começa em 0,7–0,8 s.
 
+### O celular, etapa 1: a porta remota (20/10/2026, manhã)
+
+O Léo escolheu o app (APK) em vez do grupo no WhatsApp ("as mensagens dele
+aparecem do meu lado") e do Telegram. Celular S21 FE, relógio Galaxy Watch 7
+(Wear OS: o mesmo Kotlin serve nos dois).
+
+- A ponte já tinha sido desenhada pensando no celular ("o celular vai herdar
+  o mesmo vocabulário"); faltavam duas coisas: a fala gravada lá entrar no
+  Whisper daqui, e a resposta sair lá. Virou o protocolo v2: o cliente que
+  diz `"voz": true` é um corpo, e a voz do que ele pede vai só para ele.
+- A decisão que mais importa: **pedido do celular não acorda o microfone do
+  PC.** Com o Léo fora, o PC acordado ouviria a casa e mandaria a conversa
+  dos outros para o Claude.
+- O Tailscale foi instalado no modo usuário, sem sudo, porque o Léo estava
+  fora (o sudo pede a senha dele): o `tailscale serve` funciona igual.
+

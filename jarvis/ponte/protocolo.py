@@ -8,8 +8,9 @@ Transporte: JSON Lines sobre socket unix — um objeto por linha, UTF-8. O mesmo
 formato dos logs, então as mesmas ferramentas leem os dois.
 
 ASSISTENTE -> CLIENTES
-    {"ev":"sessao", "v":1, "nome":"Jarvis", "log":"<caminho do .jsonl>"}
+    {"ev":"sessao", "v":2, "nome":"Jarvis", "log":"<caminho do .jsonl>", "id": 3}
         Só em resposta ao "ola". O log é de onde a interface lê o histórico.
+        `id` (v2) é o número deste cliente nesta sessão (o "para" da "voz").
     {"ev":"estado", "estado":"dormindo|ouvindo|escutando|pensando|falando"}
         Só quando MUDA. O último é reenviado a quem acabou de dizer "ola".
     {"ev":"nivel", "v":0.42}
@@ -30,6 +31,12 @@ ASSISTENTE -> CLIENTES
     {"ev":"atividade", "texto":"Bash — olhando a pasta lixo"}
         A ferramenta que o Claude está usando agora. Descartável e fora do
         histórico: é o "o que ele está fazendo", não o que ele disse.
+    {"ev":"voz", "para": 3, "taxa": 40000, "pcm": "<base64 de PCM int16 mono>"}
+    {"ev":"voz", "para": 3, "fim": true}
+        A voz da resposta, pedaço por pedaço, **só para o cliente que pediu**
+        (o `id` dele, no "sessao") e só se ele disse "voz": true no "ola". É
+        como o celular fala: o pedido veio dele, a resposta sai nele, e a
+        caixa de som do PC fica quieta. Fora do histórico.
     {"ev":"erro", "motivo":"..."}
         Só para o cliente que mandou o pedido inválido.
     {"ev":"historico", "falas":[
@@ -53,16 +60,26 @@ ASSISTENTE -> CLIENTES
         de conversas, mais novo primeiro.
 
 CLIENTES -> ASSISTENTE
-    {"pedir":"ola", "quem":"interface", "historico": 80}
+    {"pedir":"ola", "quem":"interface", "historico": 80, "voz": false}
         `historico` é opcional e vale 0 quando ausente: quantas falas anteriores
-        o cliente quer receber ao conectar.
+        o cliente quer receber ao conectar. `voz` (v2, opcional): true = este
+        cliente é um "corpo" (o celular): o que ele pedir é respondido NELE,
+        com os eventos "voz", sem acordar nem falar no PC. O "sessao" de
+        resposta traz o `id` do cliente.
 
     {"pedir":"memoria"}
         Pede a memória (fatos e diário). Resposta: o evento "memoria".
 
     {"pedir":"falar", "texto":"abre o loft"}
         Atendido como se tivesse sido falado: acorda mesmo dormindo e a resposta
-        sai na voz (decisão do Léo, Etapa 6).
+        sai na voz (decisão do Léo, Etapa 6). De um cliente com "voz": true, a
+        voz sai nele.
+
+    {"pedir":"ouvir", "arquivo":"<PASTA_AUDIO>/<nome>.pcm"}
+        (v2) Uma fala gravada no celular: PCM int16 mono a 16 kHz, num arquivo
+        dentro de `pasta_audio()` (quem escreve é a porta remota, no mesmo PC;
+        áudio não cabe numa linha). O assistente transcreve, apaga o arquivo e
+        atende como o "falar". Arquivo fora da pasta é recusado.
 
 **O "ola" é obrigatório antes de qualquer evento.** Quem não se apresentou não
 recebe difusão. Não é cerimônia: é o que garante que tudo o que chega depois do
@@ -77,14 +94,14 @@ import os
 from pathlib import Path
 from typing import Any
 
-VERSAO = 1
+VERSAO = 2
 
 # O que sai do assistente para os clientes. O resto que o Ciclo emite
 # (acordou, dormiu, janela, tempos...) é para o terminal e fica em casa.
 PUBLICOS = frozenset({"sessao", "estado", "nivel", "voce_disse", "jarvis_disse", "aviso",
-                      "mostrar", "atividade"})
+                      "mostrar", "atividade", "voz"})
 ESTADOS = ("dormindo", "ouvindo", "escutando", "pensando", "falando")
-PEDIDOS = frozenset({"ola", "falar", "memoria"})
+PEDIDOS = frozenset({"ola", "falar", "memoria", "ouvir"})
 
 # Uma linha maior que isto sem quebra é um cliente com defeito, não um pedido.
 MAX_LINHA = 64 * 1024
@@ -129,11 +146,25 @@ def ler_pedido(linha: bytes) -> tuple[str, dict[str, Any]]:
     if tipo == "memoria":
         return tipo, {}
 
+    if tipo == "ouvir":
+        arquivo = objeto.get("arquivo")
+        if not isinstance(arquivo, str) or not arquivo:
+            raise ErroDeProtocolo("'ouvir' sem arquivo")
+        caminho = Path(arquivo).resolve()
+        if caminho.parent != pasta_audio().resolve() or caminho.suffix != ".pcm":
+            raise ErroDeProtocolo("'ouvir' só aceita .pcm da pasta de áudio da ponte")
+        return tipo, {"arquivo": str(caminho)}
+
     if tipo == "ola":
         quantas = objeto.get("historico", 0)
         if isinstance(quantas, bool) or not isinstance(quantas, int) or quantas < 0:
             raise ErroDeProtocolo("'historico' tem que ser um inteiro não negativo")
-        return tipo, {"historico": min(quantas, MAX_HISTORICO)}
+        voz = objeto.get("voz", False)
+        if not isinstance(voz, bool):
+            raise ErroDeProtocolo("'voz' tem que ser true ou false")
+        quem = objeto.get("quem", "")
+        return tipo, {"historico": min(quantas, MAX_HISTORICO), "voz": voz,
+                      "quem": quem if isinstance(quem, str) else ""}
     return tipo, {}
 
 
@@ -147,3 +178,10 @@ def caminho_socket(configurado: str = "") -> Path:
         return Path(configurado).expanduser()
     base = os.environ.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}"
     return Path(base) / "jarvis.sock"
+
+
+def pasta_audio() -> Path:
+    """Onde a porta remota deixa as falas gravadas no celular para o "ouvir".
+    Dentro do `$XDG_RUNTIME_DIR` (só o usuário entra, some no logout)."""
+    base = os.environ.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}"
+    return Path(base) / "jarvis-remoto"

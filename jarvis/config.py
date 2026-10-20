@@ -117,6 +117,13 @@ class Ponte:
 
 
 @dataclass(frozen=True)
+class Remoto:
+    ligada: bool
+    porta: int  # só em 127.0.0.1: quem leva para a rede é o `tailscale serve`
+    chave: str  # arquivo com a chave que o celular apresenta
+
+
+@dataclass(frozen=True)
 class Whatsapp:
     ativo: bool
     banco: str
@@ -138,6 +145,7 @@ class Config:
     ciclo: Ciclo
     log: Log
     ponte: Ponte
+    remoto: Remoto
     whatsapp: "Whatsapp"
     agente: Agente
     raiz: Path
@@ -166,6 +174,7 @@ _SECOES = {
     "ciclo": Ciclo,
     "log": Log,
     "ponte": Ponte,
+    "remoto": Remoto,
     "whatsapp": Whatsapp,
     "agente": Agente,
 }

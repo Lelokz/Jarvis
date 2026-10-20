@@ -18,6 +18,7 @@ seguro para duas threads.
 
 from __future__ import annotations
 
+import itertools
 import os
 import queue
 import selectors
@@ -37,10 +38,27 @@ class ServidorOcupado(RuntimeError):
     """Outro processo já responde neste socket — outro Jarvis ligado."""
 
 
+_IDS = itertools.count(1)
+
+
+@dataclass(frozen=True)
+class Pedido:
+    """O que um cliente pediu para o laço de áudio atender."""
+    tipo: str  # "falar" (texto) ou "ouvir" (arquivo com a fala gravada)
+    valor: str  # o texto, ou o caminho do arquivo
+    cliente: int = 0  # o id de quem pediu
+    voz: bool = False  # a resposta sai NELE (o celular), não no PC
+
+
 @dataclass(eq=False)
 class _Cliente:
     sock: socket.socket
     fd: int
+    # Número do cliente na sessão (o fd se repete quando um cai e outro entra).
+    id: int = field(default_factory=lambda: next(_IDS))
+    # Disse "voz": true no "ola": é um corpo (o celular); recebe a voz do que pedir.
+    quer_voz: bool = False
+    quem: str = ""
     # Quem não disse "ola" não recebe difusão. É o que garante que tudo o que
     # chega depois do histórico seja novo: sem isso, um evento ao vivo podia
     # escapar pela brecha entre conectar e pedir, e aparecer duas vezes na tela.
@@ -76,7 +94,7 @@ class Servidor:
 
         self._clientes: dict[int, _Cliente] = {}
         self._trava = threading.Lock()
-        self._pedidos: queue.SimpleQueue[str] = queue.SimpleQueue()
+        self._pedidos: queue.SimpleQueue[Pedido] = queue.SimpleQueue()
 
         self._seletor = selectors.DefaultSelector()
         self._escuta: socket.socket | None = None
@@ -202,6 +220,9 @@ class Servidor:
         dados = protocolo.codificar(evento)
         with self._trava:
             for cliente in self._clientes.values():
+                # A voz vai só para o corpo que pediu, e só se ele quer voz.
+                if tipo == "voz" and (cliente.id != evento.get("para") or not cliente.quer_voz):
+                    continue
                 if cliente.apresentado:
                     self._enfileirar(cliente, tipo, dados)
         self._acordar()
@@ -222,11 +243,19 @@ class Servidor:
             fala["perguntando"] = bool(evento.get("perguntando"))
         self._falas.append(fala)
 
-    def proximo_texto(self) -> str | None:
+    def proximo_pedido(self) -> Pedido | None:
         try:
             return self._pedidos.get_nowait()
         except queue.Empty:
             return None
+
+    def proximo_texto(self) -> str | None:
+        """Só o texto do próximo pedido (os testes antigos e o eco usam)."""
+        pedido = self.proximo_pedido()
+        return pedido.valor if pedido is not None and pedido.tipo == "falar" else None
+
+    def conectado(self, cliente_id: int) -> bool:
+        return any(c.id == cliente_id for c in list(self._clientes.values()))
 
     # -- fila --------------------------------------------------------------
 
@@ -322,7 +351,9 @@ class Servidor:
             return
         if tipo == "ola":
             cliente.apresentado = True
-            self._direto(cliente, self._sessao)
+            cliente.quer_voz = dados.get("voz", False)
+            cliente.quem = dados.get("quem", "")
+            self._direto(cliente, {**self._sessao, "id": cliente.id})
             if self._ultimo_estado is not None:
                 self._direto(cliente, self._ultimo_estado)
             if self._ultimo_aviso is not None:
@@ -334,7 +365,9 @@ class Servidor:
                 falas = list(self._falas)[-quantas:]
                 self._direto(cliente, {"ev": "historico", "falas": falas})
         elif tipo == "falar":
-            self._pedidos.put(dados["texto"])
+            self._pedidos.put(Pedido("falar", dados["texto"], cliente.id, cliente.quer_voz))
+        elif tipo == "ouvir":
+            self._pedidos.put(Pedido("ouvir", dados["arquivo"], cliente.id, cliente.quer_voz))
         elif tipo == "memoria":
             try:
                 conteudo = self.provedor_memoria() if self.provedor_memoria else {}

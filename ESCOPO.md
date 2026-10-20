@@ -322,6 +322,42 @@ aceito pelo Léo (o padrasto dele usa algo assim há meses).
 
 **VRAM:** ~1,5 GB (só o Whisper).
 
+### O celular, etapa 1: a porta remota (20/10/2026)
+
+O cérebro, o Whisper e a voz continuam no PC; o celular é mais um "corpo".
+Plano combinado com o Léo (S21 FE + Galaxy Watch 7, Wear OS 5): 1. porta
+remota + Tailscale → 2. app Kotlin (chat, segurar para falar) → 3. app
+sempre ouvindo ("hey Jarvis" no celular) → 4. o relógio.
+
+- **`porta_remota.py`** (processo próprio, como a janela; sobe no
+  `jarvis.sh`): WebSocket em `/ws` e a página de teste em `/`. Escuta **só
+  em 127.0.0.1:8765**; quem a leva ao celular é o `tailscale serve` (HTTPS,
+  só os aparelhos da conta do Léo). O aparelho apresenta a **chave**
+  (`~/.local/share/jarvis/remoto-chave`, 0600) na primeira mensagem.
+  `porta_remota.py --endereco` mostra o link com a chave (depois do `#`: o
+  navegador não a manda em pedido nenhum).
+- **Protocolo v2 da ponte:** o cliente diz `"voz": true` no "ola" e vira um
+  corpo; o que ele pede é respondido NELE (eventos `voz` com o PCM em
+  base64, só para o `id` dele), **sem acordar o microfone do PC nem tocar
+  na caixa de som** (ele pode estar fora com gente em casa). A fala gravada
+  no celular (webm/ogg/wav/m4a) a porta converte para PCM 16 kHz (PyAV),
+  deixa em `$XDG_RUNTIME_DIR/jarvis-remoto/` e pede `ouvir`; o assistente
+  transcreve com o Whisper de sempre e apaga. Chamou o Jarvis no PC (wake
+  word, janela), a voz volta para a caixa de som.
+- **Medido (simulando o celular, 20/10/2026):** texto → voz de volta em
+  2,6 s; fala gravada → transcrita em 0,45 s → voz de volta em 3,8 s. Quase
+  tudo é o Claude pensando.
+- **Tailscale no modo usuário, sem sudo:** binários oficiais em
+  `~/.local/share/tailscale/bin/` (conferidos pelo sha256),
+  `tailscaled --tun=userspace-networking` como serviço do usuário
+  (`~/.config/systemd/user/tailscaled.service`), e `~/.local/bin/tailscale`
+  já aponta para o socket dele. Nome do PC na rede: `jarvis`. Não cria
+  placa de rede: o PC não alcança os outros aparelhos pela rede do sistema,
+  e não precisa (só recebe).
+- **Página de teste** (`jarvis/remoto/pagina.html`): chat, segurar para
+  falar e a voz tocando em fila (WebAudio). O microfone do navegador só
+  funciona em HTTPS, por isso o link do Tailscale.
+
 ### Dependências de sistema (não vêm com o pip)
 
 | peça | precisa de | sem ela |
@@ -397,6 +433,7 @@ python3 verificar_linha.py                     # as mãos (jarvis/nucleo) não c
 .venv/bin/python testes/terminal_identico.py   # o terminal do ciclo, com agente falso
 .venv/bin/python testes/testar_ciclo_eventos.py
 .venv/bin/python testes/testar_ponte.py
+.venv/bin/python testes/testar_remoto.py       # a porta do celular, de ponta a ponta
 .venv/bin/python etapa0.py --autoteste         # TTS -> VAD -> STT
 .venv/bin/python assistente.py --teste-ciclo   # FALA a saudação em voz alta
 ```
@@ -466,8 +503,9 @@ Sem ordem rígida: faz, o Léo testa o que é de voz, segue.
    treinar o RVC de novo.
 3. **Briefing da manhã:** agora é instrução no `CLAUDE.md` da casa; o e-mail
    entra pelo Gmail (cuidado com o que sai em voz alta, tem gente na casa).
-4. **Jarvis no celular:** PC como servidor, Tailscale (por causa do CGNAT),
-   página web na tela inicial antes de qualquer APK.
+4. **Jarvis no celular** (§4, "O celular"): etapa 1 feita (porta remota,
+   Tailscale, página de teste). Próximas: app Kotlin (chat e segurar para
+   falar), sempre ouvindo, e o Galaxy Watch 7.
 5. **Proatividade** com gatilho concreto (lembrete venceu, GPU quente, disco
    cheio).
 6. Depois: ver a tela (o Claude já lê imagem: print + "o que é isso?"),
