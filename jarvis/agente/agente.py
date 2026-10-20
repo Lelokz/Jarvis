@@ -204,6 +204,8 @@ class Agente:
         self._thread = threading.Thread(target=self._loop.run_forever, daemon=True,
                                         name="agente")
         self._marca = self.casa / ".ultimo-uso"
+        # As instruções com que a conversa atual começou (hash da persona).
+        self._marca_instrucoes = self.casa / ".instrucoes"
 
     # -- ciclo de vida -----------------------------------------------------
 
@@ -216,6 +218,15 @@ class Agente:
         # o Jarvis não apaga o papo); senão, começa outra.
         continuar = self._marca.exists() and \
             time.time() - self._marca.stat().st_mtime < self.cfg.recomecar_apos_h * 3600
+        # Conversa continuada guarda as instruções de quando COMEÇOU (medido em
+        # 20/10/2026: a Regra nº 1 nova foi ignorada numa conversa continuada e
+        # o Jarvis editou o config.toml; numa conversa nova, obedeceu). Mudou a
+        # persona, começa outra conversa; a memória (CLAUDE.md) continua.
+        try:
+            igual = self._marca_instrucoes.read_text().strip() == self._hash_instrucoes()
+        except OSError:
+            igual = False
+        continuar = continuar and igual
         if not Path(self.binario).is_file():
             raise ErroDoAgente(f"Claude Code não encontrado em {self.binario}.\n"
                                "  Instale: curl -fsSL https://claude.ai/install.sh | bash")
@@ -259,7 +270,7 @@ class Agente:
             permission_mode=self.cfg.modo_permissao,
             can_use_tool=self._pode,
             system_prompt={"type": "preset", "preset": "claude_code",
-                           "append": PERSONA.read_text().replace("{nome}", self.nome)},
+                           "append": self._instrucoes()},
             mcp_servers={"jarvis": servidor},
             continue_conversation=continuar,
             stderr=lambda _linha: None,
@@ -269,7 +280,20 @@ class Agente:
             max_buffer_size=64 * 1024 * 1024,
         )
 
+    def _instrucoes(self) -> str:
+        return PERSONA.read_text().replace("{nome}", self.nome)
+
+    def _hash_instrucoes(self) -> str:
+        import hashlib
+        return hashlib.sha1(self._instrucoes().encode()).hexdigest()
+
     async def _conectar(self, continuar: bool = False) -> None:
+        if not continuar:
+            # Conversa nova: começa com as instruções de agora.
+            try:
+                self._marca_instrucoes.write_text(self._hash_instrucoes() + "\n")
+            except OSError:
+                pass
         self._cliente = ClaudeSDKClient(self._opcoes(continuar))
         try:
             await self._cliente.connect()
@@ -277,6 +301,10 @@ class Agente:
             if not continuar:
                 raise
             # A sessão de antes sumiu ou não abriu: começa uma nova.
+            try:
+                self._marca_instrucoes.write_text(self._hash_instrucoes() + "\n")
+            except OSError:
+                pass
             self._cliente = ClaudeSDKClient(self._opcoes(False))
             await self._cliente.connect()
         self._leitor = asyncio.create_task(self._ler(self._cliente))
