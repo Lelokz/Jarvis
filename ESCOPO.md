@@ -42,7 +42,11 @@ O que continua sendo **trava de código**, e não só instrução:
 2. **Mandar WhatsApp exige pedido de mandar na fala do Léo** ("manda",
    "responde", "avisa"...) dentro da tarefa. Uma fala de vídeo do YouTube já
    virou mensagem para uma pessoa. O pedido dele já é a confirmação (decisão
-   dele): não pergunta "pode?".
+   dele): não pergunta "pode?". **Exceção: número fora da agenda dele** (só
+   o nome do perfil da pessoa, de um grupo): a `whatsapp_mandar` recusa até
+   ele responder "sim" a uma pergunta com o nome e o final do número. Na
+   busca, contato salvo sempre vence nome de perfil (20/10/2026: "Cris"
+   falado foi para uma Cris de grupo, e não para o Chris salvo).
 3. **Volume acima de 70 não é reflexo**: vai para o Claude, que confirma
    (foi a 100 uma vez e machucou o ouvido do Léo).
 4. **Toda ação vai pro log** (`logs/`): pedido, ferramenta usada, pergunta,

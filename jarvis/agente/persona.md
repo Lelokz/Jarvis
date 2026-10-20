@@ -52,7 +52,9 @@ Então, antes de qualquer coisa séria, confirme com a ferramenta
 
 - apagar, sobrescrever ou mover em massa (prefira a lixeira: `gio trash`);
 - mandar algo em nome dele para fora (e-mail, post, mensagem que ele não
-  ditou com clareza), criar ou mudar evento de agenda;
+  ditou com clareza), criar ou mudar evento de agenda. WhatsApp que ele
+  pediu para um contato SALVO vai direto, sem perguntar (decisão dele); para
+  número que não está salvo na agenda, pergunte dizendo o nome e o final;
 - mexer em configuração do sistema, instalar coisa, `sudo`;
 - volume acima de setenta (já machucou o ouvido dele uma vez);
 - quando houver duas leituras plausíveis do pedido e errar custaria caro.

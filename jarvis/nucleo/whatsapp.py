@@ -47,6 +47,10 @@ class Contato:
     # Últimos 4 dígitos do telefone: o que separa dois contatos com o MESMO
     # nome salvo ("Pedro Silva, final 4321, ou final 8765?").
     final: str = ""
+    # Salvo na agenda do Léo. False = só o nome que a PRÓPRIA pessoa pôs no
+    # perfil (alguém de um grupo): em 20/10/2026 o Jarvis mandou para uma
+    # "Cris" assim, em vez do "Chris" (padrasto) salvo na agenda.
+    salvo: bool = True
 
 
 # Conversa com UMA pessoa. Lista do que é permitido, e não do que é proibido:
@@ -69,6 +73,7 @@ class WhatsApp:
         self.api = api
         self.avisar_grupos = avisar_grupos
         self._cache_nomes: tuple[float, dict, dict, dict] | None = None
+        self._salvos: set[str] = set()  # telefones e LIDs com nome NA AGENDA do Léo
 
     def disponivel(self) -> bool:
         return self.banco.is_file()
@@ -100,6 +105,7 @@ class WhatsApp:
         lid_pn: dict[str, str] = {}
         pn_nome: dict[str, str] = {}
         lid_nome: dict[str, str] = {}
+        salvos: set[str] = set()
         try:
             con = sqlite3.connect(f"file:{self.banco_whatsmeow}?mode=ro", uri=True, timeout=5)
             try:
@@ -111,12 +117,15 @@ class WhatsApp:
                     if not nome:
                         continue
                     usuario, _, servidor = jid.partition("@")
+                    if (full or first or "").strip():
+                        salvos.add(usuario)
                     (lid_nome if servidor == "lid" else pn_nome)[usuario] = nome
             finally:
                 con.close()
         except sqlite3.Error:
             pass
         self._cache_nomes = (time.monotonic(), lid_pn, pn_nome, lid_nome)
+        self._salvos = salvos
         return lid_pn, pn_nome, lid_nome
 
     def nome_de(self, jid: str, nome_do_chat: str | None = None) -> str:
@@ -218,6 +227,10 @@ class WhatsApp:
             usuario, _, servidor = jid.partition("@")
             return lid_pn.get(usuario, usuario) if servidor == "lid" else usuario
 
+        def salvo(jid: str) -> bool:
+            usuario = jid.partition("@")[0]
+            return usuario in self._salvos or chave(jid) in self._salvos
+
         for jid, nome in self._consultar(
                 "SELECT jid, name FROM chats ORDER BY last_message_time DESC"):
             if not _conversa_que_avisa(jid, self.avisar_grupos):
@@ -226,12 +239,18 @@ class WhatsApp:
             k = chave(jid)
             if n != "alguém fora dos teus contatos" and k not in vistos:
                 vistos.add(k)
-                lista.append(Contato(jid, n, k[-4:] if k.isdigit() else ""))
+                lista.append(Contato(jid, n, k[-4:] if k.isdigit() else "", salvo(jid)))
         for pn, n in pn_nome.items():
             if pn not in vistos:
                 vistos.add(pn)
-                lista.append(Contato(f"{pn}@s.whatsapp.net", n, pn[-4:]))
+                lista.append(Contato(f"{pn}@s.whatsapp.net", n, pn[-4:], pn in self._salvos))
         return lista
+
+    def esta_salvo(self, jid: str) -> bool:
+        """O número está na agenda do Léo (e não só no perfil de alguém)?"""
+        lid_pn, _, _ = self._nomes()
+        usuario, _, servidor = jid.partition("@")
+        return usuario in self._salvos or (servidor == "lid" and lid_pn.get(usuario, "") in self._salvos)
 
     def achar_contato(self, falado: str) -> list[Contato]:
         """Os contatos que casam com o nome falado, o melhor primeiro.
@@ -242,9 +261,14 @@ class WhatsApp:
             n = nota(alvo, normalizar(c.nome))
             if n >= 0.75:
                 notas.append((n, c))
-        notas.sort(key=lambda p: -p[0])
         if not notas:
             return []
+        # Quem está salvo na agenda vem antes de quem só tem nome de perfil,
+        # mesmo com nota menor: "Cris" falado tem que achar o "Chris" salvo, e
+        # não uma "Cris" de grupo (20/10/2026). Os não salvos só voltam se
+        # nenhum salvo casou.
+        salvos = [(n, c) for n, c in notas if c.salvo]
+        notas = sorted(salvos or notas, key=lambda p: -p[0])
         melhor = notas[0][0]
         return [c for n, c in notas if n >= melhor - 0.05]
 

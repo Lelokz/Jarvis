@@ -2237,3 +2237,17 @@ aparecem do meu lado") e do Telegram. Celular S21 FE, relógio Galaxy Watch 7
 - O Tailscale foi instalado no modo usuário, sem sudo, porque o Léo estava
   fora (o sudo pede a senha dele): o `tailscale serve` funciona igual.
 
+### O app no celular, e o "Cris" errado (20/10/2026, tarde)
+
+O Family Link barrava instalar o APK (a regra vale para o celular inteiro:
+trocar de navegador não adianta); o padrasto do Léo liberou. Pelo app, o
+Jarvis mandou mensagens, lembrou sozinho de uma mensagem do pai sem
+resposta e anotou na memória quem é o padrasto depois de errar.
+
+O erro: "manda pro Cris" foi para uma "Cris" que nem está na agenda (o nome
+vinha do perfil dela, de um grupo), e não para o "Chris" salvo. A busca dava
+nota maior para o nome idêntico. Agora contato salvo sempre vence, e mandar
+para número fora da agenda trava até o Léo dizer sim a uma pergunta com o
+nome e o final do número. Para contato salvo continua direto, sem perguntar:
+"ficou muito melhor ele não perguntar se pode" (o Léo).
+
