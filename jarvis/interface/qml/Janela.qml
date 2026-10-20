@@ -66,6 +66,7 @@ Window {
         function onHistoricoRecebido(falas) { conversa.preencher(falas) }
         function onMostrar(titulo, texto) { conversa.mostrar(titulo, texto) }
         function onAtividade(texto) { conversa.atividade(texto) }
+        function onAnexoFalhou(texto) { janela.avisar(texto) }
         function onAvisoMudou(tipo, voltaEm) { faixa.tipo = tipo; faixa.voltaEm = voltaEm }
         function onMemoriaRecebida(fatos, conversas) {
             painelMemoria.fatos = fatos; painelMemoria.conversas = conversas;
@@ -177,16 +178,18 @@ Window {
         }
 
         // -- a esfera e o rótulo do estado ----------------------------------
+        // Embaixo, centralizada, logo acima da barra de escrita: o mesmo lugar
+        // do app do celular (out/2026, o Léo achou o celular mais bonito).
         Item {
             id: areaEsfera
-            anchors { top: barra.bottom; left: parent.left; right: parent.right }
-            height: Math.max(190, Math.min(330, moldura.height * 0.42))
+            anchors { bottom: barraDeTexto.top; left: parent.left; right: parent.right }
+            height: Math.max(150, Math.min(210, moldura.height * 0.27))
 
             Esfera {
                 id: esfera
                 anchors.horizontalCenter: parent.horizontalCenter
                 anchors.top: parent.top
-                width: Math.min(parent.width - 60, parent.height - 54)
+                width: Math.min(parent.width - 60, parent.height - 30)
                 height: width
 
                 readonly property bool vivo: janela.conectado
@@ -220,15 +223,16 @@ Window {
             Column {
                 anchors.horizontalCenter: parent.horizontalCenter
                 anchors.bottom: parent.bottom
-                spacing: 8
+                anchors.bottomMargin: 4
+                spacing: 4
 
                 Text {
                     anchors.horizontalCenter: parent.horizontalCenter
                     text: tema.rotuloDoEstado(janela.conectado ? janela.estado : "")
                     color: janela.corAtual
                     font.family: tema.familia
-                    font.pixelSize: 13
-                    font.letterSpacing: 3
+                    font.pixelSize: 11
+                    font.letterSpacing: 2.5
                     font.weight: Font.Medium
                     renderType: Text.NativeRendering
                     Behavior on color { ColorAnimation { duration: tema.normal } }
@@ -253,7 +257,7 @@ Window {
             tema: tema
             dica: janela.conectado ? "diga \"hey Jarvis\", ou escreva aqui embaixo" : ""
             anchors {
-                top: areaEsfera.bottom
+                top: barra.bottom
                 left: parent.left
                 right: parent.right
                 bottom: faixa.top
@@ -409,7 +413,7 @@ Window {
             property real agora: Date.now() / 1000
             readonly property bool ativa: (tipo === "limite" && (voltaEm === 0 || voltaEm > agora))
                                           || tipo === "offline"
-            anchors { left: parent.left; right: parent.right; bottom: barraDeTexto.top }
+            anchors { left: parent.left; right: parent.right; bottom: areaEsfera.top }
             anchors.leftMargin: 20
             anchors.rightMargin: 20
             anchors.bottomMargin: ativa ? 6 : 0
@@ -470,6 +474,20 @@ Window {
                     janela.avisar("não consegui enviar — o Jarvis não está do outro lado");
             }
             onAvisar: function (texto) { janela.avisar(texto) }
+            onEnviarComAnexos: function (texto, arquivos) {
+                if (typeof ponte === "undefined" || !ponte.enviarComAnexos(texto, arquivos))
+                    janela.avisar("não consegui enviar — o Jarvis não está do outro lado");
+            }
+        }
+
+        // Arrastar um arquivo para a janela = anexar (o clipe, sem abrir nada).
+        DropArea {
+            anchors.fill: parent
+            onDropped: function (drop) {
+                for (var i = 0; i < drop.urls.length; i++)
+                    barraDeTexto.adicionar(drop.urls[i]);
+                barraDeTexto.focar();
+            }
         }
 
         // -- avisos rápidos ---------------------------------------------------

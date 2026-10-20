@@ -15,8 +15,9 @@ import threading
 import time
 from pathlib import Path
 
-from PySide6.QtCore import QObject, Signal, Slot
+from PySide6.QtCore import QObject, QUrl, Signal, Slot
 
+from jarvis.ponte import recebidos
 from jarvis.ponte.cliente import Cliente
 
 ESPERA_ENTRE_TENTATIVAS_S = 1.0
@@ -38,6 +39,7 @@ class PonteQt(QObject):
     avisoMudou = Signal(str, float)        # "ok"|"limite"|"offline", volta_em (época, 0 = não sei)
     mostrar = Signal(str, str)             # título, texto em markdown (vai para a janela)
     atividade = Signal(str)                # o que o Claude está fazendo agora
+    anexoFalhou = Signal(str)              # não deu para copiar/mandar o anexo
 
     def __init__(self, caminho: Path, parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -65,6 +67,26 @@ class PonteQt(QObject):
             cliente.enviar_texto(texto)
         except OSError:
             return False
+        return True
+
+    @Slot(str, list, result=bool)
+    def enviarComAnexos(self, texto: str, arquivos: list) -> bool:
+        """O texto com os anexos do clipe (ou arrastados para a janela). Os
+        arquivos são copiados para a pasta de recebidos (a única de onde a ponte
+        aceita anexo) numa thread, para um vídeo grande não travar a janela."""
+        cliente = self._cliente
+        if cliente is None:
+            return False
+        caminhos = [Path(QUrl(str(a)).toLocalFile() or str(a)) for a in arquivos]
+
+        def copiar_e_mandar() -> None:
+            try:
+                copiados = [str(recebidos.copiar(c)) for c in caminhos if c.is_file()]
+                cliente.enviar_texto(texto.strip() or "Olha isso.", copiados)
+            except OSError as e:
+                self.anexoFalhou.emit(f"não consegui mandar o anexo ({e.strerror or e})")
+
+        threading.Thread(target=copiar_e_mandar, name="anexos", daemon=True).start()
         return True
 
     @Slot(result=bool)

@@ -48,7 +48,7 @@ RAIZ = Path(__file__).resolve().parent
 sys.path.insert(0, str(RAIZ))
 
 from jarvis import config  # noqa: E402
-from jarvis.ponte import protocolo  # noqa: E402
+from jarvis.ponte import protocolo, recebidos  # noqa: E402
 
 PAGINA = RAIZ / "jarvis" / "remoto" / "pagina.html"
 # O app do celular (celular/compilar.sh): baixado pelo Chrome do celular em
@@ -64,8 +64,7 @@ PEDIDOS_DO_CELULAR = {"falar", "memoria"}
 # Foto, vídeo ou arquivo mandado pelo clipe do app. Vídeo de celular passa
 # disso fácil; por enquanto é o teto (o WebSocket guarda tudo na memória).
 MAX_ANEXO_BYTES = 64 * 1024 * 1024
-# Os recebidos somem depois disto (a porta limpa ao subir).
-DIAS_RECEBIDOS = 14
+
 
 
 def ler_chave(caminho: Path) -> str:
@@ -109,42 +108,6 @@ def guardar_audio(pcm: bytes) -> Path:
     with os.fdopen(fd, "wb") as f:
         f.write(pcm)
     return caminho
-
-
-def nome_seguro(nome: str) -> str:
-    """Só o nome do arquivo, sem pasta nem caractere estranho."""
-    import re
-
-    base = Path(nome or "anexo").name
-    base = re.sub(r"[^\w.\- ]", "_", base, flags=re.UNICODE).strip(" .") or "anexo"
-    return base[-80:]
-
-
-def guardar_anexo(nome: str, dados: bytes) -> Path:
-    pasta = protocolo.pasta_recebidos()
-    pasta.mkdir(parents=True, exist_ok=True, mode=0o700)
-    caminho = pasta / f"{time.strftime('%Y%m%d-%H%M%S')}-{nome_seguro(nome)}"
-    n = 1
-    while caminho.exists():
-        caminho = caminho.with_name(f"{caminho.stem}-{n}{caminho.suffix}")
-        n += 1
-    fd = os.open(caminho, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-    with os.fdopen(fd, "wb") as f:
-        f.write(dados)
-    return caminho
-
-
-def limpar_recebidos(dias: int = DIAS_RECEBIDOS) -> int:
-    pasta = protocolo.pasta_recebidos()
-    if not pasta.is_dir():
-        return 0
-    limite = time.time() - dias * 86400
-    apagados = 0
-    for f in pasta.iterdir():
-        if f.is_file() and f.stat().st_mtime < limite:
-            f.unlink(missing_ok=True)
-            apagados += 1
-    return apagados
 
 
 def criar_app(cfg: config.Config):
@@ -242,7 +205,7 @@ def criar_app(cfg: config.Config):
                              "motivo": f"maior que {MAX_ANEXO_BYTES // 1024 // 1024} MB"},
                             ensure_ascii=False))
                         continue
-                    caminho = await asyncio.to_thread(guardar_anexo, nome, dados)
+                    caminho = await asyncio.to_thread(recebidos.guardar, nome, dados)
                     pendentes[proximo_id] = caminho
                     await ws.send_text(json.dumps({"ev": "anexo_ok", "id": proximo_id, "nome": nome},
                                                   ensure_ascii=False))
@@ -348,10 +311,10 @@ def main() -> int:
         return 0
     import uvicorn
 
-    apagados = limpar_recebidos()
+    apagados = recebidos.limpar()
     if apagados:
         print(f"{time.strftime('%H:%M:%S')} recebidos: {apagados} com mais de "
-              f"{DIAS_RECEBIDOS} dias apagados", flush=True)
+              f"{recebidos.DIAS} dias apagados", flush=True)
     uvicorn.run(criar_app(cfg), host="127.0.0.1", port=cfg.remoto.porta,
                 log_level="warning", ws_max_size=MAX_ANEXO_BYTES + 1024)
     return 0

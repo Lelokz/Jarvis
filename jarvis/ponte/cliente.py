@@ -48,8 +48,11 @@ class Cliente:
         self._buffer = bytearray()
         self._enviar({"pedir": "ola", "quem": self.quem, "historico": historico})
 
-    def enviar_texto(self, texto: str) -> None:
-        self._enviar({"pedir": "falar", "texto": texto})
+    def enviar_texto(self, texto: str, anexos: list[str] | None = None) -> None:
+        pedido: dict[str, Any] = {"pedir": "falar", "texto": texto}
+        if anexos:
+            pedido["anexos"] = anexos
+        self._enviar(pedido)
 
     def pedir_memoria(self) -> None:
         self._enviar({"pedir": "memoria"})

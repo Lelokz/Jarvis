@@ -1,60 +1,152 @@
 import QtQuick
 import QtQuick.Shapes
+import QtQuick.Dialogs
 
-// A barra de escrita: a saída quando o Whisper erra, e o jeito de mandar
-// comando sem falar. O que ele entende daqui é exatamente o que entende da
-// voz — do outro lado da ponte é o mesmo caminho.
+// A barra de escrita, no estilo do app do celular (out/2026, pedido do Léo):
+// o campo com o enviar dentro e, à direita, UM clipe (antes eram três ícones
+// de enfeite: clipe, imagem e vídeo). O que vem do clipe — ou é arrastado
+// para a janela — fica em cima do campo, com miniatura e ✕, esperando a
+// mensagem, e vai JUNTO dela.
 Item {
     id: raiz
     property var tema
     property string estado: "dormindo"
     property bool conectado: false
     property color corDoEstado: "#4da3ff"
+    property var anexos: []          // URLs (file://...) esperando a mensagem
     signal enviar(string texto)
+    signal enviarComAnexos(string texto, var arquivos)
     signal avisar(string texto)
 
-    implicitHeight: 76
+    implicitHeight: 64 + (anexos.length > 0 ? fileira.height + 8 : 0)
 
     function focar() { campo.forceActiveFocus(); }
 
-    Rectangle {
+    function adicionar(url) {
+        var u = url.toString();
+        if (raiz.anexos.indexOf(u) >= 0)
+            return;
+        if (raiz.anexos.length >= 10) {
+            raiz.avisar("no máximo dez anexos por mensagem");
+            return;
+        }
+        raiz.anexos = raiz.anexos.concat([u]);
+    }
+
+    function tirar(u) {
+        raiz.anexos = raiz.anexos.filter(function (x) { return x !== u; });
+    }
+
+    function nomeDe(u) {
+        return decodeURIComponent(u.toString().split("/").pop());
+    }
+
+    function ehImagem(u) {
+        return /\.(png|jpe?g|gif|webp|bmp)$/i.test(u.toString());
+    }
+
+    FileDialog {
+        id: escolher
+        title: "Anexar ao Jarvis"
+        fileMode: FileDialog.OpenFiles
+        onAccepted: {
+            for (var i = 0; i < selectedFiles.length; i++)
+                raiz.adicionar(selectedFiles[i]);
+            campo.forceActiveFocus();
+        }
+    }
+
+    // -- os anexos esperando a mensagem ------------------------------------
+    Flickable {
+        id: fileira
         anchors { top: parent.top; left: parent.left; right: parent.right }
-        height: 1
-        color: raiz.tema.traco
-    }
-
-    Row {
-        anchors.verticalCenter: parent.verticalCenter
-        anchors.left: parent.left
         anchors.leftMargin: 14
-        spacing: 2
+        anchors.rightMargin: 14
+        height: raiz.anexos.length > 0 ? 56 : 0
+        visible: raiz.anexos.length > 0
+        contentWidth: linhaDeAnexos.width
+        flickableDirection: Flickable.HorizontalFlick
+        clip: true
 
-        AnexoIcone {
-            tema: raiz.tema
-            // clipe de papel
-            traco: "M16.8 7.2 L9 15 a2.4 2.4 0 0 0 3.4 3.4 L20 10.8 a4.2 4.2 0 0 0-6-6 L5.6 13.2 a6.2 6.2 0 0 0 8.8 8.8 L21 15.4"
-            onTocado: raiz.avisar("anexar arquivo ainda não — é de outra etapa")
-        }
-        AnexoIcone {
-            tema: raiz.tema
-            // imagem
-            traco: "M4 6 h16 v12 h-16 z M9.5 10.5 a1.3 1.3 0 1 0 0.01 0 M5.5 17 l4.5-4.5 3 3 2.5-2.5 3 4"
-            onTocado: raiz.avisar("anexar imagem ainda não — é de outra etapa")
-        }
-        AnexoIcone {
-            tema: raiz.tema
-            // vídeo
-            traco: "M4 7 h11 v10 h-11 z M15.5 11 l4.5-2.6 v7.2 l-4.5-2.6"
-            onTocado: raiz.avisar("anexar vídeo ainda não — é de outra etapa")
+        Row {
+            id: linhaDeAnexos
+            spacing: 8
+            Repeater {
+                model: raiz.anexos
+                Rectangle {
+                    required property var modelData
+                    width: Math.min(200, 54 + nome.implicitWidth + 40)
+                    height: 56
+                    radius: 12
+                    color: raiz.tema.superficie
+                    border.width: 1
+                    border.color: raiz.tema.traco
+
+                    Rectangle {
+                        id: miniatura
+                        x: 6; anchors.verticalCenter: parent.verticalCenter
+                        width: 44; height: 44
+                        radius: 8
+                        color: raiz.tema.traco
+                        clip: true
+                        Image {
+                            anchors.fill: parent
+                            visible: raiz.ehImagem(modelData)
+                            source: raiz.ehImagem(modelData) ? modelData : ""
+                            sourceSize: Qt.size(88, 88)
+                            fillMode: Image.PreserveAspectCrop
+                            asynchronous: true
+                        }
+                        Text {
+                            anchors.centerIn: parent
+                            visible: !raiz.ehImagem(modelData)
+                            text: /\.(mp4|mkv|webm|mov|avi)$/i.test(modelData) ? "▶" : "📄"
+                            color: raiz.tema.textoFraco
+                            font.pixelSize: 16
+                        }
+                    }
+                    Text {
+                        id: nome
+                        anchors { left: miniatura.right; leftMargin: 8; right: fechar.left; rightMargin: 2 }
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: raiz.nomeDe(modelData)
+                        elide: Text.ElideMiddle
+                        color: raiz.tema.texto
+                        font.family: raiz.tema.familia
+                        font.pixelSize: 12
+                        renderType: Text.NativeRendering
+                    }
+                    Rectangle {
+                        id: fechar
+                        anchors { right: parent.right; rightMargin: 6; verticalCenter: parent.verticalCenter }
+                        width: 24; height: 24; radius: 12
+                        color: areaFechar.containsMouse ? raiz.tema.traco : "transparent"
+                        Text {
+                            anchors.centerIn: parent
+                            text: "✕"
+                            color: areaFechar.containsMouse ? raiz.tema.texto : raiz.tema.textoFraco
+                            font.pixelSize: 12
+                        }
+                        MouseArea {
+                            id: areaFechar
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: raiz.tirar(modelData)
+                        }
+                    }
+                }
+            }
         }
     }
 
+    // -- o campo, com o enviar dentro ----------------------------------------
     Rectangle {
         id: caixa
         anchors {
-            verticalCenter: parent.verticalCenter
-            left: parent.left; leftMargin: 132
-            right: parent.right; rightMargin: 62
+            bottom: parent.bottom; bottomMargin: 11
+            left: parent.left; leftMargin: 14
+            right: clipe.left; rightMargin: 8
         }
         height: 42
         radius: 21
@@ -67,7 +159,7 @@ Item {
             id: campo
             anchors.fill: parent
             anchors.leftMargin: 16
-            anchors.rightMargin: 16
+            anchors.rightMargin: botao.visible ? 46 : 16
             verticalAlignment: TextInput.AlignVCenter
             color: raiz.tema.texto
             font.family: raiz.tema.familia
@@ -86,6 +178,7 @@ Item {
             text: !raiz.conectado ? "esperando o Jarvis…"
                 : raiz.estado === "escutando" ? "ouvindo você…"
                 : raiz.estado === "pensando" ? "pensando…"
+                : raiz.anexos.length > 0 ? "fala sobre o anexo, ou só envia"
                 : "fale, ou escreva aqui"
             color: raiz.tema.textoFraco
             font.family: raiz.tema.familia
@@ -93,59 +186,94 @@ Item {
             renderType: Text.NativeRendering
             opacity: 0.9
         }
-    }
 
-    // Enviar. Acende quando há texto E alguém do outro lado.
-    Item {
-        id: botao
-        anchors.verticalCenter: parent.verticalCenter
-        anchors.right: parent.right
-        anchors.rightMargin: 14
-        width: 36; height: 36
-        readonly property bool ativo: campo.text.trim() !== "" && raiz.conectado
+        // Enviar: aparece quando há o que mandar, e acende com alguém do outro lado.
+        Item {
+            id: botao
+            anchors.verticalCenter: parent.verticalCenter
+            anchors.right: parent.right
+            anchors.rightMargin: 4
+            width: 34; height: 34
+            visible: campo.text.trim() !== "" || raiz.anexos.length > 0
+            readonly property bool ativo: visible && raiz.conectado
 
-        Rectangle {
-            anchors.fill: parent
-            radius: 18
-            color: botao.ativo ? raiz.corDoEstado : raiz.tema.superficie
-            opacity: botao.ativo ? (areaBotao.containsMouse ? 1.0 : 0.9) : 0.55
-            scale: areaBotao.containsPress && botao.ativo ? 0.9 : 1.0
-            Behavior on color { ColorAnimation { duration: raiz.tema.rapido } }
-            Behavior on opacity { NumberAnimation { duration: raiz.tema.rapido } }
-            Behavior on scale { NumberAnimation { duration: 110; easing.type: Easing.OutQuad } }
-        }
-
-        Shape {
-            anchors.centerIn: parent
-            width: 18; height: 18
-            ShapePath {
-                fillColor: "transparent"
-                strokeColor: botao.ativo ? raiz.tema.fundo : raiz.tema.textoFraco
-                strokeWidth: 1.8
-                capStyle: ShapePath.RoundCap
-                joinStyle: ShapePath.RoundJoin
-                PathSvg { path: "M9 15 V3 M4 8 L9 3 L14 8" }
+            Rectangle {
+                anchors.fill: parent
+                radius: 17
+                color: botao.ativo ? raiz.corDoEstado : raiz.tema.traco
+                opacity: botao.ativo ? (areaBotao.containsMouse ? 1.0 : 0.9) : 0.6
+                scale: areaBotao.containsPress && botao.ativo ? 0.9 : 1.0
+                Behavior on color { ColorAnimation { duration: raiz.tema.rapido } }
+                Behavior on scale { NumberAnimation { duration: 110; easing.type: Easing.OutQuad } }
+            }
+            Shape {
+                anchors.centerIn: parent
+                width: 18; height: 18
+                ShapePath {
+                    fillColor: "transparent"
+                    strokeColor: botao.ativo ? raiz.tema.fundo : raiz.tema.textoFraco
+                    strokeWidth: 1.8
+                    capStyle: ShapePath.RoundCap
+                    joinStyle: ShapePath.RoundJoin
+                    PathSvg { path: "M9 15 V3 M4 8 L9 3 L14 8" }
+                }
+            }
+            MouseArea {
+                id: areaBotao
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: botao.ativo ? Qt.PointingHandCursor : Qt.ArrowCursor
+                onClicked: raiz.mandar()
             }
         }
+    }
 
+    // -- o clipe, à direita ---------------------------------------------------
+    Rectangle {
+        id: clipe
+        anchors { right: parent.right; rightMargin: 14; verticalCenter: caixa.verticalCenter }
+        width: 42; height: 42; radius: 21
+        color: areaClipe.containsMouse ? raiz.tema.traco : raiz.tema.superficie
+        border.width: 1
+        border.color: raiz.tema.traco
+        scale: areaClipe.containsPress ? 0.92 : 1.0
+        Behavior on color { ColorAnimation { duration: raiz.tema.rapido } }
+        Behavior on scale { NumberAnimation { duration: 110; easing.type: Easing.OutQuad } }
+        Shape {
+            anchors.centerIn: parent
+            width: 24; height: 24
+            preferredRendererType: Shape.CurveRenderer
+            ShapePath {
+                fillColor: "transparent"
+                strokeColor: areaClipe.containsMouse ? raiz.tema.texto : raiz.tema.textoFraco
+                strokeWidth: 1.5
+                capStyle: ShapePath.RoundCap
+                joinStyle: ShapePath.RoundJoin
+                PathSvg { path: "M16.8 7.2 L9 15 a2.4 2.4 0 0 0 3.4 3.4 L20 10.8 a4.2 4.2 0 0 0-6-6 L5.6 13.2 a6.2 6.2 0 0 0 8.8 8.8 L21 15.4" }
+            }
+        }
         MouseArea {
-            id: areaBotao
+            id: areaClipe
             anchors.fill: parent
             hoverEnabled: true
-            cursorShape: botao.ativo ? Qt.PointingHandCursor : Qt.ArrowCursor
-            onClicked: raiz.mandar()
+            cursorShape: Qt.PointingHandCursor
+            onClicked: escolher.open()
         }
     }
 
     function mandar() {
         var texto = campo.text.trim();
-        if (texto === "")
+        if (texto === "" && raiz.anexos.length === 0)
             return;
         if (!raiz.conectado) {
-            raiz.avisar("o Jarvis não está do outro lado — o texto não foi enviado");
+            raiz.avisar("o Jarvis não está do outro lado — não foi enviado");
             return;
         }
-        raiz.enviar(texto);
+        if (raiz.anexos.length > 0)
+            raiz.enviarComAnexos(texto, raiz.anexos);
+        else
+            raiz.enviar(texto);
         campo.text = "";
+        raiz.anexos = [];
     }
 }

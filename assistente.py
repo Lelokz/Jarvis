@@ -755,18 +755,18 @@ class Ciclo:
         """Um pedido da ponte. Da janela (sem voz própria), é o texto
         digitado de sempre. De um corpo (o celular), é atendido LÁ: a voz sai
         nele e o PC continua dormindo. Roda na thread de áudio."""
+        if pedido.anexos:
+            # Vai junto do pedido para o Claude, como o contexto do WhatsApp.
+            nota = ("[Anexos que o Léo mandou, já no PC (imagem: abra com o Read; "
+                    "vídeo: tire alguns quadros com ffmpeg e olhe): "
+                    + ", ".join(pedido.anexos) + "]")
+            self._contexto = "\n".join(p for p in (self._contexto, nota) if p)
         if not pedido.voz:
             if pedido.tipo == "falar":
                 self.atender_texto(pedido.valor)
             return
         self._corpo = pedido.cliente
         self._mudo = pedido.mudo
-        if pedido.anexos:
-            # Vai junto do pedido para o Claude, como o contexto do WhatsApp.
-            nota = ("[Anexos que o Léo mandou do celular, já no PC (imagem: abra com o "
-                    "Read; vídeo: tire alguns quadros com ffmpeg e olhe): "
-                    + ", ".join(pedido.anexos) + "]")
-            self._contexto = "\n".join(p for p in (self._contexto, nota) if p)
         if pedido.tipo == "falar":
             self.registrador.registrar_estado("texto_do_celular", texto=pedido.valor)
             self._responder(pedido.valor, origem="celular")

@@ -488,6 +488,19 @@ def rodar_celular(tmp: Path) -> None:
         checa("no mudo vai o texto e nenhum evento de voz",
               any(e["ev"] == "jarvis_disse" for e in g.eventos) and "voz" not in g.tipos(), g.tipos())
 
+        print("-- E15. anexo pela janela do PC (sem voz própria) também vai ao Claude --")
+        recebidos = []
+        original_pedir = agente.pedir
+        agente.pedir = lambda texto, origem="voz", contexto="": (
+            recebidos.append(contexto), original_pedir(texto, origem, contexto))
+        agente.resposta = Saida("fim", texto="Vi.")
+        ciclo.atender_pedido(Pedido("falar", "olha isso", cliente=1, voz=False,
+                                    anexos=("/home/x/recebidos/print.png",)))
+        ciclo.atender_agente()
+        checa("o anexo da janela chega no contexto", recebidos and "print.png" in recebidos[-1], recebidos)
+        agente.pedir = original_pedir
+        ciclo.dormir("fim do E15")  # o E12 confere o acordar de novo
+
         print("-- E12. depois, falar no PC devolve a voz para a caixa de som --")
         g.limpar()
         ciclo.atender_pedido(Pedido("falar", "e agora?", cliente=1, voz=False))
