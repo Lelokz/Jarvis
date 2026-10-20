@@ -12,8 +12,11 @@ android {
         applicationId = "com.lelokz.jarvis"
         minSdk = 29          // Android 10+: o S21 FE e o Galaxy Watch 7 sobram
         targetSdk = 35
-        versionCode = 4
-        versionName = "0.4"
+        versionCode = 5
+        versionName = "0.5"
+        // O S21 FE e o Galaxy Watch 7 são 64 bits: sem as outras arquiteturas,
+        // o onnxruntime não incha o APK.
+        ndk { abiFilters += listOf("arm64-v8a") }
     }
 
     buildTypes {
@@ -44,4 +47,7 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
     // WebSocket da porta remota (porta_remota.py)
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    // O "hey Jarvis" no celular: os mesmos modelos ONNX do PC (openWakeWord e
+    // o Silero VAD), em assets/.
+    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.20.0")
 }

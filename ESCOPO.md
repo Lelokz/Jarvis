@@ -393,6 +393,18 @@ segurar o nome "Jarvis" no topo esquece o link.
   arquivo já sobe para o PC (`~/.local/share/jarvis/recebidos/`, apagados
   depois de 14 dias, teto de 64 MB) e a porta junta os caminhos ao próximo
   pedido (`"anexos"` no "falar"/"ouvir"); o Claude recebe como contexto.
+- **v0.5, "sempre ouvindo" (etapa 3, 20/10/2026):** o microfone no topo
+  liga o `ServicoOuvido` (serviço em primeiro plano, notificação fixa "Jarvis
+  está ouvindo" com Parar). O `Ouvido` roda os MESMOS modelos do PC no
+  onnxruntime-android: o openWakeWord (conferido em Python contra a
+  biblioteca do PC com gravações reais: mesma nota, diferença ≤ 0,001) e o
+  Silero VAD para saber quando a frase acabou (0,8 s de silêncio). Depois
+  da resposta, 7 s ouvindo sem precisar do "hey Jarvis", como no PC; com
+  ele falando, o microfone é ignorado. O `Jarvis` é um por processo (`App`):
+  o serviço e a tela usam a mesma conexão e a mesma conversa. Os modelos
+  ficam fora do git (o `compilar.sh` copia de `modelos-wakeword/`).
+  **No celular não tem aviso de WhatsApp**: o aviso sai sempre na caixa de
+  som do PC, mesmo com a conversa no celular, e o app esconde essas linhas.
 - **Instalar:** o Chrome do celular baixa de
   `https://jarvis.<tailnet>.ts.net/jarvis.apk` (a porta remota serve o último
   APK compilado; o APK não leva segredo nenhum).

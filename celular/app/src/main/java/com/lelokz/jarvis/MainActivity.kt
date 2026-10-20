@@ -78,7 +78,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
-import androidx.lifecycle.viewmodel.compose.viewModel
 
 // As cores da janela do PC (jarvis/interface/qml/Tema.qml).
 private val Fundo = Color(0xFF0A0C10)
@@ -107,12 +106,19 @@ private fun rotuloDoEstado(e: String) = when (e) {
 }
 
 class MainActivity : ComponentActivity() {
+    private fun temMicrofone() = ContextCompat.checkSelfPermission(
+        this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
             MaterialTheme(colorScheme = darkColorScheme(background = Fundo, surface = Fundo)) {
-                val modelo: JarvisModelo = viewModel()
+                val modelo = (application as App).jarvis
+                // Estava "sempre ouvindo" quando fechou: garante o serviço de pé.
+                LaunchedEffect(Unit) {
+                    if (modelo.sempreOuvindo.value && temMicrofone()) modelo.alternarSempreOuvindo(true)
+                }
                 Box(Modifier.fillMaxSize().background(Fundo).safeDrawingPadding()) {
                     if (modelo.configurado.value) Conversa(modelo) else Entrada(modelo)
                 }
@@ -123,7 +129,7 @@ class MainActivity : ComponentActivity() {
 
 /** A primeira vez: colar o link da página, que já traz a chave. */
 @Composable
-fun Entrada(modelo: JarvisModelo) {
+fun Entrada(modelo: Jarvis) {
     var link by remember { mutableStateOf("") }
     var erro by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.Center) {
@@ -151,12 +157,25 @@ fun Entrada(modelo: JarvisModelo) {
 }
 
 @Composable
-fun Conversa(modelo: JarvisModelo) {
+fun Conversa(modelo: Jarvis) {
     val contexto = LocalContext.current
     val vibrar = LocalHapticFeedback.current
     var texto by remember { mutableStateOf("") }
     val lista = rememberLazyListState()
     val pedirMicrofone = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
+    // Ligar o "sempre ouvindo" pede o microfone e (Android 13+) a notificação.
+    val pedirParaOuvir = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()) { r ->
+        if (r[Manifest.permission.RECORD_AUDIO] == true) modelo.alternarSempreOuvindo(true)
+    }
+    fun alternarOuvido() {
+        if (modelo.sempreOuvindo.value) { modelo.alternarSempreOuvindo(false); return }
+        val faltam = buildList {
+            add(Manifest.permission.RECORD_AUDIO)
+            if (android.os.Build.VERSION.SDK_INT >= 33) add(Manifest.permission.POST_NOTIFICATIONS)
+        }.filter { ContextCompat.checkSelfPermission(contexto, it) != PackageManager.PERMISSION_GRANTED }
+        if (faltam.isEmpty()) modelo.alternarSempreOuvindo(true) else pedirParaOuvir.launch(faltam.toTypedArray())
+    }
     val escolherArquivos = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
         uris.take(10).forEach { modelo.anexar(it) }
     }
@@ -186,7 +205,12 @@ fun Conversa(modelo: JarvisModelo) {
                 modifier = Modifier.pointerInput(Unit) { detectTapGestures(onLongPress = { modelo.esquecer() }) })
             Spacer(Modifier.weight(1f))
             if (!vivo) Text(modelo.motivo.value, color = Fraco, fontSize = 12.sp)
-            Spacer(Modifier.width(8.dp))
+            Spacer(Modifier.width(4.dp))
+            // "Sempre ouvindo": o microfone aceso = o "hey Jarvis" funciona com a tela desligada.
+            Box(
+                Modifier.size(40.dp).clip(CircleShape).clickable { alternarOuvido() },
+                contentAlignment = Alignment.Center,
+            ) { Microfone(ligado = modelo.sempreOuvindo.value) }
             // O mudo: alto-falante, e com um risco no meio quando mudo.
             Box(
                 Modifier.size(40.dp).clip(CircleShape).clickable { modelo.alternarMudo() },
@@ -300,6 +324,23 @@ fun Conversa(modelo: JarvisModelo) {
                 contentAlignment = Alignment.Center,
             ) { Text("📎", fontSize = 18.sp) }
         }
+    }
+}
+
+@Composable
+private fun Microfone(ligado: Boolean) {
+    val cor = if (ligado) Color(0xFF4DA3FF) else Fraco
+    Canvas(Modifier.size(22.dp)) {
+        val w = size.width
+        val h = size.height
+        val traco = Stroke(width = w * 0.08f, cap = StrokeCap.Round)
+        // A cápsula: cheia quando ligado (está ouvindo), só o contorno quando não.
+        drawRoundRect(cor, Offset(w * 0.35f, h * 0.08f), Size(w * 0.30f, h * 0.50f),
+            androidx.compose.ui.geometry.CornerRadius(w * 0.15f),
+            style = if (ligado) androidx.compose.ui.graphics.drawscope.Fill else traco)
+        drawArc(cor, 0f, 180f, false, Offset(w * 0.22f, h * 0.22f), Size(w * 0.56f, h * 0.52f), style = traco)
+        drawLine(cor, Offset(w * 0.5f, h * 0.74f), Offset(w * 0.5f, h * 0.90f), strokeWidth = w * 0.08f,
+            cap = StrokeCap.Round)
     }
 }
 

@@ -9,9 +9,13 @@ import android.util.Size
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.lifecycle.AndroidViewModel
-import androidx.lifecycle.viewModelScope
+import android.content.Intent
+import android.os.Build
+import android.os.VibrationEffect
+import android.os.Vibrator
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -37,10 +41,13 @@ data class Anexo(
 )
 
 /**
- * O estado do app: a conversa, o que o Jarvis está fazendo, a conexão e os
- * anexos esperando a mensagem. Sobrevive a girar a tela (é um ViewModel).
+ * O app inteiro num lugar só: a conversa, o que o Jarvis está fazendo, a
+ * conexão, os anexos e o ouvido do "hey Jarvis". UM por processo (`App`): a
+ * tela e o serviço de fundo usam a mesma conexão e a mesma conversa, então o
+ * "hey Jarvis" com a tela desligada aparece no chat quando o app abre.
  */
-class JarvisModelo(private val app: Application) : AndroidViewModel(app) {
+class Jarvis(private val app: Application) {
+    private val viewModelScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private val prefs = app.getSharedPreferences("jarvis", Application.MODE_PRIVATE)
 
     val mensagens = mutableStateListOf<Mensagem>()
@@ -55,9 +62,12 @@ class JarvisModelo(private val app: Application) : AndroidViewModel(app) {
     // O botão de mudo do topo: resposta só em texto (lugar onde não dá para
     // ouvir). Fica salvo entre uma abertura e outra.
     val mudo = mutableStateOf(prefs.getBoolean("mudo", false))
+    // "Sempre ouvindo": o "hey Jarvis" no celular, pelo ServicoOuvido.
+    val sempreOuvindo = mutableStateOf(prefs.getBoolean("sempre_ouvindo", false))
+    private var ouvido: Ouvido? = null
 
     private val principal = android.os.Handler(android.os.Looper.getMainLooper())
-    private val voz = Voz { t -> principal.post { tocando.value = t } }
+    private val voz = Voz { t -> principal.post { mudouTocando(t) } }
     private val gravador = Gravador { n -> principal.post { nivel.floatValue = n } }
     private var conexao: Conexao? = null
     private var proximoLocal = 1
@@ -203,7 +213,11 @@ class JarvisModelo(private val app: Application) : AndroidViewModel(app) {
         conexao?.enviar(JSONObject().put("pedir", "falar").put("texto", t))
     }
 
+    private var segurandoAtomo = false
+
     fun comecarFala() {
+        segurandoAtomo = true
+        ouvido?.pausado = true // um microfone de cada vez
         gravador.comecar()
         gravando.value = true
     }
@@ -211,9 +225,64 @@ class JarvisModelo(private val app: Application) : AndroidViewModel(app) {
     fun terminarFala() {
         gravando.value = false
         nivel.floatValue = 0f
+        segurandoAtomo = false
+        ouvido?.pausado = tocando.value
         val wav = gravador.parar() ?: return
         usarAnexos()
         conexao?.enviar(wav)
+    }
+
+    // -- "sempre ouvindo" -------------------------------------------------------
+
+    /** Liga ou desliga o serviço (o botão do topo). As permissões a tela pede antes. */
+    fun alternarSempreOuvindo(ligar: Boolean) {
+        sempreOuvindo.value = ligar
+        prefs.edit().putBoolean("sempre_ouvindo", ligar).apply()
+        val i = Intent(app, ServicoOuvido::class.java)
+        if (ligar) {
+            if (Build.VERSION.SDK_INT >= 26) app.startForegroundService(i) else app.startService(i)
+        } else {
+            app.stopService(i)
+        }
+    }
+
+    /** Chamado pelo serviço, já em primeiro plano e com a permissão do microfone. */
+    fun iniciarOuvido() {
+        if (ouvido != null) return
+        ouvido = Ouvido(
+            app,
+            aoAcordar = { principal.post { acordou() } },
+            aoGravar = { g -> principal.post { gravando.value = g } },
+            aoTerminar = { wav -> principal.post { usarAnexos(); conexao?.enviar(wav) } },
+            aoNivel = { n -> principal.post { nivel.floatValue = n } },
+        ).also { it.pausado = tocando.value; it.ligar() }
+        diag("ouvido ligado")
+    }
+
+    fun pararOuvido() {
+        ouvido?.desligar()
+        ouvido = null
+    }
+
+    private fun acordou() {
+        // Sem voz: vibra, para responder rápido e não fazer barulho.
+        val v = app.getSystemService(Vibrator::class.java)
+        if (Build.VERSION.SDK_INT >= 26) v?.vibrate(VibrationEffect.createOneShot(60, 200)) else @Suppress("DEPRECATION") v?.vibrate(60)
+        diag("hey jarvis")
+    }
+
+    private fun mudouTocando(t: Boolean) {
+        tocando.value = t
+        val o = ouvido ?: return
+        // Ele falando: o celular não pode se ouvir. Terminou: uns segundos
+        // ouvindo sem precisar do "hey Jarvis", como no PC.
+        o.pausado = t || segurandoAtomo
+        if (!t) o.abrirJanela()
+    }
+
+    /** Um recado para o log do PC (logs/porta-remota.log): o que o app viu. */
+    fun diag(motivo: String) {
+        conexao?.enviar(JSONObject().put("diag", JSONObject().put("motivo", motivo)))
     }
 
     // -- o que chega do PC ----------------------------------------------------
@@ -228,7 +297,8 @@ class JarvisModelo(private val app: Application) : AndroidViewModel(app) {
                     val f = falas.getJSONObject(i)
                     when (f.optString("quem")) {
                         "voce" -> acrescentar(Mensagem(Quem.VOCE, f.optString("texto")))
-                        "jarvis" -> acrescentar(Mensagem(Quem.JARVIS, f.optString("texto")))
+                        "jarvis" -> if (!f.optString("acao").startsWith("whatsapp:"))
+                            acrescentar(Mensagem(Quem.JARVIS, f.optString("texto")))
                         else -> acrescentar(Mensagem(Quem.PAINEL, f.optString("texto"),
                             f.optString("titulo")))
                     }
@@ -238,8 +308,12 @@ class JarvisModelo(private val app: Application) : AndroidViewModel(app) {
                 acrescentar(Mensagem(Quem.VOCE, ev.optString("texto"), anexos = nomesEnviados))
                 nomesEnviados = emptyList()
             }
-            "jarvis_disse" -> acrescentar(Mensagem(Quem.JARVIS, ev.optString("texto"),
-                perguntando = ev.optBoolean("perguntando")))
+            "jarvis_disse" -> {
+                // Aviso de WhatsApp é só no PC (decisão do Léo): aqui nem aparece.
+                if (ev.optString("acao").startsWith("whatsapp:")) return
+                acrescentar(Mensagem(Quem.JARVIS, ev.optString("texto"),
+                    perguntando = ev.optBoolean("perguntando")))
+            }
             "mostrar" -> acrescentar(Mensagem(Quem.PAINEL, ev.optString("texto"),
                 ev.optString("titulo")))
             "atividade" -> {
@@ -281,9 +355,5 @@ class JarvisModelo(private val app: Application) : AndroidViewModel(app) {
         mensagens.add(m)
     }
 
-    override fun onCleared() {
-        conexao?.fechar()
-        voz.fechar()
-        gravador.parar()
-    }
+
 }
