@@ -501,6 +501,28 @@ def rodar_celular(tmp: Path) -> None:
         agente.pedir = original_pedir
         ciclo.dormir("fim do E15")  # o E12 confere o acordar de novo
 
+        print("-- E16. aviso de WhatsApp com a conversa no celular: sai no PC, não lá --")
+        from jarvis.agente.avisos import Aviso
+
+        class AvisosFalsos:
+            def __init__(self):
+                self.dados = Aviso(falar=["A Mãe mandou: compra pão."], mostrar=[], ouvir=False,
+                                   contexto="")
+
+            def checar(self):
+                d, self.dados = self.dados, None
+                return d
+
+        g.limpar()
+        antes = len(falas_no_pc)
+        ciclo.avisos = AvisosFalsos()
+        ciclo._corpo = 7  # a conversa estava no celular
+        ciclo.anunciar_whatsapp()
+        checa("o aviso toca no PC e nenhum evento de voz vai para o celular",
+              len(falas_no_pc) == antes + 1 and "voz" not in g.tipos(), (falas_no_pc[antes:], g.tipos()))
+        checa("e a conversa continua sendo do celular", ciclo._corpo == 7)
+        ciclo.avisos = None
+
         print("-- E12. depois, falar no PC devolve a voz para a caixa de som --")
         g.limpar()
         ciclo.atender_pedido(Pedido("falar", "e agora?", cliente=1, voz=False))

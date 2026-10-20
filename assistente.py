@@ -719,18 +719,25 @@ class Ciclo:
                                 perguntando=False)
         if not aviso.falar:
             return
-        self._contexto = aviso.contexto
-        dormia = self.estado is Estado.DORMINDO
-        if dormia and aviso.ouvir:
-            self._acordar_por_texto()
-        for fala in aviso.falar:
-            self.registrador.registrar_estado("whatsapp_recebida", fala=fala, ouvir=aviso.ouvir)
-            self._falar(fala, acao="whatsapp:recebida")
-        if aviso.ouvir:
-            self._renovar("janela aberta")
-        elif dormia:
-            # Som tocando: avisou e volta a dormir, sem ouvir o vídeo.
-            self._mudar_estado("dormindo")
+        # O aviso é SEMPRE na caixa de som do PC, nunca no celular (decisão do
+        # Léo: "imagina no meio da aula"; lá o próprio WhatsApp já notifica).
+        # A conversa pelo celular continua depois, no celular.
+        corpo, self._corpo = self._corpo, None
+        try:
+            self._contexto = aviso.contexto
+            dormia = self.estado is Estado.DORMINDO
+            if dormia and aviso.ouvir:
+                self._acordar_por_texto()
+            for fala in aviso.falar:
+                self.registrador.registrar_estado("whatsapp_recebida", fala=fala, ouvir=aviso.ouvir)
+                self._falar(fala, acao="whatsapp:recebida")
+            if aviso.ouvir:
+                self._renovar("janela aberta")
+            elif dormia:
+                # Som tocando: avisou e volta a dormir, sem ouvir o vídeo.
+                self._mudar_estado("dormindo")
+        finally:
+            self._corpo = corpo
 
     # -- texto digitado (Etapa 6) ------------------------------------------
 
