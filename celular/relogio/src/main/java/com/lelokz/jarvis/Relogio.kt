@@ -45,13 +45,17 @@ class Relogio(private val app: Application) {
     private var saida: DataOutputStream? = null
     private var abrindo = false
     private var visivel = false
-    // A conversa que começou no relógio: depois da voz, abre a janela de 7 s.
+    // A conversa que começou no relógio: depois da voz, abre a janela de 4 s.
     private var conversando = false
     private var ouvirQuandoLigar = false
+    // Disse "dorme aí": deixa ele falar o "Tá bom." e fecha o app.
+    private var indoDormir = false
+    /** A tela se fecha (volta para o mostrador). */
+    var aoDormir: (() -> Unit)? = null
 
     companion object {
         const val DESISTE_MS = 6000L   // abriu e não falou nada
-        const val JANELA_MS = 7000L    // depois da resposta
+        const val JANELA_MS = 4000L    // depois da resposta (7 s era demais, o Léo)
         const val FECHA_MS = 30000L    // tela fora e nada acontecendo: solta o celular
     }
 
@@ -169,6 +173,10 @@ class Relogio(private val app: Application) {
         ouvindo.value = true
         Thread({
             val wav = escuta.ouvir(desisteMs)
+            val diag = JSONObject().put("diag", JSONObject()
+                .put("motivo", "escuta").put("fim", escuta.motivo).put("ms", escuta.duracaoMs)
+                .put("janela", desisteMs == JANELA_MS))
+            mandar(Tubo.TEXTO, diag.toString().toByteArray())
             principal.post {
                 ouvindo.value = false
                 nivel.floatValue = 0f
@@ -205,8 +213,19 @@ class Relogio(private val app: Application) {
     private fun mudouTocando(t: Boolean) {
         tocando.value = t
         if (t) esperando.value = false
+        if (!t && indoDormir) { dormirAgora(); return }
         // Terminou de falar: uns segundos ouvindo sem apertar nada.
         if (!t && conversando && !ouvindo.value) escutar(JANELA_MS)
+    }
+
+    private val dormirAgora = Runnable { dormirAgora() }
+
+    private fun dormirAgora() {
+        principal.removeCallbacks(dormirAgora)
+        if (!indoDormir) return
+        indoDormir = false
+        esperando.value = false
+        aoDormir?.invoke()
     }
 
     private fun vibrar() {
@@ -226,6 +245,14 @@ class Relogio(private val app: Application) {
             "estado" -> estado.value = ev.optString("estado")
             "voce_disse" -> {
                 voceDisse.value = ev.optString("texto")
+                if (eComandoDeDormir(voceDisse.value)) {
+                    // O PC dorme sozinho (assistente.py); aqui é parar de ouvir
+                    // e fechar depois do "Tá bom.". Sem voz em 4 s, fecha igual.
+                    conversando = false
+                    indoDormir = true
+                    if (ouvindo.value) escuta.cancelar()
+                    principal.postDelayed(dormirAgora, 4000)
+                }
                 resposta.value = ""
                 atividade.value = ""
             }
@@ -249,4 +276,26 @@ class Relogio(private val app: Application) {
             "erro" -> { resposta.value = ev.optString("motivo"); esperando.value = false }
         }
     }
+}
+
+/**
+ * "Dorme aí" e companhia: a MESMA lista do PC (`COMANDOS_DE_DORMIR`, no
+ * assistente.py), contra a fala inteira, sem acento, pontuação e artigo.
+ * "Dorme." casa; "o arquivo dorme na pasta" não.
+ */
+private val COMANDOS_DE_DORMIR = setOf(
+    "dorme", "dorme ai", "dorme jarvis", "jarvis dorme", "vai dormir",
+    "pode dormir", "pode ir dormir", "vai dormir jarvis", "pode dormir jarvis",
+    "dormir", "descansa", "vai descansar", "pode descansar",
+    "tchau", "tchau jarvis", "valeu pode dormir", "obrigado pode dormir",
+    "volta dormir", "volta pra dormir", "volta para dormir",
+)
+private val SUPERFLUAS = setOf("o", "a", "os", "as", "um", "uma", "de", "do", "da", "no", "na")
+
+fun eComandoDeDormir(texto: String): Boolean {
+    val semAcento = java.text.Normalizer.normalize(texto.lowercase(), java.text.Normalizer.Form.NFD)
+        .replace(Regex("\\p{Mn}+"), "")
+    val limpo = semAcento.replace(Regex("[^\\w\\s]"), " ").trim().split(Regex("\\s+"))
+    val palavras = limpo.filter { it.isNotEmpty() && it !in SUPERFLUAS }
+    return palavras.joinToString(" ") in COMANDOS_DE_DORMIR
 }

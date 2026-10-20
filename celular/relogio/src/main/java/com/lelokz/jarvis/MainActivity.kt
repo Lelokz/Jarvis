@@ -60,6 +60,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        relogio.aoDormir = { finish() } // "dorme aí": volta para o mostrador
         setContent { Tela(relogio, ::falar, ::telaAcesa) }
         if (savedInstanceState == null) falar()
     }
@@ -72,6 +73,11 @@ class MainActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         relogio.aparecer()
+    }
+
+    override fun onDestroy() {
+        relogio.aoDormir = null
+        super.onDestroy()
     }
 
     override fun onStop() {

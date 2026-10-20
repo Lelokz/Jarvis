@@ -411,6 +411,35 @@ segurar o nome "Jarvis" no topo esquece o link.
   `https://jarvis.<tailnet>.ts.net/jarvis.apk` (a porta remota serve o último
   APK compilado; o APK não leva segredo nenhum).
 
+### O relógio: Galaxy Watch 7 (20/10/2026)
+
+`celular/relogio/`: o app do relógio (Wear OS; o Watch 7 do Léo roda em
+**32 bits**, Android 16). Mesmo `applicationId` e mesma chave do app do
+celular: é o que deixa os dois conversarem.
+
+- **O caminho:** relógio → canal do Wear OS (Bluetooth) → app do celular
+  (`PonteRelogio.kt`, v0.6) → porta remota, numa conexão própria com
+  `"quem": "relogio"`. O relógio não tem Tailscale; pelo celular funciona onde
+  o celular tiver internet. O celular segura a ponte com um serviço em
+  primeiro plano ("Jarvis no relógio"); o Android deixou ligar com o app
+  fechado (conferido no log: "celular acordado: true").
+- **Usar:** o botão de cima duas vezes (Configurações → Recursos avançados →
+  Personalizar teclas → Pressionar duas vezes → Jarvis). Abre ouvindo, a
+  resposta sai na tela e em voz no relógio, e mais 4 s ouvindo. Tocar no
+  átomo: termina a frase / cala ele. "Dorme aí" (a lista do PC) fecha o app.
+- **Fim da frase pelo volume** (12 dB acima do ruído, 0,7 s de silêncio), não
+  pelo Silero: o onnxruntime dá SIGBUS em 32 bits. Cada escuta manda ao
+  `logs/porta-remota.log` quanto durou e por que parou (`diag relogio`).
+- **Instalar** (relógio no Wi-Fi de casa, tela acesa em "Depuração sem fio";
+  o PC já está pareado):
+  ```
+  ADB=/mnt/cab1286d-6765-4c73-9c77-8d3119b4b644/Arquivo/Android-Ferramentas/sdk/platform-tools/adb
+  $ADB mdns services        # mostra o IP:porta do relógio
+  $ADB connect IP:PORTA
+  $ADB install -r celular/relogio/build/outputs/apk/debug/relogio-debug.apk
+  ```
+  O relógio desliga o Wi-Fi com a tela apagada: aí some da rede.
+
 ### A janela do PC no estilo do celular (20/10/2026)
 
 O Léo achou o app mais bonito: a conversa em cima, o **átomo embaixo,
@@ -568,7 +597,8 @@ Sem ordem rígida: faz, o Léo testa o que é de voz, segue.
    entra pelo Gmail (cuidado com o que sai em voz alta, tem gente na casa).
 4. **Jarvis no celular** (§4, "O celular"): etapas 1 e 2 feitas (porta
    remota, Tailscale, app com átomo, anexos e mudo) e etapa 3 feita e
-   testada (v0.5, "hey Jarvis" no celular). Próxima: o Galaxy Watch 7. **No celular o
+   testada (v0.5, "hey Jarvis" no celular). Etapa 4, o Galaxy Watch 7: v0.1
+   funcionando (§4, "O relógio"); falta afinar a escuta com o uso. **No celular o
    Jarvis NÃO avisa mensagem de WhatsApp** (decisão do Léo: "imagina no meio
    da aula"; o celular já tem a notificação do próprio WhatsApp). Esse aviso
    é só no PC. Também na fila: a resposta no celular demora 3–4 s, no PC

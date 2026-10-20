@@ -22,10 +22,15 @@ class Escuta(private val aoNivel: (Float) -> Unit) {
     /** Já ouviu fala nesta escuta? (a voz dele chegando cancela só se não.) */
     @Volatile var falou = false
         private set
+    /** Por que a última escuta parou e quanto durou (vai para o log do PC). */
+    var motivo = ""
+        private set
+    var duracaoMs = 0L
+        private set
 
     companion object {
-        const val SILENCIO_FIM_MS = 800L
-        const val MAXIMO_MS = 15000L
+        const val SILENCIO_FIM_MS = 700L
+        const val MAXIMO_MS = 12000L
     }
 
     /** O toque no átomo: para agora e entrega o que ouviu. */
@@ -40,7 +45,7 @@ class Escuta(private val aoNivel: (Float) -> Unit) {
      */
     @SuppressLint("MissingPermission") // a tela pede antes
     fun ouvir(desisteMs: Long): ByteArray? {
-        encerrar = false; cancelar = false; falou = false
+        encerrar = false; cancelar = false; falou = false; motivo = "cancelada"
         var ruido = Double.NaN // o barulho do ambiente, em dB: começa no 1º bloco e vai se ajustando
         val taxa = 16000
         val minimo = AudioRecord.getMinBufferSize(taxa, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
@@ -61,20 +66,25 @@ class Escuta(private val aoNivel: (Float) -> Unit) {
                     if (n <= 0) break
                     lidos += n
                 }
-                if (lidos < 1280) return null
+                if (lidos < 1280) { motivo = "microfone falhou"; return null }
                 val agora = System.currentTimeMillis()
                 guardar(gravado, bloco)
                 aoNivel(nivel(bloco))
                 val db = decibeis(bloco)
                 if (ruido.isNaN()) ruido = db
                 val temFala = db > ruido + 12.0 && db > -50.0
-                // O ruído desce rápido (silêncio) e sobe devagar (não aprende a fala).
-                ruido = if (db < ruido) ruido * 0.7 + db * 0.3 else ruido * 0.98 + db * 0.02
+                // O ruído desce rápido (silêncio) e sobe em ~1,5 s: acompanha a rua
+                // ficando mais barulhenta, e não aprende a fala (as pausas entre
+                // as sílabas puxam ele para baixo).
+                ruido = if (db < ruido) ruido * 0.7 + db * 0.3 else ruido * 0.95 + db * 0.05
                 // Dois blocos seguidos (160 ms) para valer: um estalo não é fala.
                 if (temFala) seguidos++ else seguidos = 0
                 if (seguidos >= 2) { falou = true; ultimaFala = agora }
                 if (!falou) {
-                    if (encerrar || agora - inicio >= desisteMs) return null
+                    if (encerrar || agora - inicio >= desisteMs) {
+                        motivo = if (encerrar) "toque sem fala" else "ninguém falou"
+                        return null
+                    }
                     // Antes da fala, guarda só o último segundo (o começo da frase).
                     if (gravado.size() > taxa * 2 * 2) {
                         val b = gravado.toByteArray()
@@ -83,11 +93,17 @@ class Escuta(private val aoNivel: (Float) -> Unit) {
                     continue
                 }
                 if (encerrar || agora - ultimaFala >= SILENCIO_FIM_MS || agora - inicio >= MAXIMO_MS) {
+                    motivo = when {
+                        encerrar -> "toque"
+                        agora - ultimaFala >= SILENCIO_FIM_MS -> "silêncio"
+                        else -> "tempo máximo"
+                    }
                     return wav(gravado.toByteArray())
                 }
             }
             return null
         } finally {
+            duracaoMs = System.currentTimeMillis() - inicio
             rec.stop(); rec.release()
             aoNivel(0f)
         }
