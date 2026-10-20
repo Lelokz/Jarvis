@@ -405,6 +405,8 @@ segurar o nome "Jarvis" no topo esquece o link.
   ficam fora do git (o `compilar.sh` copia de `modelos-wakeword/`).
   **No celular não tem aviso de WhatsApp**: o aviso sai sempre na caixa de
   som do PC, mesmo com a conversa no celular, e o app esconde essas linhas.
+  **Testado pelo Léo no S21 FE (20/10/2026): o "hey Jarvis" no celular
+  funcionou.**
 - **Instalar:** o Chrome do celular baixa de
   `https://jarvis.<tailnet>.ts.net/jarvis.apk` (a porta remota serve o último
   APK compilado; o APK não leva segredo nenhum).
@@ -565,8 +567,8 @@ Sem ordem rígida: faz, o Léo testa o que é de voz, segue.
 3. **Briefing da manhã:** agora é instrução no `CLAUDE.md` da casa; o e-mail
    entra pelo Gmail (cuidado com o que sai em voz alta, tem gente na casa).
 4. **Jarvis no celular** (§4, "O celular"): etapas 1 e 2 feitas (porta
-   remota, Tailscale, app v0.3 com átomo, anexos e mudo). Próximas: sempre
-   ouvindo ("hey Jarvis" no celular) e o Galaxy Watch 7. **No celular o
+   remota, Tailscale, app com átomo, anexos e mudo) e etapa 3 feita e
+   testada (v0.5, "hey Jarvis" no celular). Próxima: o Galaxy Watch 7. **No celular o
    Jarvis NÃO avisa mensagem de WhatsApp** (decisão do Léo: "imagina no meio
    da aula"; o celular já tem a notificação do próprio WhatsApp). Esse aviso
    é só no PC. Também na fila: a resposta no celular demora 3–4 s, no PC
