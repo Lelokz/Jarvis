@@ -1,7 +1,6 @@
 package com.lelokz.jarvis
 
 import android.annotation.SuppressLint
-import android.content.Context
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
@@ -12,11 +11,12 @@ import java.nio.ByteOrder
 /**
  * O ouvido do relógio: sem "hey Jarvis" (ficar ouvindo o dia todo acaba com a
  * bateria). Liga quando o app abre (o botão) ou depois que ele responde, grava
- * até a fala acabar e entrega o WAV. Quem decide o que é fala é o Silero, o
- * mesmo do PC e do celular.
+ * até a fala acabar e entrega o WAV.
+ *
+ * Fala é o volume subir 12 dB acima do barulho do ambiente. NÃO é o Silero do
+ * celular: o onnxruntime quebra (SIGBUS) no relógio, que roda em 32 bits.
  */
-class Escuta(ctx: Context, private val aoNivel: (Float) -> Unit) {
-    private val fala = DetectorDeFala(ctx)
+class Escuta(private val aoNivel: (Float) -> Unit) {
     @Volatile private var encerrar = false
     @Volatile private var cancelar = false
     /** Já ouviu fala nesta escuta? (a voz dele chegando cancela só se não.) */
@@ -41,7 +41,7 @@ class Escuta(ctx: Context, private val aoNivel: (Float) -> Unit) {
     @SuppressLint("MissingPermission") // a tela pede antes
     fun ouvir(desisteMs: Long): ByteArray? {
         encerrar = false; cancelar = false; falou = false
-        fala.zerar()
+        var ruido = Double.NaN // o barulho do ambiente, em dB: começa no 1º bloco e vai se ajustando
         val taxa = 16000
         val minimo = AudioRecord.getMinBufferSize(taxa, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
         val rec = AudioRecord(MediaRecorder.AudioSource.VOICE_RECOGNITION, taxa,
@@ -65,8 +65,11 @@ class Escuta(ctx: Context, private val aoNivel: (Float) -> Unit) {
                 val agora = System.currentTimeMillis()
                 guardar(gravado, bloco)
                 aoNivel(nivel(bloco))
-                val x = FloatArray(1280) { bloco[it].toFloat() }
-                val temFala = maxOf(fala.chance(x.copyOfRange(0, 512)), fala.chance(x.copyOfRange(512, 1024))) >= 0.5f
+                val db = decibeis(bloco)
+                if (ruido.isNaN()) ruido = db
+                val temFala = db > ruido + 12.0 && db > -50.0
+                // O ruído desce rápido (silêncio) e sobe devagar (não aprende a fala).
+                ruido = if (db < ruido) ruido * 0.7 + db * 0.3 else ruido * 0.98 + db * 0.02
                 // Dois blocos seguidos (160 ms) para valer: um estalo não é fala.
                 if (temFala) seguidos++ else seguidos = 0
                 if (seguidos >= 2) { falou = true; ultimaFala = agora }
@@ -96,12 +99,15 @@ class Escuta(ctx: Context, private val aoNivel: (Float) -> Unit) {
         saida.write(bb.array())
     }
 
-    private fun nivel(bloco: ShortArray): Float {
+    private fun decibeis(bloco: ShortArray): Double {
         var soma = 0.0
         for (v in bloco) soma += v.toDouble() * v
         val rms = Math.sqrt(soma / bloco.size) / 32768.0
-        return ((20 * Math.log10(maxOf(rms, 1e-5)) + 50) / 40).toFloat().coerceIn(0f, 1f)
+        return 20 * Math.log10(maxOf(rms, 1e-5))
     }
+
+    private fun nivel(bloco: ShortArray): Float =
+        ((decibeis(bloco) + 50) / 40).toFloat().coerceIn(0f, 1f)
 
     private fun wav(pcm: ByteArray): ByteArray {
         val cab = ByteBuffer.allocate(44).order(ByteOrder.LITTLE_ENDIAN)

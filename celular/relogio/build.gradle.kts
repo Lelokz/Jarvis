@@ -51,6 +51,7 @@ dependencies {
     implementation("androidx.activity:activity-compose:1.9.3")
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("com.google.android.gms:play-services-wearable:18.2.0")
-    // O Silero VAD (fim da frase), o mesmo do PC e do celular.
+    // Só para compilar o comum/Ouvido.kt: no relógio o onnxruntime quebra
+    // (32 bits), e o fim da frase é pelo volume (Escuta.kt).
     implementation("com.microsoft.onnxruntime:onnxruntime-android:1.20.0")
 }

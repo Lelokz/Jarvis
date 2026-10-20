@@ -40,7 +40,7 @@ class Relogio(private val app: Application) {
     private val canais = Wearable.getChannelClient(app)
     private val escrita = Executors.newSingleThreadExecutor()
     private val voz = Voz { t -> principal.post { mudouTocando(t) } }
-    private val escuta by lazy { Escuta(app) { n -> principal.post { nivel.floatValue = n } } }
+    private val escuta by lazy { Escuta { n -> principal.post { nivel.floatValue = n } } }
     private var canal: ChannelClient.Channel? = null
     private var saida: DataOutputStream? = null
     private var abrindo = false
