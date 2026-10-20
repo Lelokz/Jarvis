@@ -236,8 +236,9 @@ intervalo_s = 3
 # Playwright, Gmail, Agenda, Drive...), sem roteador nem lista de funções.
 binario = "~/.local/bin/claude"
 modelo = "claude-opus-5-5"
-# "high" por pedido do Léo; medir a latência e, se ficar lento, testar "medium".
-effort = "high"
+# "medium" (20/10/2026, pedido do Léo: "ele não precisa de tudo isso"); antes
+# era "high".
+effort = "medium"
 # "auto": o próprio Claude julga o que roda direto (como no VS Code do Léo).
 # O que ele achar sério vira pergunta FALADA, nunca pop-up.
 modo_permissao = "auto"

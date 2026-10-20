@@ -40,8 +40,9 @@ def criar_servidor(mostrar: Callable[[str, str], None], whatsapp,
     """`falas_do_pedido()` devolve o que o Léo falou desde que a tarefa começou."""
 
     @tool("mostrar",
-          "Mostra texto na janela do Jarvis, sem falar. Use para tudo que é longo ou "
-          "visual: código, lista, tabela, passos, links, explicação. Aceita markdown.",
+          "Mostra texto na janela do Jarvis, sem falar. Só para o que NÃO dá para "
+          "falar: código, comando, tabela, link, endereço. Descrição, explicação e "
+          "lista vão na resposta, que é falada inteira. Aceita markdown.",
           {"titulo": str, "conteudo": str})
     async def _mostrar(args):
         mostrar(str(args.get("titulo") or ""), str(args.get("conteudo") or ""))

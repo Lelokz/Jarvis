@@ -108,31 +108,49 @@ def _limpar(texto: str) -> str:
     return " ".join(_MARKDOWN.sub("", texto).split())
 
 
-def _parece_longo(texto: str) -> bool:
-    # Medido no 1º teste por voz: uma resposta de ~380 caracteres virou 26 s
-    # de fala seguidos. Mais de 2 frases ou ~240 caracteres já é janela.
-    if "```" in texto or len(texto) > 240 or len(re.findall(r"[.!?…](\s|$)", texto)) > 2:
-        return True
-    return any(l.lstrip().startswith(("- ", "* ", "|", "#", "1.", "2."))
-               for l in texto.splitlines())
+def _tem_codigo(texto: str) -> bool:
+    """Código e tabela não se falam: vão para a janela."""
+    return "```" in texto or any(l.lstrip().startswith("|") for l in texto.splitlines())
+
+
+def _formatado(texto: str) -> bool:
+    return _tem_codigo(texto) or any(
+        re.match(r"\s*([-*•]|#+|\d+[.)])\s", l) for l in texto.splitlines())
+
+
+def _falavel(texto: str) -> str:
+    """O texto como se fala: sem código nem tabela, e cada item de lista ou
+    título vira uma frase."""
+    sem_codigo = re.sub(r"```.*?```", "", texto, flags=re.S)
+    frases = []
+    for linha in sem_codigo.splitlines():
+        s = linha.strip()
+        if not s or s.startswith("|"):
+            continue
+        s = re.sub(r"^([-*•]|#+|\d+[.)])\s+", "", s)
+        s = s[:1].upper() + s[1:]
+        if s and not re.search(r"[.!?…:;]$", s):
+            s += "."
+        frases.append(s)
+    return _limpar(" ".join(frases))
 
 
 def dividir(texto: str, deixei: str = "Deixei na janela.") -> tuple[str, str | None]:
-    """(fala, janela). O curto só fala; o longo vai para a janela e a fala é a
-    primeira frase, quando ela se sustenta sozinha."""
+    """(fala, janela). Fala TUDO o que o Claude escreveu (pedido do Léo,
+    20/10/2026: "se ele pode escrever tanto, por que não pode falar tanto?";
+    o curto é o estilo dele, não um corte). A janela fica com o que não se
+    fala (código, tabela) e com o texto formatado, quando há lista.
+
+    A 1ª versão cortava a fala em duas frases e dizia "o resto tá na janela"."""
     t = texto.strip()
     if not t or t.endswith(CALADO):
         return "", None
-    if not _parece_longo(t):
+    if not _formatado(t):
         return _limpar(t), None
-    # Fala as primeiras frases que couberem (até ~200 caracteres) e manda o
-    # texto inteiro para a janela.
-    fala = ""
-    for frase in re.split(r"(?<=[.!?…])\s+", _limpar(t.split("\n\n")[0])):
-        if len(fala) + len(frase) > 200 or fala.count(".") + fala.count("?") >= 2:
-            break
-        fala = f"{fala} {frase}".strip()
-    return (f"{fala} O resto tá na janela." if fala else deixei), t
+    fala = _falavel(t)
+    if _tem_codigo(t):
+        fala = f"{fala} O código tá na janela." if fala else deixei
+    return fala, t
 
 
 def _resumo_de_ferramenta(b: ToolUseBlock) -> str:
@@ -347,10 +365,11 @@ class Agente:
             t = texto.strip()
             if not t or t.endswith(CALADO):
                 return
-            if _parece_longo(t) or len(t) > 220:
-                self.saidas.put(Saida("mostrar", t))
-            else:
-                self.saidas.put(Saida("falar", _limpar(t)))
+            fala, janela = dividir(t)
+            if janela:
+                self.saidas.put(Saida("mostrar", janela))
+            if fala:
+                self.saidas.put(Saida("falar", fala))
 
         try:
             async for m in cliente.receive_messages():
