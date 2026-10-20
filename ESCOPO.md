@@ -397,6 +397,16 @@ segurar o nome "Jarvis" no topo esquece o link.
   `https://jarvis.<tailnet>.ts.net/jarvis.apk` (a porta remota serve o último
   APK compilado; o APK não leva segredo nenhum).
 
+### A janela do PC no estilo do celular (20/10/2026)
+
+O Léo achou o app mais bonito: a conversa em cima, o **átomo embaixo,
+centralizado**, e a barra de escrita com o enviar dentro e **um clipe só**
+à direita (os três ícones de antes, clipe, imagem e vídeo, eram enfeite).
+Os anexos (clipe ou **arrastados para a janela**) esperam a mensagem com
+miniatura e ✕; ao enviar, a janela copia os arquivos para a pasta de
+recebidos (`jarvis/ponte/recebidos.py`, o mesmo do celular) e manda
+`"anexos"` no "falar".
+
 ### Dependências de sistema (não vêm com o pip)
 
 | peça | precisa de | sem ela |
@@ -542,9 +552,13 @@ Sem ordem rígida: faz, o Léo testa o que é de voz, segue.
    treinar o RVC de novo.
 3. **Briefing da manhã:** agora é instrução no `CLAUDE.md` da casa; o e-mail
    entra pelo Gmail (cuidado com o que sai em voz alta, tem gente na casa).
-4. **Jarvis no celular** (§4, "O celular"): etapa 1 feita (porta remota,
-   Tailscale, página de teste). Próximas: app Kotlin (chat e segurar para
-   falar), sempre ouvindo, e o Galaxy Watch 7.
+4. **Jarvis no celular** (§4, "O celular"): etapas 1 e 2 feitas (porta
+   remota, Tailscale, app v0.3 com átomo, anexos e mudo). Próximas: sempre
+   ouvindo ("hey Jarvis" no celular) e o Galaxy Watch 7. **No celular o
+   Jarvis NÃO avisa mensagem de WhatsApp** (decisão do Léo: "imagina no meio
+   da aula"; o celular já tem a notificação do próprio WhatsApp). Esse aviso
+   é só no PC. Também na fila: a resposta no celular demora 3–4 s, no PC
+   1–3 s.
 5. **Proatividade** com gatilho concreto (lembrete venceu, GPU quente, disco
    cheio).
 6. Depois: ver a tela (o Claude já lê imagem: print + "o que é isso?"),
