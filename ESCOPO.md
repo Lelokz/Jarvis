@@ -365,6 +365,24 @@ sempre ouvindo ("hey Jarvis" no celular) → 4. o relógio.
   - O botão 🔊 (bipe) e a linha de diagnóstico mandam o que chegou e o que
     tocou para `logs/porta-remota.log`.
 
+### O celular, etapa 2: o app (20/10/2026)
+
+`celular/`: Kotlin + Jetpack Compose, um APK só (AGP 8.7.3, Kotlin 2.0.21,
+compileSdk 35, minSdk 29). Fala o mesmo protocolo da página, pela porta
+remota: chat, cartões, a linha de atividade, **segurar para falar** (grava
+PCM 16 kHz e manda WAV) e a voz tocada direto no `AudioTrack` (sem as
+manias do Chrome). Na primeira abertura cola-se o link com a chave;
+segurar o nome "Jarvis" no topo esquece o link.
+
+- **Compilar:** `celular/compilar.sh` (dentro do `contido.sh`: ~2 min na
+  primeira vez, pico de 2,9 GB). JDK (Temurin 21), SDK do Android, Gradle e
+  o cache dele moram no HD, em `Arquivo/Android-Ferramentas/` (~3 GB), sem
+  sudo. A chave de assinatura é a de debug, em `~/.android/debug.keystore`:
+  **perder ela = desinstalar o app para instalar a versão nova.**
+- **Instalar:** o Chrome do celular baixa de
+  `https://jarvis.<tailnet>.ts.net/jarvis.apk` (a porta remota serve o último
+  APK compilado; o APK não leva segredo nenhum).
+
 ### Dependências de sistema (não vêm com o pip)
 
 | peça | precisa de | sem ela |

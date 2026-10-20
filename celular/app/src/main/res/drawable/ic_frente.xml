@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- O anel azul do HUD: um círculo vazado com um ponto no meio. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <path android:strokeColor="#4FB3FF" android:strokeWidth="5" android:fillColor="#00000000"
+        android:pathData="M54,30 A24,24 0 1,1 53.99,30 Z" />
+    <path android:strokeColor="#2A6E9E" android:strokeWidth="2" android:fillColor="#00000000"
+        android:pathData="M54,38 A16,16 0 1,1 53.99,38 Z" />
+    <path android:fillColor="#4FB3FF" android:pathData="M54,48 A6,6 0 1,1 53.99,48 Z" />
+</vector>

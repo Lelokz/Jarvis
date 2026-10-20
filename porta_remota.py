@@ -51,6 +51,9 @@ from jarvis import config  # noqa: E402
 from jarvis.ponte import protocolo  # noqa: E402
 
 PAGINA = RAIZ / "jarvis" / "remoto" / "pagina.html"
+# O app do celular (celular/compilar.sh): baixado pelo Chrome do celular em
+# /jarvis.apk. Sem chave: o APK não leva segredo nenhum (a chave se cola nele).
+APK = RAIZ / "celular" / "app" / "build" / "outputs" / "apk" / "debug" / "app-debug.apk"
 # Fala gravada maior que isto não é uma frase: 8 MB de webm são vários minutos.
 MAX_AUDIO_BYTES = 8 * 1024 * 1024
 # Um minuto de PCM 16 kHz: o resto é cortado antes de ir para o Whisper.
@@ -105,7 +108,7 @@ def guardar_audio(pcm: bytes) -> Path:
 
 def criar_app(cfg: config.Config):
     from starlette.applications import Starlette
-    from starlette.responses import HTMLResponse, PlainTextResponse
+    from starlette.responses import FileResponse, HTMLResponse, PlainTextResponse
     from starlette.routing import Route, WebSocketRoute
     from starlette.websockets import WebSocket, WebSocketDisconnect
 
@@ -120,6 +123,12 @@ def criar_app(cfg: config.Config):
 
     async def saude(_):
         return PlainTextResponse("ok")
+
+    async def apk(_):
+        if not APK.is_file():
+            return PlainTextResponse("o app ainda não foi compilado (celular/compilar.sh)", status_code=404)
+        return FileResponse(APK, media_type="application/vnd.android.package-archive",
+                            filename="jarvis.apk", headers={"Cache-Control": "no-store"})
 
     async def conexao(ws: WebSocket) -> None:
         await ws.accept()
@@ -210,7 +219,7 @@ def criar_app(cfg: config.Config):
             except (RuntimeError, WebSocketDisconnect):
                 pass  # já fechado pelo celular
 
-    return Starlette(routes=[Route("/", pagina), Route("/saude", saude),
+    return Starlette(routes=[Route("/", pagina), Route("/saude", saude), Route("/jarvis.apk", apk),
                              WebSocketRoute("/ws", conexao)])
 
 
