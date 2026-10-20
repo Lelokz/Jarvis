@@ -355,8 +355,15 @@ sempre ouvindo ("hey Jarvis" no celular) → 4. o relógio.
   placa de rede: o PC não alcança os outros aparelhos pela rede do sistema,
   e não precisa (só recebe).
 - **Página de teste** (`jarvis/remoto/pagina.html`): chat, segurar para
-  falar e a voz tocando em fila (WebAudio). O microfone do navegador só
-  funciona em HTTPS, por isso o link do Tailscale.
+  falar e a voz tocando em fila, cada pedaço um WAV num `<audio>`. O
+  microfone do navegador só funciona em HTTPS, por isso o link do
+  Tailscale. **Testada no S21 FE do Léo (20/10/2026): texto e voz ok.**
+  - No S21 FE o **Web Audio dizia "tocando" e não saía som** (nem um bipe
+    gerado no próprio celular); o `<audio>` funciona.
+  - No Chrome do Android, **encostar o dedo (pointerdown) não libera som**
+    (NotAllowedError); soltar (touchend, click) libera.
+  - O botão 🔊 (bipe) e a linha de diagnóstico mandam o que chegou e o que
+    tocou para `logs/porta-remota.log`.
 
 ### Dependências de sistema (não vêm com o pip)
 
