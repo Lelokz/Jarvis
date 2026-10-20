@@ -12,7 +12,8 @@ Protocolo (socket unix, uma conexão por fala):
 
 A voz e o modelo são PESSOAIS (ESCOPO §4, decisão do Léo): ficam fora do git.
 
-    servidor_voz.py --modelo M.safetensors --ref ref.wav --ref-texto "..." [--nfe 16]
+    servidor_voz.py --modelo M.safetensors --ref ref.wav --ref-texto "..." [--nfe 32]
+                    [--filtro "bass=g=4:f=150:w=0.8"]
 """
 from __future__ import annotations
 
@@ -20,7 +21,9 @@ import argparse
 import json
 import os
 import re
+import shutil
 import socket
+import subprocess
 import time
 from collections import OrderedDict
 
@@ -49,8 +52,11 @@ def main() -> int:
     p.add_argument("--ref-texto", required=True)
     p.add_argument("--socket", default=os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"),
                                                     "jarvis-voz.sock"))
-    # 16 passos: metade do tempo de 32, mesma nota de semelhança (medido).
-    p.add_argument("--nfe", type=int, default=16)
+    # 32 passos: com 16 sai em metade do tempo, mas a voz borbulha mais e
+    # fica fina (o Léo escolheu de ouvido a versão de 32, 19/10/2026).
+    p.add_argument("--nfe", type=int, default=32)
+    # Filtro do ffmpeg aplicado em cada frase (ex.: graves realçados). Vazio = nenhum.
+    p.add_argument("--filtro", default="")
     p.add_argument("--velocidade", type=float, default=1.0)
     a = p.parse_args()
 
@@ -59,6 +65,16 @@ def main() -> int:
     vocab = files("f5_tts").joinpath("infer/examples/vocab.txt")
     tts = F5TTS(model="F5TTS_Base", ckpt_file=a.modelo, vocab_file=str(vocab), device="cuda")
     ref_texto = normalizar(a.ref_texto)
+    ffmpeg = shutil.which("ffmpeg")
+
+    def filtrar(audio: np.ndarray, taxa: int) -> np.ndarray:
+        """O mesmo filtro do ffmpeg do teste aprovado. Sem ffmpeg, sai sem filtro."""
+        if not a.filtro or ffmpeg is None:
+            return audio
+        r = subprocess.run([ffmpeg, "-loglevel", "error", "-f", "f32le", "-ar", str(taxa), "-ac", "1",
+                            "-i", "-", "-af", a.filtro, "-f", "f32le", "-"],
+                           input=audio.astype(np.float32).tobytes(), capture_output=True)
+        return np.frombuffer(r.stdout, dtype=np.float32) if r.returncode == 0 and r.stdout else audio
 
     # O que se repete ("Pois não?", "Tá bom.", "Parei.") sai na hora da 2ª vez.
     guardadas: OrderedDict[str, bytes] = OrderedDict()
@@ -70,7 +86,8 @@ def main() -> int:
             return guardadas[chave], 24000
         wav, taxa, _ = tts.infer(ref_file=a.ref, ref_text=ref_texto, gen_text=chave,
                                  nfe_step=a.nfe, speed=a.velocidade, show_info=lambda *_: None)
-        pcm = (np.clip(np.asarray(wav, dtype=np.float32), -1, 1) * 32767).astype(np.int16).tobytes()
+        audio = filtrar(np.asarray(wav, dtype=np.float32), taxa)
+        pcm = (np.clip(audio, -1, 1) * 32767).astype(np.int16).tobytes()
         if len(chave) <= 40:
             guardadas[chave] = pcm
             if len(guardadas) > 200:

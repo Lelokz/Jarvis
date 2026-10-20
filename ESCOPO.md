@@ -164,10 +164,18 @@ do git (decisão do Léo; se o Jarvis um dia for para alguém, vai com a Kokoro)
 - **Como roda:** `servidor_voz.py` na venv da voz
   (`~/.local/share/jarvis/voz-jarvis`, com PyTorch), socket
   `$XDG_RUNTIME_DIR/jarvis-voz.sock`; sobe e desce no `jarvis.sh`. O
-  `VozF5` (`tts.py`) pede a fala e toca frase por frase. **16 passos de
-  difusão** (metade do tempo de 32, mesma nota): ~1 s até o primeiro som numa
-  frase nova; frase curta repetida ("Pois não?", "Parei.") sai na hora, da
-  memória do servidor. ~1,5 GB a mais de VRAM (4,1 GB no total).
+  `VozF5` (`tts.py`) pede a fala e toca frase por frase. Frase curta
+  repetida ("Pois não?", "Parei.") sai na hora, da memória do servidor.
+  ~1,5 GB a mais de VRAM (4,1 GB no total).
+- **A receita (19/10/2026, noite, escolhida de ouvido entre 8 versões):**
+  referência LIMPA (o "Bom dia..." com a voz separada da música), **32
+  passos** e **graves realçados** (`bass=g=4:f=150:w=0.8`, ffmpeg), sem
+  filtro de ruído. ~1,9 s até o primeiro som numa frase nova.
+  - 16 passos com a referência cortada da cena: rápido (~1 s), sem bolha,
+    mas "fina, não tão fiel".
+  - Corte de agudos (7,5 kHz) + filtro de ruído (`afftdn`): mais grossa e
+    fiel, mas "pra dentro" e "borbulhando" — o filtro de ruído cria o som de
+    bolha de sabão. Os graves sozinhos engrossam sem abafar.
 - **Sem o servidor, fala com a Kokoro** (testado): nunca fica mudo.
 - Arquivos do treino (cenas, dataset, checkpoints): HD,
   `Arquivo/Jarvis - Treino da voz dublada/`. Scripts em `rascunho/voz_jarvis/`.
