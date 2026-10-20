@@ -49,6 +49,7 @@ class Pedido:
     cliente: int = 0  # o id de quem pediu
     voz: bool = False  # a resposta sai NELE (o celular), não no PC
     anexos: tuple[str, ...] = ()  # fotos/vídeos/arquivos do celular, já no PC
+    mudo: bool = False  # o celular está no mudo: resposta só em texto
 
 
 @dataclass(eq=False)
@@ -367,10 +368,10 @@ class Servidor:
                 self._direto(cliente, {"ev": "historico", "falas": falas})
         elif tipo == "falar":
             self._pedidos.put(Pedido("falar", dados["texto"], cliente.id, cliente.quer_voz,
-                                     tuple(dados["anexos"])))
+                                     tuple(dados["anexos"]), dados["mudo"]))
         elif tipo == "ouvir":
             self._pedidos.put(Pedido("ouvir", dados["arquivo"], cliente.id, cliente.quer_voz,
-                                     tuple(dados["anexos"])))
+                                     tuple(dados["anexos"]), dados["mudo"]))
         elif tipo == "memoria":
             try:
                 conteudo = self.provedor_memoria() if self.provedor_memoria else {}

@@ -214,6 +214,16 @@ def main() -> int:
         checa("anexo cancelado: apagado e fora do pedido", p3 is not None and p3.anexos == () and not sobrou,
               (repr(p3), sobrou))
 
+        # 11b. Mudo: o botão do app vai junto de todo pedido até desligar.
+        celular.send(json.dumps({"pedir": "mudo", "mudo": True}))
+        celular.send(json.dumps({"pedir": "falar", "texto": "baixinho"}))
+        pm = esperar_pedido(srv)
+        celular.send(json.dumps({"pedir": "mudo", "mudo": False}))
+        celular.send(json.dumps({"pedir": "falar", "texto": "alto"}))
+        pa = esperar_pedido(srv)
+        checa("no mudo, o pedido vai com mudo=true; desligado, sem",
+              pm is not None and pm.mudo and pa is not None and not pa.mudo, (repr(pm), repr(pa)))
+
         # 11. A ponte recusa anexo de fora da pasta de recebidos.
         try:
             protocolo.ler_pedido(json.dumps({"pedir": "falar", "texto": "x",

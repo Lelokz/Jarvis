@@ -262,6 +262,8 @@ class Ciclo:
         # da ponte que é um "corpo" (o celular) e fez o último pedido. Volta
         # para o PC quando alguém fala com ele aqui (wake word, janela).
         self._corpo: int | None = None
+        # O corpo está no mudo (o botão do app): a resposta vai só em texto.
+        self._mudo = False
         self.vad = detector_vad
         self.ww = detector_ww
         self.transcritor = transcritor
@@ -386,7 +388,12 @@ class Ciclo:
         self, texto: str, *, acao: str | None, perguntando: bool
     ) -> tts.TemposDaFala:
         """A voz vai para o celular, pedaço por pedaço, pelos eventos "voz"
-        da ponte. Sem portão: o microfone do PC não ouve o celular."""
+        da ponte. Sem portão: o microfone do PC não ouve o celular. No mudo,
+        só o texto: a voz nem é gerada."""
+        if self._mudo:
+            self.emissor.emitir("jarvis_disse", texto=texto, acao=acao, perguntando=perguntando)
+            return tts.TemposDaFala(primeiro_audio_s=0.0, sintese_total_s=0.0,
+                                    reproducao_s=0.0, duracao_audio_s=0.0)
         inicio = time.monotonic()
         primeiro: float | None = None
         duracao = 0.0
@@ -753,6 +760,7 @@ class Ciclo:
                 self.atender_texto(pedido.valor)
             return
         self._corpo = pedido.cliente
+        self._mudo = pedido.mudo
         if pedido.anexos:
             # Vai junto do pedido para o Claude, como o contexto do WhatsApp.
             nota = ("[Anexos que o Léo mandou do celular, já no PC (imagem: abra com o "

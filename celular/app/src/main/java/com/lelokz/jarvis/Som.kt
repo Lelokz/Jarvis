@@ -22,16 +22,20 @@ class Voz(private val aoMudar: (tocando: Boolean) -> Unit = {}) {
     private var trilha: AudioTrack? = null
     private var taxaAtual = 0
     private val pendentes = java.util.concurrent.atomic.AtomicInteger(0)
+    // Sobe a cada parar(): o que estava na fila de uma geração velha não toca.
+    @Volatile private var geracao = 0
 
     /** `aoMudar(true)` quando começa a tocar, `false` quando a fila esvazia
      * (o átomo fica âmbar enquanto ele fala, como no PC). */
     fun tocar(taxa: Int, pcm: ByteArray) {
         if (pendentes.getAndIncrement() == 0) aoMudar(true)
+        val minha = geracao
         fila.execute {
             val t = trilhaPara(taxa)
             var feito = 0
-            while (feito < pcm.size) {
-                val n = t.write(pcm, feito, pcm.size - feito)
+            // Em pedaços pequenos: o mudo corta no meio de uma frase.
+            while (feito < pcm.size && minha == geracao) {
+                val n = t.write(pcm, feito, minOf(4096, pcm.size - feito))
                 if (n <= 0) break
                 feito += n
             }
@@ -65,6 +69,13 @@ class Voz(private val aoMudar: (tocando: Boolean) -> Unit = {}) {
         trilha = nova
         taxaAtual = taxa
         return nova
+    }
+
+    /** Corta o que está tocando e o que está na fila (o botão de mudo). */
+    fun parar() {
+        geracao++
+        trilha?.let { runCatching { it.pause(); it.flush(); it.play() } }
+        if (pendentes.get() > 0) aoMudar(false)
     }
 
     fun fechar() {

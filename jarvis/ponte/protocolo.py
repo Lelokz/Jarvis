@@ -87,6 +87,10 @@ CLIENTES -> ASSISTENTE
         em `pasta_recebidos()`. O Claude recebe os caminhos e abre (imagem com
         o Read; vídeo tirando quadros). Até MAX_ANEXOS; fora da pasta, recusa.
 
+    "mudo": true
+        (v2, opcional no "falar" e no "ouvir") O celular está no mudo: a
+        resposta vai só em texto, e a voz nem é gerada (mais rápido).
+
 **O "ola" é obrigatório antes de qualquer evento.** Quem não se apresentou não
 recebe difusão. Não é cerimônia: é o que garante que tudo o que chega depois do
 histórico seja novo, sem um evento ao vivo escapar pela brecha entre conectar e
@@ -149,7 +153,7 @@ def ler_pedido(linha: bytes) -> tuple[str, dict[str, Any]]:
         texto = " ".join(texto.split())
         if len(texto) > MAX_TEXTO:
             raise ErroDeProtocolo(f"texto com mais de {MAX_TEXTO} caracteres")
-        return tipo, {"texto": texto, "anexos": _anexos(objeto)}
+        return tipo, {"texto": texto, "anexos": _anexos(objeto), "mudo": _mudo(objeto)}
 
     if tipo == "memoria":
         return tipo, {}
@@ -161,7 +165,7 @@ def ler_pedido(linha: bytes) -> tuple[str, dict[str, Any]]:
         caminho = Path(arquivo).resolve()
         if caminho.parent != pasta_audio().resolve() or caminho.suffix != ".pcm":
             raise ErroDeProtocolo("'ouvir' só aceita .pcm da pasta de áudio da ponte")
-        return tipo, {"arquivo": str(caminho), "anexos": _anexos(objeto)}
+        return tipo, {"arquivo": str(caminho), "anexos": _anexos(objeto), "mudo": _mudo(objeto)}
 
     if tipo == "ola":
         quantas = objeto.get("historico", 0)
@@ -200,6 +204,13 @@ def pasta_recebidos() -> Path:
     Fora do git e fora do $XDG_RUNTIME_DIR: o Claude pode precisar deles
     depois (a porta remota apaga os de mais de 14 dias)."""
     return Path.home() / ".local" / "share" / "jarvis" / "recebidos"
+
+
+def _mudo(objeto: dict[str, Any]) -> bool:
+    mudo = objeto.get("mudo", False)
+    if not isinstance(mudo, bool):
+        raise ErroDeProtocolo("'mudo' tem que ser true ou false")
+    return mudo
 
 
 def _anexos(objeto: dict[str, Any]) -> list[str]:

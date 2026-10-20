@@ -480,6 +480,14 @@ def rodar_celular(tmp: Path) -> None:
               and recebidos[-1][0] == "o que é isso?", recebidos)
         agente.pedir = original_pedir
 
+        print("-- E14. celular no mudo: só o texto, a voz nem é gerada --")
+        g.limpar()
+        agente.resposta = Saida("fim", texto="Tudo certo.")
+        ciclo.atender_pedido(Pedido("falar", "tudo bem?", cliente=7, voz=True, mudo=True))
+        ciclo.atender_agente()
+        checa("no mudo vai o texto e nenhum evento de voz",
+              any(e["ev"] == "jarvis_disse" for e in g.eventos) and "voz" not in g.tipos(), g.tipos())
+
         print("-- E12. depois, falar no PC devolve a voz para a caixa de som --")
         g.limpar()
         ciclo.atender_pedido(Pedido("falar", "e agora?", cliente=1, voz=False))

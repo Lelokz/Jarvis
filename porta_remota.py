@@ -215,17 +215,20 @@ def criar_app(cfg: config.Config):
         # arquivo em binário. Fica guardado até o próximo pedido (texto ou
         # fala), que leva os anexos junto.
         anexo_chegando: dict | None = None
+        mudo = False  # o botão de mudo do app: vai em todo pedido
         pendentes: dict[int, Path] = {}
         proximo_id = 1
 
         def com_anexos(pedido: dict) -> dict:
+            if mudo:
+                pedido["mudo"] = True
             if pendentes:
                 pedido["anexos"] = [str(p) for p in pendentes.values()][:protocolo.MAX_ANEXOS]
                 pendentes.clear()
             return pedido
 
         async def do_celular() -> None:
-            nonlocal anexo_chegando, proximo_id
+            nonlocal anexo_chegando, proximo_id, mudo
             while True:
                 msg = await ws.receive()
                 if msg["type"] == "websocket.disconnect":
@@ -275,6 +278,9 @@ def criar_app(cfg: config.Config):
                         continue
                     if isinstance(pedido, dict) and pedido.get("pedir") == "anexo":
                         anexo_chegando = {"nome": str(pedido.get("nome") or "anexo")}
+                        continue
+                    if isinstance(pedido, dict) and pedido.get("pedir") == "mudo":
+                        mudo = pedido.get("mudo") is True
                         continue
                     if isinstance(pedido, dict) and pedido.get("pedir") == "anexo_cancelar":
                         caminho = pendentes.pop(pedido.get("id"), None)

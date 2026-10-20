@@ -52,6 +52,9 @@ class JarvisModelo(private val app: Application) : AndroidViewModel(app) {
     val tocando = mutableStateOf(false)         // a voz dele saindo AQUI
     val nivel = mutableFloatStateOf(0f)         // volume do microfone, 0 a 1
     val configurado = mutableStateOf(prefs.contains("chave"))
+    // O botão de mudo do topo: resposta só em texto (lugar onde não dá para
+    // ouvir). Fica salvo entre uma abertura e outra.
+    val mudo = mutableStateOf(prefs.getBoolean("mudo", false))
 
     private val principal = android.os.Handler(android.os.Looper.getMainLooper())
     private val voz = Voz { t -> principal.post { tocando.value = t } }
@@ -107,6 +110,7 @@ class JarvisModelo(private val app: Application) : AndroidViewModel(app) {
             conectado.value = ok
             motivo.value = porque
             if (ok) {
+                avisarMudo()
                 // O histórico vem de novo a cada conexão: começa do zero. Os
                 // anexos ainda não enviados sobem de novo (a porta nova não
                 // conhece os da conexão que caiu).
@@ -115,6 +119,17 @@ class JarvisModelo(private val app: Application) : AndroidViewModel(app) {
                 for (a in anexos.toList()) subir(a.copy(idServidor = null, erro = ""))
             }
         }.also { it.abrir() }
+    }
+
+    fun alternarMudo() {
+        mudo.value = !mudo.value
+        prefs.edit().putBoolean("mudo", mudo.value).apply()
+        if (mudo.value) voz.parar()
+        avisarMudo()
+    }
+
+    private fun avisarMudo() {
+        conexao?.enviar(JSONObject().put("pedir", "mudo").put("mudo", mudo.value))
     }
 
     // -- anexos -----------------------------------------------------------
@@ -235,7 +250,7 @@ class JarvisModelo(private val app: Application) : AndroidViewModel(app) {
             }
             "voz" -> {
                 val pcm = ev.optString("pcm")
-                if (pcm.isNotEmpty()) voz.tocar(ev.optInt("taxa", 24000), Base64.decode(pcm, Base64.DEFAULT))
+                if (pcm.isNotEmpty() && !mudo.value) voz.tocar(ev.optInt("taxa", 24000), Base64.decode(pcm, Base64.DEFAULT))
             }
             "anexo_ok", "anexo_erro" -> {
                 val local = esperandoOk.removeFirstOrNull() ?: return
