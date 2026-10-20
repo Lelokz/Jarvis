@@ -116,7 +116,7 @@ class Jarvis(private val app: Application) {
         conexao?.fechar()
         val base = prefs.getString("base", "") ?: return
         val chave = prefs.getString("chave", "") ?: return
-        conexao = Conexao(base, chave, ::receber) { ok, porque ->
+        conexao = Conexao(base, chave, aoReceber = ::receber) { ok, porque ->
             conectado.value = ok
             motivo.value = porque
             if (ok) {

@@ -22,6 +22,8 @@ import java.util.concurrent.TimeUnit
 class Conexao(
     private val base: String,
     private val chave: String,
+    private val quem: String = "celular-app",
+    private val historico: Int = 80,
     private val aoReceber: (JSONObject) -> Unit,
     private val aoMudar: (conectado: Boolean, motivo: String) -> Unit,
 ) {
@@ -43,8 +45,8 @@ class Conexao(
                 espera = 1000L
                 webSocket.send(JSONObject()
                     .put("chave", chave)
-                    .put("historico", 80)
-                    .put("quem", "celular-app")
+                    .put("historico", historico)
+                    .put("quem", quem)
                     .toString())
                 principal.post { aoMudar(true, "") }
             }

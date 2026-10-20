@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# compilar.sh — gera o APK do app do Jarvis (app/build/outputs/apk/debug/).
+# compilar.sh — gera os APKs do Jarvis: o do celular (app/build/outputs/apk/debug/)
+# e o do relógio (relogio/build/outputs/apk/debug/).
 #
 # As ferramentas (JDK, SDK do Android, Gradle e o cache dele) moram no HD,
 # não no SSD: são ~3 GB. Ver ESCOPO §4, "O celular".
@@ -13,4 +14,7 @@ mkdir -p app/src/main/assets
 for m in melspectrogram embedding_model hey_jarvis_v0.1 silero_vad; do
   cp -u "../modelos-wakeword/$m.onnx" app/src/main/assets/
 done
+# O relógio só usa o Silero (o fim da frase): sem "hey Jarvis" lá.
+mkdir -p relogio/src/main/assets
+cp -u ../modelos-wakeword/silero_vad.onnx relogio/src/main/assets/
 exec ./gradlew --console=plain "${@:-assembleDebug}"

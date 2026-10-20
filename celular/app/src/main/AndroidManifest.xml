@@ -8,6 +8,10 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- A ponte do relógio: o serviço que segura o celular acordado enquanto
+         a conversa do relógio passa por ele. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
+    <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
 
     <application
         android:name=".App"
@@ -29,5 +33,19 @@
             android:name=".ServicoOuvido"
             android:exported="false"
             android:foregroundServiceType="microphone" />
+        <!-- O relógio abre o canal "/jarvis": o Google Play services acorda
+             este serviço, mesmo com o app fechado. -->
+        <service
+            android:name=".ServicoRelogio"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.google.android.gms.wearable.CHANNEL_EVENT" />
+                <data android:scheme="wear" android:host="*" android:pathPrefix="/jarvis" />
+            </intent-filter>
+        </service>
+        <service
+            android:name=".ServicoPonte"
+            android:exported="false"
+            android:foregroundServiceType="connectedDevice" />
     </application>
 </manifest>

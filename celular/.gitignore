@@ -5,3 +5,5 @@ local.properties
 *.apk
 .kotlin/
 app/src/main/assets/*.onnx
+relogio/build/
+relogio/src/main/assets/*.onnx
