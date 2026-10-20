@@ -163,10 +163,22 @@ def criar_app(cfg: config.Config):
         await escritor.drain()
 
         quem = str(primeira.get("quem") or "celular")[:40]
+        # Medição da demora (o Léo: no celular 3-4 s, no PC 1-3 s): do pedido
+        # chegar aqui até o texto e a 1ª voz da resposta saírem para ele.
+        relogio: dict = {}
         print(f"{time.strftime('%H:%M:%S')} conectou: {quem}", flush=True)
 
         async def da_ponte() -> None:
             while linha := await leitor.readline():
+                if relogio.get("pedido") and linha.startswith((b'{"ev":"jarvis_disse"', b'{"ev":"voz"')):
+                    marca = "texto" if linha.startswith(b'{"ev":"jarvis_disse"') else "voz"
+                    if marca not in relogio:
+                        relogio[marca] = time.monotonic() - relogio["pedido"]
+                    if "texto" in relogio and "voz" in relogio:
+                        print(f"{time.strftime('%H:%M:%S')} demora ({relogio['tipo']}): "
+                              f"texto em {relogio['texto']:.2f}s, 1ª voz em {relogio['voz']:.2f}s",
+                              flush=True)
+                        relogio.clear()
                 if linha.startswith(b'{"ev":"voz"'):
                     print(f"{time.strftime('%H:%M:%S')} voz -> {quem}: {len(linha) // 1024} KB",
                           flush=True)
@@ -214,6 +226,8 @@ def criar_app(cfg: config.Config):
                     proximo_id += 1
                     continue
                 if msg.get("bytes") is not None:
+                    relogio.clear()
+                    relogio.update(pedido=time.monotonic(), tipo="fala")
                     dados = msg["bytes"]
                     if len(dados) > MAX_AUDIO_BYTES:
                         await ws.send_text(json.dumps({"ev": "erro", "motivo": "áudio grande demais"},
@@ -254,6 +268,8 @@ def criar_app(cfg: config.Config):
                     if not isinstance(pedido, dict) or pedido.get("pedir") not in PEDIDOS_DO_CELULAR:
                         continue
                     if pedido.get("pedir") == "falar":
+                        relogio.clear()
+                        relogio.update(pedido=time.monotonic(), tipo="texto")
                         # Os anexos quem põe é a porta (o celular não sabe os caminhos).
                         pedido = com_anexos({"pedir": "falar", "texto": pedido.get("texto")})
                     escritor.write(protocolo.codificar(pedido))
