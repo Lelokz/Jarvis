@@ -18,6 +18,7 @@ A voz e o modelo são PESSOAIS (ESCOPO §4, decisão do Léo): ficam fora do git
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -42,7 +43,32 @@ def normalizar(texto: str) -> str:
 
 
 def frases(texto: str) -> list[str]:
-    return [f for f in re.split(r"(?<=[.!?…])\s+", texto.strip()) if f.strip()]
+    """Frase por frase; frase longa quebra nas vírgulas. Cada pedaço é gerado
+    enquanto o anterior toca: pedaço curto no começo = voz começa antes."""
+    pedacos = []
+    for f in re.split(r"(?<=[.!?…])\s+", texto.strip()):
+        if not f.strip():
+            continue
+        if len(f) <= 80:
+            pedacos.append(f)
+            continue
+        atual = ""
+        for parte in re.split(r"(?<=,)\s+", f):
+            atual = f"{atual} {parte}".strip()
+            if len(atual) >= 30:
+                pedacos.append(atual)
+                atual = ""
+        if atual:
+            if pedacos:
+                pedacos[-1] = f"{pedacos[-1]} {atual}"
+            else:
+                pedacos.append(atual)
+    return pedacos
+
+
+# Frases que o Jarvis fala sempre igual: ficam prontas desde a subida.
+FIXAS = ["pois não?", "tá bom.", "parei.", "pausei.", "voltando.", "próxima.", "anterior.",
+         "pronto.", "não consegui falar com o claude agora. tenta de novo?"]
 
 
 def main() -> int:
@@ -76,25 +102,40 @@ def main() -> int:
                            input=audio.astype(np.float32).tobytes(), capture_output=True)
         return np.frombuffer(r.stdout, dtype=np.float32) if r.returncode == 0 and r.stdout else audio
 
-    # O que se repete ("Pois não?", "Tá bom.", "Parei.") sai na hora da 2ª vez.
+    # O que se repete ("Pois não?", "Tá bom.", "Parei.") sai na hora da 2ª vez,
+    # e fica guardado em disco: continua instantâneo depois de reiniciar. A
+    # pasta muda com a receita (modelo, referência, passos, filtro).
     guardadas: OrderedDict[str, bytes] = OrderedDict()
+    receita = hashlib.sha1(f"{a.modelo}|{a.ref}|{a.nfe}|{a.filtro}|{a.velocidade}".encode()).hexdigest()[:12]
+    disco = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(a.modelo))), "cache", receita)
+    os.makedirs(disco, exist_ok=True)
+
+    def no_disco(chave: str) -> str:
+        return os.path.join(disco, hashlib.sha1(chave.encode()).hexdigest() + ".pcm")
 
     def gerar(frase: str) -> tuple[bytes, int]:
         chave = normalizar(frase)
         if chave in guardadas:
             guardadas.move_to_end(chave)
             return guardadas[chave], 24000
+        if os.path.exists(no_disco(chave)):
+            with open(no_disco(chave), "rb") as f:
+                guardadas[chave] = f.read()
+            return guardadas[chave], 24000
         wav, taxa, _ = tts.infer(ref_file=a.ref, ref_text=ref_texto, gen_text=chave,
                                  nfe_step=a.nfe, speed=a.velocidade, show_info=lambda *_: None)
         audio = filtrar(np.asarray(wav, dtype=np.float32), taxa)
         pcm = (np.clip(audio, -1, 1) * 32767).astype(np.int16).tobytes()
-        if len(chave) <= 40:
+        if len(chave) <= 60:
             guardadas[chave] = pcm
-            if len(guardadas) > 200:
+            if len(guardadas) > 300:
                 guardadas.popitem(last=False)
+            with open(no_disco(chave), "wb") as f:
+                f.write(pcm)
         return pcm, taxa
 
-    gerar("pois não?")  # aquece e já deixa a saudação pronta
+    for fixa in FIXAS:  # aquece e já deixa a saudação e as respostas fixas prontas
+        gerar(fixa)
     if os.path.exists(a.socket):
         os.unlink(a.socket)
     srv = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)

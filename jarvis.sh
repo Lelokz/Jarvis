@@ -48,7 +48,7 @@ if [ -f "$VOZ/modelo/jarvis-dublado.safetensors" ] && ! voz_ligada; then
   PATH="$HOME/.local/share/lelokz-estudio/ffmpeg:$PATH" nohup "$VOZ/venv/bin/python" -u \
       "$PROJETO/servidor_voz.py" --modelo "$VOZ/modelo/jarvis-dublado.safetensors" \
       --ref "$VOZ/ref/bomdia-limpa.wav" --ref-texto "$(cat "$VOZ/ref/bomdia-limpa.txt")" \
-      --nfe 32 --filtro "bass=g=4:f=150:w=0.8" \
+      --nfe 32 --filtro "volume=-6dB,bass=g=4:f=150:w=0.8" \
       >> logs/servidor-voz.log 2>&1 &
 fi
 

@@ -196,6 +196,7 @@ def falar(
     texto: str,
     *,
     dispositivo: int | None = None,
+    ao_comecar=None,
 ) -> TemposDaFala:
     """Sintetiza e toca, medindo síntese e reprodução separadamente.
 
@@ -236,11 +237,17 @@ def falar(
                 )
                 stream.start()
                 inicio_reproducao = time.monotonic()
+                # O texto aparece na janela junto com a voz, não antes dela.
+                if ao_comecar is not None:
+                    ao_comecar()
+                    ao_comecar = None
 
             stream.write(trecho.pcm)
             amostras += len(trecho.pcm) // (2 * trecho.canais)
 
         if stream is None:  # texto vazio ou sem áudio
+            if ao_comecar is not None:
+                ao_comecar()
             return TemposDaFala(0.0, sintese_total_s, 0.0, 0.0)
 
         # O write só bloqueia até caber no buffer: ao sair do laço ainda há

@@ -109,7 +109,9 @@ def _limpar(texto: str) -> str:
 
 
 def _parece_longo(texto: str) -> bool:
-    if "```" in texto or len(texto) > 400:
+    # Medido no 1º teste por voz: uma resposta de ~380 caracteres virou 26 s
+    # de fala seguidos. Mais de 2 frases ou ~240 caracteres já é janela.
+    if "```" in texto or len(texto) > 240 or len(re.findall(r"[.!?…](\s|$)", texto)) > 2:
         return True
     return any(l.lstrip().startswith(("- ", "* ", "|", "#", "1.", "2."))
                for l in texto.splitlines())
@@ -123,10 +125,14 @@ def dividir(texto: str, deixei: str = "Deixei na janela.") -> tuple[str, str | N
         return "", None
     if not _parece_longo(t):
         return _limpar(t), None
-    primeiro = t.split("\n\n")[0].strip()
-    if len(primeiro) <= 250 and not _parece_longo(primeiro) and primeiro != t:
-        return f"{_limpar(primeiro)} {deixei}", t
-    return deixei, t
+    # Fala as primeiras frases que couberem (até ~200 caracteres) e manda o
+    # texto inteiro para a janela.
+    fala = ""
+    for frase in re.split(r"(?<=[.!?…])\s+", _limpar(t.split("\n\n")[0])):
+        if len(fala) + len(frase) > 200 or fala.count(".") + fala.count("?") >= 2:
+            break
+        fala = f"{fala} {frase}".strip()
+    return (f"{fala} O resto tá na janela." if fala else deixei), t
 
 
 def _resumo_de_ferramenta(b: ToolUseBlock) -> str:

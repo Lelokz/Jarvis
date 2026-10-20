@@ -350,13 +350,19 @@ class Ciclo:
         se responde, e — pior neste etapa — o wake word pode se ouvir e acordar
         de novo em laço.
         """
-        self._mudar_estado("falando")
-        self.emissor.emitir(
-            "jarvis_disse", texto=texto, acao=acao, perguntando=perguntando
-        )
         self.portao.fechar_portao()
+
+        def ao_comecar() -> None:
+            # Texto, estado "falando" e voz saem juntos: antes o texto chegava
+            # na janela uns 2 s antes do som (o tempo de gerar a voz).
+            self._mudar_estado("falando")
+            self.emissor.emitir(
+                "jarvis_disse", texto=texto, acao=acao, perguntando=perguntando
+            )
+
         try:
-            return tts.falar(self.voz, texto, dispositivo=self.dispositivo_saida)
+            return tts.falar(self.voz, texto, dispositivo=self.dispositivo_saida,
+                             ao_comecar=ao_comecar)
         finally:
             time.sleep(self.guarda_s)
             self.portao.abrir_portao()
@@ -417,7 +423,8 @@ class Ciclo:
             # Nunca dormir no meio de uma frase, nem com o Claude trabalhando
             # ou esperando resposta: a resposta dele tem que ser ouvida.
             if agora >= self.prazo and not self.vad.falando and \
-                    not self.agente.ocupado and self._pergunta is None:
+                    not self.agente.ocupado and self._pergunta is None \
+                    and self.agente.saidas.empty():
                 self.dormir(f"{self.cfg.ciclo.janela_s:g} s sem fala")
             return
 
