@@ -187,8 +187,10 @@ function destravarAudio() {
       diag.erro = e.name; relatar("nao liberou");
     });
 }
-document.addEventListener("pointerdown", destravarAudio, true);
+// No Android, "encostar o dedo" (pointerdown) NÃO conta como toque para
+// liberar som; só soltar (touchend, click). Medido no S21 FE: NotAllowedError.
 document.addEventListener("touchend", destravarAudio, true);
+document.addEventListener("click", destravarAudio, true);
 $("bipe").onclick = () => { fila.push(bipe()); if (!tocando) proxima(); relatar("bipe"); };
 
 function tocar(taxa, b64) {
