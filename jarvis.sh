@@ -21,6 +21,11 @@ ponte_ligada() { pgrep -f "^./whatsapp-bridge$" > /dev/null; }
 # o modelo é pessoal (ESCOPO §4). Sem a pasta, o Jarvis fala com a Kokoro.
 VOZ="$HOME/.local/share/jarvis/voz-jarvis"
 voz_ligada() { pgrep -f "$PROJETO/servidor_voz.py" > /dev/null; }
+# Motor "rvc" (out/2026): a Kokoro fala e o servidor_rvc.py, na venv do Applio
+# (no HD, junto do treino), troca o timbre pelo do JARVIS.
+APPLIO="/mnt/cab1286d-6765-4c73-9c77-8d3119b4b644/Arquivo/Jarvis - Treino da voz dublada/applio"
+rvc_ligado() { pgrep -f "$PROJETO/servidor_rvc.py" > /dev/null; }
+MOTOR="$(sed -n 's/^motor *= *"\(.*\)".*/\1/p' config.toml | head -1)"
 
 if [ "${1:-}" = "--desligar" ]; then
   # O assistente trata SIGTERM como ctrl+c: fecha o microfone, apaga o
@@ -28,6 +33,7 @@ if [ "${1:-}" = "--desligar" ]; then
   pkill -TERM -f "$PROJETO/assistente.py"
   pkill -TERM -f "^./whatsapp-bridge$"
   pkill -TERM -f "$PROJETO/servidor_voz.py"
+  pkill -TERM -f "$PROJETO/servidor_rvc.py"
   pkill -f "$PROJETO/interface.py"
   # Até 20 s: ao desligar, o assistente resume a conversa em andamento para
   # o diário (uma chamada ao Claude).
@@ -42,7 +48,16 @@ if [ -x "$PONTE_WHATS/whatsapp-bridge" ] && ! ponte_ligada; then
       >> "$HOME/.local/share/jarvis/whatsapp-bridge.log" 2>&1 & )
 fi
 
-if [ -f "$VOZ/modelo/jarvis-dublado.safetensors" ] && ! voz_ligada; then
+if [ "$MOTOR" = "rvc" ] && [ -f "$VOZ/rvc/jarvis-dublado.pth" ] && [ -x "$APPLIO/.venv/bin/python" ] \
+    && ! rvc_ligado; then
+  mkdir -p logs
+  # De dentro da pasta do Applio: ele acha os modelos dele (rmvpe, contentvec) por ali.
+  ( cd "$APPLIO" && PATH="$HOME/.local/share/lelokz-estudio/ffmpeg:$PATH" nohup .venv/bin/python -u \
+      "$PROJETO/servidor_rvc.py" --modelo "$VOZ/rvc/jarvis-dublado.pth" \
+      --index "$VOZ/rvc/jarvis-dublado.index" >> "$PROJETO/logs/servidor-rvc.log" 2>&1 & )
+fi
+
+if [ "$MOTOR" = "f5" ] && [ -f "$VOZ/modelo/jarvis-dublado.safetensors" ] && ! voz_ligada; then
   mkdir -p logs
   # O ffmpeg estático do Estúdio no PATH: a biblioteca de áudio do F5 procura.
   PATH="$HOME/.local/share/lelokz-estudio/ffmpeg:$PATH" nohup "$VOZ/venv/bin/python" -u \

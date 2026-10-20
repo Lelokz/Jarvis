@@ -65,6 +65,7 @@ class Tts:
     efeito: str = ""
     tom: float = 0.0  # semitons; negativo = mais grave (só Kokoro)
     socket_f5: str = "jarvis-voz.sock"  # o servidor_voz.py (motor "f5")
+    socket_rvc: str = "jarvis-rvc.sock"  # o servidor_rvc.py (motor "rvc")
 
 
 @dataclass(frozen=True)

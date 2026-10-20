@@ -123,10 +123,12 @@ beam_size = 1
 usar_vocabulario = true
 
 [tts]
-# "f5" = a voz do JARVIS dublado (out/2026, aprovada pelo Léo: "ficou muito
-# bom"), pelo servidor_voz.py; sem o servidor, fala com a Kokoro abaixo.
+# "rvc" = a voz do JARVIS dublado, 2ª versão (20/10/2026, aprovada pelo Léo):
+# a Kokoro fala e o servidor_rvc.py troca o timbre pelo do JARVIS; sem o
+# servidor, fala com a Kokoro abaixo.
+# "f5" = a 1ª versão (servidor_voz.py): o "s" estourava e abafava.
 # "kokoro" = a Kokoro sozinha; "piper" = a voz de antes.
-motor = "f5"
+motor = "rvc"
 
 # Kokoro: pm_alex (escolhida), pm_santa; pf_dora para a futura personagem.
 # Piper: pt_BR-faber-medium, pt_BR-cadu-medium, pt_BR-jeff-medium.
@@ -136,7 +138,7 @@ voz = "pm_alex"
 # "1,15 é mais bonitinha"; antes era 0.769 = 1,3x).
 velocidade = 0.87
 
-# Só Kokoro. "suave" = só corpo nos graves (out/2026: o Léo achou a voz
+# Só Kokoro (e a reserva do "rvc"). "suave" = só corpo nos graves (out/2026: o Léo achou a voz
 # robotizada); "jarvis" = eco curto de capacete + graves; "" = puro.
 efeito = "suave"
 # Semitons; negativo = mais grave. O Léo ouviu -4, -3, -2 e -1 (graves
@@ -144,6 +146,8 @@ efeito = "suave"
 tom = -0.5
 # Só "f5": onde o servidor_voz.py atende (em $XDG_RUNTIME_DIR).
 socket_f5 = "jarvis-voz.sock"
+# Só "rvc": onde o servidor_rvc.py atende (em $XDG_RUNTIME_DIR).
+socket_rvc = "jarvis-rvc.sock"
 
 [wakeword]
 # Escolhido e medido na Etapa 0.5: 20/20 de acerto na pronúncia inglesa

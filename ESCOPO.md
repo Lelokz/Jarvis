@@ -106,8 +106,8 @@ microfone ─► wake word "hey Jarvis" (CPU) ─► "Pois não?" ─► 30 s ou
 
 **Stack:** openWakeWord `hey_jarvis` · pysilero-vad · faster-whisper
 `large-v3-turbo` int8 na GPU · **Claude Code pelo `claude-agent-sdk`, Opus 5.5
-no esforço alto, login da assinatura** · voz do JARVIS dublado (F5-TTS treinado,
-`servidor_voz.py`), Kokoro de reserva · janela em PySide6/QML.
+no esforço alto, login da assinatura** · voz do JARVIS dublado (Kokoro + RVC
+treinado, `servidor_rvc.py`), Kokoro de reserva · janela em PySide6/QML.
 
 ### O cérebro: o Claude Code inteiro (out/2026)
 
@@ -142,7 +142,43 @@ instalado, com o login da assinatura) e a mantém aberta numa thread própria.
 - **Uso pessoal só**: a Anthropic não permite oferecer o login do claude.ai
   num produto para outras pessoas.
 
-### A voz do JARVIS dublado (19/10/2026)
+### A voz do JARVIS dublado, 2ª versão: Kokoro + RVC (20/10/2026)
+
+A **Kokoro fala** e um **RVC treinado com as mesmas 93 falas** do JARVIS
+dublado **troca o timbre**. Substituiu a F5 (abaixo), cujo "s" estourava e
+abafava em toda palavra com "ss"/"ç": o defeito vinha da geração do próprio
+modelo PT-BR (o "s" dele sai +11,5 dB acima das vogais; no filme, +2,9), e
+nenhum filtro resolveu (deesser, agudos, graves: o Léo ouviu 7 versões,
+"continua igual"). No RVC o "s" é o da Kokoro, limpo. **Aprovado pelo Léo de
+ouvido (20/10/2026):** "não ouvi... nem borbulhando, e tá muito boa a fala".
+Pessoal como a F5: modelo FORA do git.
+
+- **Treino:** Applio 3.6.4 (CLI `core.py`), 40 kHz, rmvpe + contentvec,
+  HiFi-GAN pré-treinado, **300 épocas, lote 8, ~1h15 na 3060**, pico de 6 GB
+  de RAM (a F5 desligada durante o treino para caber). O Applio só pela linha
+  de comando não cria o `assets/config.json`: sem ele, salvar o modelo falha
+  (copiar do `config_template.json`).
+- **A receita R1 (a aprovada):** Kokoro `pm_alex` pura (sem efeito, tom 0,
+  velocidade 0,87) → RVC com **tom -1** (a Kokoro fala a 136 Hz, o JARVIS a
+  127), índice 0,5, proteção 0,33.
+- **Como roda:** `servidor_rvc.py` na venv do Applio (no HD, junto do
+  treino), de dentro da pasta do Applio; socket
+  `$XDG_RUNTIME_DIR/jarvis-rvc.sock`; sobe no `jarvis.sh` quando
+  `[tts] motor = "rvc"`. O `VozRVC` (`tts.py`) gera cada pedaço na Kokoro,
+  manda o áudio, recebe com o timbre do JARVIS. Modelo em
+  `~/.local/share/jarvis/voz-jarvis/rvc/`.
+- **Rapidez:** frase nova começa a tocar em **0,7–0,8 s** (F5: ~1,8 s);
+  frase curta repetida sai na hora, guardada em disco já convertida
+  (`voz-jarvis/cache-rvc/`, uma pasta por receita). O Applio, a cada
+  conversão, recarregava o medidor de tom (rmvpe, ~1,5 s) e reconstruía o
+  índice: o servidor guarda os dois na memória (conversão de 1,8 s → 0,3–0,5 s).
+- **Partida:** o servidor leva ~25 s (até ~50 s com o disco frio). O Jarvis
+  não espera: fala com a Kokoro até o servidor responder, e a voz do JARVIS
+  entra sozinha. Se o servidor cair no meio, o resto da fala sai na Kokoro.
+
+### A voz do JARVIS dublado, 1ª versão: F5-TTS (19/10/2026)
+
+Continua disponível (`motor = "f5"`), mas saiu de uso pelo "s" estourado.
 
 **F5-TTS** com o modelo PT-BR da comunidade (`firstpixel/F5-TTS-pt-br`,
 CC-BY-NC: uso pessoal) **treinado com a voz do JARVIS dublado**. Aprovado pelo
@@ -425,8 +461,9 @@ Sem ordem rígida: faz, o Léo testa o que é de voz, segue.
 
 1. **Testar o Jarvis-Claude Code por voz** e ajustar a `persona.md` com o
    que aparecer (o que fala demais, o que pergunta demais ou de menos).
-2. **Voz:** feita (JARVIS dublado, §4). Se quiser ainda mais fiel: juntar
-   mais falas (filmes inteiros dariam muito mais que 5 min) ou RVC.
+2. **Voz:** feita (JARVIS dublado, Kokoro + RVC, §4). Se quiser ainda mais
+   fiel: juntar mais falas (filmes inteiros dariam muito mais que 5 min) e
+   treinar o RVC de novo.
 3. **Briefing da manhã:** agora é instrução no `CLAUDE.md` da casa; o e-mail
    entra pelo Gmail (cuidado com o que sai em voz alta, tem gente na casa).
 4. **Jarvis no celular:** PC como servidor, Tailscale (por causa do CGNAT),

@@ -2198,3 +2198,26 @@ do ESCOPO antigo pensava no Jarvis indo para outras pessoas.
   se arrastou. Parado e refeito com 2 workers e cerca de 7 GB.
 - O resultado foi mandado ao Léo pelo WhatsApp (ponte do Jarvis, para o
   próprio número) porque ele já tinha saído para o SENAI.
+
+### O "s" estourado e a troca para o RVC (20/10/2026, madrugada)
+
+Testando em casa, o Léo achou três problemas na voz F5: toda palavra com
+"ss" ficava "muito baixa e abafada", a fala demorava 3–4 s e o texto aparecia
+antes da voz.
+
+- **O "s":** 7 versões com filtro (sem estourar o volume, agudos realçados,
+  deesser em 3 forças, referência do filme sem separar): "continua igual". O
+  diagnóstico mostrou por quê: o modelo PT-BR **antes** do treino já gerava o
+  "s" forte demais (+11,5 dB sobre as vogais; o filme, +2,9). Era a geração,
+  não o tratamento.
+- **A saída foi o RVC**, que o Léo já tinha deixado combinado ("se ficar
+  ruim de novo, a gente usa essa função... que fica mais fiel"): a Kokoro
+  fala (o "s" dela é limpo) e o RVC troca só o timbre. Treinado no Applio
+  com as mesmas 93 falas, ~1h15. Mandados 4 áudios no WhatsApp; ele aprovou
+  a receita R1 (índice 0,5, proteção 0,33).
+- **Pegadinhas:** o Applio pela linha de comando não cria o
+  `assets/config.json` e falhou ao salvar o modelo na época 50 (achado pelo
+  monitor, corrigido com o treino rodando); e, a cada frase, recarregava o
+  medidor de tom e o índice — 1,5 s jogados fora por frase. Guardados na
+  memória, a voz nova começa em 0,7–0,8 s.
+

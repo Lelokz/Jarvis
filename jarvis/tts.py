@@ -351,6 +351,174 @@ class VozF5(Voz):
         yield from self.reserva.sintetizar(texto)
 
 
+def _pedacos(texto: str) -> list[str]:
+    """Frase por frase; frase longa quebra nas vírgulas. Cada pedaço é gerado
+    enquanto o anterior toca: pedaço curto no começo = voz começa antes."""
+    import re
+
+    pedacos: list[str] = []
+    for f in re.split(r"(?<=[.!?…])\s+", texto.strip()):
+        if not f.strip():
+            continue
+        if len(f) <= 80:
+            pedacos.append(f)
+            continue
+        atual = ""
+        for parte in re.split(r"(?<=,)\s+", f):
+            atual = f"{atual} {parte}".strip()
+            if len(atual) >= 30:
+                pedacos.append(atual)
+                atual = ""
+        if atual:
+            if pedacos:
+                pedacos[-1] = f"{pedacos[-1]} {atual}"
+            else:
+                pedacos.append(atual)
+    return pedacos
+
+
+class VozRVC(Voz):
+    """A voz do JARVIS dublado, 2ª versão (out/2026): a Kokoro fala e o
+    `servidor_rvc.py` troca o timbre pelo do JARVIS (RVC treinado com as
+    mesmas 93 falas do filme). Substituiu a F5, cujo "s" estourava e abafava;
+    o "s" aqui é o da Kokoro, limpo. O Léo aprovou de ouvido (20/10/2026).
+
+    `entrada` é a Kokoro pura (sem efeito nem tom: o timbre vem do RVC);
+    `reserva`, a Kokoro de sempre, para quando o servidor não responder.
+    Frases curtas que se repetem ("Pois não?", "Tá bom.") ficam guardadas em
+    disco já convertidas e saem na hora.
+    """
+
+    _RMS_ALVO = VozKokoro._RMS_ALVO  # o mesmo volume da Kokoro, nunca acima
+    # Frases que o Jarvis fala sempre igual: convertidas logo na partida.
+    FIXAS = ["Pois não?", "Tá bom.", "Parei.", "Pausei.", "Voltando.", "Próxima.", "Anterior.",
+             "Pronto.", "Não consegui falar com o Claude agora. Tenta de novo?"]
+
+    def __init__(self, cfg: ConfigTts, entrada: VozKokoro, reserva: Voz,
+                 pasta_cache: Path, espera_s: float = 3.0) -> None:
+        import os
+        import threading
+
+        self.cfg = cfg
+        self.entrada = entrada
+        self.reserva = reserva
+        self.caminho = cfg.socket_rvc if cfg.socket_rvc.startswith("/") else os.path.join(
+            os.environ.get("XDG_RUNTIME_DIR", "/tmp"), cfg.socket_rvc)
+        self._pasta_base = pasta_cache
+        self._guardadas: dict[str, bytes] = {}
+        # O servidor sobe junto (jarvis.sh), mas leva ~50 s carregando: o
+        # Jarvis não espera por ele. Até lá fala com a reserva, e a voz do
+        # JARVIS entra sozinha quando o servidor responder.
+        inicio = time.monotonic()
+        self._rec = self._receita()
+        while self._rec is None and time.monotonic() - inicio < espera_s:
+            time.sleep(0.5)
+            self._rec = self._receita()
+        self.segundos_de_carga = entrada.segundos_de_carga + time.monotonic() - inicio
+        threading.Thread(target=self._aquecer, daemon=True, name="voz-fixas").start()
+
+    def _receita(self) -> str | None:
+        """A receita do servidor (modelo e ajustes), ou None se ele não responde."""
+        import json
+        import socket
+
+        try:
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
+                s.settimeout(2)
+                s.connect(self.caminho)
+                s.sendall(b'{"ping": true}\n')
+                r = json.loads(s.makefile("rb").readline() or b"{}")
+                return str(r.get("receita", "")) if r.get("ok") is True else None
+        except (OSError, ValueError):
+            return None
+
+    def _arquivo(self, chave: str) -> Path | None:
+        import hashlib
+
+        if not self._rec:
+            self._rec = self._receita()  # o servidor subiu depois do Jarvis
+            if not self._rec:
+                return None
+        pasta = self._pasta_base / hashlib.sha1(
+            f"{self._rec}|{self.cfg.voz}|{self.cfg.velocidade}".encode()).hexdigest()[:12]
+        pasta.mkdir(parents=True, exist_ok=True)
+        return pasta / (hashlib.sha1(chave.encode()).hexdigest() + ".pcm")
+
+    def _aquecer(self) -> None:
+        fim = time.monotonic() + 300
+        while not self._rec and time.monotonic() < fim:
+            time.sleep(2)
+            self._rec = self._receita()
+        for frase in self.FIXAS:
+            try:
+                for _ in self._converter_pedaco(frase):
+                    pass
+            except (OSError, ValueError, KeyError):
+                return
+
+    @property
+    def nome(self) -> str:
+        estado = "servidor no ar" if self._receita() is not None else \
+            "SERVIDOR FORA: falando com a reserva"
+        return f"jarvis dublado (Kokoro + RVC, {estado}); reserva {self.reserva.nome}"
+
+    def _converter_pedaco(self, pedaco: str) -> Iterator[Trecho]:
+        """Kokoro → servidor → volume igual ao da Kokoro. Levanta OSError se
+        o servidor falhar."""
+        import json
+        import socket
+
+        import numpy as np
+
+        chave = " ".join(pedaco.lower().split())
+        guardar = len(chave) <= 60
+        if guardar:
+            if chave not in self._guardadas:
+                arq = self._arquivo(chave)
+                if arq is not None and arq.is_file():
+                    self._guardadas[chave] = arq.read_bytes()
+            if chave in self._guardadas:
+                yield Trecho(pcm=self._guardadas[chave], taxa=40000, canais=1)
+                return
+        if not self._rec:
+            self._rec = self._receita()
+            if not self._rec:  # fora do ar: nem gasta a Kokoro à toa
+                raise OSError("servidor do timbre fora do ar")
+        for trecho in self.entrada.sintetizar(pedaco):
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
+                s.settimeout(2)
+                s.connect(self.caminho)
+                s.settimeout(30)
+                s.sendall(json.dumps({"taxa": trecho.taxa, "n": len(trecho.pcm)}).encode()
+                          + b"\n" + trecho.pcm)
+                arq_s = s.makefile("rb")
+                cab = json.loads(arq_s.readline() or b'{"erro": "conexao fechada"}')
+                if "erro" in cab:
+                    raise OSError(cab["erro"])
+                bruto = arq_s.read(cab["n"])
+            audio = np.frombuffer(bruto, dtype=np.int16).astype(np.float32) / 32768
+            rms = float(np.sqrt(np.mean(audio ** 2))) or 1.0
+            ganho = min(self._RMS_ALVO / rms, 0.95 / max(float(np.max(np.abs(audio))), 1e-6))
+            pcm = (np.clip(audio * ganho, -1.0, 1.0) * 32767).astype(np.int16).tobytes()
+            if guardar and len(self._guardadas) < 300:
+                self._guardadas[chave] = pcm
+                arq = self._arquivo(chave)
+                if arq is not None:
+                    arq.write_bytes(pcm)
+            yield Trecho(pcm=pcm, taxa=cab["taxa"], canais=1)
+
+    def sintetizar(self, texto: str) -> Iterator[Trecho]:
+        pedacos = _pedacos(texto)
+        for i, pedaco in enumerate(pedacos):
+            try:
+                yield from self._converter_pedaco(pedaco)
+            except (OSError, ValueError, KeyError):
+                self._rec = None  # pode voltar com outro modelo: pergunta de novo
+                # Caiu: o que já foi dito fica, o resto sai na voz de reserva.
+                yield from self.reserva.sintetizar(" ".join(pedacos[i:]))
+                return
+
+
 def criar_voz(cfg: ConfigTts, dir_vozes: Path) -> Voz:
     if cfg.motor == "piper":
         return VozPiper(cfg, dir_vozes)
@@ -359,4 +527,14 @@ def criar_voz(cfg: ConfigTts, dir_vozes: Path) -> Voz:
     if cfg.motor == "f5":
         # A reserva é a Kokoro com as mesmas configurações de [tts].
         return VozF5(cfg, reserva=VozKokoro(cfg, dir_vozes))
-    raise ValueError(f'motor de TTS desconhecido: "{cfg.motor}" (existem "piper", "kokoro" e "f5")')
+    if cfg.motor == "rvc":
+        # A entrada do RVC é a Kokoro pura (o tom e o corpo vêm do timbre do
+        # JARVIS); a reserva, a Kokoro com as configurações de [tts].
+        from dataclasses import replace
+
+        reserva = VozKokoro(cfg, dir_vozes)
+        entrada = VozKokoro(replace(cfg, efeito="", tom=0.0), dir_vozes)
+        return VozRVC(cfg, entrada, reserva,
+                      Path.home() / ".local/share/jarvis/voz-jarvis/cache-rvc")
+    raise ValueError(f'motor de TTS desconhecido: "{cfg.motor}" '
+                     '(existem "piper", "kokoro", "f5" e "rvc")')
