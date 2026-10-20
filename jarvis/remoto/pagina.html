@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0b1016">
 <title>Jarvis</title>
+<link rel="icon" href="data:,">
 <!-- A página de teste do celular (etapa 1 do app). O app de verdade (Kotlin)
      fala o mesmo protocolo: jarvis/ponte/protocolo.py e porta_remota.py. -->
 <style>
@@ -52,6 +53,7 @@
   }
   #falar { background: var(--destaque); color: #04121f; font-weight: 600; touch-action: none; user-select: none; -webkit-user-select: none; }
   #falar.gravando { background: var(--erro); }
+  #liberar { display: none; margin: 0 16px 8px; height: 48px; background: var(--destaque); color: #04121f; font-weight: 600; }
   #entrada { position: fixed; inset: 0; background: var(--fundo); display: none; align-items: center; justify-content: center; padding: 16px; }
   #entrada div { width: 100%; max-width: 360px; display: flex; flex-direction: column; gap: 10px; }
   #entrada input { padding: 12px; border-radius: 10px; border: 1px solid var(--borda); background: var(--painel); color: var(--texto); font: inherit; }
@@ -63,6 +65,7 @@
   <span id="estado"><span id="luz"></span><span id="estado-texto">conectando…</span></span>
 </header>
 <main id="conversa" aria-live="polite"></main>
+<button id="liberar">🔊 Toca aqui pra ligar o som</button>
 <footer>
   <input id="texto" type="text" placeholder="Escreve pro Jarvis…" autocomplete="off" enterkeyhint="send">
   <button id="enviar" aria-label="Enviar">➤</button>
@@ -116,13 +119,34 @@ function estado(nome, classe) {
 }
 
 // ---- voz: os pedaços chegam em PCM int16 e tocam em fila, sem buraco ----
-let audio = null, proximoInicio = 0;
+// O Chrome do Android só deixa tocar som depois de um TOQUE na página (o Enter
+// do teclado nem sempre conta). Por isso: qualquer toque libera o som; e se a
+// voz chegar com o som ainda preso, ela espera e aparece o botão para liberar.
+let audio = null, proximoInicio = 0, presos = [];
+function soltarPresos() {
+  $("liberar").style.display = "none";
+  const fila = presos; presos = [];
+  for (const [t, p] of fila) tocar(t, p);
+}
 function destravarAudio() {
   if (!audio) audio = new (window.AudioContext || window.webkitAudioContext)();
-  if (audio.state === "suspended") audio.resume();
+  if (audio.state === "running") { soltarPresos(); return; }
+  audio.resume().then(() => {
+    // Um silêncio curtinho: alguns celulares só "abrem" o som tocando algo.
+    const b = audio.createBuffer(1, 1, audio.sampleRate), f = audio.createBufferSource();
+    f.buffer = b; f.connect(audio.destination); f.start();
+    soltarPresos();
+  }).catch(() => {});
 }
+document.addEventListener("pointerdown", destravarAudio, true);
+document.addEventListener("touchend", destravarAudio, true);
 function tocar(taxa, b64) {
-  destravarAudio();
+  if (!audio || audio.state !== "running") {
+    presos.push([taxa, b64]);
+    $("liberar").style.display = "block";
+    if (audio) audio.resume().then(soltarPresos).catch(() => {});
+    return;
+  }
   const bin = atob(b64);
   const n = bin.length >> 1;
   const buf = audio.createBuffer(1, n, taxa);
