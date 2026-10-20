@@ -53,6 +53,7 @@
   }
   #falar { background: var(--destaque); color: #04121f; font-weight: 600; touch-action: none; user-select: none; -webkit-user-select: none; }
   #falar.gravando { background: var(--erro); }
+  #diag { font-size: 11px; color: var(--fraco); padding: 2px 16px; min-height: 16px; }
   #liberar { display: none; margin: 0 16px 8px; height: 48px; background: var(--destaque); color: #04121f; font-weight: 600; }
   #entrada { position: fixed; inset: 0; background: var(--fundo); display: none; align-items: center; justify-content: center; padding: 16px; }
   #entrada div { width: 100%; max-width: 360px; display: flex; flex-direction: column; gap: 10px; }
@@ -63,7 +64,9 @@
 <header>
   <h1>Jarvis</h1>
   <span id="estado"><span id="luz"></span><span id="estado-texto">conectando…</span></span>
+  <button id="bipe" aria-label="Testar o som">🔊</button>
 </header>
+<div id="diag"></div>
 <main id="conversa" aria-live="polite"></main>
 <button id="liberar">🔊 Toca aqui pra ligar o som</button>
 <footer>
@@ -118,50 +121,83 @@ function estado(nome, classe) {
   $("luz").className = classe || "";
 }
 
-// ---- voz: os pedaços chegam em PCM int16 e tocam em fila, sem buraco ----
-// O Chrome do Android só deixa tocar som depois de um TOQUE na página (o Enter
-// do teclado nem sempre conta). Por isso: qualquer toque libera o som; e se a
-// voz chegar com o som ainda preso, ela espera e aparece o botão para liberar.
-let audio = null, proximoInicio = 0, presos = [];
-function soltarPresos() {
-  $("liberar").style.display = "none";
-  const fila = presos; presos = [];
-  for (const [t, p] of fila) tocar(t, p);
+// ---- voz: cada pedaço vira um WAV e toca num <audio>, em fila ----
+// O <audio> é o caminho do vídeo comum, o mais confiável no Android. (A 1ª
+// versão usava Web Audio: no S21 FE ela dizia "tocando" e não saía som,
+// 20/10/2026.) O Chrome só deixa tocar depois de um TOQUE na página: o 1º
+// toque toca um silêncio neste mesmo <audio>, e daí ele fica liberado.
+const player = new Audio();
+player.preload = "auto";
+let fila = [], tocando = false, liberado = false;
+const diag = { pedacos: 0, segundos: 0, erro: "" };
+
+function wav(taxa, pcm) {  // pcm: Uint8Array de int16 little-endian, mono
+  const cab = new DataView(new ArrayBuffer(44));
+  const txt = (o, t) => { for (let k = 0; k < 4; k++) cab.setUint8(o + k, t.charCodeAt(k)); };
+  txt(0, "RIFF"); cab.setUint32(4, 36 + pcm.length, true); txt(8, "WAVE");
+  txt(12, "fmt "); cab.setUint32(16, 16, true); cab.setUint16(20, 1, true); cab.setUint16(22, 1, true);
+  cab.setUint32(24, taxa, true); cab.setUint32(28, taxa * 2, true); cab.setUint16(32, 2, true);
+  cab.setUint16(34, 16, true); txt(36, "data"); cab.setUint32(40, pcm.length, true);
+  return URL.createObjectURL(new Blob([cab, pcm], { type: "audio/wav" }));
 }
+function silencio() { return wav(8000, new Uint8Array(800)); }
+function bipe() {
+  const taxa = 16000, n = taxa * 0.4, pcm = new Uint8Array(n * 2), d = new DataView(pcm.buffer);
+  for (let k = 0; k < n; k++) d.setInt16(2 * k, Math.round(9000 * Math.sin(2 * Math.PI * 660 * k / taxa)), true);
+  return wav(taxa, pcm);
+}
+
+function relatar(motivo) {
+  const info = { motivo, pedacos: diag.pedacos, segundos: +diag.segundos.toFixed(1), liberado,
+                 tocando, fila: fila.length, volume: player.volume, mudo: player.muted, erro: diag.erro };
+  $("diag").textContent = `voz: ${info.pedacos} pedaços (${info.segundos}s) · som ${liberado ? "liberado" : "preso"}`
+    + (diag.erro ? ` · erro: ${diag.erro}` : "");
+  if (ws && ws.readyState === 1) ws.send(JSON.stringify({ diag: info }));
+}
+
+function proxima() {
+  const url = fila.shift();
+  if (!url) { tocando = false; return; }
+  tocando = true;
+  player.src = url;
+  player.play().then(() => { liberado = true; diag.erro = ""; $("liberar").style.display = "none"; })
+    .catch((e) => {
+      tocando = false;
+      if (e.name === "AbortError") return;  // trocou de som no meio: o novo segue
+      // Ainda sem toque na página: a voz espera o botão.
+      diag.erro = e.name; fila.unshift(url);
+      $("liberar").style.display = "block";
+      relatar("bloqueado");
+    });
+}
+player.addEventListener("ended", () => {
+  if (player.src.startsWith("blob:")) URL.revokeObjectURL(player.src);
+  proxima();
+});
+player.addEventListener("error", () => { diag.erro = "audio: " + (player.error && player.error.code); relatar("erro"); proxima(); });
+
 function destravarAudio() {
-  if (!audio) audio = new (window.AudioContext || window.webkitAudioContext)();
-  if (audio.state === "running") { soltarPresos(); return; }
-  audio.resume().then(() => {
-    // Um silêncio curtinho: alguns celulares só "abrem" o som tocando algo.
-    const b = audio.createBuffer(1, 1, audio.sampleRate), f = audio.createBufferSource();
-    f.buffer = b; f.connect(audio.destination); f.start();
-    soltarPresos();
-  }).catch(() => {});
+  if (tocando) return;
+  if (fila.length) { proxima(); return; }  // tinha voz esperando: toca já
+  if (liberado) return;
+  player.src = silencio();
+  player.play().then(() => { liberado = true; diag.erro = ""; $("liberar").style.display = "none"; relatar("liberou"); })
+    .catch((e) => {
+      if (e.name === "AbortError") return;  // outro som (o bipe, a voz) entrou na frente
+      diag.erro = e.name; relatar("nao liberou");
+    });
 }
 document.addEventListener("pointerdown", destravarAudio, true);
 document.addEventListener("touchend", destravarAudio, true);
+$("bipe").onclick = () => { fila.push(bipe()); if (!tocando) proxima(); relatar("bipe"); };
+
 function tocar(taxa, b64) {
-  if (!audio || audio.state !== "running") {
-    presos.push([taxa, b64]);
-    $("liberar").style.display = "block";
-    if (audio) audio.resume().then(soltarPresos).catch(() => {});
-    return;
-  }
-  const bin = atob(b64);
-  const n = bin.length >> 1;
-  const buf = audio.createBuffer(1, n, taxa);
-  const canal = buf.getChannelData(0);
-  for (let i = 0; i < n; i++) {
-    let v = bin.charCodeAt(2 * i) | (bin.charCodeAt(2 * i + 1) << 8);
-    if (v >= 32768) v -= 65536;
-    canal[i] = v / 32768;
-  }
-  const fonte = audio.createBufferSource();
-  fonte.buffer = buf;
-  fonte.connect(audio.destination);
-  proximoInicio = Math.max(proximoInicio, audio.currentTime + 0.05);
-  fonte.start(proximoInicio);
-  proximoInicio += buf.duration;
+  const bin = atob(b64), pcm = new Uint8Array(bin.length);
+  for (let k = 0; k < bin.length; k++) pcm[k] = bin.charCodeAt(k);
+  fila.push(wav(taxa, pcm));
+  diag.pedacos++; diag.segundos += pcm.length / 2 / taxa;
+  if (!tocando) proxima();
+  relatar("chegou voz");
 }
 
 // ---- conexão ----
@@ -193,7 +229,9 @@ function conectar() {
       case "jarvis_disse": acrescentar("jarvis", ev.texto); break;
       case "mostrar": acrescentar("painel", ev.texto, ev.titulo); break;
       case "atividade": atividade(ev.texto); break;
-      case "voz": if (ev.pcm) tocar(ev.taxa, ev.pcm); break;
+      case "voz":
+        if (ev.pcm) { try { tocar(ev.taxa, ev.pcm); } catch (e) { relatar("erro: " + e.message); } }
+        break;
       case "aviso":
         if (ev.situacao === "limite") acrescentar("aviso", "O limite do Claude acabou por agora.");
         else if (ev.situacao === "offline") acrescentar("aviso", "O PC está sem internet.");

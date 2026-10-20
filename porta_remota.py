@@ -40,6 +40,7 @@ import secrets
 import shutil
 import subprocess
 import sys
+import time
 import uuid
 from pathlib import Path
 
@@ -148,8 +149,14 @@ def criar_app(cfg: config.Config):
             "historico": max(0, min(historico, protocolo.MAX_HISTORICO)), "voz": True}))
         await escritor.drain()
 
+        quem = str(primeira.get("quem") or "celular")[:40]
+        print(f"{time.strftime('%H:%M:%S')} conectou: {quem}", flush=True)
+
         async def da_ponte() -> None:
             while linha := await leitor.readline():
+                if linha.startswith(b'{"ev":"voz"'):
+                    print(f"{time.strftime('%H:%M:%S')} voz -> {quem}: {len(linha) // 1024} KB",
+                          flush=True)
                 await ws.send_text(linha.decode("utf-8").rstrip("\n"))
             await ws.send_text(json.dumps({"ev": "erro", "motivo": "o Jarvis desligou"},
                                           ensure_ascii=False))
@@ -178,6 +185,11 @@ def criar_app(cfg: config.Config):
                     try:
                         pedido = json.loads(msg["text"])
                     except ValueError:
+                        continue
+                    # O relatório da página (o que chegou e tocou): só para o log.
+                    if isinstance(pedido, dict) and isinstance(pedido.get("diag"), dict):
+                        print(f"{time.strftime('%H:%M:%S')} diag {quem}: "
+                              f"{json.dumps(pedido['diag'], ensure_ascii=False)[:300]}", flush=True)
                         continue
                     # Só o que um celular pode pedir; o "ola" quem faz é a porta.
                     if not isinstance(pedido, dict) or pedido.get("pedir") not in PEDIDOS_DO_CELULAR:
