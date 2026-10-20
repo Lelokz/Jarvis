@@ -184,6 +184,45 @@ def main() -> int:
             recusou = True
         checa("a ponte recusa 'ouvir' fora da pasta de áudio", recusou)
 
+        # 9. Anexo (o clipe): guardado em recebidos e levado pelo próximo pedido.
+        celular.send(json.dumps({"pedir": "anexo", "nome": "../../foto da praia.jpg"}))
+        celular.send(b"\xff\xd8 imagem de mentira" * 50)
+        ok_anexo = receber_ate(celular, "anexo_ok")
+        checa("o anexo é guardado e confirmado com id", ok_anexo is not None and ok_anexo.get("id"))
+        celular.send(json.dumps({"pedir": "falar", "texto": "o que tem nessa foto?"}))
+        p = esperar_pedido(srv)
+        anexo = Path(p.anexos[0]) if p and p.anexos else None
+        checa("o pedido seguinte leva o anexo, dentro da pasta de recebidos",
+              anexo is not None and anexo.parent == protocolo.pasta_recebidos()
+              and anexo.read_bytes().startswith(b"\xff\xd8"), repr(p))
+        checa("e o nome perde o caminho (../../ não escapa da pasta)",
+              anexo is not None and anexo.name.endswith("foto da praia.jpg"), anexo and anexo.name)
+        celular.send(json.dumps({"pedir": "falar", "texto": "e agora?"}))
+        p2 = esperar_pedido(srv)
+        checa("o anexo vai uma vez só", p2 is not None and p2.anexos == (), repr(p2))
+        if anexo:
+            anexo.unlink(missing_ok=True)
+
+        # 10. Anexo cancelado (o ✕ no app) é apagado e não vai.
+        celular.send(json.dumps({"pedir": "anexo", "nome": "errado.png"}))
+        celular.send(b"png" * 10)
+        ok_anexo = receber_ate(celular, "anexo_ok")
+        celular.send(json.dumps({"pedir": "anexo_cancelar", "id": ok_anexo["id"] if ok_anexo else 0}))
+        celular.send(json.dumps({"pedir": "falar", "texto": "nada"}))
+        p3 = esperar_pedido(srv)
+        sobrou = list(protocolo.pasta_recebidos().glob("*errado.png"))
+        checa("anexo cancelado: apagado e fora do pedido", p3 is not None and p3.anexos == () and not sobrou,
+              (repr(p3), sobrou))
+
+        # 11. A ponte recusa anexo de fora da pasta de recebidos.
+        try:
+            protocolo.ler_pedido(json.dumps({"pedir": "falar", "texto": "x",
+                                             "anexos": ["/etc/passwd"]}).encode())
+            recusou = False
+        except protocolo.ErroDeProtocolo:
+            recusou = True
+        checa("a ponte recusa anexo fora da pasta de recebidos", recusou)
+
         celular.close()
         servidor_web.should_exit = True
         srv.encerrar()

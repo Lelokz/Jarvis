@@ -61,6 +61,11 @@ MAX_PCM_BYTES = 16000 * 2 * 60
 # Os eventos "voz" trazem uma frase inteira em base64 (centenas de KB).
 LIMITE_LINHA_PONTE = 32 * 1024 * 1024
 PEDIDOS_DO_CELULAR = {"falar", "memoria"}
+# Foto, vídeo ou arquivo mandado pelo clipe do app. Vídeo de celular passa
+# disso fácil; por enquanto é o teto (o WebSocket guarda tudo na memória).
+MAX_ANEXO_BYTES = 64 * 1024 * 1024
+# Os recebidos somem depois disto (a porta limpa ao subir).
+DIAS_RECEBIDOS = 14
 
 
 def ler_chave(caminho: Path) -> str:
@@ -104,6 +109,42 @@ def guardar_audio(pcm: bytes) -> Path:
     with os.fdopen(fd, "wb") as f:
         f.write(pcm)
     return caminho
+
+
+def nome_seguro(nome: str) -> str:
+    """Só o nome do arquivo, sem pasta nem caractere estranho."""
+    import re
+
+    base = Path(nome or "anexo").name
+    base = re.sub(r"[^\w.\- ]", "_", base, flags=re.UNICODE).strip(" .") or "anexo"
+    return base[-80:]
+
+
+def guardar_anexo(nome: str, dados: bytes) -> Path:
+    pasta = protocolo.pasta_recebidos()
+    pasta.mkdir(parents=True, exist_ok=True, mode=0o700)
+    caminho = pasta / f"{time.strftime('%Y%m%d-%H%M%S')}-{nome_seguro(nome)}"
+    n = 1
+    while caminho.exists():
+        caminho = caminho.with_name(f"{caminho.stem}-{n}{caminho.suffix}")
+        n += 1
+    fd = os.open(caminho, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(fd, "wb") as f:
+        f.write(dados)
+    return caminho
+
+
+def limpar_recebidos(dias: int = DIAS_RECEBIDOS) -> int:
+    pasta = protocolo.pasta_recebidos()
+    if not pasta.is_dir():
+        return 0
+    limite = time.time() - dias * 86400
+    apagados = 0
+    for f in pasta.iterdir():
+        if f.is_file() and f.stat().st_mtime < limite:
+            f.unlink(missing_ok=True)
+            apagados += 1
+    return apagados
 
 
 def criar_app(cfg: config.Config):
@@ -170,11 +211,42 @@ def criar_app(cfg: config.Config):
             await ws.send_text(json.dumps({"ev": "erro", "motivo": "o Jarvis desligou"},
                                           ensure_ascii=False))
 
+        # O clipe do app: {"pedir":"anexo","nome":...} e, logo depois, o
+        # arquivo em binário. Fica guardado até o próximo pedido (texto ou
+        # fala), que leva os anexos junto.
+        anexo_chegando: dict | None = None
+        pendentes: dict[int, Path] = {}
+        proximo_id = 1
+
+        def com_anexos(pedido: dict) -> dict:
+            if pendentes:
+                pedido["anexos"] = [str(p) for p in pendentes.values()][:protocolo.MAX_ANEXOS]
+                pendentes.clear()
+            return pedido
+
         async def do_celular() -> None:
+            nonlocal anexo_chegando, proximo_id
             while True:
                 msg = await ws.receive()
                 if msg["type"] == "websocket.disconnect":
                     return
+                if msg.get("bytes") is not None and anexo_chegando is not None:
+                    dados, nome = msg["bytes"], anexo_chegando["nome"]
+                    anexo_chegando = None
+                    if len(dados) > MAX_ANEXO_BYTES:
+                        await ws.send_text(json.dumps(
+                            {"ev": "anexo_erro", "nome": nome,
+                             "motivo": f"maior que {MAX_ANEXO_BYTES // 1024 // 1024} MB"},
+                            ensure_ascii=False))
+                        continue
+                    caminho = await asyncio.to_thread(guardar_anexo, nome, dados)
+                    pendentes[proximo_id] = caminho
+                    await ws.send_text(json.dumps({"ev": "anexo_ok", "id": proximo_id, "nome": nome},
+                                                  ensure_ascii=False))
+                    print(f"{time.strftime('%H:%M:%S')} anexo de {quem}: {caminho.name} "
+                          f"({len(dados) // 1024} KB)", flush=True)
+                    proximo_id += 1
+                    continue
                 if msg.get("bytes") is not None:
                     dados = msg["bytes"]
                     if len(dados) > MAX_AUDIO_BYTES:
@@ -189,7 +261,8 @@ def criar_app(cfg: config.Config):
                             ensure_ascii=False))
                         continue
                     caminho = guardar_audio(pcm)
-                    escritor.write(protocolo.codificar({"pedir": "ouvir", "arquivo": str(caminho)}))
+                    escritor.write(protocolo.codificar(
+                        com_anexos({"pedir": "ouvir", "arquivo": str(caminho)})))
                 elif msg.get("text") is not None:
                     try:
                         pedido = json.loads(msg["text"])
@@ -200,9 +273,20 @@ def criar_app(cfg: config.Config):
                         print(f"{time.strftime('%H:%M:%S')} diag {quem}: "
                               f"{json.dumps(pedido['diag'], ensure_ascii=False)[:300]}", flush=True)
                         continue
+                    if isinstance(pedido, dict) and pedido.get("pedir") == "anexo":
+                        anexo_chegando = {"nome": str(pedido.get("nome") or "anexo")}
+                        continue
+                    if isinstance(pedido, dict) and pedido.get("pedir") == "anexo_cancelar":
+                        caminho = pendentes.pop(pedido.get("id"), None)
+                        if caminho is not None:
+                            caminho.unlink(missing_ok=True)
+                        continue
                     # Só o que um celular pode pedir; o "ola" quem faz é a porta.
                     if not isinstance(pedido, dict) or pedido.get("pedir") not in PEDIDOS_DO_CELULAR:
                         continue
+                    if pedido.get("pedir") == "falar":
+                        # Os anexos quem põe é a porta (o celular não sabe os caminhos).
+                        pedido = com_anexos({"pedir": "falar", "texto": pedido.get("texto")})
                     escritor.write(protocolo.codificar(pedido))
                 await escritor.drain()
 
@@ -258,8 +342,12 @@ def main() -> int:
         return 0
     import uvicorn
 
+    apagados = limpar_recebidos()
+    if apagados:
+        print(f"{time.strftime('%H:%M:%S')} recebidos: {apagados} com mais de "
+              f"{DIAS_RECEBIDOS} dias apagados", flush=True)
     uvicorn.run(criar_app(cfg), host="127.0.0.1", port=cfg.remoto.porta,
-                log_level="warning", ws_max_size=MAX_AUDIO_BYTES + 1024)
+                log_level="warning", ws_max_size=MAX_ANEXO_BYTES + 1024)
     return 0
 
 

@@ -533,7 +533,8 @@ class Ciclo:
                 self.agente.interromper()
             else:
                 self.registrador.registrar_estado("fala_no_meio", texto=texto)
-                self.agente.pedir(texto, origem)
+                contexto, self._contexto = self._contexto, ""
+                self.agente.pedir(texto, origem, contexto)
             self._mudar_estado("pensando")
             return
 
@@ -752,6 +753,12 @@ class Ciclo:
                 self.atender_texto(pedido.valor)
             return
         self._corpo = pedido.cliente
+        if pedido.anexos:
+            # Vai junto do pedido para o Claude, como o contexto do WhatsApp.
+            nota = ("[Anexos que o Léo mandou do celular, já no PC (imagem: abra com o "
+                    "Read; vídeo: tire alguns quadros com ffmpeg e olhe): "
+                    + ", ".join(pedido.anexos) + "]")
+            self._contexto = "\n".join(p for p in (self._contexto, nota) if p)
         if pedido.tipo == "falar":
             self.registrador.registrar_estado("texto_do_celular", texto=pedido.valor)
             self._responder(pedido.valor, origem="celular")

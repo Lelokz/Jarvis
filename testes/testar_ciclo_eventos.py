@@ -466,6 +466,20 @@ def rodar_celular(tmp: Path) -> None:
               agente.chamadas[-1] == "toca uma música"
               and any(e["ev"] == "voz" and e.get("pcm") for e in g.eventos), agente.chamadas)
 
+        print("-- E13. anexo do celular vai para o Claude junto do pedido --")
+        recebidos = []
+        original_pedir = agente.pedir
+        agente.pedir = lambda texto, origem="voz", contexto="": (
+            recebidos.append((texto, contexto)), original_pedir(texto, origem, contexto))
+        agente.resposta = Saida("fim", texto="É uma praia.")
+        ciclo.atender_pedido(Pedido("falar", "o que é isso?", cliente=7, voz=True,
+                                    anexos=("/home/x/recebidos/foto.jpg",)))
+        ciclo.atender_agente()
+        checa("o caminho do anexo vai no contexto do pedido",
+              recebidos and "/home/x/recebidos/foto.jpg" in recebidos[-1][1]
+              and recebidos[-1][0] == "o que é isso?", recebidos)
+        agente.pedir = original_pedir
+
         print("-- E12. depois, falar no PC devolve a voz para a caixa de som --")
         g.limpar()
         ciclo.atender_pedido(Pedido("falar", "e agora?", cliente=1, voz=False))

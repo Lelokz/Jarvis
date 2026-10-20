@@ -81,6 +81,12 @@ CLIENTES -> ASSISTENTE
         áudio não cabe numa linha). O assistente transcreve, apaga o arquivo e
         atende como o "falar". Arquivo fora da pasta é recusado.
 
+    "anexos": ["<pasta_recebidos()>/..."]
+        (v2, opcional no "falar" e no "ouvir") Fotos, vídeos e arquivos que o
+        Léo mandou do celular junto com o pedido; a porta remota já os gravou
+        em `pasta_recebidos()`. O Claude recebe os caminhos e abre (imagem com
+        o Read; vídeo tirando quadros). Até MAX_ANEXOS; fora da pasta, recusa.
+
 **O "ola" é obrigatório antes de qualquer evento.** Quem não se apresentou não
 recebe difusão. Não é cerimônia: é o que garante que tudo o que chega depois do
 histórico seja novo, sem um evento ao vivo escapar pela brecha entre conectar e
@@ -110,6 +116,8 @@ MAX_TEXTO = 500
 # Teto do histórico que o assistente guarda e que um cliente pode pedir. É o
 # alcance de UMA sessão, que foi a decisão do Léo na passada 2.
 MAX_HISTORICO = 200
+# Anexos num pedido só (fotos, vídeos, arquivos do celular).
+MAX_ANEXOS = 10
 
 
 class ErroDeProtocolo(ValueError):
@@ -141,7 +149,7 @@ def ler_pedido(linha: bytes) -> tuple[str, dict[str, Any]]:
         texto = " ".join(texto.split())
         if len(texto) > MAX_TEXTO:
             raise ErroDeProtocolo(f"texto com mais de {MAX_TEXTO} caracteres")
-        return tipo, {"texto": texto}
+        return tipo, {"texto": texto, "anexos": _anexos(objeto)}
 
     if tipo == "memoria":
         return tipo, {}
@@ -153,7 +161,7 @@ def ler_pedido(linha: bytes) -> tuple[str, dict[str, Any]]:
         caminho = Path(arquivo).resolve()
         if caminho.parent != pasta_audio().resolve() or caminho.suffix != ".pcm":
             raise ErroDeProtocolo("'ouvir' só aceita .pcm da pasta de áudio da ponte")
-        return tipo, {"arquivo": str(caminho)}
+        return tipo, {"arquivo": str(caminho), "anexos": _anexos(objeto)}
 
     if tipo == "ola":
         quantas = objeto.get("historico", 0)
@@ -185,3 +193,26 @@ def pasta_audio() -> Path:
     Dentro do `$XDG_RUNTIME_DIR` (só o usuário entra, some no logout)."""
     base = os.environ.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}"
     return Path(base) / "jarvis-remoto"
+
+
+def pasta_recebidos() -> Path:
+    """Onde ficam as fotos, vídeos e arquivos que o Léo manda do celular.
+    Fora do git e fora do $XDG_RUNTIME_DIR: o Claude pode precisar deles
+    depois (a porta remota apaga os de mais de 14 dias)."""
+    return Path.home() / ".local" / "share" / "jarvis" / "recebidos"
+
+
+def _anexos(objeto: dict[str, Any]) -> list[str]:
+    anexos = objeto.get("anexos", [])
+    if not isinstance(anexos, list) or len(anexos) > MAX_ANEXOS:
+        raise ErroDeProtocolo(f"'anexos' tem que ser uma lista de até {MAX_ANEXOS}")
+    pasta = pasta_recebidos().resolve()
+    caminhos = []
+    for a in anexos:
+        if not isinstance(a, str):
+            raise ErroDeProtocolo("anexo tem que ser um caminho")
+        c = Path(a).resolve()
+        if pasta not in c.parents or not c.is_file():
+            raise ErroDeProtocolo("anexo fora da pasta de recebidos")
+        caminhos.append(str(c))
+    return caminhos

@@ -383,6 +383,16 @@ segurar o nome "Jarvis" no topo esquece o link.
   o cache dele moram no HD, em `Arquivo/Android-Ferramentas/` (~3 GB), sem
   sudo. A chave de assinatura é a de debug, em `~/.android/debug.keystore`:
   **perder ela = desinstalar o app para instalar a versão nova.**
+- **v0.2 (20/10/2026, pedido do Léo):** o estilo da janela do PC. O
+  **átomo** (`Atomo.kt`, o mesmo desenho do `Esfera.qml`: as metades de trás
+  dos anéis passam atrás do núcleo) fica **centralizado embaixo e é o botão
+  de falar** (segura e fala; cresce com a voz). As cores são as do PC:
+  azul pronto, verde te escutando, roxo pensando, âmbar falando. Embaixo, o
+  campo de escrever e, à direita, o **clipe**: a foto/vídeo/arquivo fica
+  esperando a mensagem (miniatura e ✕) e vai **junto** dela. Por baixo, o
+  arquivo já sobe para o PC (`~/.local/share/jarvis/recebidos/`, apagados
+  depois de 14 dias, teto de 64 MB) e a porta junta os caminhos ao próximo
+  pedido (`"anexos"` no "falar"/"ouvir"); o Claude recebe como contexto.
 - **Instalar:** o Chrome do celular baixa de
   `https://jarvis.<tailnet>.ts.net/jarvis.apk` (a porta remota serve o último
   APK compilado; o APK não leva segredo nenhum).

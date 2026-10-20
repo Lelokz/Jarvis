@@ -17,12 +17,16 @@ import java.util.concurrent.Executors
  * direto no AudioTrack. Sem o navegador no meio: nada de "toque na página
  * para liberar o som".
  */
-class Voz {
+class Voz(private val aoMudar: (tocando: Boolean) -> Unit = {}) {
     private val fila = Executors.newSingleThreadExecutor()
     private var trilha: AudioTrack? = null
     private var taxaAtual = 0
+    private val pendentes = java.util.concurrent.atomic.AtomicInteger(0)
 
+    /** `aoMudar(true)` quando começa a tocar, `false` quando a fila esvazia
+     * (o átomo fica âmbar enquanto ele fala, como no PC). */
     fun tocar(taxa: Int, pcm: ByteArray) {
+        if (pendentes.getAndIncrement() == 0) aoMudar(true)
         fila.execute {
             val t = trilhaPara(taxa)
             var feito = 0
@@ -30,6 +34,11 @@ class Voz {
                 val n = t.write(pcm, feito, pcm.size - feito)
                 if (n <= 0) break
                 feito += n
+            }
+            if (pendentes.decrementAndGet() == 0) {
+                // O write volta com ~0,5 s ainda no buffer: espera ele tocar.
+                Thread.sleep(500)
+                if (pendentes.get() == 0) aoMudar(false)
             }
         }
     }
@@ -69,7 +78,7 @@ class Voz {
  * ao soltar, devolve um WAV. A porta remota converte qualquer formato, mas
  * WAV não gasta nada para montar.
  */
-class Gravador {
+class Gravador(private val aoNivel: (Float) -> Unit = {}) {
     private val taxa = 16000
     private var gravacao: AudioRecord? = null
     private var thread: Thread? = null
@@ -95,7 +104,10 @@ class Gravador {
             val buf = ByteArray(3200)
             while (gravando) {
                 val n = g.read(buf, 0, buf.size)
-                if (n > 0) synchronized(dados) { dados.write(buf, 0, n) }
+                if (n > 0) {
+                    synchronized(dados) { dados.write(buf, 0, n) }
+                    aoNivel(nivel(buf, n))
+                }
             }
         }.also { it.start() }
     }
@@ -111,6 +123,20 @@ class Gravador {
         val pcm = synchronized(dados) { dados.toByteArray() }
         if (pcm.size < taxa * 2 * 3 / 10) return null // menos de 0,3 s
         return wav(pcm)
+    }
+
+    /** Volume do pedaço, 0 a 1 em escala de dB (o átomo cresce com a voz). */
+    private fun nivel(buf: ByteArray, n: Int): Float {
+        var soma = 0.0
+        var i = 0
+        while (i + 1 < n) {
+            val v = ((buf[i + 1].toInt() shl 8) or (buf[i].toInt() and 0xff)).toShort().toDouble()
+            soma += v * v
+            i += 2
+        }
+        val rms = Math.sqrt(soma / maxOf(1, n / 2)) / 32768.0
+        val db = 20 * Math.log10(maxOf(rms, 1e-5))
+        return ((db + 50) / 40).toFloat().coerceIn(0f, 1f)
     }
 
     private fun wav(pcm: ByteArray): ByteArray {
