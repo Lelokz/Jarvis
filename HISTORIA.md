@@ -2251,3 +2251,22 @@ para número fora da agenda trava até o Léo dizer sim a uma pergunta com o
 nome e o final do número. Para contato salvo continua direto, sem perguntar:
 "ficou muito melhor ele não perguntar se pode" (o Léo).
 
+### A Regra nº 1 e as instruções que não pegavam (20/10/2026, tarde)
+
+O Léo pediu ao próprio Jarvis para anotar no `CLAUDE.md` da casa: nunca
+mexer no próprio código. Virou também a "Regra nº 1" das instruções de
+sistema (`persona.md`), concreta: o que é código, o que ele pode (os `.md`),
+e o que fazer quando o Léo pede mudança (anotar em `PEDIDOS.md` para o
+Claude do VS Code).
+
+No teste, ele **desobedeceu**: mudou o `config.toml`, fez commit e push
+(revertido). Numa conversa nova, obedeceu de primeira. A causa valia para
+tudo: **conversa continuada guarda as instruções de quando começou**. O
+Jarvis continua a conversa se parou há menos de 3 h, então toda mudança na
+`persona.md` ficava sem efeito por horas (por isso ele seguia mandando a
+descrição da foto para a janela). Agora o hash das instruções fica em
+`.instrucoes` na casa; mudou, começa conversa nova (a memória continua).
+
+No mesmo dia: a fala passou a ser a resposta inteira (antes cortava em duas
+frases com "o resto tá na janela") e o esforço baixou para "medium".
+
