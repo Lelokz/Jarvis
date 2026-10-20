@@ -245,6 +245,10 @@ class Agente:
             mcp_servers={"jarvis": servidor},
             continue_conversation=continuar,
             stderr=lambda _linha: None,
+            # Uma foto aberta pelo Read volta numa mensagem só, em base64. O
+            # padrão (1 MB) quebrava a conexão com uma foto de 2 MB do
+            # celular ("JSON message exceeded maximum buffer size", 20/10/2026).
+            max_buffer_size=64 * 1024 * 1024,
         )
 
     async def _conectar(self, continuar: bool = False) -> None:
