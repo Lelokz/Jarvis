@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- O átomo do Jarvis com o anel de HUD (gerado por celular/gerar_icone.py). -->
 <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
-    <background android:drawable="@color/fundo" />
+    <background android:drawable="@drawable/ic_fundo" />
     <foreground android:drawable="@drawable/ic_frente" />
 </adaptive-icon>
