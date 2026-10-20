@@ -156,8 +156,7 @@ modelo = "hey_jarvis_v0.1"
 
 # 0.50 está num platô — de 0.45 a 0.50 o resultado é idêntico. Há 0.05 de
 # folga para baixo antes que mexer aqui mude qualquer comportamento.
-# 20/out/2026: o Léo subiu para 0.60 (pedido por voz).
-limiar = 0.60
+limiar = 0.50
 
 # Abaixo do limiar, mas alto o bastante para valer gravar o áudio. É o que
 # permite auditar um quase-acerto depois: o log diz o score, o .wav diz o que
