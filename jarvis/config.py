@@ -96,6 +96,7 @@ class Ciclo:
 class Agente:
     binario: str
     modelo: str
+    modelo_rapido: str
     effort: str
     modo_permissao: str
     casa: str

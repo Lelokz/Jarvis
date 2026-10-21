@@ -448,6 +448,22 @@ celular: é o que deixa os dois conversarem.
   ```
   O relógio desliga o Wi-Fi com a tela apagada: aí some da rede.
 
+### Dois cérebros: o rápido atende, o Opus pensa (21/10/2026)
+
+Ideia do Léo: escolher conforme o pedido. Medido (medianas de 3, mesma
+conversa): o **esforço quase não muda nada** (Opus médio e baixo empatam); o
+**modelo** muda: o Haiku responde "tudo bem?" em 1,3 s (Opus 2,1), uma conta em
+1,2 (1,9) e olhar uma pasta em 3,1 (6,2). Então: `modelo_rapido` (Haiku) atende
+tudo; pedido que é trabalho de verdade ele passa com a ferramenta
+`chamar_o_opus` e o Jarvis troca o modelo na MESMA conversa
+(`set_model`), avisa "Pensando com calma" na tela, e volta ao rápido no fim.
+Quem decide é o próprio Haiku (descrição da ferramenta + persona "Dois
+cérebros"), não uma lista de palavras. Testado: o simples ficou no Haiku (1,0
+a 2,9 s); "capricha"/"pensa com calma" foram ao Opus (8 a 10 s: 2–3 s do
+Haiku decidindo + o Opus escrevendo a resposta longa inteira antes de falar).
+**Próximo ganho possível:** falar a primeira frase enquanto o resto ainda é
+escrito (hoje a fala espera o texto todo).
+
 ### Reconhecer a voz do Léo (21/10/2026)
 
 Os amigos do Léo usaram o Jarvis dele (trocaram o nome dele na memória e

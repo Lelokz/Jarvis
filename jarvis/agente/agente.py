@@ -215,6 +215,10 @@ class Agente:
         # Quem falou por último (jarvis/quem_fala.py): as travas da voz olham
         # isto. None = digitado ou sem o reconhecimento: vale como o Léo.
         self.voz = None
+        # Os dois cérebros (config [agente] modelo_rapido): o rápido atende; o
+        # pedido pesado ele passa para o forte (ferramenta chamar_o_opus).
+        self._subir = False     # o rápido pediu o Opus: ao fim do turno, troca
+        self._no_opus = False   # o pedido atual está com o Opus
         self._cliente: ClaudeSDKClient | None = None
         self._leitor: asyncio.Task | None = None
         self._loop = asyncio.new_event_loop()
@@ -275,11 +279,13 @@ class Agente:
             whatsapp=self.whatsapp,
             falas_do_pedido=lambda: list(self._falas),
             ao_mandar=self._mandou_whats,
+            chamar_o_opus=self._pedir_o_opus if self.cfg.modelo_rapido else None,
         )
+        self._no_opus = False
         return ClaudeAgentOptions(
             cli_path=self.binario,
             cwd=str(self.casa),
-            model=self.cfg.modelo,
+            model=self.cfg.modelo_rapido or self.cfg.modelo,
             effort=self.cfg.effort,
             # "user": os MCPs, skills e preferências do Léo, iguais ao VS Code.
             # "project": o CLAUDE.md da casa, que é a memória dele.
@@ -446,7 +452,17 @@ class Agente:
                 elif isinstance(m, RateLimitEvent):
                     info = m.rate_limit_info
                     self.limite = Limite(info.status, info.resets_at, info.utilization)
+                elif isinstance(m, ResultMessage) and self._subir and not m.is_error \
+                        and not (getattr(m, "terminal_reason", None) or "").startswith("aborted"):
+                    # O rápido passou o pedido: o que ele escreveu não vale, e o
+                    # turno continua com o Opus (mesma conversa).
+                    self._subir, self._no_opus, pendente = False, True, None
+                    self.saidas.put(Saida("atividade", "Pensando com calma"))
+                    asyncio.create_task(self._subir_pro_opus(cliente))
                 elif isinstance(m, ResultMessage):
+                    self._subir = False
+                    if self._no_opus:
+                        asyncio.create_task(self._voltar_pro_rapido(cliente))
                     final, pendente = (pendente if pendente is not None else m.result or ""), None
                     self.ocupado = False
                     self.offline = False
@@ -466,6 +482,30 @@ class Agente:
             # O Claude Code caiu: o próximo pedido sobe outro.
             self._cliente = None
             self._falhou(e)
+
+    def _pedir_o_opus(self, motivo: str) -> str:
+        if self._no_opus:
+            return "Você já é o Opus: siga com o pedido."
+        self._subir = True
+        return ("Combinado: o Opus assume este pedido assim que você terminar. Termine o "
+                "turno AGORA, sem escrever nada para o usuário.")
+
+    async def _subir_pro_opus(self, cliente: ClaudeSDKClient) -> None:
+        try:
+            await cliente.set_model(self.cfg.modelo)
+            await cliente.query("[sistema: o modelo rápido passou este pedido para você, o Opus. "
+                                "Atenda o último pedido do usuário acima, do começo, como se ninguém "
+                                "tivesse respondido. Não chame chamar_o_opus.]")
+        except Exception as e:
+            self._no_opus = False
+            self._falhou(e)
+
+    async def _voltar_pro_rapido(self, cliente: ClaudeSDKClient) -> None:
+        try:
+            await cliente.set_model(self.cfg.modelo_rapido)
+        except Exception:
+            pass
+        self._no_opus = False
 
     async def _perguntar(self, texto: str, opcoes: list[str]) -> str | None:
         fut: concurrent.futures.Future = concurrent.futures.Future()

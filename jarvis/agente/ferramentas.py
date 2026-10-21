@@ -37,8 +37,10 @@ def _texto(t: str, erro: bool = False) -> dict[str, Any]:
 
 
 def criar_servidor(mostrar: Callable[[str, str], None], whatsapp,
-                   falas_do_pedido: Callable[[], list[str]], ao_mandar: Callable[[str, str, str], None]):
-    """`falas_do_pedido()` devolve o que o Léo falou desde que a tarefa começou."""
+                   falas_do_pedido: Callable[[], list[str]], ao_mandar: Callable[[str, str, str], None],
+                   chamar_o_opus: Callable[[str], str] | None = None):
+    """`falas_do_pedido()` devolve o que o Léo falou desde que a tarefa começou.
+    `chamar_o_opus(motivo)`: passa o pedido do modelo rápido para o forte."""
 
     @tool("mostrar",
           "Mostra texto na janela do Jarvis, sem falar. Só para o que NÃO dá para "
@@ -50,6 +52,20 @@ def criar_servidor(mostrar: Callable[[str, str], None], whatsapp,
         return _texto("Mostrado na janela.")
 
     ferramentas = [_mostrar]
+
+    if chamar_o_opus is not None:
+        @tool("chamar_o_opus",
+              "Passa ESTE pedido para o Opus, o modelo que pensa melhor (e é mais lento). "
+              "Use quando o pedido for trabalho de verdade: vários passos, organizar ou "
+              "mexer em vários arquivos, pesquisar na internet, criar documento, slides ou "
+              "código, decidir algo delicado, ou quando o usuário pedir para caprichar ou "
+              "pensar com calma. Na dúvida, chame. Chame ANTES de qualquer outra coisa e "
+              "sem escrever nada: o Opus assume com a conversa toda.",
+              {"motivo": str})
+        async def _opus(args):
+            return _texto(chamar_o_opus(str(args.get("motivo") or "")))
+
+        ferramentas.append(_opus)
 
     if whatsapp is not None:
         def _ligado() -> bool:

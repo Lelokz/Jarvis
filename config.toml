@@ -236,6 +236,12 @@ intervalo_s = 3
 # Playwright, Gmail, Agenda, Drive...), sem roteador nem lista de funções.
 binario = "~/.local/bin/claude"
 modelo = "claude-opus-5-5"
+# O que atende primeiro (21/10/2026, ideia do Léo: escolher conforme o
+# pedido). Medido: o Haiku responde em ~1,3 s o que o Opus leva ~2,1 s, e
+# tarefa com ferramenta em ~3 s contra ~6 s; o esforço quase não mudava nada.
+# Pedido que é trabalho de verdade, o próprio Haiku passa para o `modelo`
+# (ferramenta chamar_o_opus). Vazio = só o `modelo`, como antes.
+modelo_rapido = "claude-haiku-5-5"
 # "medium" (20/10/2026, pedido do Léo: "ele não precisa de tudo isso"); antes
 # era "high".
 effort = "medium"
