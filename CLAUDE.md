@@ -171,7 +171,10 @@ que bater o olho e perceber "isso aqui tá estranho".
   Em 20/10/2026 eu religuei com `./jarvis.sh` direto: os processos ficaram no
   grupo do VS Code e, quando ele fechou o terminal (~23:45), o Jarvis inteiro
   foi desligado junto (assistente, porta, voz, WhatsApp). O Léo só percebeu
-  porque o link do APK não abriu no celular.
+  porque o link do APK não abriu no celular. E o `./jarvis.sh --desligar`
+  vai SOZINHO num comando: ele faz `pkill -f` pelo caminho dos scripts, e se a
+  mesma linha de comando citar `assistente.py` ou `porta_remota.py` (um
+  `pgrep` logo depois, por exemplo), mata o próprio comando (21/10/2026).
 - A separação cérebro/corpo (o agente recebe texto e devolve fala, pergunta
   ou cartão pela fila, sem saber o que é microfone ou tela; `jarvis/nucleo/`
   ficou só com as mãos que o corpo usa) é o desenho central do Jarvis e o
