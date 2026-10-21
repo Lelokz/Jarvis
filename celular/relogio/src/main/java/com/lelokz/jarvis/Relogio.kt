@@ -40,7 +40,14 @@ class Relogio(private val app: Application) {
     private val canais = Wearable.getChannelClient(app)
     private val escrita = Executors.newSingleThreadExecutor()
     private val voz = Voz { t -> principal.post { mudouTocando(t) } }
-    private val escuta by lazy { Escuta { n -> principal.post { nivel.floatValue = n } } }
+    private val microfone = Microfone(
+        aoPedaco = { pcm -> mandar(Tubo.FALA_PEDACO, pcm) },
+        aoNivel = { n -> principal.post { nivel.floatValue = n } },
+    )
+    // O celular já ouviu fala nesta escuta (a voz dele chegando só cancela se não).
+    private var falouNaEscuta = false
+    // Quando a frase acabou: a demora até o 1º som vai para o log do PC.
+    private var fimDaFala = 0L
     private var canal: ChannelClient.Channel? = null
     private var saida: DataOutputStream? = null
     private var abrindo = false
@@ -139,6 +146,7 @@ class Relogio(private val app: Application) {
         ligado.value = false
         motivo.value = porque
         esperando.value = false
+        if (ouvindo.value) { microfone.desligar(); ouvindo.value = false }
         // Com a tela na frente, tenta de novo daqui a pouco.
         if (visivel) principal.postDelayed({ if (visivel) abrir() }, 3000)
     }
@@ -169,34 +177,52 @@ class Relogio(private val app: Application) {
         escutar(DESISTE_MS)
     }
 
+    /** Liga o microfone indo para o celular; o celular avisa quando a frase acabou (`_escuta`). */
     private fun escutar(desisteMs: Long) {
         ouvindo.value = true
-        Thread({
-            val wav = escuta.ouvir(desisteMs)
-            val diag = JSONObject().put("diag", JSONObject()
-                .put("motivo", "escuta").put("fim", escuta.motivo).put("ms", escuta.duracaoMs)
-                .put("janela", desisteMs == JANELA_MS))
-            mandar(Tubo.TEXTO, diag.toString().toByteArray())
-            principal.post {
-                ouvindo.value = false
-                nivel.floatValue = 0f
-                if (wav != null) {
-                    mandar(Tubo.AUDIO, wav)
-                    esperando.value = true
-                    resposta.value = ""
-                    atividade.value = ""
-                } else if (!esperando.value && !tocando.value) {
-                    conversando = false // ninguém falou: a conversa acabou
-                }
-            }
-        }, "escuta").start()
+        falouNaEscuta = false
+        mandar(Tubo.FALA_INICIO, JSONObject().put("desiste_ms", desisteMs).toString().toByteArray())
+        microfone.ligar()
+        // O celular não respondeu (app velho, travou): não fica preso em "ouvindo".
+        principal.removeCallbacks(semResposta)
+        principal.postDelayed(semResposta, Microfone.SEGURANCA_MS + 1000)
+    }
+
+    private val semResposta = Runnable {
+        if (ouvindo.value) { cancelarEscuta(); motivo.value = "o celular não respondeu" }
+    }
+
+    /** O celular decidiu: a frase acabou (ou ninguém falou). */
+    private fun escutaAcabou(fim: String) {
+        principal.removeCallbacks(semResposta)
+        microfone.desligar()
+        ouvindo.value = false
+        nivel.floatValue = 0f
+        if (fim == "silêncio" || fim == "tempo máximo" || fim == "toque") {
+            esperando.value = true
+            resposta.value = ""
+            atividade.value = ""
+            fimDaFala = System.currentTimeMillis()
+        } else if (!esperando.value && !tocando.value) {
+            conversando = false // ninguém falou: a conversa acabou
+        }
+    }
+
+    /** Fecha o microfone sem mandar nada (a voz dele chegou, ou "dorme aí"). */
+    private fun cancelarEscuta() {
+        if (!ouvindo.value) return
+        principal.removeCallbacks(semResposta)
+        mandar(Tubo.FALA_FIM, "cancelar".toByteArray())
+        microfone.desligar()
+        ouvindo.value = false
+        nivel.floatValue = 0f
     }
 
     /** O toque no átomo: depende do que ele está fazendo. */
     fun tocou() {
         when {
             !ligado.value -> abrir()
-            ouvindo.value -> escuta.encerrar()
+            ouvindo.value -> mandar(Tubo.FALA_FIM, "toque".toByteArray())
             tocando.value -> { voz.parar(); conversando = false }
             else -> ouvir()
         }
@@ -206,7 +232,13 @@ class Relogio(private val app: Application) {
         // A voz dele chegando com o microfone aberto esperando: fecha o
         // microfone (o relógio não pode se ouvir). Se o Léo já estava falando,
         // deixa terminar.
-        if (ouvindo.value && !escuta.falou) escuta.cancelar()
+        if (ouvindo.value && !falouNaEscuta) cancelarEscuta()
+        if (fimDaFala > 0) {
+            val ms = System.currentTimeMillis() - fimDaFala
+            fimDaFala = 0
+            mandar(Tubo.TEXTO, JSONObject().put("diag", JSONObject().put("motivo", "demora no relógio")
+                .put("fim_da_fala_ate_1o_som_ms", ms).put("1a_voz_kb", pcm.size / 1024)).toString().toByteArray())
+        }
         voz.tocar(taxa, pcm)
     }
 
@@ -242,6 +274,10 @@ class Relogio(private val app: Application) {
                 motivo.value = ev.optString("motivo")
                 if (ligado.value && ouvirQuandoLigar) { ouvirQuandoLigar = false; ouvir() }
             }
+            "_escuta" -> {
+                if (ev.optBoolean("falou")) falouNaEscuta = true
+                if (ev.has("fim") && ouvindo.value) escutaAcabou(ev.optString("fim"))
+            }
             "estado" -> estado.value = ev.optString("estado")
             "voce_disse" -> {
                 voceDisse.value = ev.optString("texto")
@@ -250,7 +286,7 @@ class Relogio(private val app: Application) {
                     // e fechar depois do "Tá bom.". Sem voz em 4 s, fecha igual.
                     conversando = false
                     indoDormir = true
-                    if (ouvindo.value) escuta.cancelar()
+                    cancelarEscuta()
                     principal.postDelayed(dormirAgora, 4000)
                 }
                 resposta.value = ""

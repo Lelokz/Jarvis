@@ -15,8 +15,8 @@ android {
         applicationId = "com.lelokz.jarvis"
         minSdk = 30          // Wear OS 3+
         targetSdk = 34       // Wear OS 5 é Android 14
-        versionCode = 1
-        versionName = "0.1"
+        versionCode = 2
+        versionName = "0.2"
         // O Galaxy Watch 7 roda em 32 bits (conferido no adb).
         ndk { abiFilters += listOf("armeabi-v7a") }
     }

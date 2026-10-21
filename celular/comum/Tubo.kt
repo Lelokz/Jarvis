@@ -10,8 +10,14 @@ import java.io.DataOutputStream
  *
  * - TEXTO: um evento ou pedido da porta remota, o mesmo JSON do WebSocket.
  * - AUDIO: o WAV da fala gravada no relógio (relógio → celular).
- * - VOZ: a voz do Jarvis já fora do base64: a taxa (4 bytes) e o PCM
- *   (celular → relógio). Um quarto a menos de bytes no Bluetooth.
+ * - VOZ: a voz do Jarvis já fora do base64 e pela metade da taxa (o
+ *   alto-falante do relógio não precisa de mais): a taxa (4 bytes) e o PCM
+ *   (celular → relógio).
+ * - FALA_INICIO / FALA_PEDACO / FALA_FIM: o microfone do relógio indo para o
+ *   celular ENQUANTO o Léo fala (PCM 16 kHz em pedaços de 160 ms). Quem decide
+ *   o fim da frase é o celular, com o Silero (`EscutaRemota.kt`), e responde
+ *   com o evento `_escuta`. FALA_INICIO leva `{"desiste_ms": N}`; FALA_FIM,
+ *   "toque" (terminar agora) ou "cancelar" (jogar fora).
  *
  * Este arquivo mora em `comum/`: o app do celular e o do relógio usam o mesmo.
  */
@@ -19,6 +25,9 @@ object Tubo {
     const val TEXTO = 1
     const val AUDIO = 2
     const val VOZ = 3
+    const val FALA_INICIO = 4
+    const val FALA_PEDACO = 5
+    const val FALA_FIM = 6
     const val CAMINHO = "/jarvis"
 
     fun escrever(saida: DataOutputStream, tipo: Int, dados: ByteArray) {

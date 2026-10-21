@@ -427,9 +427,17 @@ celular: é o que deixa os dois conversarem.
   Personalizar teclas → Pressionar duas vezes → Jarvis). Abre ouvindo, a
   resposta sai na tela e em voz no relógio, e mais 4 s ouvindo. Tocar no
   átomo: termina a frase / cala ele. "Dorme aí" (a lista do PC) fecha o app.
-- **Fim da frase pelo volume** (12 dB acima do ruído, 0,7 s de silêncio), não
-  pelo Silero: o onnxruntime dá SIGBUS em 32 bits. Cada escuta manda ao
-  `logs/porta-remota.log` quanto durou e por que parou (`diag relogio`).
+- **Mais rápido (relógio v0.2 + celular v0.7, 20/10/2026, noite):** no SENAI
+  ele levou 5–10 s. Medido: 2–5,5 s são do PC (Claude 1,6–4,8 s), o resto era
+  a ponte: a fala só subia depois de terminar, o fim da frase pelo volume
+  errava com barulho (e o Whisper inventava "A CIDADE NO BRASIL" com o
+  barulho), e a voz descia com 200–375 KB por frase. Agora o microfone vai
+  para o celular **enquanto o Léo fala** (pedaços de 160 ms), o **celular**
+  decide o fim da frase com o Silero (`EscutaRemota.kt`; no relógio o
+  onnxruntime dá SIGBUS em 32 bits) e manda ao PC na hora, e a voz desce
+  pela metade da taxa. No `logs/porta-remota.log`: `diag relogio` "escuta"
+  (como acabou, quanto áudio) e "demora no relógio" (fim da fala até o 1º
+  som, medido no relógio).
 - **Instalar** (relógio no Wi-Fi de casa, tela acesa em "Depuração sem fio";
   o PC já está pareado):
   ```

@@ -17,6 +17,7 @@ import org.json.JSONObject
 import java.io.DataInputStream
 import java.io.DataOutputStream
 import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import java.util.concurrent.Executors
 
 /**
@@ -25,13 +26,15 @@ import java.util.concurrent.Executors
  * conexão própria na porta remota, com "quem": "relogio". Para o PC o relógio
  * é um corpo a mais: a voz do que ele pede vai só para ele.
  *
- * O celular não entende o que passa, só repassa: o que vem do PC desce pelo
- * canal, o que sobe do relógio vai para o PC. A única troca é a voz, que desce
- * já fora do base64 (Tubo.VOZ).
+ * Quase tudo só passa: o que vem do PC desce pelo canal, o que sobe do
+ * relógio vai para o PC. Duas coisas o celular faz no meio, para o relógio
+ * responder mais rápido: decide o fim da frase do microfone do relógio
+ * (`EscutaRemota`, com o Silero) e manda a voz pela metade da taxa.
  */
 class PonteRelogio(private val app: Application) {
     private val prefs = app.getSharedPreferences("jarvis", Application.MODE_PRIVATE)
     private var atual: Sessao? = null
+    private val escuta by lazy { EscutaRemota(app) }
 
     @Synchronized
     fun abrir(canal: ChannelClient.Channel) {
@@ -73,6 +76,20 @@ class PonteRelogio(private val app: Application) {
                     when (tipo) {
                         Tubo.TEXTO -> conexao?.enviar(JSONObject(String(dados)))
                         Tubo.AUDIO -> conexao?.enviar(dados)
+                        Tubo.FALA_INICIO -> {
+                            val j = try { JSONObject(String(dados)) } catch (e: Exception) { JSONObject() }
+                            escuta.comecar(j.optLong("desiste_ms", 6000L))
+                        }
+                        Tubo.FALA_PEDACO -> {
+                            val antes = escuta.falou
+                            val fim = escuta.pedaco(dados)
+                            if (!antes && escuta.falou) avisarEscuta(JSONObject().put("falou", true))
+                            if (fim != null) terminarEscuta(fim)
+                        }
+                        Tubo.FALA_FIM -> {
+                            if (String(dados) == "cancelar") escuta.cancelar()
+                            else terminarEscuta(escuta.encerrar())
+                        }
                     }
                 }
             } catch (e: Exception) {
@@ -81,12 +98,27 @@ class PonteRelogio(private val app: Application) {
             fechar()
         }
 
+        /** A frase acabou: a fala vai para o PC na hora, e o relógio fecha o microfone. */
+        private fun terminarEscuta(fim: String) {
+            val vale = fim == "silêncio" || fim == "tempo máximo" || fim == "toque"
+            if (vale) conexao?.enviar(escuta.wav())
+            avisarEscuta(JSONObject().put("fim", fim))
+            conexao?.enviar(JSONObject().put("diag", JSONObject()
+                .put("motivo", "escuta").put("fim", fim).put("audio_ms", escuta.duracaoMs)))
+        }
+
+        private fun avisarEscuta(ev: JSONObject) {
+            if (fechada) return
+            ev.put("ev", "_escuta")
+            escrita.execute { mandar(Tubo.TEXTO, ev.toString().toByteArray()) }
+        }
+
         private fun doPc(ev: JSONObject) {
             if (fechada) return
             escrita.execute {
                 if (ev.optString("ev") == "voz") {
-                    val pcm = Base64.decode(ev.optString("pcm"), Base64.DEFAULT)
-                    val dados = ByteBuffer.allocate(4 + pcm.size).putInt(ev.optInt("taxa", 24000)).put(pcm).array()
+                    val pcm = metade(Base64.decode(ev.optString("pcm"), Base64.DEFAULT))
+                    val dados = ByteBuffer.allocate(4 + pcm.size).putInt(ev.optInt("taxa", 24000) / 2).put(pcm).array()
                     mandar(Tubo.VOZ, dados)
                 } else {
                     mandar(Tubo.TEXTO, ev.toString().toByteArray())
@@ -135,6 +167,21 @@ class PonteRelogio(private val app: Application) {
             false
         }
     }
+}
+
+/**
+ * A voz pela metade da taxa (40 kHz → 20 kHz): a média de cada par de
+ * amostras. Metade dos bytes no Bluetooth; no alto-falante do relógio não se
+ * ouve a diferença (a média já corta os agudos que dobrariam).
+ */
+private fun metade(pcm: ByteArray): ByteArray {
+    val entrada = ByteBuffer.wrap(pcm).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer()
+    val n = entrada.remaining() / 2
+    val saida = ByteBuffer.allocate(n * 2).order(ByteOrder.LITTLE_ENDIAN)
+    for (i in 0 until n) {
+        saida.putShort(((entrada.get(2 * i).toInt() + entrada.get(2 * i + 1).toInt()) / 2).toShort())
+    }
+    return saida.array()
 }
 
 /** Acordado pelo Google Play services quando o relógio abre o canal "/jarvis". */
