@@ -272,9 +272,14 @@ class WhatsApp:
         melhor = notas[0][0]
         return [c for n, c in notas if n >= melhor - 0.05]
 
-    def enviar(self, jid: str, texto: str) -> tuple[bool, str]:
+    def enviar(self, jid: str, texto: str, arquivo: str | None = None) -> tuple[bool, str]:
+        """`arquivo`: caminho absoluto de um arquivo para mandar junto (o texto
+        vira a legenda). A ponte lê o arquivo do disco (`media_path`)."""
+        corpo = {"recipient": jid, "message": texto}
+        if arquivo:
+            corpo["media_path"] = arquivo
         try:
-            r = requests.post(self.api, json={"recipient": jid, "message": texto}, timeout=15)
+            r = requests.post(self.api, json=corpo, timeout=60 if arquivo else 15)
             dados = r.json() if r.content else {}
         except (requests.RequestException, ValueError) as e:
             return False, f"a ponte do WhatsApp não respondeu ({e.__class__.__name__})"

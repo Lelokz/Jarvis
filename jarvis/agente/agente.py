@@ -505,6 +505,14 @@ class Agente:
 
     async def _trava_da_voz(self, entrada, _id, _ctx) -> dict:
         """Barra o que só o Léo pode pedir quando a voz não é a dele."""
+        comando = str((entrada.get("tool_input") or {}).get("command") or "")
+        if entrada.get("tool_name") == "Bash" and re.search(r"(localhost|127\.0\.0\.1):8080/api/send", comando):
+            # A ponte direto pula as travas do WhatsApp (pedido, número fora da
+            # agenda, voz): foi o contorno do Jarvis para mandar arquivo (20/10/2026).
+            return {"hookSpecificOutput": {
+                "hookEventName": "PreToolUse", "permissionDecision": "deny",
+                "permissionDecisionReason": "Use a ferramenta whatsapp_mandar (ela manda arquivo "
+                                            "também, no campo `arquivo`), nunca a ponte direto."}}
         voz = self.voz
         if voz is None or voz.quem == "leo":
             return {}
