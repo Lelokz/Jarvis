@@ -601,8 +601,13 @@ Sem ordem rígida: faz, o Léo testa o que é de voz, segue.
 2. **Voz:** feita (JARVIS dublado, Kokoro + RVC, §4). Se quiser ainda mais
    fiel: juntar mais falas (filmes inteiros dariam muito mais que 5 min) e
    treinar o RVC de novo.
-3. **Briefing da manhã:** agora é instrução no `CLAUDE.md` da casa; o e-mail
-   entra pelo Gmail (cuidado com o que sai em voz alta, tem gente na casa).
+3. **Briefing da manhã: feito (20/10/2026), só no PC.** O primeiro pedido ao
+   Claude do dia, pela voz ou digitado no PC, antes das 14h, leva junto a
+   nota "dê o briefing do Bom dia" (`_primeira_da_manha`, no assistente.py;
+   o dia do último fica em `.ultimo-briefing`, na casa). O que ele diz está
+   no `CLAUDE.md` da casa ("Bom dia"). Celular e relógio, não (decisão do
+   Léo: de manhã ele vai para a escola; no fim de semana acorda e vai direto
+   para o PC).
 4. **Jarvis no celular** (§4, "O celular"): etapas 1 e 2 feitas (porta
    remota, Tailscale, app com átomo, anexos e mudo) e etapa 3 feita e
    testada (v0.5, "hey Jarvis" no celular). Etapa 4, o Galaxy Watch 7: v0.1

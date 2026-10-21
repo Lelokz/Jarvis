@@ -557,10 +557,32 @@ class Ciclo:
 
         # 5. O Claude.
         contexto, self._contexto = self._contexto, ""
+        if origem in ("voz", "texto") and self._primeira_da_manha():
+            nota = ("[Primeira conversa do dia no PC, de manhã: junto com o que ele "
+                    "pediu, dê o briefing do \"Bom dia\" (CLAUDE.md da casa), curto.]")
+            contexto = "\n".join(p for p in (nota, contexto) if p)
         self.registrador.registrar_estado("pedido", texto=texto, origem=origem,
                                           contexto=contexto or None)
         self._pedido = (time.monotonic(), segmento, transcricao)
         self.agente.pedir(texto, origem, contexto)
+
+    def _primeira_da_manha(self) -> bool:
+        """O briefing da manhã: só no PC (o Léo de manhã vai para a escola; no fim
+        de semana acorda e vai direto para o computador), no primeiro pedido ao
+        Claude do dia, antes das 14h. O dia do último fica em `.ultimo-briefing`,
+        na casa, para religar o Jarvis não repetir."""
+        agora = datetime.now()
+        if agora.hour >= 14:
+            return False
+        marca = self.agente.casa / ".ultimo-briefing"
+        hoje = agora.date().isoformat()
+        try:
+            if marca.read_text().strip() == hoje:
+                return False
+        except OSError:
+            pass
+        marca.write_text(hoje + "\n")
+        return True
 
     # -- o que o Claude devolve --------------------------------------------
 
