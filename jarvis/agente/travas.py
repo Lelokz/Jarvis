@@ -1,0 +1,84 @@
+"""As travas da voz: o que só o Léo pode pedir (out/2026).
+
+Quando a impressão de voz diz que quem falou NÃO é o Léo (`jarvis/quem_fala.py`),
+estas ferramentas são barradas no código, antes de rodar, mesmo que alguém
+convença o Claude. Decisão do Léo (21/10/2026):
+
+- livre para qualquer um: conversar, olhar arquivos, música, volume e
+  ACRESCENTAR coisa na memória;
+- o Claude julga (persona, "Outras vozes"): mandar mensagem;
+- só o Léo (aqui): apagar ou trocar o que está na memória, criar/editar/mover/
+  apagar arquivo, instalar ou desinstalar, desligar ou bloquear o PC.
+
+A lista do Bash é de comandos claramente perigosos, não um cadeado perfeito:
+o resto fica com o julgamento do Claude. Bloquear demais só atrapalha os
+amigos do Léo, nunca ele.
+"""
+from __future__ import annotations
+
+import re
+from pathlib import Path
+
+_BASH = [
+    (re.compile(r"(^|[;&|`(]|\s)(sudo|rm|rmdir|shred|unlink|mv|dd|truncate|chmod|chown|crontab)\s"),
+     "apagar, mover ou mexer em arquivo"),
+    (re.compile(r"\bfind\b.*\s-delete\b|\bgio\s+(trash|remove|move|rename|save|copy)\b"),
+     "apagar ou mexer em arquivo"),
+    (re.compile(r"\bsed\s+(-\w*i|--in-place)|\btee\b|\btouch\s|\bmkdir\s|\bcp\s"),
+     "criar ou editar arquivo"),
+    (re.compile(r"(?<![0-9&>])>(?![&>])\s*(?!/dev/null)[^\s]|>>\s*(?!/dev/null)[^\s]"),
+     "criar ou editar arquivo"),
+    (re.compile(r"\b(apt|apt-get|aptitude|dpkg|snap|flatpak|pip|pip3|pipx|npm|pnpm|yarn|cargo|gem)\s+"
+                r"(install|remove|purge|uninstall|i|add|rm)\b|\|\s*(sudo\s+)?(sh|bash)\b"),
+     "instalar ou desinstalar programa"),
+    (re.compile(r"(^|[;&|`(]|\s)(shutdown|poweroff|reboot|halt|kill|pkill|killall)\b"
+                r"|\bsystemctl\s+(poweroff|reboot|suspend|hibernate|halt|stop|disable|mask)\b"
+                r"|\bloginctl\s+(lock|terminate|poweroff|reboot|kill)"),
+     "desligar o PC ou fechar programa à força"),
+    (re.compile(r"\bcinnamon-screensaver-command\s+(-l|--lock|-a|--activate)\b|\bxdg-screensaver\s+lock\b"),
+     "bloquear o PC"),
+    (re.compile(r"\bgit\s+(push|reset|clean|rm|commit|checkout|restore)\b"),
+     "mexer em arquivo"),
+]
+
+_EDITAM = {"Write", "Edit", "MultiEdit", "NotebookEdit"}
+
+
+def precisa_do_leo(ferramenta: str, entrada: dict, memoria: Path) -> str | None:
+    """O que a ferramenta faria que só o Léo pode pedir, ou None se pode.
+
+    `memoria`: o CLAUDE.md da casa. Nele, outra pessoa pode ACRESCENTAR (o
+    texto que já estava continua todo lá), mas não apagar nem trocar.
+    """
+    if ferramenta in _EDITAM:
+        caminho = str(entrada.get("file_path") or entrada.get("notebook_path") or "")
+        if caminho and Path(caminho).expanduser().resolve() == memoria.resolve():
+            return None if _so_acrescenta(ferramenta, entrada, memoria) else \
+                "apagar ou trocar o que está na memória"
+        return "criar ou editar arquivo"
+    if ferramenta == "Bash":
+        comando = str(entrada.get("command") or "")
+        for padrao, o_que in _BASH:
+            if padrao.search(comando):
+                return o_que
+        return None
+    if ferramenta.startswith("mcp__"):
+        acao = ferramenta.rsplit("__", 1)[-1].lower()
+        if any(p in acao for p in ("trash", "delete", "remove", "uninstall")):
+            return "apagar"
+    return None
+
+
+def _so_acrescenta(ferramenta: str, entrada: dict, memoria: Path) -> bool:
+    if ferramenta == "Edit":
+        return str(entrada.get("old_string", "")) in str(entrada.get("new_string", ""))
+    if ferramenta == "MultiEdit":
+        return all(str(e.get("old_string", "")) in str(e.get("new_string", ""))
+                   for e in entrada.get("edits") or [])
+    if ferramenta == "Write":
+        try:
+            antes = memoria.read_text()
+        except OSError:
+            antes = ""
+        return antes.strip() in str(entrada.get("content", ""))
+    return False

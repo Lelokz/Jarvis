@@ -469,7 +469,7 @@ def rodar_celular(tmp: Path) -> None:
         print("-- E13. anexo do celular vai para o Claude junto do pedido --")
         recebidos = []
         original_pedir = agente.pedir
-        agente.pedir = lambda texto, origem="voz", contexto="": (
+        agente.pedir = lambda texto, origem="voz", contexto="", voz=None: (
             recebidos.append((texto, contexto)), original_pedir(texto, origem, contexto))
         agente.resposta = Saida("fim", texto="É uma praia.")
         ciclo.atender_pedido(Pedido("falar", "o que é isso?", cliente=7, voz=True,
@@ -491,7 +491,7 @@ def rodar_celular(tmp: Path) -> None:
         print("-- E15. anexo pela janela do PC (sem voz própria) também vai ao Claude --")
         recebidos = []
         original_pedir = agente.pedir
-        agente.pedir = lambda texto, origem="voz", contexto="": (
+        agente.pedir = lambda texto, origem="voz", contexto="", voz=None: (
             recebidos.append(contexto), original_pedir(texto, origem, contexto))
         agente.resposta = Saida("fim", texto="Vi.")
         ciclo.atender_pedido(Pedido("falar", "olha isso", cliente=1, voz=False,

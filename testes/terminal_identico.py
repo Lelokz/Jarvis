@@ -107,12 +107,12 @@ class AgenteRoteirizado:
         self.depois: Saida | None = None     # o que vem depois da resposta à pergunta
         self.chamadas: list[str] = []
 
-    def pedir(self, texto, origem="voz", contexto=""):
+    def pedir(self, texto, origem="voz", contexto="", voz=None):
         self.chamadas.append(texto)
         if self.resposta is not None:
             self.saidas.put(self.resposta)
 
-    def responder(self, saida, falado):
+    def responder(self, saida, falado, voz=None):
         self.chamadas.append(f"resposta: {falado}")
         if self.depois is not None:
             self.saidas.put(self.depois)

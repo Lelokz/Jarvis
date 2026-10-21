@@ -41,10 +41,11 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from claude_agent_sdk import (AssistantMessage, ClaudeAgentOptions, ClaudeSDKClient,
+from claude_agent_sdk import (AssistantMessage, ClaudeAgentOptions, ClaudeSDKClient, HookMatcher,
                               PermissionResultAllow, PermissionResultDeny, RateLimitEvent,
                               ResultMessage, TextBlock, ToolUseBlock)
 
+from jarvis.agente import travas
 from jarvis.nucleo import relogio
 from jarvis.nucleo.atalhos import normalizar
 
@@ -180,6 +181,19 @@ def _casar_opcao(falado: str, opcoes: list[str]) -> str:
     return falado
 
 
+# O dono do Jarvis: a voz que as travas reconhecem (jarvis/quem_fala.py).
+DONO = "Léo"
+
+
+def etiqueta_da_voz(voz, dono: str = DONO) -> str:
+    """O pedaço do cabeçalho que diz ao Claude quem falou (persona, "Outras vozes")."""
+    if voz.quem == "leo":
+        return f"voz do {dono}"
+    if voz.quem == "outra":
+        return f"voz de OUTRA pessoa, não do {dono} (nota {voz.nota:.2f})"
+    return "fala curta demais para reconhecer a voz"
+
+
 class Agente:
     def __init__(self, cfg, nome: str, *, whatsapp=None, persona_cfg=None) -> None:
         self.cfg = cfg
@@ -198,6 +212,9 @@ class Agente:
         # (pessoa, quando, texto) do que o Jarvis mandou no WhatsApp: os
         # avisos usam para separar o que veio do celular.
         self.enviados_whats: list[tuple[str, dt.datetime, str]] = []
+        # Quem falou por último (jarvis/quem_fala.py): as travas da voz olham
+        # isto. None = digitado ou sem o reconhecimento: vale como o Léo.
+        self.voz = None
         self._cliente: ClaudeSDKClient | None = None
         self._leitor: asyncio.Task | None = None
         self._loop = asyncio.new_event_loop()
@@ -269,6 +286,9 @@ class Agente:
             setting_sources=["user", "project"],
             permission_mode=self.cfg.modo_permissao,
             can_use_tool=self._pode,
+            # As travas da voz rodam antes de TODA ferramenta, inclusive no
+            # modo auto (o can_use_tool quase nunca é chamado nele).
+            hooks={"PreToolUse": [HookMatcher(matcher=None, hooks=[self._trava_da_voz])]},
             system_prompt={"type": "preset", "preset": "claude_code",
                            "append": self._instrucoes()},
             mcp_servers={"jarvis": servidor},
@@ -318,15 +338,18 @@ class Agente:
 
     # -- o que o ciclo chama ----------------------------------------------
 
-    def pedir(self, texto: str, origem: str = "voz", contexto: str = "") -> None:
+    def pedir(self, texto: str, origem: str = "voz", contexto: str = "", voz=None) -> None:
         """Manda uma fala. Com uma tarefa em andamento, ela entra NA tarefa
-        (medido: o Claude incorpora a fala nova e responde as duas coisas)."""
+        (medido: o Claude incorpora a fala nova e responde as duas coisas).
+        `voz`: quem falou (`quem_fala.Voz`); None = digitado, vale como o Léo."""
         if not self.ocupado:
             self._falas = []
         self._falas.append(texto)
         self.ocupado = True
+        self.voz = voz
         agora = dt.datetime.now()
-        cabecalho = f"[{origem}, {relogio.data_curta(agora.date())}, {agora:%H:%M}]"
+        quem = "" if voz is None else ", " + etiqueta_da_voz(voz, DONO)
+        cabecalho = f"[{origem}, {relogio.data_curta(agora.date())}, {agora:%H:%M}{quem}]"
         mensagem = "\n".join(p for p in (cabecalho, contexto, texto) if p)
         self._rodar(self._enviar(mensagem))
 
@@ -334,10 +357,12 @@ class Agente:
         if self._cliente is not None and self.ocupado:
             self._rodar(self._cliente.interrupt())
 
-    def responder(self, saida: Saida, falado: str | None) -> None:
+    def responder(self, saida: Saida, falado: str | None, voz=None) -> None:
         """A resposta dele a uma pergunta (None: não respondeu a tempo)."""
         if falado:
             self._falas.append(falado)
+            if voz is not None:
+                self.voz = voz
         if saida.resposta is not None and not saida.resposta.done():
             saida.resposta.set_result(falado)
 
@@ -477,6 +502,34 @@ class Agente:
         return PermissionResultDeny(
             message=f"O usuário não autorizou e disse: «{falado}». Siga o que ele disse.")
 
+    async def _trava_da_voz(self, entrada, _id, _ctx) -> dict:
+        """Barra o que só o Léo pode pedir quando a voz não é a dele."""
+        voz = self.voz
+        if voz is None or voz.quem == "leo":
+            return {}
+        o_que = travas.precisa_do_leo(str(entrada.get("tool_name") or ""),
+                                      entrada.get("tool_input") or {}, self.casa / "CLAUDE.md")
+        if o_que is None:
+            return {}
+        quem = ("a fala foi curta demais para reconhecer a voz" if voz.quem == "curta"
+                else f"a voz não é a do {DONO} (nota {voz.nota:.2f})")
+        return {"hookSpecificOutput": {
+            "hookEventName": "PreToolUse",
+            "permissionDecision": "deny",
+            "permissionDecisionReason": (
+                f"Bloqueado pelas travas da voz: {quem}, e isso ({o_que}) só o "
+                f"{DONO} pode pedir. Diga isso em uma frase e não tente outro caminho."),
+        }}
+
     def _mandou_whats(self, jid: str, nome: str, texto: str) -> None:
         pessoa = self.whatsapp.pessoa(jid) if self.whatsapp else nome
+        voz = self.voz
+        if voz is not None and voz.quem != "leo":
+            # Decisão do Léo: outra pessoa pode mandar (o Claude julga), mas ele
+            # sempre fica sabendo.
+            linha = (f"{dt.datetime.now():%d/%m %H:%M} — voz que não era a dele "
+                     f"({voz.quem}, nota {voz.nota:.2f}) mandou pra {pessoa}: {texto}")
+            with open(Path(__file__).resolve().parents[2] / "logs" / "outras-vozes.log", "a") as f:
+                f.write(linha + "\n")
+            self.saidas.put(Saida("mostrar", linha, titulo="Mensagem mandada por outra voz"))
         self.enviados_whats = (self.enviados_whats + [(pessoa, dt.datetime.now(), texto)])[-50:]

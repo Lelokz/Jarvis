@@ -448,6 +448,34 @@ celular: é o que deixa os dois conversarem.
   ```
   O relógio desliga o Wi-Fi com a tela apagada: aí some da rede.
 
+### Reconhecer a voz do Léo (21/10/2026)
+
+Os amigos do Léo usaram o Jarvis dele (trocaram o nome dele na memória e
+travaram a troca de volta). Agora cada fala falada ganha uma etiqueta no
+cabeçalho: `voz do Léo`, `voz de OUTRA pessoa` ou `fala curta demais`.
+
+- **Como:** `jarvis/quem_fala.py`, a impressão de voz ECAPA (SpeechBrain)
+  rodando sem PyTorch: espectrograma em numpy + o ECAPA em ONNX (conferido:
+  cosseno 1,00000 com o SpeechBrain). Perfil: 399 trechos de 3 s de 46 áudios
+  que o Léo mandou no WhatsApp em out/2026 (um não era dele, saiu). Limiar
+  0,35; fala de menos de 1,2 s herda a voz da última reconhecida (até 2 min).
+  ~0,2 s por fala, no processador. Arquivos fora do git, em
+  `~/.local/share/jarvis/voz-leo/`. Medição em `medicoes/voz-do-leo.md`.
+- **As regras (decisão do Léo):** com outra voz, conversar, olhar, música e
+  ACRESCENTAR na memória são livres; mandar mensagem o Claude julga (zoeira
+  leve sim, xingamento não) e o Léo sempre fica sabendo
+  (`logs/outras-vozes.log` + cartão); criar/editar/apagar arquivo, instalar,
+  desligar ou bloquear o PC e apagar memória são **barrados no código**
+  (`jarvis/agente/travas.py`, um gancho PreToolUse que roda até no modo
+  auto). Testado com o Claude Code de verdade, enganado de propósito: tentou
+  criar o arquivo e a trava barrou.
+- **Digitado vale como o Léo** (decisão dele: quem tem o celular dele
+  desbloqueado já tem o WhatsApp).
+- **Falta:** calibrar com um voluntário que tope (os "outros" da medição
+  foram vozes dubladas de filme, mais fáceis), e medir o microfone do
+  relógio. Anotar o apelido do amigo: a trava do código NÃO pega (foi um
+  acréscimo); quem segura é a persona.
+
 ### A janela do PC no estilo do celular (20/10/2026)
 
 O Léo achou o app mais bonito: a conversa em cima, o **átomo embaixo,

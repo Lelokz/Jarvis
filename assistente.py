@@ -43,6 +43,7 @@ from jarvis.cronometro import Tempos
 from jarvis.nucleo import relogio
 from jarvis.nucleo.atalhos import normalizar
 from jarvis.nucleo.whatsapp import WhatsApp
+from jarvis.quem_fala import QuemFala, Voz
 from jarvis.ponte import protocolo
 from jarvis.ponte.servidor import Pedido, Servidor, ServidorOcupado
 from jarvis.registro import Registrador
@@ -256,6 +257,16 @@ class Ciclo:
         # Vai junto da próxima fala para o Claude (o WhatsApp que acabou de
         # ser anunciado, para "responde que eu chego às oito").
         self._contexto = ""
+        # Quem está falando (a voz do Léo ou outra): as travas do agente olham.
+        # Sem os arquivos (perfil, modelo), fica desligado e vale como antes.
+        try:
+            self.quem_fala: QuemFala | None = QuemFala()
+            if self.quem_fala.perfil is None:
+                self.quem_fala = None
+        except Exception as e:
+            print(f"  reconhecer a voz: desligado ({e.__class__.__name__}: {e})", flush=True)
+            self.quem_fala = None
+        self._ultima_voz: tuple[Voz, float] | None = None
         # O pedido em andamento, para medir o tempo quando a resposta chegar.
         self._pedido: tuple[float, object, object] | None = None
         # Onde a voz sai: None = a caixa de som do PC; um número = o cliente
@@ -493,7 +504,8 @@ class Ciclo:
 
         self._corpo = None
         self._responder(
-            transcricao.texto, origem="voz", segmento=segmento, transcricao=transcricao
+            transcricao.texto, origem="voz", segmento=segmento, transcricao=transcricao,
+            voz=self._identificar(segmento.audio),
         )
 
     def _responder(
@@ -503,6 +515,7 @@ class Ciclo:
         origem: str,
         segmento=None,
         transcricao=None,
+        voz: Voz | None = None,
     ) -> None:
         """Entrega a fala ao Claude (ou a um reflexo) e volta a ouvir.
 
@@ -520,7 +533,7 @@ class Ciclo:
             self._pergunta = None
             self.registrador.registrar_estado("resposta_a_pergunta",
                                               pergunta=saida.texto, resposta=texto)
-            self.agente.responder(saida, texto)
+            self.agente.responder(saida, texto, voz)
             self._mudar_estado("pensando")
             return
 
@@ -541,7 +554,7 @@ class Ciclo:
             else:
                 self.registrador.registrar_estado("fala_no_meio", texto=texto)
                 contexto, self._contexto = self._contexto, ""
-                self.agente.pedir(texto, origem, contexto)
+                self.agente.pedir(texto, origem, contexto, voz)
             self._mudar_estado("pensando")
             return
 
@@ -564,7 +577,7 @@ class Ciclo:
         self.registrador.registrar_estado("pedido", texto=texto, origem=origem,
                                           contexto=contexto or None)
         self._pedido = (time.monotonic(), segmento, transcricao)
-        self.agente.pedir(texto, origem, contexto)
+        self.agente.pedir(texto, origem, contexto, voz)
 
     def _primeira_da_manha(self) -> bool:
         """O briefing da manhã: só no PC (o Léo de manhã vai para a escola; no fim
@@ -821,7 +834,28 @@ class Ciclo:
             return
         self.registrador.registrar_estado("fala_do_celular", texto=transcricao.texto,
                                           stt_s=round(transcricao.segundos, 2))
-        self._responder(transcricao.texto, origem="celular")
+        self._responder(transcricao.texto, origem="celular", voz=self._identificar(audio))
+
+    def _identificar(self, audio: np.ndarray) -> Voz | None:
+        """Quem falou. Fala curta ("sim", "pode") não dá para reconhecer:
+        herda a voz da última fala reconhecida, se foi há menos de 2 min (a
+        resposta curta é de quem fez o pedido)."""
+        if self.quem_fala is None:
+            return None
+        try:
+            voz = self.quem_fala.quem(audio)
+        except Exception as e:
+            self.registrador.registrar_estado("voz_erro", erro=f"{e.__class__.__name__}: {e}")
+            return None
+        agora = time.monotonic()
+        herdou = False
+        if voz.quem == "curta" and self._ultima_voz and agora - self._ultima_voz[1] < 120:
+            voz, herdou = Voz(self._ultima_voz[0].quem, self._ultima_voz[0].nota, voz.segundos), True
+        elif voz.quem != "curta":
+            self._ultima_voz = (voz, agora)
+        self.registrador.registrar_estado("voz", quem=voz.quem, nota=round(voz.nota, 3),
+                                          segundos=round(voz.segundos, 2), herdou=herdou)
+        return voz
 
     def _acordar_por_texto(self) -> None:
         self._contabilizar()
