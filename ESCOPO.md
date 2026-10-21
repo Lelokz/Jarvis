@@ -646,7 +646,13 @@ Sem ordem rígida: faz, o Léo testa o que é de voz, segue.
    1–3 s.
 5. **Proatividade** com gatilho concreto (lembrete venceu, GPU quente, disco
    cheio).
-6. Depois: ver a tela (o Claude já lê imagem: print + "o que é isso?"),
+6. **Cérebro reserva (adiado pelo Léo, 21/10/2026):** a Venice (GLM 5.2) precisa
+   de crédito pago na API (a chave grátis devolve 402; ela fica em
+   `~/.local/share/jarvis/venice.env`). Os Cydonia/Magidonia 24B são de
+   roleplay, sem recusa e não cabem na placa junto com o Jarvis. Se voltar:
+   um modelo de ~8B bom em ferramentas, local, entrando quando o limite do
+   Claude acabar ou a internet cair.
+7. Depois: ver a tela (o Claude já lê imagem: print + "o que é isso?"),
    personagem feminina, o organizador de prints e vídeos (o Claude usa
    sozinho, sem integração especial).
 
