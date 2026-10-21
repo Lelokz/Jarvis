@@ -28,7 +28,10 @@ class Voz:
 
 
 class QuemFala:
-    def __init__(self, limiar: float = 0.35, minimo_s: float = 1.2, pasta: Path = PASTA) -> None:
+    # minimo_s: abaixo disso a nota não vale (21/10/2026: o "pode" do Léo,
+    # 1,2 s, deu 0,33 e a trava barrou ele mesmo; na medição, 1,5 s já errava
+    # 8-15%). A fala curta herda a voz do pedido (assistente.py).
+    def __init__(self, limiar: float = 0.35, minimo_s: float = 2.0, pasta: Path = PASTA) -> None:
         import onnxruntime as ort
 
         self.limiar = limiar

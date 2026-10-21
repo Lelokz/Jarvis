@@ -361,8 +361,9 @@ class Agente:
         """A resposta dele a uma pergunta (None: não respondeu a tempo)."""
         if falado:
             self._falas.append(falado)
-            if voz is not None:
-                self.voz = voz
+            # None = digitado: vale como o Léo, e desfaz uma "outra voz" de
+            # antes (21/10/2026: o "pode apagar" digitado continuava barrado).
+            self.voz = voz
         if saida.resposta is not None and not saida.resposta.done():
             saida.resposta.set_result(falado)
 
