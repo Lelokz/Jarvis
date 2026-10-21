@@ -166,6 +166,12 @@ que bater o olho e perceber "isso aqui tá estranho".
   `gnome-screenshot -f` ou o retrato da própria janela do Jarvis
   (`interface.py --dizer … --retrato-da-conversa`). Clique simulado que não
   funciona é sinal para investigar a tela, não para insistir.
+- **Religar o Jarvis de dentro do Claude Code: sempre por
+  `systemd-run --user --scope --unit=jarvis-religado-$(date +%H%M%S) setsid ./jarvis.sh --na-bandeja`.**
+  Em 20/10/2026 eu religuei com `./jarvis.sh` direto: os processos ficaram no
+  grupo do VS Code e, quando ele fechou o terminal (~23:45), o Jarvis inteiro
+  foi desligado junto (assistente, porta, voz, WhatsApp). O Léo só percebeu
+  porque o link do APK não abriu no celular.
 - A separação cérebro/corpo (o agente recebe texto e devolve fala, pergunta
   ou cartão pela fila, sem saber o que é microfone ou tela; `jarvis/nucleo/`
   ficou só com as mãos que o corpo usa) é o desenho central do Jarvis e o
