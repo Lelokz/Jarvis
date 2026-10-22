@@ -92,7 +92,10 @@ CLIENTES -> ASSISTENTE
         o cliente quer receber ao conectar. `voz` (v2, opcional): true = este
         cliente é um "corpo" (o celular): o que ele pedir é respondido NELE,
         com os eventos "voz", sem acordar nem falar no PC. O "sessao" de
-        resposta traz o `id` do cliente.
+        resposta traz o `id` do cliente. `janela` (v3, opcional): um corpo
+        que TAMBÉM mostra a janela nova (o app do celular, beta 0.6) e quer
+        os eventos dela (`conversa_atual`, `escrevendo`, `uso`); o relógio
+        não manda e não recebe.
 
     {"pedir":"memoria"}
         Pede a memória (fatos e diário). Resposta: o evento "memoria".
@@ -242,7 +245,10 @@ def ler_pedido(linha: bytes) -> tuple[str, dict[str, Any]]:
         if not isinstance(voz, bool):
             raise ErroDeProtocolo("'voz' tem que ser true ou false")
         quem = objeto.get("quem", "")
-        return tipo, {"historico": min(quantas, MAX_HISTORICO), "voz": voz,
+        janela = objeto.get("janela", False)
+        if not isinstance(janela, bool):
+            raise ErroDeProtocolo("'janela' tem que ser true ou false")
+        return tipo, {"historico": min(quantas, MAX_HISTORICO), "voz": voz, "janela": janela,
                       "quem": quem if isinstance(quem, str) else ""}
     return tipo, {}
 

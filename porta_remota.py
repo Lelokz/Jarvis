@@ -60,7 +60,9 @@ MAX_AUDIO_BYTES = 8 * 1024 * 1024
 MAX_PCM_BYTES = 16000 * 2 * 60
 # Os eventos "voz" trazem uma frase inteira em base64 (centenas de KB).
 LIMITE_LINHA_PONTE = 32 * 1024 * 1024
-PEDIDOS_DO_CELULAR = {"falar", "memoria"}
+# Os da janela nova (beta 0.6) também: conversas, cérebro, Parar.
+PEDIDOS_DO_CELULAR = {"falar", "memoria", "conversas", "abrir", "nova", "continuar", "cerebro",
+                      "parar", "renomear", "apagar"}
 # Foto, vídeo ou arquivo mandado pelo clipe do app. Vídeo de celular passa
 # disso fácil; por enquanto é o teto (o WebSocket guarda tudo na memória).
 MAX_ANEXO_BYTES = 64 * 1024 * 1024
@@ -159,7 +161,9 @@ def criar_app(cfg: config.Config):
             historico = 80
         escritor.write(protocolo.codificar({
             "pedir": "ola", "quem": str(primeira.get("quem") or "celular")[:40],
-            "historico": max(0, min(historico, protocolo.MAX_HISTORICO)), "voz": True}))
+            "historico": max(0, min(historico, protocolo.MAX_HISTORICO)), "voz": True,
+            # O app do celular mostra a janela nova; o relógio não.
+            "janela": primeira.get("janela") is True}))
         await escritor.drain()
 
         quem = str(primeira.get("quem") or "celular")[:40]

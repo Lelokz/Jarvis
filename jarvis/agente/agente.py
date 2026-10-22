@@ -489,12 +489,12 @@ class Agente:
     async def _enviar(self, mensagem: str) -> None:
         async with self._travar():
             try:
-                parada = time.time() - self._marca.stat().st_mtime if self._marca.exists() else 0
-                if self._cliente is not None and parada > self.cfg.recomecar_apos_h * 3600:
-                    await self._desconectar()  # muito tempo parado: conversa nova
-                    self.sessao = None
+                # Sem "conversa nova depois de 3 h parado" (era o `recomecar_apos_h`):
+                # com a janela nova, quem escolhe é o Léo (Novo chat; cada vez que
+                # o Jarvis liga já é um). E a troca no meio do pedido apagava da
+                # tela a fala que ele tinha acabado de mandar (22/10/2026).
                 if self._cliente is None:
-                    # Caiu (ou parou demais): reabre a mesma conversa, se tem uma.
+                    # Caiu: reabre a mesma conversa, se tem uma.
                     await self._conectar(self.sessao)
                 elif self._esforco_atual != self.cerebro["esforco"]:
                     # O esforço mudou na janela: reabre a MESMA conversa com ele.

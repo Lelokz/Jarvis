@@ -592,8 +592,18 @@ def rodar_janela(base: Path) -> None:
     celular = Conexao(caminho)
     celular.enviar({"pedir": "ola", "voz": True})
     evs_cel = [e["ev"] for e in celular.ler(4, timeout=0.6)]
-    checa("o celular não recebe a conversa inteira nem o uso",
+    checa("o corpo sem janela (relógio) não recebe a conversa inteira nem o uso",
           "conversa_atual" not in evs_cel and "uso" not in evs_cel, str(evs_cel))
+    app = Conexao(caminho)
+    app.enviar({"pedir": "ola", "voz": True, "janela": True, "historico": 10})
+    evs_app = [e["ev"] for e in app.ler(5)]
+    checa("o app do celular (corpo com janela) recebe o uso e a conversa",
+          "uso" in evs_app and "conversa_atual" in evs_app, str(evs_app))
+    srv.receber({"ev": "escrevendo", "bloco": 1, "delta": "oi"})
+    checa("e o texto em pedaços", any(e["ev"] == "escrevendo" for e in app.ler(1)))
+    checa("o relógio não", all(e["ev"] != "escrevendo" for e in celular.ler(1, timeout=0.4)))
+    janela.ler(1)  # a janela também recebeu o pedaço
+    app.fechar()
     janela.enviar({"pedir": "conversas"})
     r = janela.ler(1)
     checa("conversas: a lista volta só para quem pediu",

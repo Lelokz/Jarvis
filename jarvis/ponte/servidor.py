@@ -64,6 +64,9 @@ class _Cliente:
     id: int = field(default_factory=lambda: next(_IDS))
     # Disse "voz": true no "ola": é um corpo (o celular); recebe a voz do que pedir.
     quer_voz: bool = False
+    # Disse "janela": true: um corpo que também mostra a janela nova (o app do
+    # celular) e quer os eventos dela. Quem não é corpo sempre quer.
+    quer_janela: bool = False
     quem: str = ""
     # Quem não disse "ola" não recebe difusão. É o que garante que tudo o que
     # chega depois do histórico seja novo: sem isso, um evento ao vivo podia
@@ -252,7 +255,8 @@ class Servidor:
                     continue
                 # A conversa inteira e o texto em pedaços são para a janela; o
                 # corpo (celular) não usa.
-                if tipo in ("conversa_atual", "escrevendo") and cliente.quer_voz:
+                if tipo in ("conversa_atual", "escrevendo") and cliente.quer_voz \
+                        and not cliente.quer_janela:
                     continue
                 if cliente.apresentado:
                     self._enfileirar(cliente, tipo, dados)
@@ -393,6 +397,7 @@ class Servidor:
         if tipo == "ola":
             cliente.apresentado = True
             cliente.quer_voz = dados.get("voz", False)
+            cliente.quer_janela = dados.get("janela", False) or not cliente.quer_voz
             cliente.quem = dados.get("quem", "")
             self._direto(cliente, {**self._sessao, "id": cliente.id})
             if self._ultimo_estado is not None:
@@ -401,9 +406,9 @@ class Servidor:
                 self._direto(cliente, self._ultimo_aviso)
             if self._ultimo_cerebro is not None:
                 self._direto(cliente, self._ultimo_cerebro)
-            if self._ultimo_uso is not None and not cliente.quer_voz:
+            if self._ultimo_uso is not None and cliente.quer_janela:
                 self._direto(cliente, self._ultimo_uso)
-            if self._conversa_atual and not cliente.quer_voz:
+            if self._conversa_atual and cliente.quer_janela:
                 self._direto(cliente, {"ev": "conversa_atual", "id": self._conversa_atual})
             quantas = dados.get("historico", 0)
             if quantas:

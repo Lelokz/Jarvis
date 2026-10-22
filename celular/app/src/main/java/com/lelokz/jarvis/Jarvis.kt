@@ -28,7 +28,16 @@ data class Mensagem(
     val titulo: String = "",
     val anexos: List<String> = emptyList(),
     val perguntando: Boolean = false,
+    val opcoes: List<String> = emptyList(),   // as da pergunta: viram botões
+    val origem: String = "",                  // voz, texto, celular...
+    val quando: Double = System.currentTimeMillis() / 1000.0,
+    val passos: List<String> = emptyList(),   // ATIVIDADE: o que ele fez, em ordem
+    val escrevendo: Boolean = false,          // o texto ainda está chegando
+    val bloco: Int = 0,
 )
+
+/** Uma conversa da gaveta: uma sessão do Claude Code no PC. */
+data class Conversa(val id: String, val titulo: String, val quando: Double, val origem: String)
 
 /** Um anexo do clipe, esperando a mensagem: miniatura, nome e o ✕. */
 data class Anexo(
@@ -50,8 +59,22 @@ class Jarvis(private val app: Application) {
     private val viewModelScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private val prefs = app.getSharedPreferences("jarvis", Application.MODE_PRIVATE)
 
-    val mensagens = mutableStateListOf<Mensagem>()
+    val mensagens = mutableStateListOf<Mensagem>()       // a conversa de agora
+    val mensagensVendo = mutableStateListOf<Mensagem>()  // uma antiga, aberta na gaveta
     val anexos = mutableStateListOf<Anexo>()
+    // A janela nova (beta 0.6): as conversas, o que está escolhido e o uso.
+    val conversas = mutableStateListOf<Conversa>()
+    val conversaAtual = mutableStateOf("")
+    val vendo = mutableStateOf("")           // "" = a de agora; senão, o id da antiga
+    val pagina = mutableStateOf("chat")      // "chat", "memoria", "ajustes"
+    val modelo = mutableStateOf("auto")
+    val esforco = mutableStateOf("medium")
+    val memoriaTexto = mutableStateOf("")
+    val usoCinco = mutableStateOf(-1.0)
+    val voltaCinco = mutableStateOf(0.0)
+    val usoSemana = mutableStateOf(-1.0)
+    val voltaSemana = mutableStateOf(0.0)
+    val aviso = mutableStateOf("")           // recado rápido (erro, "mandada pra lixeira")
     val estado = mutableStateOf("dormindo")     // o do PC: pensando, falando...
     val conectado = mutableStateOf(false)
     val motivo = mutableStateOf("conectando…")
@@ -116,7 +139,7 @@ class Jarvis(private val app: Application) {
         conexao?.fechar()
         val base = prefs.getString("base", "") ?: return
         val chave = prefs.getString("chave", "") ?: return
-        conexao = Conexao(base, chave, aoReceber = ::receber) { ok, porque ->
+        conexao = Conexao(base, chave, janela = true, aoReceber = ::receber) { ok, porque ->
             conectado.value = ok
             motivo.value = porque
             if (ok) {
@@ -126,6 +149,7 @@ class Jarvis(private val app: Application) {
                 // conhece os da conexão que caiu).
                 mensagens.clear()
                 esperandoOk.clear()
+                pedirConversas()
                 for (a in anexos.toList()) subir(a.copy(idServidor = null, erro = ""))
             }
         }.also { it.abrir() }
@@ -210,8 +234,80 @@ class Jarvis(private val app: Application) {
         val t = texto.trim().ifEmpty { if (anexos.isNotEmpty()) "Olha isso." else return }
         if (!anexosProntos) return
         usarAnexos()
-        conexao?.enviar(JSONObject().put("pedir", "falar").put("texto", t))
+        mandarOuEsperar(JSONObject().put("pedir", "falar").put("texto", t))
     }
+
+    // -- a janela nova: conversas, cérebro, Parar -------------------------------
+
+    // Escreveu (ou falou) numa conversa antiga: primeiro o PC volta pra ela, e
+    // o pedido só vai quando a "conversa_atual" chegar com esse id. Mandar
+    // junto faria a fala sumir da tela quando a conversa fosse recarregada.
+    private var esperandoContinuar = ""
+    private var pendente: Any? = null   // JSONObject (texto) ou ByteArray (fala)
+
+    private fun mandarOuEsperar(pedido: Any) {
+        val antiga = vendo.value
+        if (antiga.isEmpty()) {
+            enviarAgora(pedido)
+            return
+        }
+        esperandoContinuar = antiga
+        pendente = pedido
+        conexao?.enviar(JSONObject().put("pedir", "continuar").put("id", antiga))
+    }
+
+    private fun enviarAgora(pedido: Any) {
+        when (pedido) {
+            is JSONObject -> conexao?.enviar(pedido)
+            is ByteArray -> conexao?.enviar(pedido)
+        }
+    }
+
+    fun pedirConversas() { conexao?.enviar(JSONObject().put("pedir", "conversas")) }
+
+    fun abrir(id: String) {
+        pagina.value = "chat"
+        if (id.isEmpty() || id == conversaAtual.value) { vendo.value = ""; return }
+        vendo.value = id
+        mensagensVendo.clear()
+        conexao?.enviar(JSONObject().put("pedir", "abrir").put("id", id))
+    }
+
+    fun novaConversa() {
+        pagina.value = "chat"
+        if (vendo.value.isEmpty() && mensagens.isEmpty()) return  // já está num chat novo
+        vendo.value = ""
+        conexao?.enviar(JSONObject().put("pedir", "nova"))
+    }
+
+    fun renomear(id: String, titulo: String) {
+        if (titulo.isBlank()) return
+        conexao?.enviar(JSONObject().put("pedir", "renomear").put("id", id).put("titulo", titulo.trim()))
+    }
+
+    fun apagar(id: String) {
+        if (vendo.value == id) vendo.value = ""
+        conexao?.enviar(JSONObject().put("pedir", "apagar").put("id", id))
+        aviso.value = "Conversa mandada pra lixeira"
+    }
+
+    fun escolherModelo(m: String) {
+        modelo.value = m
+        conexao?.enviar(JSONObject().put("pedir", "cerebro").put("modelo", m))
+    }
+
+    fun escolherEsforco(e: String) {
+        esforco.value = e
+        conexao?.enviar(JSONObject().put("pedir", "cerebro").put("esforco", e))
+    }
+
+    fun parar() { conexao?.enviar(JSONObject().put("pedir", "parar")) }
+
+    fun pedirMemoria() { conexao?.enviar(JSONObject().put("pedir", "memoria")) }
+
+    /** Ele está trabalhando no pedido (o enviar vira Parar). */
+    val trabalhando: Boolean
+        get() = conectado.value && vendo.value.isEmpty() && estado.value == "pensando"
 
     private var segurandoAtomo = false
 
@@ -229,7 +325,7 @@ class Jarvis(private val app: Application) {
         ouvido?.pausado = tocando.value
         val wav = gravador.parar() ?: return
         usarAnexos()
-        conexao?.enviar(wav)
+        mandarOuEsperar(wav)
     }
 
     // -- "sempre ouvindo" -------------------------------------------------------
@@ -286,41 +382,81 @@ class Jarvis(private val app: Application) {
     }
 
     // -- o que chega do PC ----------------------------------------------------
+    // As mesmas regras da janela do PC (jarvis/interface/qml/Falas.qml).
+
+    // A resposta formatada chega como painel sem título e, logo depois, a
+    // versão FALADA dela: essa não entra (até este instante).
+    private var pularFalaAte = 0.0
+    private fun agora() = System.currentTimeMillis() / 1000.0
 
     private fun receber(ev: JSONObject) {
         when (ev.optString("ev")) {
             "sessao" -> estado.value = "dormindo"
             "estado" -> estado.value = ev.optString("estado")
-            "historico" -> {
-                val falas = ev.optJSONArray("falas") ?: return
-                for (i in 0 until falas.length()) {
-                    val f = falas.getJSONObject(i)
-                    when (f.optString("quem")) {
-                        "voce" -> acrescentar(Mensagem(Quem.VOCE, f.optString("texto")))
-                        "jarvis" -> if (!f.optString("acao").startsWith("whatsapp:"))
-                            acrescentar(Mensagem(Quem.JARVIS, f.optString("texto")))
-                        else -> acrescentar(Mensagem(Quem.PAINEL, f.optString("texto"),
-                            f.optString("titulo")))
+            "historico" -> preencher(mensagens, ev.optJSONArray("falas"))
+            "conversa_atual" -> {
+                val id = ev.optString("id")
+                conversaAtual.value = id
+                if (ev.has("falas")) {
+                    preencher(mensagens, ev.optJSONArray("falas"))
+                    if (vendo.value == id) vendo.value = ""
+                    if (esperandoContinuar == id) {
+                        esperandoContinuar = ""
+                        vendo.value = ""
+                        pendente?.let { enviarAgora(it) }
+                        pendente = null
                     }
                 }
+                pedirConversas()
             }
+            "conversas" -> {
+                val lista = ev.optJSONArray("lista") ?: return
+                conversas.clear()
+                for (i in 0 until lista.length()) {
+                    val c = lista.getJSONObject(i)
+                    conversas.add(Conversa(c.optString("id"), c.optString("titulo").ifEmpty { "Conversa" },
+                        c.optDouble("quando", 0.0), c.optString("origem")))
+                }
+            }
+            "conversa" -> if (ev.optString("id") == vendo.value) preencher(mensagensVendo, ev.optJSONArray("falas"))
+            "cerebro" -> {
+                modelo.value = ev.optString("modelo", modelo.value)
+                esforco.value = ev.optString("esforco", esforco.value)
+            }
+            "uso" -> {
+                ev.optJSONObject("cinco_horas")?.let {
+                    usoCinco.value = it.optDouble("uso", -1.0); voltaCinco.value = it.optDouble("volta_em", 0.0)
+                }
+                ev.optJSONObject("semana")?.let {
+                    usoSemana.value = it.optDouble("uso", -1.0); voltaSemana.value = it.optDouble("volta_em", 0.0)
+                }
+            }
+            "memoria" -> memoriaTexto.value = ev.optString("texto")
             "voce_disse" -> {
-                acrescentar(Mensagem(Quem.VOCE, ev.optString("texto"), anexos = nomesEnviados))
+                fecharPerguntas()
+                mensagens.add(Mensagem(Quem.VOCE, ev.optString("texto"), anexos = nomesEnviados,
+                    origem = ev.optString("origem")))
                 nomesEnviados = emptyList()
             }
             "jarvis_disse" -> {
                 // Aviso de WhatsApp é só no PC (decisão do Léo): aqui nem aparece.
                 if (ev.optString("acao").startsWith("whatsapp:")) return
-                acrescentar(Mensagem(Quem.JARVIS, ev.optString("texto"),
-                    perguntando = ev.optBoolean("perguntando")))
+                val opcoes = ev.optJSONArray("opcoes")?.let { a -> List(a.length()) { a.getString(it) } } ?: emptyList()
+                falaDele(ev.optString("texto"), ev.optBoolean("perguntando"), opcoes)
             }
-            "mostrar" -> acrescentar(Mensagem(Quem.PAINEL, ev.optString("texto"),
-                ev.optString("titulo")))
+            "mostrar" -> painel(ev.optString("titulo"), ev.optString("texto"))
             "atividade" -> {
-                // Uma linha só, que vai sendo trocada: é o "o que ele está fazendo".
-                val m = Mensagem(Quem.ATIVIDADE, ev.optString("texto"))
-                if (mensagens.lastOrNull()?.quem == Quem.ATIVIDADE) mensagens[mensagens.lastIndex] = m
-                else mensagens.add(m)
+                val t = ev.optString("texto")
+                val i = mensagens.lastIndex
+                if (i >= 0 && mensagens[i].quem == Quem.ATIVIDADE) {
+                    mensagens[i] = mensagens[i].copy(texto = t, passos = mensagens[i].passos + t)
+                } else {
+                    mensagens.add(Mensagem(Quem.ATIVIDADE, t, passos = listOf(t)))
+                }
+            }
+            "escrevendo" -> {
+                if (ev.optBoolean("fim")) encerrarEscrita(ev.optBoolean("descartar"))
+                else escrever(ev.optInt("bloco"), ev.optString("delta"))
             }
             "voz" -> {
                 val pcm = ev.optString("pcm")
@@ -340,20 +476,96 @@ class Jarvis(private val app: Application) {
                 }
             }
             "aviso" -> when (ev.optString("situacao")) {
-                "limite" -> acrescentar(Mensagem(Quem.AVISO, "O limite do Claude acabou por agora."))
-                "offline" -> acrescentar(Mensagem(Quem.AVISO, "O PC está sem internet."))
+                "limite" -> mensagens.add(Mensagem(Quem.AVISO, "O limite do Claude acabou por agora."))
+                "offline" -> mensagens.add(Mensagem(Quem.AVISO, "O PC está sem internet."))
             }
-            "erro" -> acrescentar(Mensagem(Quem.AVISO, ev.optString("motivo")))
+            "erro" -> {
+                esperandoContinuar = ""
+                pendente = null
+                aviso.value = ev.optString("motivo")
+            }
         }
     }
 
-    private fun acrescentar(m: Mensagem) {
-        // A linha de atividade some quando ele volta a falar.
-        if (mensagens.lastOrNull()?.quem == Quem.ATIVIDADE && m.quem != Quem.VOCE) {
-            mensagens.removeAt(mensagens.lastIndex)
-        }
-        mensagens.add(m)
+    private fun fecharPerguntas() {
+        for (i in mensagens.indices) if (mensagens[i].perguntando) mensagens[i] = mensagens[i].copy(perguntando = false)
     }
 
+    private fun falaDele(texto: String, perguntando: Boolean, opcoes: List<String>) {
+        if (agora() < pularFalaAte) {
+            // A versão falada do painel que acabou de chegar.
+            pularFalaAte = 0.0
+            if (perguntando) {
+                val j = mensagens.indexOfLast { it.quem == Quem.PAINEL }
+                if (j >= 0) mensagens[j] = mensagens[j].copy(perguntando = true, opcoes = opcoes)
+            }
+            return
+        }
+        fecharPerguntas()
+        if (fecharEscrita(Quem.JARVIS, texto, perguntando, opcoes)) return
+        mensagens.add(Mensagem(Quem.JARVIS, texto, perguntando = perguntando, opcoes = opcoes))
+    }
 
+    private fun painel(titulo: String, texto: String) {
+        fecharPerguntas()
+        if (titulo.isEmpty()) {
+            pularFalaAte = agora() + 15
+            if (fecharEscrita(Quem.PAINEL, texto, false, emptyList())) return
+        }
+        mensagens.add(Mensagem(Quem.PAINEL, texto, titulo))
+    }
+
+    // -- o texto chegando em pedaços ----------------------------------------------
+
+    private fun escrever(bloco: Int, delta: String) {
+        val i = mensagens.indexOfLast { it.escrevendo && it.bloco == bloco }
+        if (i >= 0) mensagens[i] = mensagens[i].copy(texto = mensagens[i].texto + delta)
+        else mensagens.add(Mensagem(Quem.JARVIS, delta, escrevendo = true, bloco = bloco))
+    }
+
+    /** O texto inteiro chegou: troca a fala que estava sendo escrita (a mais antiga aberta). */
+    private fun fecharEscrita(quem: Quem, texto: String, perguntando: Boolean, opcoes: List<String>): Boolean {
+        val i = mensagens.indexOfFirst { it.escrevendo }
+        if (i < 0) return false
+        mensagens[i] = mensagens[i].copy(quem = quem, texto = texto, escrevendo = false,
+            perguntando = perguntando, opcoes = opcoes)
+        return true
+    }
+
+    private fun encerrarEscrita(descartar: Boolean) {
+        for (i in mensagens.indices.reversed()) {
+            if (!mensagens[i].escrevendo) continue
+            if (descartar) mensagens.removeAt(i) else mensagens[i] = mensagens[i].copy(escrevendo = false)
+        }
+    }
+
+    /** A conversa que JÁ existia (histórico, conversa retomada ou aberta). */
+    private fun preencher(lista: MutableList<Mensagem>, falas: org.json.JSONArray?) {
+        lista.clear()
+        pularFalaAte = 0.0
+        if (falas == null) return
+        for (k in 0 until falas.length()) {
+            val f = falas.getJSONObject(k)
+            val quando = f.optDouble("quando", agora())
+            val texto = f.optString("texto")
+            when (f.optString("quem")) {
+                "voce" -> lista.add(Mensagem(Quem.VOCE, texto, origem = f.optString("origem"), quando = quando))
+                "atividade" -> {
+                    val ultima = lista.lastOrNull()
+                    if (ultima?.quem == Quem.ATIVIDADE) lista[lista.lastIndex] = ultima.copy(texto = texto, passos = ultima.passos + texto)
+                    else lista.add(Mensagem(Quem.ATIVIDADE, texto, passos = listOf(texto), quando = quando))
+                }
+                "jarvis" -> {
+                    if (f.optString("acao").startsWith("whatsapp:")) continue
+                    // Na conversa ao vivo, a fala que repete o painel não entra.
+                    val antes = lista.lastOrNull()
+                    if (antes?.quem == Quem.PAINEL && antes.titulo.isEmpty() && kotlin.math.abs(quando - antes.quando) < 15) continue
+                    val opcoes = f.optJSONArray("opcoes")?.let { a -> List(a.length()) { a.getString(it) } } ?: emptyList()
+                    lista.add(Mensagem(Quem.JARVIS, texto, quando = quando,
+                        perguntando = f.optBoolean("perguntando") && k == falas.length() - 1, opcoes = opcoes))
+                }
+                else -> lista.add(Mensagem(Quem.PAINEL, texto, f.optString("titulo"), quando = quando))
+            }
+        }
+    }
 }

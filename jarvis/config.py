@@ -100,7 +100,6 @@ class Agente:
     effort: str
     modo_permissao: str
     casa: str
-    recomecar_apos_h: float
     validade_pergunta_s: float
 
 

@@ -561,17 +561,23 @@ escrito com ".5" no fim. Ex.: 0.1 (grande) → 0.1.5 (pequena) → 0.2 (pequena)
   inteiro em 8,5 s); com o Opus, 10,2 s contra 16,4 s. A voz continua saindo
   só com o texto inteiro.
 
-**Plano da beta 0.6 (a janela nova no app do celular), esperando o Léo
-aprovar o protótipo** (`rascunho/janela-nova/prints/prototipo-celular.png`):
-chat novo com o átomo grande (segura pra falar, como hoje) e a saudação;
-conversa igual à do PC (markdown, código com copiar, pílula de passos,
-perguntas com botões, texto em pedaços), com o átomo pequeno ao lado do
-campo como botão de falar; ☰ abre a gaveta com as mesmas conversas, Novo
-chat, Memória e Ajustes; tocar no título abre cérebro e esforço. Por baixo:
-o celular entra na ponte como corpo (`"voz": true`) e por isso hoje NÃO
-recebe `conversa_atual`, `escrevendo` e `uso` (o servidor filtra corpos);
-precisa de um `"janela": true` no "ola", e a `porta_remota.py` liberar os
-pedidos novos (`PEDIDOS_DO_CELULAR` hoje só tem os antigos).
+- **beta 0.6 (grande): a janela nova no app do celular** (app v0.8; o ícone
+  do app ficou o mesmo, pedido do Léo). Chat novo com o átomo grande (segura
+  pra falar) e a saudação; conversa igual à do PC (markdown com código
+  copiável em `Markdown.kt`, pílula de passos, perguntas com botões, texto
+  em pedaços com cursor, Parar no lugar do enviar), átomo pequeno ao lado do
+  campo para falar; ☰ abre a gaveta com as conversas (segurar: renomear ou
+  apagar, confirmação no menu), Memória e Ajustes (uso da assinatura e
+  "Trocar o link do PC", que antes era segurar o JARVIS); tocar no título
+  abre persona, cérebro e esforço. Ícones com os mesmos caminhos SVG do PC
+  (`Icones.kt`) e a fonte Inter. Por baixo: o app diz `"janela": true` no
+  "ola" (o relógio não) e recebe `conversa_atual`, `escrevendo` e `uso`; a
+  porta remota libera os pedidos novos. Escrever ou falar numa conversa
+  antiga manda "continuar" e só envia quando a conversa volta (senão a fala
+  sumiria da tela ao recarregar).
+- **Saiu o "conversa nova depois de 3 h parado"** (`recomecar_apos_h`): o
+  teste do app pegou que a troca no meio do pedido apagava da tela a fala
+  recém-mandada. Agora quem escolhe é o Léo (Novo chat; religar já abre um).
 
 **Roteiro da janela (pedido do Léo, 22/10/2026), um commit por etapa:**
 0.2 Parar · 0.2.5 perguntas com botões · 0.3 renomear e apagar conversa ·

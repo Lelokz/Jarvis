@@ -24,6 +24,8 @@ class Conexao(
     private val chave: String,
     private val quem: String = "celular-app",
     private val historico: Int = 80,
+    // O app mostra a janela nova (beta 0.6) e quer os eventos dela; o relógio não.
+    private val janela: Boolean = false,
     private val aoReceber: (JSONObject) -> Unit,
     private val aoMudar: (conectado: Boolean, motivo: String) -> Unit,
 ) {
@@ -47,6 +49,7 @@ class Conexao(
                     .put("chave", chave)
                     .put("historico", historico)
                     .put("quem", quem)
+                    .put("janela", janela)
                     .toString())
                 principal.post { aoMudar(true, "") }
             }
