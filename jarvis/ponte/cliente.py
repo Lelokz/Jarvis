@@ -54,6 +54,10 @@ class Cliente:
             pedido["anexos"] = anexos
         self._enviar(pedido)
 
+    def enviar(self, objeto: dict[str, Any]) -> None:
+        """Um pedido qualquer do protocolo (a janela grande usa os da v3)."""
+        self._enviar(objeto)
+
     def pedir_memoria(self) -> None:
         self._enviar({"pedir": "memoria"})
 

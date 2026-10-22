@@ -16,6 +16,7 @@ import time
 from pathlib import Path
 
 from PySide6.QtCore import QObject, QUrl, Signal, Slot
+from PySide6.QtGui import QGuiApplication
 
 from jarvis.ponte import recebidos
 from jarvis.ponte.cliente import Cliente
@@ -40,6 +41,13 @@ class PonteQt(QObject):
     mostrar = Signal(str, str)             # título, texto em markdown (vai para a janela)
     atividade = Signal(str)                # o que o Claude está fazendo agora
     anexoFalhou = Signal(str)              # não deu para copiar/mandar o anexo
+    memoriaTexto = Signal(str)             # o CLAUDE.md inteiro, em markdown
+    # A janela grande (protocolo v3).
+    cerebroMudou = Signal(str, str, str)   # modelo, esforço, persona
+    conversaAtual = Signal(str, list, bool)  # id, falas, veio com as falas (troca)
+    conversasRecebidas = Signal(list)      # a barra lateral
+    conversaRecebida = Signal(str, list)   # uma conversa aberta só para ler
+    erroRecebido = Signal(str)             # "espera ele terminar", pedido inválido
 
     def __init__(self, caminho: Path, parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -100,6 +108,45 @@ class PonteQt(QObject):
             return False
         return True
 
+    def _pedir(self, objeto: dict) -> bool:
+        cliente = self._cliente
+        if cliente is None:
+            return False
+        try:
+            cliente.enviar(objeto)
+        except OSError:
+            return False
+        return True
+
+    @Slot(result=bool)
+    def pedirConversas(self) -> bool:
+        return self._pedir({"pedir": "conversas"})
+
+    @Slot(str, result=bool)
+    def abrirConversa(self, sessao: str) -> bool:
+        return self._pedir({"pedir": "abrir", "id": sessao})
+
+    @Slot(result=bool)
+    def novaConversa(self) -> bool:
+        return self._pedir({"pedir": "nova"})
+
+    @Slot(str, result=bool)
+    def continuarConversa(self, sessao: str) -> bool:
+        return self._pedir({"pedir": "continuar", "id": sessao})
+
+    @Slot(str, str, result=bool)
+    def definirCerebro(self, modelo: str, esforco: str) -> bool:
+        pedido = {"pedir": "cerebro"}
+        if modelo:
+            pedido["modelo"] = modelo
+        if esforco:
+            pedido["esforco"] = esforco
+        return self._pedir(pedido)
+
+    @Slot(str)
+    def copiar(self, texto: str) -> None:
+        QGuiApplication.clipboard().setText(texto)
+
     # ----------------------------------------------------------------------
 
     def _laco(self) -> None:
@@ -137,6 +184,19 @@ class PonteQt(QObject):
         elif tipo == "memoria":
             self.memoriaRecebida.emit(list(ev.get("fatos") or []),
                                       list(ev.get("conversas") or []))
+            self.memoriaTexto.emit(str(ev.get("texto") or ""))
+        elif tipo == "cerebro":
+            self.cerebroMudou.emit(str(ev.get("modelo") or ""), str(ev.get("esforco") or ""),
+                                   str(ev.get("persona") or "jarvis"))
+        elif tipo == "conversa_atual":
+            self.conversaAtual.emit(str(ev.get("id") or ""), list(ev.get("falas") or []),
+                                    "falas" in ev)
+        elif tipo == "conversas":
+            self.conversasRecebidas.emit(list(ev.get("lista") or []))
+        elif tipo == "conversa":
+            self.conversaRecebida.emit(str(ev.get("id") or ""), list(ev.get("falas") or []))
+        elif tipo == "erro":
+            self.erroRecebido.emit(str(ev.get("motivo") or ""))
         elif tipo == "aviso":
             self.avisoMudou.emit(str(ev.get("situacao") or "ok"), float(ev.get("volta_em") or 0))
         elif tipo == "mostrar":

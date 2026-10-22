@@ -1,135 +1,303 @@
 import QtQuick
 
-// Uma fala na conversa. A sua vem numa bolha cheia, a dele numa bolha só de
-// contorno — a diferença é de peso, não de cor. A única cor é a borda da
-// pergunta que ainda espera resposta.
+// Uma fala na conversa, no estilo do app do Claude (janela grande, 22/10/2026):
 //
-// Mais dois tipos, desde que o cérebro virou o Claude Code (out/2026):
-//   painel     o que ele mandou para a janela (código, lista, passos): cartão
-//              largo, markdown, texto selecionável para copiar;
-//   atividade  o que ele está fazendo agora: uma linha fraca, sem bolha.
+//   voce       balão à direita, com a origem (voz, digitado, celular) e a hora;
+//   jarvis     sem balão, com o átomo ao lado e o texto em markdown;
+//   painel     o que ele mandou para a janela: sem título, é a resposta
+//              formatada (fica igual a uma fala dele); com título, um cartão;
+//   atividade  o que ele fez: uma pílula ("3 passos · Bash — ..."), que abre
+//              a lista de passos ao clicar.
 //
-// A largura segue a regra que não cria laço: o texto pede `min(implicitWidth,
-// máximo)`, e a bolha se ajusta ao texto. Pedir a largura do pai e o pai pedir
-// a do filho degenerava a bolha num fiapo.
+// A coluna da conversa tem largura fixa no meio da área (`largura`), e o
+// delegado ocupa a lista inteira, para a rolagem pegar em qualquer lugar.
 Item {
     id: raiz
 
     property var tema
-    property string quem: "voce"          // "voce" | "jarvis" | "painel" | "atividade"
+    property string quem: "voce"
     property string texto: ""
-    property string acao: ""
+    property string origem: ""
     property string titulo: ""
+    property real quando: 0
     property bool perguntando: false
+    property string passos: ""
     property bool animar: true
+    property real largura: 780
+    property color corPersona: tema ? tema.persona : "#4da3ff"
+    signal copiar(string texto)
 
     readonly property bool minha: quem === "voce"
-    readonly property bool painel: quem === "painel"
     readonly property bool atividade: quem === "atividade"
-    readonly property real maxLargura: width * 0.86 - 28
+    readonly property bool cartao: quem === "painel" && titulo !== ""
+    readonly property real x0: Math.max(0, (width - largura) / 2)
 
-    width: ListView.view ? ListView.view.width : 320
-    height: atividade ? linhaDeAtividade.height + 6 : bolha.height + 8
+    width: ListView.view ? ListView.view.width : 800
+    height: corpo.height + (atividade ? 14 : 26)
 
-    Text {
-        id: linhaDeAtividade
-        visible: raiz.atividade
-        x: 4
-        y: 3
-        width: raiz.width - 8
-        text: "▸ " + raiz.texto
-        color: raiz.tema.textoFraco
-        opacity: 0.8
-        font.family: raiz.tema.familia
-        font.pixelSize: 11
-        font.letterSpacing: 0.3
-        renderType: Text.NativeRendering
-        elide: Text.ElideRight
+    function hora(seg) {
+        if (!seg)
+            return "";
+        var d = new Date(seg * 1000);
+        return ("0" + d.getHours()).slice(-2) + ":" + ("0" + d.getMinutes()).slice(-2);
     }
 
-    Rectangle {
-        id: bolha
-        visible: !raiz.atividade
-        anchors.right: raiz.minha ? parent.right : undefined
-        anchors.left: raiz.minha ? undefined : parent.left
-        // A entrada anima ESTE y, e não o do delegado: num ListView quem manda
-        // no y do delegado é a lista, e as duas coisas brigando empilhavam
-        // todas as falas na mesma linha.
-        //
-        // Sem animar, os valores já nascem no destino e os Behaviors não têm o
-        // que fazer — é assim que o histórico entra inteiro, parado.
-        y: raiz.animar ? 8 : 0
+    function nomeDaOrigem(o) {
+        return { voz: "voz", texto: "digitado", digitado: "digitado", celular: "celular",
+                 relogio: "relógio" }[o] || o;
+    }
+
+    function iconeDaOrigem(o) {
+        return { voz: tema.icones.voz, texto: tema.icones.teclado, digitado: tema.icones.teclado,
+                 celular: tema.icones.celular, relogio: tema.icones.relogio }[o] || tema.icones.teclado;
+    }
+
+    Item {
+        id: corpo
+        x: raiz.x0
+        width: raiz.largura
+        height: raiz.minha ? balao.height + meta.height + 6
+              : raiz.atividade ? pilula.height + (pilula.aberta ? listaPassos.height + 8 : 0)
+              : resposta.height
+        // A entrada anima ESTE y, e não o do delegado: no ListView quem manda
+        // no y do delegado é a lista.
+        y: raiz.animar ? 10 : 0
         opacity: raiz.animar ? 0 : 1
         Component.onCompleted: { y = 0; opacity = 1; }
-        Behavior on y { NumberAnimation { duration: 280; easing.type: Easing.OutCubic } }
-        Behavior on opacity { NumberAnimation { duration: 280; easing.type: Easing.OutCubic } }
-        width: raiz.painel ? raiz.width : conteudo.width + 28
-        height: conteudo.height + 22
-        radius: raiz.painel ? 10 : 14
-        color: raiz.minha || raiz.painel ? raiz.tema.superficie : "transparent"
-        border.width: raiz.minha ? 0 : 1
-        border.color: raiz.perguntando ? raiz.tema.pergunta : raiz.tema.traco
-        Behavior on border.color { ColorAnimation { duration: raiz.tema.normal } }
+        Behavior on y { NumberAnimation { duration: 260; easing.type: Easing.OutCubic } }
+        Behavior on opacity { NumberAnimation { duration: 260; easing.type: Easing.OutCubic } }
 
-        Column {
-            id: conteudo
-            anchors.centerIn: parent
-            spacing: 5
+        // -- a minha fala -----------------------------------------------------
+        Rectangle {
+            id: balao
+            visible: raiz.minha
+            anchors.right: parent.right
+            width: Math.min(textoMeu.implicitWidth, raiz.largura * 0.72) + 34
+            height: textoMeu.height + 24
+            radius: 18
+            bottomRightRadius: 6
+            color: raiz.tema.superficie2
+            border.width: 1
+            border.color: raiz.tema.traco
 
-            Text {
-                visible: raiz.painel && raiz.titulo !== ""
-                width: raiz.width - 28
-                text: raiz.titulo.toUpperCase()
-                color: raiz.tema.textoFraco
-                font.family: raiz.tema.familia
-                font.pixelSize: 10
-                font.letterSpacing: 1.2
-                font.bold: true
-                renderType: Text.NativeRendering
-                elide: Text.ElideRight
-            }
-
-            // O cartão do painel: markdown, e dá para selecionar e copiar.
             TextEdit {
-                visible: raiz.painel
-                width: raiz.width - 28
-                text: raiz.painel ? raiz.texto : ""
-                textFormat: TextEdit.MarkdownText
+                id: textoMeu
+                x: 17; y: 12
+                width: Math.min(implicitWidth, raiz.largura * 0.72)
+                text: raiz.minha ? raiz.texto : ""
                 readOnly: true
                 selectByMouse: true
-                selectionColor: raiz.tema.traco
-                color: raiz.tema.texto
-                font.family: raiz.tema.familia
-                font.pixelSize: 13
-                renderType: Text.NativeRendering
                 wrapMode: TextEdit.Wrap
-            }
-
-            Text {
-                id: corpoDaFala
-                visible: !raiz.painel
-                width: Math.min(implicitWidth, raiz.maxLargura)
-                text: raiz.painel ? "" : raiz.texto
                 color: raiz.tema.texto
+                selectionColor: raiz.tema.tracoForte
                 font.family: raiz.tema.familia
-                font.pixelSize: 14
-                renderType: Text.NativeRendering
-                wrapMode: Text.WordWrap
-            }
-
-            // O que ele FEZ, e não só o que disse. É a §2.5 aparecendo na tela.
-            Text {
-                visible: raiz.acao !== "" && !raiz.painel
-                width: Math.min(implicitWidth, raiz.maxLargura)
-                text: raiz.acao
-                color: raiz.tema.textoFraco
-                font.family: raiz.tema.familia
-                font.pixelSize: 10
-                font.letterSpacing: 0.5
-                renderType: Text.NativeRendering
-                elide: Text.ElideRight
+                font.pixelSize: 15
             }
         }
-    }
+        Row {
+            id: meta
+            visible: raiz.minha
+            anchors.right: parent.right
+            anchors.top: balao.bottom
+            anchors.topMargin: 6
+            spacing: 5
+            Icone {
+                anchors.verticalCenter: parent.verticalCenter
+                caminho: raiz.iconeDaOrigem(raiz.origem)
+                cor: raiz.tema.muitoFraco
+                tamanho: 12
+            }
+            Text {
+                text: raiz.nomeDaOrigem(raiz.origem || "texto") + " · " + raiz.hora(raiz.quando)
+                color: raiz.tema.muitoFraco
+                font.family: raiz.tema.familia
+                font.pixelSize: 12
+            }
+        }
 
+        // -- o que ele fez ------------------------------------------------------
+        Rectangle {
+            id: pilula
+            visible: raiz.atividade
+            property bool aberta: false
+            readonly property var lista: raiz.passos ? raiz.passos.split("\n") : []
+            x: 46
+            width: Math.min(linhaPilula.width + 28, raiz.largura - 46)
+            height: 32
+            radius: 16
+            color: areaPilula.containsMouse ? raiz.tema.superficie : raiz.tema.lateral
+            border.width: 1
+            border.color: raiz.tema.traco
+            Behavior on color { ColorAnimation { duration: raiz.tema.rapido } }
+            Row {
+                id: linhaPilula
+                anchors.verticalCenter: parent.verticalCenter
+                x: 12
+                spacing: 8
+                Rectangle {
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: 7; height: 7; radius: 3.5
+                    color: "#38d39f"
+                }
+                Text {
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: Math.min(implicitWidth, raiz.largura - 140)
+                    elide: Text.ElideRight
+                    text: (pilula.lista.length > 1 ? pilula.lista.length + " passos · " : "") + raiz.texto
+                    color: raiz.tema.textoFraco
+                    font.family: raiz.tema.familia
+                    font.pixelSize: 13
+                }
+                Icone {
+                    anchors.verticalCenter: parent.verticalCenter
+                    caminho: pilula.aberta ? raiz.tema.icones.seta : raiz.tema.icones.direita
+                    cor: raiz.tema.muitoFraco
+                    tamanho: 13
+                }
+            }
+            MouseArea {
+                id: areaPilula
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: pilula.aberta = !pilula.aberta
+            }
+        }
+        Column {
+            id: listaPassos
+            visible: raiz.atividade && pilula.aberta
+            anchors.top: pilula.bottom
+            anchors.topMargin: 8
+            x: 60
+            width: raiz.largura - 60
+            spacing: 4
+            Repeater {
+                model: listaPassos.visible ? pilula.lista : []
+                Text {
+                    required property var modelData
+                    width: listaPassos.width
+                    elide: Text.ElideRight
+                    text: "·  " + modelData
+                    color: raiz.tema.textoFraco
+                    font.family: raiz.tema.familia
+                    font.pixelSize: 13
+                }
+            }
+        }
+
+        // -- a fala dele (e o painel) -------------------------------------------
+        Item {
+            id: resposta
+            visible: !raiz.minha && !raiz.atividade
+            width: parent.width
+            height: Math.max(30, colunaResposta.height)
+
+            AtomoFixo {
+                y: 2
+                tamanho: 30
+                cor: raiz.corPersona
+                corDeFundo: raiz.tema.fundo
+            }
+
+            Column {
+                id: colunaResposta
+                x: 46
+                width: parent.width - 46
+                spacing: 8
+
+                // A pergunta que ainda espera resposta.
+                Row {
+                    visible: raiz.perguntando
+                    spacing: 6
+                    Rectangle {
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: 7; height: 7; radius: 3.5
+                        color: raiz.tema.pergunta
+                    }
+                    Text {
+                        text: "Esperando tua resposta"
+                        color: raiz.tema.pergunta
+                        font.family: raiz.tema.familia
+                        font.pixelSize: 12
+                    }
+                }
+
+                Rectangle {
+                    // Com título: um cartão (pedido de permissão, aviso...).
+                    width: parent.width
+                    height: raiz.cartao ? colunaCartao.height + 28 : textoDele.height
+                    color: raiz.cartao ? raiz.tema.superficie : "transparent"
+                    border.width: raiz.cartao ? 1 : 0
+                    border.color: raiz.perguntando ? raiz.tema.pergunta : raiz.tema.traco
+                    radius: 12
+
+                    Column {
+                        id: colunaCartao
+                        x: raiz.cartao ? 16 : 0
+                        y: raiz.cartao ? 14 : 0
+                        width: parent.width - 2 * x
+                        spacing: 8
+                        Text {
+                            visible: raiz.cartao
+                            width: parent.width
+                            text: raiz.titulo
+                            elide: Text.ElideRight
+                            color: raiz.tema.texto
+                            font.family: raiz.tema.familia
+                            font.pixelSize: 14
+                            font.weight: Font.DemiBold
+                        }
+                        BlocoMarkdown {
+                            id: textoDele
+                            tema: raiz.tema
+                            width: parent.width
+                            texto: raiz.minha || raiz.atividade ? "" : raiz.texto
+                            onCopiar: function (t) { raiz.copiar(t) }
+                        }
+                    }
+                }
+
+                // Copiar e a hora: aparecem com o mouse em cima.
+                Row {
+                    spacing: 14
+                    opacity: areaResposta.hovered ? 1 : 0
+                    Behavior on opacity { NumberAnimation { duration: raiz.tema.rapido } }
+                    Item {
+                        width: linhaCopiar.width
+                        height: linhaCopiar.height
+                        Row {
+                            id: linhaCopiar
+                            spacing: 5
+                            Icone {
+                                anchors.verticalCenter: parent.verticalCenter
+                                caminho: raiz.tema.icones.copiar
+                                cor: areaCopiarTudo.containsMouse ? raiz.tema.texto : raiz.tema.muitoFraco
+                                tamanho: 13
+                            }
+                            Text {
+                                text: "Copiar"
+                                color: areaCopiarTudo.containsMouse ? raiz.tema.texto : raiz.tema.muitoFraco
+                                font.family: raiz.tema.familia
+                                font.pixelSize: 12
+                            }
+                        }
+                        MouseArea {
+                            id: areaCopiarTudo
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: raiz.copiar(raiz.texto)
+                        }
+                    }
+                    Text {
+                        text: raiz.hora(raiz.quando)
+                        color: raiz.tema.muitoFraco
+                        font.family: raiz.tema.familia
+                        font.pixelSize: 12
+                    }
+                }
+            }
+            HoverHandler { id: areaResposta }
+        }
+    }
 }

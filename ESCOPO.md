@@ -502,6 +502,45 @@ miniatura e ✕; ao enviar, a janela copia os arquivos para a pasta de
 recebidos (`jarvis/ponte/recebidos.py`, o mesmo do celular) e manda
 `"anexos"` no "falar".
 
+### A janela grande, no estilo do app do Claude (22/10/2026)
+
+Pedido do Léo: "transformar num programa de IA de verdade", do tamanho da
+tela. Protótipo aprovado ("Caralho. Ficou muito bom"), e a janela segue ele:
+
+- **Barra lateral:** Novo chat (Ctrl+N), busca (Ctrl+K), as conversas por
+  data (Hoje, Ontem, Esta semana...) com o ícone de onde vieram (voz, relógio,
+  celular, digitado) e, embaixo, o átomo pequeno com o estado, Memória e
+  Ajustes.
+- **Conversas = sessões do Claude Code** (`jarvis/agente/sessoes.py`): o SDK
+  lista (`list_sessions`, com o título que o próprio Claude Code dá) e lê
+  (`get_session_messages`). **Cada vez que o Jarvis liga é um chat novo**
+  (antes continuava a de menos de 3 h). Clicar numa antiga mostra ela; o que
+  for escrito ali faz o Jarvis voltar pra ela (`resume`) e então manda.
+- **Barra de escrever:** várias linhas (Enter envia, Shift+Enter quebra), o
+  clipe e três seletores: persona (só o Jarvis por enquanto), cérebro
+  (Automático = os dois cérebros, Haiku, Sonnet, Opus) e esforço (baixo a
+  máximo). O modelo troca na hora (`set_model`); o esforço reabre a MESMA
+  conversa por baixo (o SDK só aceita esforço ao abrir). A escolha fica em
+  `~/.local/share/jarvis/cerebro.json`.
+- **Mensagens:** as dele sem balão, com o átomo; markdown de verdade; código
+  em caixa própria com "Copiar"; a resposta formatada (painel sem título)
+  substitui a versão falada; as atividades viram uma pílula ("3 passos ·
+  ...") que abre a lista.
+- **Chat novo:** o átomo grande no meio, "Boa noite, Léo." e a barra logo
+  abaixo, com ideias de pedido.
+- **Ponte v3** (`protocolo.py`): pedidos `conversas`, `abrir`, `nova`,
+  `continuar`, `cerebro`; eventos `cerebro`, `conversa_atual`, `conversas`,
+  `conversa`. O celular ignora todos. Texto digitado agora vai até 8000
+  caracteres e mantém as quebras de linha.
+
+**Por que arrastar a janela velha travava ("parece 10 fps").** Ela era
+transparente (cantos redondos) com uma sombra feita com `MultiEffect` sobre a
+janela inteira: a cada quadro do átomo, tudo era redesenhado e borrado; e o
+limite de 30 fps fazia o programa esperar 6 sincronismos a cada quadro. A
+janela grande é opaca, sem efeito na janela inteira, intervalo 3 (60 fps), e
+só anima o que aparece: medido com `--medir-quadros`, parada ela desenha
+**0 quadros** (6,8% de um núcleo só na subida).
+
 ### Dependências de sistema (não vêm com o pip)
 
 | peça | precisa de | sem ela |

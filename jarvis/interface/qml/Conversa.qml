@@ -1,128 +1,133 @@
 import QtQuick
+import QtQuick.Controls.Basic
 
-// O que foi pedido e o que ele respondeu, em ordem. O histórico da lateral
-// (passada 4) lê o .jsonl da sessão; isto aqui é só o que aconteceu com a
-// janela aberta.
+// A conversa: uma coluna no meio da área (como no app do Claude), rolando
+// por baixo. O modelo vem de fora (Falas): a janela tem um para a conversa
+// ao vivo e outro para a antiga que o Léo abriu na barra lateral.
 Item {
     id: raiz
     property var tema
+    property var falas
+    property bool pensando: false
+    property string textoPensando: "Pensando…"
+    property color corPensando: "#9b7bff"
+    property color corPersona: tema ? tema.persona : "#4da3ff"
+    property real largura: Math.min(780, width - 64)
+    signal copiar(string texto)
 
-    // Só a última fala pode estar perguntando: qualquer fala nova responde ou
-    // atropela a pergunta, e a borda dela apaga.
-    function _fecharPerguntas() {
-        for (var i = 0; i < falas.count; i++)
-            if (falas.get(i).perguntando) falas.setProperty(i, "perguntando", false);
-    }
-
-    function acrescentar(quem, texto, acao, perguntando) {
-        _fecharPerguntas();
-        falas.append({ quem: quem, texto: texto, acao: acao || "", titulo: "",
-                       perguntando: perguntando === true, animar: true });
-    }
-
-    // O que o Claude mandou para a janela: código, lista, passos. Um cartão
-    // largo, com markdown e texto que dá para selecionar e copiar.
-    function mostrar(titulo, texto) {
-        falas.append({ quem: "painel", texto: texto, acao: "", titulo: titulo || "",
-                       perguntando: false, animar: true });
-    }
-
-    // O que ele está fazendo agora. Uma linha só por sequência: cada
-    // atividade nova troca a anterior, em vez de encher a conversa de passos.
-    function atividade(texto) {
-        var ultima = falas.count - 1;
-        if (ultima >= 0 && falas.get(ultima).quem === "atividade")
-            falas.setProperty(ultima, "texto", texto);
-        else
-            falas.append({ quem: "atividade", texto: texto, acao: "", titulo: "",
-                           perguntando: false, animar: true });
-    }
-
-    // A conversa que JÁ existia, vinda do assistente ao conectar. Entra de uma
-    // vez e sem animação: não é fala nova chegando, e animar tudo faria a
-    // janela parecer que está recebendo a conversa inteira agora.
-    function preencher(anteriores) {
-        falas.clear();
-        for (var i = 0; i < anteriores.length; i++) {
-            var f = anteriores[i];
-            falas.append({ quem: f.quem, texto: f.texto || "",
-                           acao: f.acao || "", titulo: f.titulo || "",
-                           perguntando: f.perguntando === true && i === anteriores.length - 1,
-                           animar: false });
-        }
-        raiz.seguindo = true;
-        Qt.callLater(lista.positionViewAtEnd);
-    }
-
-    function limpar() { falas.clear(); }
-
-    property string dica: ""
-    readonly property bool vazia: falas.count === 0
-
-    // "Estou acompanhando o fim da conversa." Só muda quando o Léo arrasta a
-    // lista — e não a cada fala nova.
-    //
-    // Antes isso era decidido por `atYEnd` na hora da fala nova, e não
-    // funcionava: logo depois de preencher o histórico as bolhas ainda não
-    // tinham sido medidas, a lista se achava fora do fim, e daí em diante
-    // nenhuma fala nova aparecia sem arrastar à mão.
+    // "Estou acompanhando o fim da conversa." Só muda quando o Léo rola a
+    // lista — e não a cada fala nova (decidir por `atYEnd` na hora da fala
+    // falhava logo depois do histórico, com as falas ainda sem altura).
     property bool seguindo: true
 
-    ListModel { id: falas }
-
-    // Conversa vazia é um vão grande no meio da janela. Uma linha só, apagada,
-    // dizendo por onde se começa.
-    Text {
-        anchors.centerIn: parent
-        width: parent.width - 80
-        horizontalAlignment: Text.AlignHCenter
-        wrapMode: Text.WordWrap
-        visible: opacity > 0
-        opacity: raiz.vazia && raiz.dica !== "" ? 0.45 : 0.0
-        text: raiz.dica
-        color: raiz.tema.textoFraco
-        font.family: raiz.tema.familia
-        font.pixelSize: 13
-        renderType: Text.NativeRendering
-        Behavior on opacity { NumberAnimation { duration: raiz.tema.lento } }
+    function irProFim() {
+        raiz.seguindo = true;
+        Qt.callLater(lista.positionViewAtEnd);
     }
 
     ListView {
         id: lista
         anchors.fill: parent
-        anchors.leftMargin: 20
-        anchors.rightMargin: 20
         clip: true
-        spacing: 2
-        model: falas
-        // A conversa acompanha o fim sozinha: quem está lendo o meio segura a
-        // rolagem, e quem está no fim continua vendo o que chega.
-        // `Qt.callLater` porque rolar antes de a lista se medir não vai a lugar
-        // nenhum: a altura das bolhas ainda não existe.
+        model: raiz.falas
+        topMargin: 28
+        bottomMargin: 24
+        boundsBehavior: Flickable.StopAtBounds
         onCountChanged: if (raiz.seguindo) Qt.callLater(positionViewAtEnd)
         onMovementEnded: raiz.seguindo = atYEnd
-        // Os papéis vêm do `model`, e não de propriedades obrigatórias: o
-        // Mensagem já declara essas propriedades, e redeclará-las aqui fazia
-        // cada uma ser atribuída a si mesma.
+        onContentHeightChanged: if (raiz.seguindo && !moving) Qt.callLater(positionViewAtEnd)
+
+        ScrollBar.vertical: ScrollBar {
+            policy: ScrollBar.AsNeeded
+            contentItem: Rectangle {
+                implicitWidth: 6
+                radius: 3
+                color: raiz.tema.tracoForte
+                opacity: parent.active ? 0.9 : 0.0
+                Behavior on opacity { NumberAnimation { duration: raiz.tema.normal } }
+            }
+        }
+
         delegate: Mensagem {
             tema: raiz.tema
+            largura: raiz.largura
+            corPersona: raiz.corPersona
             quem: model.quem
             texto: model.texto
-            acao: model.acao
+            origem: model.origem
             titulo: model.titulo
+            quando: model.quando
             perguntando: model.perguntando
+            passos: model.passos
             animar: model.animar
+            onCopiar: function (t) { raiz.copiar(t) }
+        }
+
+        // Enquanto ele trabalha: o átomo roxo e o que está fazendo.
+        footer: Item {
+            width: lista.width
+            height: raiz.pensando ? 46 : 0
+            Behavior on height { NumberAnimation { duration: raiz.tema.normal; easing.type: Easing.OutCubic } }
+            Row {
+                x: Math.max(0, (parent.width - raiz.largura) / 2)
+                y: 8
+                spacing: 16
+                opacity: raiz.pensando ? 1 : 0
+                Behavior on opacity { NumberAnimation { duration: raiz.tema.normal } }
+                AtomoFixo {
+                    tamanho: 30
+                    cor: raiz.corPensando
+                    corDeFundo: raiz.tema.fundo
+                    SequentialAnimation on opacity {
+                        running: raiz.pensando
+                        loops: Animation.Infinite
+                        NumberAnimation { from: 1.0; to: 0.45; duration: 900; easing.type: Easing.InOutSine }
+                        NumberAnimation { from: 0.45; to: 1.0; duration: 900; easing.type: Easing.InOutSine }
+                    }
+                }
+                Text {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: raiz.textoPensando
+                    color: raiz.tema.textoFraco
+                    font.family: raiz.tema.familia
+                    font.pixelSize: 14
+                }
+            }
         }
     }
 
-    // Um fiapo de sombra no topo, para a conversa parecer passar por baixo da
-    // esfera em vez de começar do nada.
+    // A conversa some por baixo da barra de escrever, em vez de cortar seco.
     Rectangle {
-        anchors { top: parent.top; left: parent.left; right: parent.right }
-        height: 24
+        anchors { bottom: parent.bottom; left: parent.left; right: parent.right }
+        height: 28
         gradient: Gradient {
-            GradientStop { position: 0.0; color: raiz.tema.fundo }
-            GradientStop { position: 1.0; color: "transparent" }
+            GradientStop { position: 0.0; color: "transparent" }
+            GradientStop { position: 1.0; color: raiz.tema.fundo }
+        }
+    }
+
+    // Voltar pro fim, quando ele rolou para cima e chegou coisa nova.
+    Rectangle {
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.bottom: parent.bottom
+        anchors.bottomMargin: 12
+        width: 36; height: 36; radius: 18
+        color: raiz.tema.superficie2
+        border.width: 1
+        border.color: raiz.tema.tracoForte
+        visible: opacity > 0
+        opacity: !raiz.seguindo && !lista.atYEnd ? 1 : 0
+        Behavior on opacity { NumberAnimation { duration: raiz.tema.rapido } }
+        Icone {
+            anchors.centerIn: parent
+            caminho: raiz.tema.icones.seta
+            cor: raiz.tema.texto
+            tamanho: 18
+        }
+        MouseArea {
+            anchors.fill: parent
+            cursorShape: Qt.PointingHandCursor
+            onClicked: raiz.irProFim()
         }
     }
 }

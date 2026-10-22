@@ -20,7 +20,7 @@ import sys
 from pathlib import Path
 
 from PySide6.QtCore import QTimer, QUrl
-from PySide6.QtGui import QGuiApplication, QSurfaceFormat
+from PySide6.QtGui import QFontDatabase, QGuiApplication, QSurfaceFormat
 from PySide6.QtQml import QQmlApplicationEngine
 from PySide6.QtWidgets import QApplication
 
@@ -32,17 +32,15 @@ from jarvis.ponte import protocolo
 
 QML = Path(__file__).parent / "jarvis" / "interface" / "qml"
 
-# Quadros: um a cada SEIS sincronismos da tela.
+# Quadros: um a cada TRÊS sincronismos da tela (180 Hz ÷ 3 = 60 fps).
 #
-# A tela do Léo é de 180 Hz, então 180 ÷ 6 = 30 quadros por segundo. Medido na
-# passada 3, com a esfera no estado mais pesado: 60 fps custam 19,7% de um
-# núcleo e 30 fps custam 11,2%. A máquina tem 4 núcleos e a janela fica aberta
-# o dia inteiro — decisão do Léo, com o número na mão.
-#
-# O 6 é literal de propósito, sem constante configurável e sem calcular em cima
-# da taxa da tela. O preço está dito: trocar de monitor muda a taxa e o código
-# não avisa.
-INTERVALO_DE_TROCA = 6
+# Era 6 (30 fps), da janela pequena. Com ela, arrastar a janela ficava aos
+# trancos ("parece 10 fps", 21/10/2026): a cada quadro o programa ficava preso
+# esperando 6 sincronismos, e a sombra feita com efeito redesenhava tudo. A
+# janela grande é opaca, sem esse efeito, e só anima o que aparece; parada,
+# não desenha nada. O 3 é literal: trocar de monitor muda a taxa.
+INTERVALO_DE_TROCA = 3
+FONTES = Path(__file__).parent / "jarvis" / "interface" / "fontes"
 ESTADOS = protocolo.ESTADOS
 
 
@@ -179,6 +177,10 @@ def main(argv: list[str] | None = None) -> int:
         print(f"  tela {hz:.0f} Hz · intervalo {INTERVALO_DE_TROCA} · "
               f"alvo {hz / INTERVALO_DE_TROCA:.0f} fps", flush=True)
 
+    # A fonte da janela (Inter, licença OFL) vem com o projeto.
+    for fonte in FONTES.glob("*.ttf"):
+        QFontDatabase.addApplicationFont(str(fonte))
+
     ponte = PonteQt(protocolo.caminho_socket(args.socket))
     olho = OlhoDeTelaCheia()
 
@@ -194,6 +196,9 @@ def main(argv: list[str] | None = None) -> int:
         print("a janela não carregou", file=sys.stderr)
         return 1
     janela = engine.rootObjects()[0]
+    # A janela grande abre do tamanho da tela (pedido do Léo, 22/10/2026).
+    if janela.isVisible():
+        janela.showMaximized()
 
     # Os sinais da ponte o QML escuta sozinho (Connections no Janela.qml): o
     # chat precisa de dois deles que não viram propriedade, e repassar tudo
