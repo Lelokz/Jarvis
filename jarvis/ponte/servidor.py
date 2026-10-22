@@ -94,6 +94,8 @@ class Servidor:
         self.provedor_memoria = None
         self.provedor_conversas = None
         self.provedor_conversa = None
+        self.provedor_renomear = None
+        self.provedor_apagar = None
         # O histórico da sessão, para um cliente que chega depois — ou que
         # fechou a janela e voltou. Anel de tamanho fixo: o alcance é a sessão,
         # e memória de processo que roda o dia todo não cresce sem teto.
@@ -429,6 +431,21 @@ class Servidor:
                 self._direto(cliente, {"ev": "erro", "motivo": f"não abri a conversa ({e})"})
                 return
             self._direto(cliente, {"ev": "conversa", "id": dados["id"], "falas": falas})
+        elif tipo in ("renomear", "apagar"):
+            if tipo == "apagar" and dados["id"] == self._conversa_atual:
+                self._direto(cliente, {"ev": "erro", "motivo": "Essa é a conversa de agora: "
+                                       "começa um chat novo antes de apagar ela."})
+                return
+            try:
+                if tipo == "renomear" and self.provedor_renomear:
+                    self.provedor_renomear(dados["id"], dados["titulo"])
+                elif tipo == "apagar" and self.provedor_apagar:
+                    self.provedor_apagar(dados["id"])
+                lista = self.provedor_conversas() if self.provedor_conversas else []
+            except Exception as e:
+                self._direto(cliente, {"ev": "erro", "motivo": f"não deu ({e})"})
+                return
+            self._direto(cliente, {"ev": "conversas", "lista": lista})
         elif tipo in ("nova", "continuar", "cerebro", "parar"):
             valor = dados.get("id", "") if tipo == "continuar" else \
                 json.dumps(dados) if tipo == "cerebro" else ""

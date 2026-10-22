@@ -92,6 +92,9 @@ CLIENTES -> ASSISTENTE
          {"pedir":"continuar", "id":"..."} -> o Jarvis volta para essa conversa
          {"pedir":"cerebro", "modelo":"...", "esforco":"..."}  (um ou os dois)
          {"pedir":"parar"}                -> interrompe a tarefa (o botão Parar)
+         {"pedir":"renomear", "id":"...", "titulo":"..."} -> "conversas"
+         {"pedir":"apagar", "id":"..."}   -> manda para a lixeira; "conversas"
+        A conversa de AGORA não pode ser apagada (erro): o Jarvis está nela.
         "nova" e "continuar" com o Jarvis no meio de uma tarefa voltam
         {"ev":"erro"} para quem pediu.
 
@@ -138,7 +141,8 @@ PUBLICOS = frozenset({"sessao", "estado", "nivel", "voce_disse", "jarvis_disse",
                       "mostrar", "atividade", "voz", "cerebro", "conversa_atual"})
 ESTADOS = ("dormindo", "ouvindo", "escutando", "pensando", "falando")
 PEDIDOS = frozenset({"ola", "falar", "memoria", "ouvir",
-                     "conversas", "abrir", "nova", "continuar", "cerebro", "parar"})
+                     "conversas", "abrir", "nova", "continuar", "cerebro", "parar",
+                     "renomear", "apagar"})
 
 # Uma linha maior que isto sem quebra é um cliente com defeito, não um pedido.
 MAX_LINHA = 64 * 1024
@@ -186,10 +190,15 @@ def ler_pedido(linha: bytes) -> tuple[str, dict[str, Any]]:
     if tipo in ("memoria", "conversas", "nova", "parar"):
         return tipo, {}
 
-    if tipo in ("abrir", "continuar"):
+    if tipo in ("abrir", "continuar", "renomear", "apagar"):
         sessao = objeto.get("id")
         if not isinstance(sessao, str) or not re.fullmatch(r"[0-9a-fA-F-]{8,64}", sessao):
             raise ErroDeProtocolo(f"'{tipo}' sem um id de conversa válido")
+        if tipo == "renomear":
+            titulo = objeto.get("titulo")
+            if not isinstance(titulo, str) or not titulo.strip() or len(titulo) > 200:
+                raise ErroDeProtocolo("'renomear' sem um título válido")
+            return tipo, {"id": sessao, "titulo": titulo.strip()}
         return tipo, {"id": sessao}
 
     if tipo == "cerebro":

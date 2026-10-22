@@ -570,6 +570,9 @@ def rodar_janela(base: Path) -> None:
     srv.provedor_conversas = lambda: [{"id": "a1b2c3d4", "titulo": "Teste", "quando": 1.0,
                                        "criada": 1.0, "origem": "voz"}]
     srv.provedor_conversa = lambda sessao: [{"quem": "voce", "texto": "oi " + sessao}]
+    feitos = []
+    srv.provedor_renomear = lambda sessao, titulo: feitos.append(("renomear", sessao, titulo))
+    srv.provedor_apagar = lambda sessao: feitos.append(("apagar", sessao))
     srv.iniciar()
     print("-- janela: conversas e cérebro --")
     srv.receber({"ev": "cerebro", "modelo": "auto", "esforco": "medium", "persona": "jarvis"})
@@ -610,6 +613,18 @@ def rodar_janela(base: Path) -> None:
           [(x.tipo, x.valor) for x in pedidos] == [("nova", ""), ("continuar", "a1b2c3d4"),
                                                    ("cerebro", '{"esforco": "high"}'), ("parar", "")],
           str([(x.tipo, x.valor) for x in pedidos]))
+    janela.enviar({"pedir": "renomear", "id": "a1b2c3d4", "titulo": "  Meu nome  "})
+    r = janela.ler(1)
+    checa("renomear: chama o provedor e devolve a lista", r and r[0]["ev"] == "conversas"
+          and feitos[-1] == ("renomear", "a1b2c3d4", "Meu nome"))
+    janela.enviar({"pedir": "apagar", "id": "feedbeef-1"})
+    r = janela.ler(1)
+    checa("apagar a conversa de agora: erro, e nada foi apagado",
+          r and r[0]["ev"] == "erro" and not any(f[0] == "apagar" for f in feitos))
+    janela.enviar({"pedir": "apagar", "id": "a1b2c3d4"})
+    r = janela.ler(1)
+    checa("apagar outra: chama o provedor", r and r[0]["ev"] == "conversas"
+          and feitos[-1] == ("apagar", "a1b2c3d4"))
     srv.avisar(pedidos[0].cliente, "espera")
     r = janela.ler(1)
     checa("avisar: o erro chega só para quem pediu", r and r[0] == {"ev": "erro", "motivo": "espera"})

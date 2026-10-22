@@ -11,6 +11,7 @@ Rectangle {
     property var tema
     property var conversas            // ListModel: sessao, titulo, quando, origem, grupo
     property string selecionada: ""   // o id que está na tela
+    property string atual: ""         // o id da conversa do Jarvis agora (não se apaga)
     property string pagina: "chat"
     property string estado: "dormindo"
     property bool conectado: false
@@ -20,6 +21,8 @@ Rectangle {
     property alias filtro: busca.text
     signal novoChat()
     signal abrir(string id)
+    signal renomear(string id, string titulo)
+    signal apagar(string id)
     signal irPara(string pagina)
     signal arrastar()
     signal alternarMaximizar()
@@ -187,6 +190,17 @@ Rectangle {
             required property string sessao
             required property string titulo
             required property string origem
+            property bool editando: false
+            function comecarAEditar() {
+                editando = true;
+                campoTitulo.text = titulo;
+                campoTitulo.selectAll();
+                campoTitulo.forceActiveFocus();
+            }
+            Connections {
+                target: menuConversa
+                function onPedirRenomear(alvo) { if (alvo === item.sessao) item.comecarAEditar() }
+            }
             readonly property bool combina: raiz.filtro === ""
                 || titulo.toLowerCase().indexOf(raiz.filtro.toLowerCase()) >= 0
             readonly property bool escolhida: sessao === raiz.selecionada && raiz.pagina === "chat"
@@ -207,19 +221,154 @@ Rectangle {
             Text {
                 anchors.verticalCenter: parent.verticalCenter
                 x: 36
-                width: parent.width - 46
+                width: parent.width - 46 - (botaoMais.visible ? 26 : 0)
+                visible: !item.editando
                 elide: Text.ElideRight
                 text: item.titulo
                 color: item.escolhida ? raiz.tema.texto : raiz.tema.textoMedio
                 font.family: raiz.tema.familia
                 font.pixelSize: 14
             }
+            // Renomeando: o título vira campo (Enter salva, Esc desiste).
+            TextInput {
+                id: campoTitulo
+                anchors.verticalCenter: parent.verticalCenter
+                x: 36
+                width: parent.width - 46
+                visible: item.editando
+                color: raiz.tema.texto
+                selectionColor: raiz.tema.tracoForte
+                font.family: raiz.tema.familia
+                font.pixelSize: 14
+                clip: true
+                onAccepted: {
+                    if (text.trim() && text.trim() !== item.titulo)
+                        raiz.renomear(item.sessao, text.trim());
+                    item.editando = false;
+                }
+                Keys.onEscapePressed: item.editando = false
+                onActiveFocusChanged: if (!activeFocus) item.editando = false
+            }
             MouseArea {
                 id: areaItem
                 anchors.fill: parent
                 hoverEnabled: true
+                enabled: !item.editando
+                acceptedButtons: Qt.LeftButton | Qt.RightButton
                 cursorShape: Qt.PointingHandCursor
-                onClicked: raiz.abrir(item.sessao)
+                onClicked: function (evento) {
+                    if (evento.button === Qt.RightButton)
+                        menuConversa.abrirPara(item, item.sessao, evento.x, evento.y);
+                    else
+                        raiz.abrir(item.sessao);
+                }
+            }
+            // O "⋯": aparece com o mouse em cima.
+            Rectangle {
+                id: botaoMais
+                anchors.verticalCenter: parent.verticalCenter
+                anchors.right: parent.right
+                anchors.rightMargin: 6
+                width: 24; height: 24; radius: 6
+                visible: !item.editando && (areaItem.containsMouse || areaMais.containsMouse
+                         || (menuConversa.opened && menuConversa.alvo === item.sessao))
+                color: areaMais.containsMouse ? raiz.tema.realce : "transparent"
+                Text {
+                    anchors.centerIn: parent
+                    anchors.verticalCenterOffset: -3
+                    text: "···"
+                    color: raiz.tema.textoMedio
+                    font.family: raiz.tema.familia
+                    font.pixelSize: 16
+                    font.weight: Font.Bold
+                }
+                MouseArea {
+                    id: areaMais
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: menuConversa.abrirPara(botaoMais, item.sessao, 0, botaoMais.height + 4)
+                }
+            }
+        }
+    }
+
+    // -- o menu de uma conversa: renomear e apagar -------------------------------
+    // Apagar pede confirmação NO PRÓPRIO menu (sem janela de pop-up): o
+    // primeiro clique troca o texto, o segundo manda para a lixeira.
+    Popup {
+        id: menuConversa
+        objectName: "menuConversa"
+        property string alvo: ""
+        property bool confirmando: false
+        readonly property bool eAtual: alvo === raiz.atual
+        signal pedirRenomear(string alvo)
+        function abrirPara(item, sessao, px, py) {
+            alvo = sessao;
+            confirmando = false;
+            var p = item.mapToItem(raiz, px, py);
+            x = Math.min(p.x, raiz.width - width - 8);
+            y = Math.min(p.y, raiz.height - 110);
+            open();
+        }
+        width: 236
+        padding: 6
+        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+        background: Rectangle {
+            color: raiz.tema.superficie2
+            radius: 12
+            border.width: 1
+            border.color: raiz.tema.tracoForte
+        }
+        contentItem: Column {
+            spacing: 2
+            Repeater {
+                model: [
+                    { acao: "renomear", nome: "Renomear" },
+                    { acao: "apagar", nome: "Apagar" },
+                ]
+                Rectangle {
+                    required property var modelData
+                    readonly property bool apagar: modelData.acao === "apagar"
+                    readonly property bool bloqueado: apagar && menuConversa.eAtual
+                    width: 224
+                    height: 36
+                    radius: 8
+                    color: areaAcao.containsMouse && !bloqueado
+                           ? (apagar ? "#3a1c1e" : raiz.tema.realce) : "transparent"
+                    opacity: bloqueado ? 0.5 : 1
+                    Text {
+                        anchors.verticalCenter: parent.verticalCenter
+                        x: 12
+                        width: parent.width - 24
+                        elide: Text.ElideRight
+                        text: parent.bloqueado ? "Apagar (é a conversa de agora)"
+                            : parent.apagar && menuConversa.confirmando ? "Confirmar: mandar pra lixeira"
+                            : modelData.nome
+                        color: parent.apagar ? "#ff8a8a" : raiz.tema.texto
+                        font.family: raiz.tema.familia
+                        font.pixelSize: 14
+                        font.weight: parent.apagar && menuConversa.confirmando ? Font.DemiBold : Font.Normal
+                    }
+                    MouseArea {
+                        id: areaAcao
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        enabled: !parent.bloqueado
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: {
+                            if (!parent.apagar) {
+                                menuConversa.close();
+                                menuConversa.pedirRenomear(menuConversa.alvo);
+                            } else if (!menuConversa.confirmando) {
+                                menuConversa.confirmando = true;
+                            } else {
+                                menuConversa.close();
+                                raiz.apagar(menuConversa.alvo);
+                            }
+                        }
+                    }
+                }
             }
         }
     }

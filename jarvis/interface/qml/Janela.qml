@@ -243,6 +243,7 @@ Window {
         tema: tema
         conversas: conversas
         selecionada: janela.vendo || janela.conversaAtual
+        atual: janela.conversaAtual
         pagina: janela.pagina
         estado: janela.estado
         conectado: janela.conectado
@@ -251,6 +252,14 @@ Window {
         sendoVista: janela.sendoVista
         onNovoChat: janela.novoChat()
         onAbrir: function (sessao) { janela.abrir(sessao) }
+        onRenomear: function (sessao, titulo) {
+            if (typeof ponte !== "undefined") ponte.renomearConversa(sessao, titulo);
+        }
+        onApagar: function (sessao) {
+            if (janela.vendo === sessao) janela.abrir("");
+            if (typeof ponte !== "undefined") ponte.apagarConversa(sessao);
+            janela.avisar("Conversa mandada pra lixeira");
+        }
         onIrPara: function (p) {
             janela.pagina = p;
             if (p === "memoria") {

@@ -6,13 +6,15 @@ que o próprio Claude Code dá, o `custom_title`) e devolve as mensagens na
 ordem certa; daqui sai o formato das falas do protocolo da ponte (`quem`,
 `texto`, `origem`, `quando`), o mesmo do histórico ao vivo.
 
-Só lê. Quem troca de conversa é o `Agente`.
+Lê, renomeia e manda para a lixeira (pedidos da barra lateral). Quem troca
+de conversa é o `Agente`.
 """
 from __future__ import annotations
 
 import datetime as dt
 import json
 import re
+import subprocess
 from pathlib import Path
 
 import claude_agent_sdk as sdk
@@ -51,6 +53,28 @@ def listar(casa: Path, limite: int = 200) -> list[dict]:
         })
     conversas.sort(key=lambda c: c["quando"], reverse=True)
     return conversas
+
+
+def renomear(casa: Path, sessao: str, titulo: str) -> None:
+    """O título que o Léo deu (o último vale; o SDK acrescenta no arquivo)."""
+    sdk.rename_session(sessao, " ".join(titulo.split())[:120], directory=str(casa))
+
+
+def apagar(casa: Path, sessao: str) -> None:
+    """Manda a conversa para a LIXEIRA (dá para desfazer), nunca apaga de vez:
+    a regra da casa. Só conversa desta casa."""
+    if sessao not in {c["id"] for c in listar(casa, limite=1000)}:
+        raise FileNotFoundError("conversa não encontrada")
+    alvos = []
+    for arquivo in (Path.home() / ".claude" / "projects").glob(f"*/{sessao}.jsonl"):
+        alvos.append(arquivo)
+        pasta = arquivo.with_suffix("")   # subagentes e resultados grandes, se houver
+        if pasta.is_dir():
+            alvos.append(pasta)
+    if not alvos:
+        raise FileNotFoundError("conversa não encontrada")
+    subprocess.run(["gio", "trash", *map(str, alvos)], check=True, timeout=20,
+                   capture_output=True)
 
 
 def _horarios(sessao: str) -> dict[str, float]:

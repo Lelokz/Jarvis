@@ -531,6 +531,14 @@ escrito com ".5" no fim. Ex.: 0.1 (grande) → 0.1.5 (pequena) → 0.2 (pequena)
   pergunta, `_casar_opcao`). Medido: "Azul ou verde?" -> clique em Verde ->
   "Você escolheu verde." Responder falando continua valendo.
 
+- **beta 0.3:** renomear e apagar conversa. "···" no item (ou botão direito):
+  Renomear vira um campo no próprio item (Enter salva; `rename_session` do
+  SDK); Apagar pede confirmação NO MENU (sem pop-up) e manda o arquivo da
+  sessão para a LIXEIRA com `gio trash` (dá para desfazer), nunca de vez. A
+  conversa de agora não se apaga (a ponte recusa). Junto: ícones e o átomo
+  parado viraram imagens SVG, porque o Shape com CurveRenderer ignorava o
+  corte da lista e vazava por cima da barra do topo.
+
 **Roteiro da janela (pedido do Léo, 22/10/2026), um commit por etapa:**
 0.2 Parar · 0.2.5 perguntas com botões · 0.3 renomear e apagar conversa ·
 0.3.5 colar imagem (Ctrl+V) · 0.4 uso da assinatura · 0.5 a resposta

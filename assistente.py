@@ -1200,6 +1200,8 @@ def conversar(cfg: config.Config) -> int:
         ponte.provedor_memoria = agente.memoria_para_janela
         ponte.provedor_conversas = lambda: sessoes.listar(agente.casa)
         ponte.provedor_conversa = lambda sessao: sessoes.falas(agente.casa, sessao)
+        ponte.provedor_renomear = lambda sessao, titulo: sessoes.renomear(agente.casa, sessao, titulo)
+        ponte.provedor_apagar = lambda sessao: sessoes.apagar(agente.casa, sessao)
 
     mic: microfone.Microfone | None = None
     ciclo: Ciclo | None = None

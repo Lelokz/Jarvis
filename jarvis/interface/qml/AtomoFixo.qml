@@ -1,10 +1,10 @@
 import QtQuick
-import QtQuick.Shapes
 
 // O átomo parado: o avatar das respostas e a marca da barra lateral. Os
-// mesmos três anéis da Esfera (raio e inclinação), sem animação: desenhado
-// uma vez, não custa nada depois.
-Item {
+// mesmos três anéis da Esfera (raio e inclinação), sem animação. É uma imagem
+// SVG (e não Shapes): respeita o corte da lista e não custa nada depois de
+// desenhada. O ícone da bandeja (atomo_icone.py) é o mesmo desenho.
+Image {
     id: raiz
     property color cor: "#4da3ff"
     property color corDeFundo: "#0a0c10"
@@ -12,51 +12,23 @@ Item {
 
     width: tamanho
     height: tamanho
+    sourceSize: Qt.size(Math.ceil(tamanho * 2), Math.ceil(tamanho * 2))
+    smooth: true
 
-    readonly property real meio: tamanho / 2
-    readonly property var aneis: [
-        { rx: 0.46, ry: 0.15, angulo: 0 },
-        { rx: 0.39, ry: 0.22, angulo: 62 },
-        { rx: 0.32, ry: 0.12, angulo: 121 },
-    ]
+    readonly property string _rgb: "rgb(" + Math.round(cor.r * 255) + "," + Math.round(cor.g * 255)
+                                   + "," + Math.round(cor.b * 255) + ")"
+    // O traço em unidades da caixa de 100: ~1/22 do lado, como antes.
+    readonly property real _traco: Math.max(100 / tamanho, 100 / 22)
 
-    // O brilho do núcleo, e o disco escuro que faz os anéis passarem "atrás".
-    Rectangle {
-        anchors.centerIn: parent
-        width: raiz.tamanho * 0.6; height: width; radius: width / 2
-        gradient: Gradient {
-            orientation: Gradient.Vertical
-            GradientStop { position: 0.0; color: Qt.rgba(raiz.cor.r, raiz.cor.g, raiz.cor.b, 0.10) }
-            GradientStop { position: 1.0; color: Qt.rgba(raiz.cor.r, raiz.cor.g, raiz.cor.b, 0.04) }
-        }
-    }
-    Rectangle {
-        anchors.centerIn: parent
-        width: raiz.tamanho * 0.34; height: width; radius: width / 2
-        color: Qt.rgba(raiz.cor.r, raiz.cor.g, raiz.cor.b, 0.55)
+    function _anel(rx, ry, angulo) {
+        return '<ellipse rx="' + rx + '" ry="' + ry + '" transform="rotate(' + angulo + ')" fill="none" stroke="'
+               + _rgb + '" stroke-width="' + _traco + '"/>';
     }
 
-    Repeater {
-        model: raiz.aneis
-        Shape {
-            required property var modelData
-            anchors.fill: parent
-            preferredRendererType: Shape.CurveRenderer
-            transform: Rotation {
-                origin.x: raiz.meio; origin.y: raiz.meio
-                angle: modelData.angulo
-            }
-            ShapePath {
-                fillColor: "transparent"
-                strokeColor: raiz.cor
-                strokeWidth: Math.max(1.0, raiz.tamanho / 22)
-                PathAngleArc {
-                    centerX: raiz.meio; centerY: raiz.meio
-                    radiusX: raiz.tamanho * modelData.rx
-                    radiusY: raiz.tamanho * modelData.ry
-                    startAngle: 0; sweepAngle: 360
-                }
-            }
-        }
-    }
+    source: "data:image/svg+xml;base64," + Qt.btoa(
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="-50 -50 100 100">'
+        + '<circle r="30" fill="' + _rgb + '" fill-opacity="0.08"/>'
+        + '<circle r="17" fill="' + _rgb + '" fill-opacity="0.55"/>'
+        + _anel(46, 15, 0) + _anel(39, 22, 62) + _anel(32, 12, 121)
+        + '</svg>')
 }

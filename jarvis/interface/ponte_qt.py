@@ -143,6 +143,14 @@ class PonteQt(QObject):
             pedido["esforco"] = esforco
         return self._pedir(pedido)
 
+    @Slot(str, str, result=bool)
+    def renomearConversa(self, sessao: str, titulo: str) -> bool:
+        return self._pedir({"pedir": "renomear", "id": sessao, "titulo": titulo})
+
+    @Slot(str, result=bool)
+    def apagarConversa(self, sessao: str) -> bool:
+        return self._pedir({"pedir": "apagar", "id": sessao})
+
     @Slot(result=bool)
     def parar(self) -> bool:
         return self._pedir({"pedir": "parar"})
