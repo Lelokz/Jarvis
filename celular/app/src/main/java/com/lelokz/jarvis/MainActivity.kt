@@ -85,6 +85,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.PointerEventPass
@@ -127,7 +128,7 @@ private val Azul = Color(0xFF4DA3FF)
 private val Roxo = Color(0xFF9B7BFF)
 
 /** A versão da janela (a numeração do Léo, igual à do PC) e a do app. */
-const val VERSAO_JANELA = "beta 0.7.5"
+const val VERSAO_JANELA = "beta 0.8"
 
 // A Inter, a fonte da janela do PC (licença OFL). Variável: o peso funciona.
 @OptIn(ExperimentalTextApi::class)
@@ -653,15 +654,19 @@ private fun BarraDeEscrever(modelo: Jarvis, texto: String, mudar: (String) -> Un
         Spacer(Modifier.width(6.dp))
         // O enviar, fora da barra (vira Parar com ele trabalhando e o campo vazio).
         val ativo = modelo.conectado.value && (modoParar || (temTexto && modelo.anexosProntos))
+        // Apagado = a cor misturada com o fundo, sem .alpha(): a camada do
+        // alpha não redesenhava com o teclado aberto, e o botão sumia até ser
+        // tocado (Léo, 22/10/2026).
+        val cor = if (modoParar) Texto else Azul
+        val fundoDoBotao = if (ativo) cor else lerp(Fundo, cor, 0.35f)
         Box(Modifier.size(lado), contentAlignment = Alignment.Center) {
             Box(
-                Modifier.size(48.dp).clip(CircleShape)
-                    .background(if (modoParar) Texto else Azul).alpha(if (ativo) 1f else 0.35f)
+                Modifier.size(48.dp).clip(CircleShape).background(fundoDoBotao)
                     .clickable(enabled = ativo) { if (modoParar) modelo.parar() else enviar() },
                 contentAlignment = Alignment.Center,
             ) {
                 if (modoParar) Box(Modifier.size(13.dp).clip(RoundedCornerShape(3.dp)).background(Fundo))
-                else Ic(Icones.enviar, Color(0xFF06101D), 20.dp)
+                else Ic(Icones.enviar, if (ativo) Color(0xFF06101D) else lerp(fundoDoBotao, Color(0xFF06101D), 0.5f), 20.dp)
             }
         }
     }
