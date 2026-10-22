@@ -618,6 +618,15 @@ class Ciclo:
             self._saida(saida)
 
     def _saida(self, s: Saida) -> None:
+        if s.tipo == "parcial":
+            # O texto enquanto ele escreve: só para a janela (fora do log e do
+            # histórico). A fala continua saindo só com o texto inteiro.
+            if s.janela == "descartar":
+                self.emissor.emitir("escrevendo", fim=True, descartar=True)
+            else:
+                self._escreveu = True
+                self.emissor.emitir("escrevendo", bloco=int(s.titulo or 0), delta=s.texto)
+            return
         if s.tipo == "atividade":
             self.acoes += 1
             self.registrador.registrar_estado("atividade", texto=s.texto)
@@ -640,6 +649,9 @@ class Ciclo:
             self._renovar("pergunta feita")
         elif s.tipo == "fim":
             self._fim(s)
+            # O que ainda estava "escrevendo" (interrompido, sem fala) fica
+            # como texto normal na janela.
+            self._fim_da_escrita()
             self.atualizar_aviso()
         elif s.tipo == "sessao":
             # Chat novo ou retomado: a janela troca a conversa que mostra.
@@ -656,11 +668,18 @@ class Ciclo:
                     "offline": self.cfg.persona.sem_internet}.get(
                         s.texto, self.cfg.persona.cerebro_falhou)
             self.registrador.registrar_estado("erro_do_claude", tipo=s.texto, detalhe=s.titulo)
+            self._fim_da_escrita()
             self._pedido = None
             self._acordar_se_dormindo()
             self._falar(fala)
             self.atualizar_aviso()
             self._renovar("janela reiniciada")
+
+    def _fim_da_escrita(self) -> None:
+        """Fecha o texto em pedaços do turno, se houve (beta 0.5)."""
+        if getattr(self, "_escreveu", False):
+            self._escreveu = False
+            self.emissor.emitir("escrevendo", fim=True, descartar=False)
 
     def _fim(self, s: Saida) -> None:
         pedido, self._pedido = self._pedido, None

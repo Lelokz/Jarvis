@@ -17,6 +17,9 @@ que sai pela fila `saidas`:
     fim        a resposta final (`texto` vira voz, `janela` vai para a janela)
     erro       limite, sem internet, Claude fora
     sessao     a conversa mudou (`texto` = id; `janela` = "nova" ou "continuada")
+    parcial    um pedaço do texto enquanto ele escreve (`texto` = o pedaço,
+               `titulo` = o número do bloco; `janela` = "descartar": jogue
+               fora o que veio, o rápido passou para o Opus)
 
 **Permissão por voz.** O modo é "auto": o próprio Claude julga o que roda
 direto (medido: leu a pasta antes de apagar, e apagou só o pedido). O que ele
@@ -45,7 +48,7 @@ from pathlib import Path
 
 from claude_agent_sdk import (AssistantMessage, ClaudeAgentOptions, ClaudeSDKClient, HookMatcher,
                               PermissionResultAllow, PermissionResultDeny, RateLimitEvent,
-                              ResultMessage, TextBlock, ToolUseBlock)
+                              ResultMessage, StreamEvent, TextBlock, ToolUseBlock)
 
 from jarvis.agente import travas
 from jarvis.nucleo import relogio
@@ -309,6 +312,8 @@ class Agente:
             system_prompt={"type": "preset", "preset": "claude_code",
                            "append": self._instrucoes()},
             mcp_servers={"jarvis": servidor},
+            # O texto em pedaços, enquanto ele escreve (a janela mostra; beta 0.5).
+            include_partial_messages=True,
             # Conversa nova com id escolhido aqui (a janela precisa saber qual
             # é), ou uma antiga retomada pela barra lateral.
             session_id=None if retomar else self.sessao,
@@ -511,6 +516,9 @@ class Agente:
 
     async def _ler(self, cliente: ClaudeSDKClient) -> None:
         pendente: str | None = None  # texto que pode ser o final ou um aviso no meio
+        # Os pedaços do texto. O começo de cada bloco fica segurado enquanto
+        # pode ser um "[calado]" (fala que não era com ele: nada aparece).
+        bloco, segurado, soltou = 0, "", False
 
         def no_meio(texto: str) -> None:
             t = texto.strip()
@@ -524,6 +532,25 @@ class Agente:
 
         try:
             async for m in cliente.receive_messages():
+                if isinstance(m, StreamEvent):
+                    if m.parent_tool_use_id:  # subagente
+                        continue
+                    e = m.event or {}
+                    if e.get("type") == "content_block_start" \
+                            and (e.get("content_block") or {}).get("type") == "text":
+                        bloco, segurado, soltou = bloco + 1, "", False
+                    elif e.get("type") == "content_block_delta" \
+                            and (e.get("delta") or {}).get("type") == "text_delta":
+                        pedaco = e["delta"].get("text") or ""
+                        if not soltou:
+                            segurado += pedaco
+                            inicio = segurado.lstrip()
+                            if inicio.startswith(CALADO) or (inicio and CALADO.startswith(inicio)) \
+                                    or not inicio:
+                                continue
+                            pedaco, soltou = segurado, True
+                        self.saidas.put(Saida("parcial", pedaco, titulo=str(bloco)))
+                    continue
                 if isinstance(m, AssistantMessage):
                     if m.parent_tool_use_id:  # dentro de um subagente: só ele vê
                         continue
@@ -555,6 +582,7 @@ class Agente:
                     # O rápido passou o pedido: o que ele escreveu não vale, e o
                     # turno continua com o Opus (mesma conversa).
                     self._subir, self._no_opus, pendente = False, True, None
+                    self.saidas.put(Saida("parcial", janela="descartar"))
                     self.saidas.put(Saida("atividade", "Pensando com calma"))
                     asyncio.create_task(self._subir_pro_opus(cliente))
                 elif isinstance(m, ResultMessage):

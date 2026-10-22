@@ -250,8 +250,9 @@ class Servidor:
                 # A voz vai só para o corpo que pediu, e só se ele quer voz.
                 if tipo == "voz" and (cliente.id != evento.get("para") or not cliente.quer_voz):
                     continue
-                # A conversa inteira é para a janela; o corpo (celular) não usa.
-                if tipo == "conversa_atual" and cliente.quer_voz:
+                # A conversa inteira e o texto em pedaços são para a janela; o
+                # corpo (celular) não usa.
+                if tipo in ("conversa_atual", "escrevendo") and cliente.quer_voz:
                     continue
                 if cliente.apresentado:
                     self._enfileirar(cliente, tipo, dados)

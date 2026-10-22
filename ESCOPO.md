@@ -550,6 +550,17 @@ escrito com ".5" no fim. Ex.: 0.1 (grande) → 0.1.5 (pequena) → 0.2 (pequena)
   `agente.uso`, o ciclo emite o evento "uso" quando muda (a cada resposta),
   e a ponte reenvia a quem diz "ola". Aparece depois do 1º pedido.
 
+- **beta 0.5 (grande):** a resposta aparece enquanto ele escreve. O agente
+  liga `include_partial_messages` e repassa os `text_delta` como a saída
+  "parcial" (o começo de cada bloco fica segurado enquanto pode ser um
+  "[calado]"); o ciclo emite o evento "escrevendo" (só para a janela, fora do
+  histórico e do log); a janela junta os pedaços em lotes de 60 ms, mostra
+  com um cursor e troca pelo texto inteiro quando ele chega (jarvis_disse ou
+  painel). Quando o rápido passa o pedido para o Opus, o que ele escreveu é
+  descartado da tela. Medido: texto longo começou a aparecer em 4,6 s (o
+  inteiro em 8,5 s); com o Opus, 10,2 s contra 16,4 s. A voz continua saindo
+  só com o texto inteiro.
+
 **Roteiro da janela (pedido do Léo, 22/10/2026), um commit por etapa:**
 0.2 Parar · 0.2.5 perguntas com botões · 0.3 renomear e apagar conversa ·
 0.3.5 colar imagem (Ctrl+V) · 0.4 uso da assinatura · 0.5 a resposta

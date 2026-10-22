@@ -23,6 +23,7 @@ Item {
     property bool perguntando: false
     property string opcoes: ""            // as da pergunta, uma por linha
     property string passos: ""
+    property bool escrevendo: false       // o texto ainda está chegando
     property bool animar: true
     property real largura: 780
     property color corPersona: tema ? tema.persona : "#4da3ff"
@@ -253,7 +254,9 @@ Item {
                             id: textoDele
                             tema: raiz.tema
                             width: parent.width
-                            texto: raiz.minha || raiz.atividade ? "" : raiz.texto
+                            // Enquanto chega, um cursor no fim.
+                            texto: raiz.minha || raiz.atividade ? ""
+                                 : raiz.escrevendo ? raiz.texto + " ▍" : raiz.texto
                             onCopiar: function (t) { raiz.copiar(t) }
                         }
                     }
@@ -298,6 +301,7 @@ Item {
                 // Copiar e a hora: aparecem com o mouse em cima.
                 Row {
                     spacing: 14
+                    visible: !raiz.escrevendo
                     opacity: areaResposta.hovered ? 1 : 0
                     Behavior on opacity { NumberAnimation { duration: raiz.tema.rapido } }
                     Item {

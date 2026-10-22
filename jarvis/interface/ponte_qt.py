@@ -52,6 +52,7 @@ class PonteQt(QObject):
     conversaRecebida = Signal(str, list)   # uma conversa aberta só para ler
     erroRecebido = Signal(str)             # "espera ele terminar", pedido inválido
     usoMudou = Signal(float, float, float, float)  # 5 h (uso, volta_em), semana (uso, volta_em)
+    escrevendo = Signal(int, str, bool, bool)      # bloco, pedaço, fim, descartar
 
     def __init__(self, caminho: Path, parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -239,6 +240,9 @@ class PonteQt(QObject):
             self.conversaRecebida.emit(str(ev.get("id") or ""), list(ev.get("falas") or []))
         elif tipo == "erro":
             self.erroRecebido.emit(str(ev.get("motivo") or ""))
+        elif tipo == "escrevendo":
+            self.escrevendo.emit(int(ev.get("bloco") or 0), str(ev.get("delta") or ""),
+                                 bool(ev.get("fim")), bool(ev.get("descartar")))
         elif tipo == "uso":
             c, s = ev.get("cinco_horas") or {}, ev.get("semana") or {}
             self.usoMudou.emit(float(c.get("uso") or -1), float(c.get("volta_em") or 0),

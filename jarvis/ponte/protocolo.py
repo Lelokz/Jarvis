@@ -74,6 +74,13 @@ ASSISTENTE -> CLIENTES
      "semana":{"uso":0.76, "volta_em":1792807200}}
         O uso da assinatura (0 a 1) e quando cada janela renova. Só quando
         muda (chega com as respostas do Claude); reenviado a quem diz "ola".
+    {"ev":"escrevendo", "bloco": 3, "delta": "um pedaço"}
+    {"ev":"escrevendo", "fim": true, "descartar": false}
+        (beta 0.5) O texto da resposta enquanto ele escreve, em pedaços; o
+        texto inteiro chega depois, como sempre (jarvis_disse / mostrar), e
+        substitui. `fim`: acabou o turno (o que sobrou vira texto normal; com
+        `descartar`, some: o rápido passou o pedido para o Opus). Fora do
+        histórico; só para quem não é corpo (a janela).
     {"ev":"conversas", "lista":[{"id", "titulo", "quando", "criada", "origem"}]}
         Só para quem pediu "conversas". Mais nova primeiro.
     {"ev":"conversa", "id":"<uuid>", "falas":[...]}
@@ -142,7 +149,8 @@ VERSAO = 3
 # O que sai do assistente para os clientes. O resto que o Ciclo emite
 # (acordou, dormiu, janela, tempos...) é para o terminal e fica em casa.
 PUBLICOS = frozenset({"sessao", "estado", "nivel", "voce_disse", "jarvis_disse", "aviso",
-                      "mostrar", "atividade", "voz", "cerebro", "conversa_atual", "uso"})
+                      "mostrar", "atividade", "voz", "cerebro", "conversa_atual", "uso",
+                      "escrevendo"})
 ESTADOS = ("dormindo", "ouvindo", "escutando", "pensando", "falando")
 PEDIDOS = frozenset({"ola", "falar", "memoria", "ouvir",
                      "conversas", "abrir", "nova", "continuar", "cerebro", "parar",

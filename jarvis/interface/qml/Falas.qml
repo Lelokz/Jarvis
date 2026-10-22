@@ -5,10 +5,18 @@ import QtQuick
 // Papéis: quem ("voce" | "jarvis" | "painel" | "atividade"), texto, origem
 // (voz, texto, celular...), titulo (do painel), quando (segundos desde a
 // época), perguntando, opcoes (as da pergunta, uma por linha: viram botões),
-// passos (as atividades seguidas, uma por linha) e animar (fala nova
-// chegando; o histórico entra parado).
+// passos (as atividades seguidas, uma por linha), escrevendo + bloco (a
+// fala dele chegando em pedaços; beta 0.5) e animar (fala nova chegando; o
+// histórico entra parado).
 ListModel {
     id: raiz
+
+    // Quantas falas estão sendo escritas agora (a conversa esconde o
+    // "Pensando…" enquanto o texto aparece).
+    property int abertas: 0
+    // A resposta formatada chega como painel sem título e, logo depois, a
+    // versão FALADA dela (jarvis_disse): essa não entra. Marca até quando.
+    property real _pularFalaAte: 0
 
     function _agora() { return Date.now() / 1000; }
 
@@ -25,7 +33,51 @@ ListModel {
                  titulo: extra.titulo || "", quando: extra.quando || _agora(),
                  perguntando: extra.perguntando === true,
                  opcoes: (extra.opcoes || []).join("\n"), passos: "",
-                 animar: animar };
+                 escrevendo: false, bloco: 0, animar: animar };
+    }
+
+    // -- o texto chegando em pedaços ------------------------------------------
+    function escrever(bloco, delta) {
+        for (var i = count - 1; i >= 0 && i >= count - 12; i--) {
+            var f = get(i);
+            if (f.escrevendo && f.bloco === bloco) {
+                setProperty(i, "texto", f.texto + delta);
+                return;
+            }
+        }
+        var nova = _nova("jarvis", delta, {}, true);
+        nova.escrevendo = true;
+        nova.bloco = bloco;
+        append(nova);
+        abertas += 1;
+    }
+
+    // O texto inteiro chegou: troca a fala que estava sendo escrita (a mais
+    // antiga aberta, porque os textos inteiros chegam na mesma ordem).
+    function _fecharEscrita(quem, texto, extra) {
+        for (var i = 0; i < count; i++) {
+            if (get(i).escrevendo) {
+                setProperty(i, "quem", quem);
+                setProperty(i, "texto", texto);
+                setProperty(i, "escrevendo", false);
+                setProperty(i, "perguntando", !!(extra && extra.perguntando));
+                setProperty(i, "opcoes", ((extra && extra.opcoes) || []).join("\n"));
+                abertas = Math.max(0, abertas - 1);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // Acabou o turno: o que sobrou aberto vira texto normal (interrompido),
+    // ou some (descartar: o rápido passou o pedido para o Opus).
+    function encerrarEscrita(descartar) {
+        for (var i = count - 1; i >= 0; i--) {
+            if (!get(i).escrevendo) continue;
+            if (descartar) remove(i);
+            else setProperty(i, "escrevendo", false);
+        }
+        abertas = 0;
     }
 
     // A resposta formatada (lista, código) chega como painel SEM título e,
@@ -38,6 +90,23 @@ ListModel {
     }
 
     function acrescentar(quem, texto, extra) {
+        if (quem === "jarvis" && _agora() < _pularFalaAte) {
+            // A versão falada do painel que acabou de chegar.
+            _pularFalaAte = 0;
+            if (extra && extra.perguntando)
+                for (var j = count - 1; j >= 0; j--)
+                    if (get(j).quem === "painel") {
+                        setProperty(j, "perguntando", true);
+                        setProperty(j, "opcoes", (extra.opcoes || []).join("\n"));
+                        break;
+                    }
+            return;
+        }
+        if (quem === "jarvis") {
+            _fecharPerguntas();
+            if (_fecharEscrita("jarvis", texto, extra))
+                return;
+        }
         if (_ehAFalaDoPainel(quem)) {
             if (extra && extra.perguntando) {
                 setProperty(count - 1, "perguntando", true);
@@ -51,6 +120,11 @@ ListModel {
 
     function mostrar(titulo, texto) {
         _fecharPerguntas();
+        if (!titulo) {
+            _pularFalaAte = _agora() + 15;
+            if (_fecharEscrita("painel", texto, {}))
+                return;
+        }
         append(_nova("painel", texto, { titulo: titulo }, true));
     }
 
@@ -72,6 +146,8 @@ ListModel {
     // A conversa que JÁ existia: entra de uma vez e sem animação.
     function preencher(anteriores) {
         clear();
+        abertas = 0;
+        _pularFalaAte = 0;
         for (var i = 0; i < anteriores.length; i++) {
             var f = anteriores[i];
             if (f.quem === "atividade") {

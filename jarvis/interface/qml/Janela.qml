@@ -57,7 +57,7 @@ Window {
     Tema { id: tema }
 
     // -- o estado da tela ---------------------------------------------------
-    Falas { id: falasAtual }   // a conversa ao vivo
+    Falas { id: falasAtual; objectName: "falasAtual" }   // a conversa ao vivo
     Falas { id: falasVendo }   // uma antiga, aberta na barra lateral
     ListModel { id: conversas } // a barra lateral
 
@@ -170,6 +170,27 @@ Window {
         if (maximizada) janela.showNormal(); else janela.showMaximized();
     }
 
+    // Os pedaços do texto entram na conversa em lotes (~16 por segundo), e
+    // não um por um: cada atualização redesenha a fala inteira.
+    Timer {
+        id: escrita
+        interval: 60
+        property var pendentes: ({})   // bloco -> texto ainda não mostrado
+        property var ordem: []
+        function guardar(bloco, delta) {
+            if (pendentes[bloco] === undefined) { pendentes[bloco] = ""; ordem.push(bloco); }
+            pendentes[bloco] += delta;
+            if (!running) start();
+        }
+        function esvaziar() {
+            stop();
+            for (var i = 0; i < ordem.length; i++)
+                falasAtual.escrever(ordem[i], pendentes[ordem[i]]);
+            pendentes = ({}); ordem = [];
+        }
+        onTriggered: esvaziar()
+    }
+
     Timer { // a lista da barra lateral, sem pedir a cada fala
         id: atualizarLista
         interval: 1500
@@ -190,11 +211,12 @@ Window {
         }
         function onVoceDisse(texto, origem) { falasAtual.acrescentar("voce", texto, { origem: origem }) }
         function onJarvisDisse(texto, acao, perguntando, opcoes) {
+            escrita.esvaziar();
             falasAtual.acrescentar("jarvis", texto, { perguntando: perguntando, opcoes: opcoes });
             atualizarLista.restart();
         }
         function onHistoricoRecebido(falas) { falasAtual.preencher(falas) }
-        function onMostrar(titulo, texto) { falasAtual.mostrar(titulo, texto) }
+        function onMostrar(titulo, texto) { escrita.esvaziar(); falasAtual.mostrar(titulo, texto) }
         function onAtividade(texto) {
             falasAtual.atividade(texto);
             janela.textoPensando = texto.split(" — ")[0] === "Pensando com calma"
@@ -227,6 +249,14 @@ Window {
             if (sessao === janela.vendo) {
                 falasVendo.preencher(falas);
                 conversa.irProFim();
+            }
+        }
+        function onEscrevendo(bloco, delta, fim, descartar) {
+            if (fim) {
+                escrita.esvaziar();
+                falasAtual.encerrarEscrita(descartar);
+            } else {
+                escrita.guardar(bloco, delta);
             }
         }
         function onUsoMudou(cinco, voltaCinco, semana, voltaSemana) {

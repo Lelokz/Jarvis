@@ -61,6 +61,7 @@ Item {
             perguntando: model.perguntando
             opcoes: model.opcoes
             passos: model.passos
+            escrevendo: model.escrevendo
             animar: model.animar
             onCopiar: function (t) { raiz.copiar(t) }
             onResponder: function (t) { raiz.responder(t) }
@@ -68,14 +69,16 @@ Item {
 
         // Enquanto ele trabalha: o átomo roxo e o que está fazendo.
         footer: Item {
+            // Enquanto o texto aparece, o "Pensando…" sai da frente.
+            readonly property bool mostrar: raiz.pensando && !(raiz.falas && raiz.falas.abertas > 0)
             width: lista.width
-            height: raiz.pensando ? 46 : 0
+            height: mostrar ? 46 : 0
             Behavior on height { NumberAnimation { duration: raiz.tema.normal; easing.type: Easing.OutCubic } }
             Row {
                 x: Math.max(0, (parent.width - raiz.largura) / 2)
                 y: 8
                 spacing: 16
-                opacity: raiz.pensando ? 1 : 0
+                opacity: parent.mostrar ? 1 : 0
                 Behavior on opacity { NumberAnimation { duration: raiz.tema.normal } }
                 AtomoFixo {
                     tamanho: 30
