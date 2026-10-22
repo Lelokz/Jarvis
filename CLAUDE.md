@@ -175,6 +175,22 @@ que bater o olho e perceber "isso aqui tá estranho".
   vai SOZINHO num comando: ele faz `pkill -f` pelo caminho dos scripts, e se a
   mesma linha de comando citar `assistente.py` ou `porta_remota.py` (um
   `pgrep` logo depois, por exemplo), mata o próprio comando (21/10/2026).
+- **Conferir a janela sem tela (22/10/2026):** `rascunho/janela-nova/retratar.py`
+  com `QT_QPA_PLATFORM=offscreen` abre a janela fora da tela e ela se
+  retrata (`QQuickWindow.grabWindow`), com conversa de exemplo. Serve de
+  noite e não pega nada do que o Léo está vendo. Print da tela inteira
+  (`primaryScreen().grabWindow(0)`) pega o navegador dele: não use.
+- **Testar pedido de verdade sem som:** um cliente da ponte com
+  `"voz": true` (corpo) e `"mudo": true` no "falar" recebe a resposta só em
+  texto e o PC não fala (`rascunho/janela-nova/pedir_mudo.py`). Um cliente
+  sem "voz" faria o PC falar alto.
+- **Shape com CurveRenderer ignora o `clip` da lista** (Qt 6.11): ícones de
+  mensagens que já tinham rolado vazavam por cima da barra do topo. Ícone e
+  átomo parado são imagens SVG (`Icone.qml`, `AtomoFixo.qml`); Shape só onde
+  não há corte (a Esfera).
+- **O painel e o menu do Cinnamon usam o ícone do ATALHO e guardam em cache
+  pelo caminho:** trocar o desenho do mesmo arquivo não muda nada. O ícone
+  mora no tema (`jarvis-atomo`); ver ESCOPO, beta 0.1.5.
 - A separação cérebro/corpo (o agente recebe texto e devolve fala, pergunta
   ou cartão pela fila, sem saber o que é microfone ou tela; `jarvis/nucleo/`
   ficou só com as mãos que o corpo usa) é o desenho central do Jarvis e o
