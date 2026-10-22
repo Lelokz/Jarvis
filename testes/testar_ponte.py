@@ -576,22 +576,24 @@ def rodar_janela(base: Path) -> None:
     srv.iniciar()
     print("-- janela: conversas e cérebro --")
     srv.receber({"ev": "cerebro", "modelo": "auto", "esforco": "medium", "persona": "jarvis"})
+    srv.receber({"ev": "uso", "cinco_horas": {"uso": 0.5, "volta_em": 1}, "semana": {"uso": 0.7, "volta_em": 2}})
     srv.receber({"ev": "conversa_atual", "id": "feedbeef-1", "falas": [
         {"quem": "voce", "texto": "antiga", "origem": "voz"},
         {"quem": "atividade", "texto": "Bash"},
         {"quem": "jarvis", "texto": "resposta", "acao": None, "perguntando": False}]})
     janela = Conexao(caminho)
     janela.enviar({"pedir": "ola", "historico": 10})
-    evs = janela.ler(4)
-    checa("o ola traz o cérebro e o id da conversa",
-          [e["ev"] for e in evs] == ["sessao", "cerebro", "conversa_atual", "historico"],
+    evs = janela.ler(5)
+    checa("o ola traz o cérebro, o uso e o id da conversa",
+          [e["ev"] for e in evs] == ["sessao", "cerebro", "uso", "conversa_atual", "historico"],
           str([e["ev"] for e in evs]))
     checa("o histórico é o da conversa retomada, sem a atividade",
           [f["texto"] for f in evs[-1].get("falas", [])] == ["antiga", "resposta"])
     celular = Conexao(caminho)
     celular.enviar({"pedir": "ola", "voz": True})
-    checa("o celular não recebe a conversa inteira",
-          "conversa_atual" not in [e["ev"] for e in celular.ler(3, timeout=0.6)])
+    evs_cel = [e["ev"] for e in celular.ler(4, timeout=0.6)]
+    checa("o celular não recebe a conversa inteira nem o uso",
+          "conversa_atual" not in evs_cel and "uso" not in evs_cel, str(evs_cel))
     janela.enviar({"pedir": "conversas"})
     r = janela.ler(1)
     checa("conversas: a lista volta só para quem pediu",

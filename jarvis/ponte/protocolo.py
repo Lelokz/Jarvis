@@ -70,6 +70,10 @@ ASSISTENTE -> CLIENTES
         A conversa do Jarvis mudou (ligou, "nova", "continuar"): o id da
         sessão do Claude Code e as falas dela (vazio na nova). O histórico
         da ponte passa a ser este. Reenviado a quem diz "ola", só o id.
+    {"ev":"uso", "cinco_horas":{"uso":0.56, "volta_em":1792643400},
+     "semana":{"uso":0.76, "volta_em":1792807200}}
+        O uso da assinatura (0 a 1) e quando cada janela renova. Só quando
+        muda (chega com as respostas do Claude); reenviado a quem diz "ola".
     {"ev":"conversas", "lista":[{"id", "titulo", "quando", "criada", "origem"}]}
         Só para quem pediu "conversas". Mais nova primeiro.
     {"ev":"conversa", "id":"<uuid>", "falas":[...]}
@@ -138,7 +142,7 @@ VERSAO = 3
 # O que sai do assistente para os clientes. O resto que o Ciclo emite
 # (acordou, dormiu, janela, tempos...) é para o terminal e fica em casa.
 PUBLICOS = frozenset({"sessao", "estado", "nivel", "voce_disse", "jarvis_disse", "aviso",
-                      "mostrar", "atividade", "voz", "cerebro", "conversa_atual"})
+                      "mostrar", "atividade", "voz", "cerebro", "conversa_atual", "uso"})
 ESTADOS = ("dormindo", "ouvindo", "escutando", "pensando", "falando")
 PEDIDOS = frozenset({"ola", "falar", "memoria", "ouvir",
                      "conversas", "abrir", "nova", "continuar", "cerebro", "parar",

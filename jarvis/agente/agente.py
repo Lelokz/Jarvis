@@ -213,6 +213,10 @@ class Agente:
         self.saidas: queue.Queue[Saida] = queue.Queue()
         self.ocupado = False
         self.limite = Limite()
+        # O uso da assinatura, das janelas de 5 h e da semana (o RateLimitEvent
+        # traz as duas em `raw["unifiedWindows"]`): {"cinco_horas": {"uso":
+        # 0-1, "volta_em": época}, "semana": {...}}. Vazio até o 1º pedido.
+        self.uso: dict = {}
         self.offline = False
         # O que o Léo falou desde que a tarefa começou (pedido, correções e
         # respostas). É o que a trava de envio do WhatsApp olha.
@@ -539,6 +543,13 @@ class Agente:
                 elif isinstance(m, RateLimitEvent):
                     info = m.rate_limit_info
                     self.limite = Limite(info.status, info.resets_at, info.utilization)
+                    janelas = (info.raw or {}).get("unifiedWindows") or {}
+                    uso = {nome: {"uso": float(j.get("utilization") or 0),
+                                  "volta_em": j.get("resetsAt")}
+                           for nome, j in (("cinco_horas", janelas.get("five_hour")),
+                                           ("semana", janelas.get("seven_day"))) if j}
+                    if uso:
+                        self.uso = uso
                 elif isinstance(m, ResultMessage) and self._subir and not m.is_error \
                         and not (getattr(m, "terminal_reason", None) or "").startswith("aborted"):
                     # O rápido passou o pedido: o que ele escreveu não vale, e o

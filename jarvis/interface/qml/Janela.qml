@@ -69,6 +69,10 @@ Window {
     property string esforco: "medium"
     property string persona: "jarvis"
     property string textoPensando: "Pensando…"
+    property real usoCinco: -1
+    property real voltaCinco: 0
+    property real usoSemana: -1
+    property real voltaSemana: 0
     // Escreveu numa conversa antiga: primeiro o Jarvis volta pra ela, depois
     // a mensagem vai (quando a "conversa_atual" chegar com este id).
     property string esperandoContinuar: ""
@@ -224,6 +228,10 @@ Window {
                 falasVendo.preencher(falas);
                 conversa.irProFim();
             }
+        }
+        function onUsoMudou(cinco, voltaCinco, semana, voltaSemana) {
+            janela.usoCinco = cinco; janela.voltaCinco = voltaCinco;
+            janela.usoSemana = semana; janela.voltaSemana = voltaSemana;
         }
         function onErroRecebido(motivo) {
             janela.esperandoContinuar = ""; janela.pendente = null;
@@ -635,6 +643,10 @@ Window {
             conversa: janela.conversaAtual
             modelo: janela.modelo
             esforco: janela.esforco
+            usoCinco: janela.usoCinco
+            voltaCinco: janela.voltaCinco
+            usoSemana: janela.usoSemana
+            voltaSemana: janela.voltaSemana
         }
 
         // -- avisos rápidos ----------------------------------------------------------

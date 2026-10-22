@@ -88,6 +88,7 @@ class Servidor:
         self._ultimo_estado: dict[str, Any] | None = None
         self._ultimo_aviso: dict[str, Any] | None = None
         self._ultimo_cerebro: dict[str, Any] | None = None
+        self._ultimo_uso: dict[str, Any] | None = None
         self._conversa_atual: str = ""
         # Quem responde os pedidos "memoria", "conversas" e "abrir" (o
         # assistente põe aqui). Só leem arquivos: rodam na thread da ponte.
@@ -226,6 +227,8 @@ class Servidor:
             self._ultimo_aviso = evento
         elif tipo == "cerebro":
             self._ultimo_cerebro = evento
+        elif tipo == "uso":
+            self._ultimo_uso = evento
         elif tipo == "conversa_atual":
             # Conversa nova ou retomada: o histórico da ponte passa a ser ela.
             # A linha de atividade fica fora, como no histórico ao vivo (o
@@ -397,6 +400,8 @@ class Servidor:
                 self._direto(cliente, self._ultimo_aviso)
             if self._ultimo_cerebro is not None:
                 self._direto(cliente, self._ultimo_cerebro)
+            if self._ultimo_uso is not None and not cliente.quer_voz:
+                self._direto(cliente, self._ultimo_uso)
             if self._conversa_atual and not cliente.quer_voz:
                 self._direto(cliente, {"ev": "conversa_atual", "id": self._conversa_atual})
             quantas = dados.get("historico", 0)

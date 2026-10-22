@@ -640,6 +640,7 @@ class Ciclo:
             self._renovar("pergunta feita")
         elif s.tipo == "fim":
             self._fim(s)
+            self.atualizar_aviso()
         elif s.tipo == "sessao":
             # Chat novo ou retomado: a janela troca a conversa que mostra.
             falas = []
@@ -745,6 +746,11 @@ class Ciclo:
         """
         if conferir_internet:
             self.agente.conferir_internet()
+        # O uso da assinatura (a página de Ajustes da janela), só quando muda.
+        uso = getattr(self.agente, "uso", {})
+        if uso and uso != getattr(self, "_ultimo_uso", None):
+            self._ultimo_uso = dict(uso)
+            self.emissor.emitir("uso", **uso)
         s = self.agente.situacao()
         chave = (s.get("tipo"), s.get("volta_em") if s.get("tipo") == "limite" else None)
         if chave == getattr(self, "_ultimo_aviso", None):
