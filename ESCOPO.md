@@ -794,7 +794,28 @@ Sem ordem rígida: faz, o Léo testa o que é de voz, segue.
    roleplay, sem recusa e não cabem na placa junto com o Jarvis. Se voltar:
    um modelo de ~8B bom em ferramentas, local, entrando quando o limite do
    Claude acabar ou a internet cair.
-7. Depois: ver a tela (o Claude já lê imagem: print + "o que é isso?"),
+7. **Escola: Khan Academy e Estudante Online (planejado em 22/10/2026).**
+   Nenhum dos dois tem API aberta (a do Khan foi desligada em 2020). Plano:
+   um navegador escondido (Playwright, sem janela) com um perfil só do
+   Jarvis, em `~/.local/share/jarvis/`. O Léo entra uma vez em cada site
+   (no Khan, com o Google), e a sessão fica guardada ali, sem a senha. A
+   leitura roda 2–3 vezes por dia, leve (nice 19), e grava um resumo local
+   que o Jarvis consulta. Se a sessão vencer, ele avisa pra entrar de novo.
+   - **Khan:** os minutos de aprendizado do dia e da semana, contra a meta
+     de **6 h por semana** (a mesma conta que o padrasto vê). Exemplo:
+     "3h40 de 6h, faltam 47 min por dia".
+   - **Estudante Online (SED-SC):** notas (destacar as abaixo da média),
+     faltas por matéria e a agenda que os professores postam (provas,
+     trabalhos, entregas).
+   - **Como fala disso (decisão do Léo):** a voz **não** fala do nada. Só
+     responde quando ele pergunta, ou quando ele já está falando de escola.
+     O que é novo (prova marcada, nota lançada) vira **notificação do
+     sistema**, no canto da tela do Linux e no topo da tela do celular, sem
+     som de voz. A notificação é pedido dele, mas pop-up incomoda: só manda
+     o que for novo, uma vez, e junta várias coisas numa notificação só.
+   - Precisa: um evento novo na ponte para o app mostrar a notificação do
+     Android, e no PC usar `notify-send`.
+8. Depois: ver a tela (o Claude já lê imagem: print + "o que é isso?"),
    personagem feminina, o organizador de prints e vídeos (o Claude usa
    sozinho, sem integração especial).
 
