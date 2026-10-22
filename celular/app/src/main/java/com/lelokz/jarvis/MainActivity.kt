@@ -550,12 +550,16 @@ private fun BarraDeEscrever(modelo: Jarvis, texto: String, mudar: (String) -> Un
     val temTexto = texto.isNotBlank() || modelo.anexos.isNotEmpty()
     // Trabalhando e sem nada escrito: o enviar vira o Parar.
     val modoParar = modelo.trabalhando && !temTexto
-    Row(Modifier.fillMaxWidth().padding(start = 10.dp, end = 12.dp, bottom = 10.dp, top = 2.dp),
+    // [átomo] [barra: texto + clipe] [enviar]. O átomo e o enviar ocupam o
+    // mesmo espaço dos dois lados, e a barra fica no centro da tela (pedido
+    // do Léo, 22/10/2026: o enviar dentro da barra ficava feio e torto).
+    val lado = 54.dp
+    Row(Modifier.fillMaxWidth().padding(start = 8.dp, end = 8.dp, bottom = 10.dp, top = 2.dp),
         verticalAlignment = Alignment.CenterVertically) {
         if (mostrarAtomo) {
             // O átomo pequeno: segura pra falar, como o grande.
-            AtomoVivo(modelo, 54.dp, Modifier.segurarPraFalar(modelo))
-            Spacer(Modifier.width(4.dp))
+            AtomoVivo(modelo, lado, Modifier.segurarPraFalar(modelo))
+            Spacer(Modifier.width(6.dp))
         }
         Row(
             Modifier.weight(1f).clip(RoundedCornerShape(24.dp)).background(Superficie)
@@ -566,10 +570,11 @@ private fun BarraDeEscrever(modelo: Jarvis, texto: String, mudar: (String) -> Un
             Box(Modifier.weight(1f).padding(vertical = 8.dp)) {
                 if (texto.isEmpty()) Text(
                     when {
-                        !modelo.conectado.value -> "Esperando o Jarvis…"
-                        modelo.anexos.isNotEmpty() -> "Fala sobre o anexo, ou só envia"
-                        else -> "Fala ou escreve pro Jarvis…"
-                    }, color = MuitoFraco, fontSize = 15.sp, maxLines = 1)
+                        // Curto: na barra estreita do celular a frase longa cortava.
+                        !modelo.conectado.value -> "Esperando…"
+                        modelo.anexos.isNotEmpty() -> "Sobre o anexo…"
+                        else -> "Digite aqui…"
+                    }, color = MuitoFraco, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 BasicTextField(
                     value = texto, onValueChange = mudar,
                     textStyle = TextStyle(color = Texto, fontSize = 15.sp, fontFamily = Inter),
@@ -581,16 +586,19 @@ private fun BarraDeEscrever(modelo: Jarvis, texto: String, mudar: (String) -> Un
             }
             Box(Modifier.size(36.dp).clip(CircleShape).clickable { escolherArquivos.launch("*/*") },
                 contentAlignment = Alignment.Center) { Ic(Icones.clipe, Fraco, 20.dp) }
-            Spacer(Modifier.width(4.dp))
-            val ativo = modelo.conectado.value && (modoParar || (temTexto && modelo.anexosProntos))
+        }
+        Spacer(Modifier.width(6.dp))
+        // O enviar, fora da barra (vira Parar com ele trabalhando e o campo vazio).
+        val ativo = modelo.conectado.value && (modoParar || (temTexto && modelo.anexosProntos))
+        Box(Modifier.size(lado), contentAlignment = Alignment.Center) {
             Box(
-                Modifier.size(38.dp).clip(RoundedCornerShape(11.dp))
-                    .background(if (modoParar) Texto else Azul).alpha(if (ativo) 1f else 0.3f)
+                Modifier.size(48.dp).clip(CircleShape)
+                    .background(if (modoParar) Texto else Azul).alpha(if (ativo) 1f else 0.35f)
                     .clickable(enabled = ativo) { if (modoParar) modelo.parar() else enviar() },
                 contentAlignment = Alignment.Center,
             ) {
-                if (modoParar) Box(Modifier.size(11.dp).clip(RoundedCornerShape(2.5.dp)).background(Fundo))
-                else Ic(Icones.enviar, Color(0xFF06101D), 18.dp)
+                if (modoParar) Box(Modifier.size(13.dp).clip(RoundedCornerShape(3.dp)).background(Fundo))
+                else Ic(Icones.enviar, Color(0xFF06101D), 20.dp)
             }
         }
     }
