@@ -23,6 +23,7 @@ import argparse
 import base64
 import dataclasses
 import datetime as dt
+import json
 import math
 import queue
 import signal
@@ -36,6 +37,7 @@ from pathlib import Path
 import numpy as np
 
 from jarvis import config, cronometro, eventos, microfone, tts, wakeword
+from jarvis.agente import sessoes
 from jarvis.agente.agente import Agente, ErroDoAgente, Saida
 from jarvis.agente.avisos import AvisosWhatsApp
 from jarvis.agente.reflexos import reflexo
@@ -275,6 +277,9 @@ class Ciclo:
         self._corpo: int | None = None
         # O corpo está no mudo (o botão do app): a resposta vai só em texto.
         self._mudo = False
+        # Manda um erro só para quem pediu (a ponte põe aqui; ex.: "nova" no
+        # meio de uma tarefa).
+        self.avisar_cliente = lambda _id, _motivo: None
         self.vad = detector_vad
         self.ww = detector_ww
         self.transcritor = transcritor
@@ -631,6 +636,16 @@ class Ciclo:
             self._renovar("pergunta feita")
         elif s.tipo == "fim":
             self._fim(s)
+        elif s.tipo == "sessao":
+            # Chat novo ou retomado: a janela troca a conversa que mostra.
+            falas = []
+            if s.janela == "continuada":
+                try:
+                    falas = sessoes.falas(self.agente.casa, s.texto)
+                except Exception as e:
+                    self.registrador.registrar_estado("conversa_erro", erro=str(e))
+            self.registrador.registrar_estado("conversa", id=s.texto, como=s.janela)
+            self.emissor.emitir("conversa_atual", id=s.texto, falas=falas)
         elif s.tipo == "erro":
             fala = {"limite": self._fala_de_limite(self.agente.limite.volta_em),
                     "offline": self.cfg.persona.sem_internet}.get(
@@ -793,10 +808,29 @@ class Ciclo:
         self.registrador.registrar_estado("texto_digitado", texto=texto)
         self._responder(texto, origem="texto")
 
+    def emitir_cerebro(self) -> None:
+        self.emissor.emitir("cerebro", persona="jarvis", **self.agente.cerebro)
+
     def atender_pedido(self, pedido: Pedido) -> None:
         """Um pedido da ponte. Da janela (sem voz própria), é o texto
         digitado de sempre. De um corpo (o celular), é atendido LÁ: a voz sai
         nele e o PC continua dormindo. Roda na thread de áudio."""
+        if pedido.tipo in ("nova", "continuar"):
+            ok = self.agente.nova_conversa() if pedido.tipo == "nova" \
+                else self.agente.continuar_conversa(pedido.valor)
+            if not ok:
+                self.avisar_cliente(pedido.cliente, "Espera ele terminar o pedido (ou diz "
+                                                    "\"para\") pra trocar de conversa.")
+            return
+        if pedido.tipo == "cerebro":
+            try:
+                escolha = json.loads(pedido.valor)
+            except ValueError:
+                return
+            self.agente.definir_cerebro(escolha.get("modelo"), escolha.get("esforco"))
+            self.registrador.registrar_estado("cerebro", **self.agente.cerebro)
+            self.emitir_cerebro()
+            return
         if pedido.anexos:
             # Vai junto do pedido para o Claude, como o contexto do WhatsApp.
             nota = ("[Anexos que o Léo mandou, já no PC (imagem: abra com o Read; "
@@ -1147,9 +1181,11 @@ def conversar(cfg: config.Config) -> int:
     emissor = _emissor_de_terminal(cfg)
     ponte = _abrir_ponte(cfg, registrador, emissor)
     if ponte is not None:
-        # A seção de memória da janela pede por aqui. Só lê arquivos: pode
-        # rodar na thread da ponte sem tocar no estado da conversa.
+        # A seção de memória e a barra lateral da janela pedem por aqui. Só
+        # leem arquivos: rodam na thread da ponte sem tocar na conversa.
         ponte.provedor_memoria = agente.memoria_para_janela
+        ponte.provedor_conversas = lambda: sessoes.listar(agente.casa)
+        ponte.provedor_conversa = lambda sessao: sessoes.falas(agente.casa, sessao)
 
     mic: microfone.Microfone | None = None
     ciclo: Ciclo | None = None
@@ -1179,6 +1215,9 @@ def conversar(cfg: config.Config) -> int:
                 avisos=AvisosWhatsApp(agente.whatsapp, cfg.persona, cfg.whatsapp.ler_conteudo,
                                       lambda: agente.enviados_whats),
             )
+            if ponte is not None:
+                ciclo.avisar_cliente = ponte.avisar
+            ciclo.emitir_cerebro()
             print(REGUA)
             _linha("dormindo", 'diga "hey Jarvis"  (ctrl+c encerra)')
 

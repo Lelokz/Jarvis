@@ -169,7 +169,7 @@ def rodar(base: Path) -> None:
         (b"[1,2]\n", "JSON que não é objeto"),
         (b'{"pedir":"voar"}\n', "pedido desconhecido"),
         (b'{"pedir":"falar"}\n', "falar sem texto"),
-        (protocolo.codificar({"pedir": "falar", "texto": "x" * 501}), "texto longo demais"),
+        (protocolo.codificar({"pedir": "falar", "texto": "x" * (protocolo.MAX_TEXTO + 1)}), "texto longo demais"),
     ]:
         a.crus(crus)
         r = a.ler(1)
@@ -563,12 +563,75 @@ def rodar_processos(base: Path) -> None:
             p.matar()
 
 
+def rodar_janela(base: Path) -> None:
+    """Os pedidos da janela grande (v3): conversas, cérebro e troca de conversa."""
+    caminho = base / "j.sock"
+    srv = Servidor(caminho, fila_max=256, sessao=SESSAO)
+    srv.provedor_conversas = lambda: [{"id": "a1b2c3d4", "titulo": "Teste", "quando": 1.0,
+                                       "criada": 1.0, "origem": "voz"}]
+    srv.provedor_conversa = lambda sessao: [{"quem": "voce", "texto": "oi " + sessao}]
+    srv.iniciar()
+    print("-- janela: conversas e cérebro --")
+    srv.receber({"ev": "cerebro", "modelo": "auto", "esforco": "medium", "persona": "jarvis"})
+    srv.receber({"ev": "conversa_atual", "id": "feedbeef-1", "falas": [
+        {"quem": "voce", "texto": "antiga", "origem": "voz"},
+        {"quem": "atividade", "texto": "Bash"},
+        {"quem": "jarvis", "texto": "resposta", "acao": None, "perguntando": False}]})
+    janela = Conexao(caminho)
+    janela.enviar({"pedir": "ola", "historico": 10})
+    evs = janela.ler(4)
+    checa("o ola traz o cérebro e o id da conversa",
+          [e["ev"] for e in evs] == ["sessao", "cerebro", "conversa_atual", "historico"],
+          str([e["ev"] for e in evs]))
+    checa("o histórico é o da conversa retomada, sem a atividade",
+          [f["texto"] for f in evs[-1].get("falas", [])] == ["antiga", "resposta"])
+    celular = Conexao(caminho)
+    celular.enviar({"pedir": "ola", "voz": True})
+    checa("o celular não recebe a conversa inteira",
+          "conversa_atual" not in [e["ev"] for e in celular.ler(3, timeout=0.6)])
+    janela.enviar({"pedir": "conversas"})
+    r = janela.ler(1)
+    checa("conversas: a lista volta só para quem pediu",
+          r and r[0]["ev"] == "conversas" and r[0]["lista"][0]["titulo"] == "Teste")
+    janela.enviar({"pedir": "abrir", "id": "a1b2c3d4"})
+    r = janela.ler(1)
+    checa("abrir: as falas da conversa", r and r[0].get("falas") == [{"quem": "voce", "texto": "oi a1b2c3d4"}])
+    janela.enviar({"pedir": "abrir", "id": "../etc"})
+    r = janela.ler(1)
+    checa("abrir com id torto: erro", r and r[0]["ev"] == "erro")
+    janela.enviar({"pedir": "nova"})
+    janela.enviar({"pedir": "continuar", "id": "a1b2c3d4"})
+    janela.enviar({"pedir": "cerebro", "esforco": "high"})
+    pedidos = []
+    esperar(lambda: pedidos.append(srv.proximo_pedido()) or len([x for x in pedidos if x]) >= 3)
+    pedidos = [x for x in pedidos if x]
+    checa("nova, continuar e cerebro vão para a fila, em ordem",
+          [(x.tipo, x.valor) for x in pedidos] == [("nova", ""), ("continuar", "a1b2c3d4"),
+                                                   ("cerebro", '{"esforco": "high"}')],
+          str([(x.tipo, x.valor) for x in pedidos]))
+    srv.avisar(pedidos[0].cliente, "espera")
+    r = janela.ler(1)
+    checa("avisar: o erro chega só para quem pediu", r and r[0] == {"ev": "erro", "motivo": "espera"})
+    checa("e o celular não vê", celular.ler(1, timeout=0.4) == [])
+    srv.receber({"ev": "conversa_atual", "id": "novinha", "falas": []})
+    janela.ler(1)
+    nova = Conexao(caminho)
+    nova.enviar({"pedir": "ola", "historico": 10})
+    evs = nova.ler(4, timeout=1.0)
+    checa("conversa nova: histórico vazio", any(e["ev"] == "historico" and e["falas"] == [] for e in evs)
+          or not any(e["ev"] == "historico" for e in evs))
+    for c in (janela, celular, nova):
+        c.fechar()
+    srv.encerrar()
+
+
 def main() -> int:
     base = Path(tempfile.mkdtemp(prefix="jarvis-ponte-",
                                  dir=os.environ.get("XDG_RUNTIME_DIR") or None))
     try:
         rodar(base)
         rodar_historico(base)
+        rodar_janela(base)
         rodar_processos(base)
     finally:
         shutil.rmtree(base, ignore_errors=True)

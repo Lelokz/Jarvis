@@ -19,6 +19,7 @@ seguro para duas threads.
 from __future__ import annotations
 
 import itertools
+import json
 import os
 import queue
 import selectors
@@ -44,8 +45,10 @@ _IDS = itertools.count(1)
 @dataclass(frozen=True)
 class Pedido:
     """O que um cliente pediu para o laço de áudio atender."""
-    tipo: str  # "falar" (texto) ou "ouvir" (arquivo com a fala gravada)
-    valor: str  # o texto, ou o caminho do arquivo
+    # "falar" (texto), "ouvir" (arquivo com a fala gravada), ou da janela (v3):
+    # "nova", "continuar" (valor = id da conversa), "cerebro" (valor = JSON)
+    tipo: str
+    valor: str  # o texto, o caminho do arquivo, o id ou o JSON
     cliente: int = 0  # o id de quem pediu
     voz: bool = False  # a resposta sai NELE (o celular), não no PC
     anexos: tuple[str, ...] = ()  # fotos/vídeos/arquivos do celular, já no PC
@@ -83,8 +86,13 @@ class Servidor:
         self._sessao = {"ev": "sessao", **sessao}
         self._ultimo_estado: dict[str, Any] | None = None
         self._ultimo_aviso: dict[str, Any] | None = None
-        # Quem responde o pedido "memoria" (o assistente põe aqui). Só lê.
+        self._ultimo_cerebro: dict[str, Any] | None = None
+        self._conversa_atual: str = ""
+        # Quem responde os pedidos "memoria", "conversas" e "abrir" (o
+        # assistente põe aqui). Só leem arquivos: rodam na thread da ponte.
         self.provedor_memoria = None
+        self.provedor_conversas = None
+        self.provedor_conversa = None
         # O histórico da sessão, para um cliente que chega depois — ou que
         # fechou a janela e voltou. Anel de tamanho fixo: o alcance é a sessão,
         # e memória de processo que roda o dia todo não cresce sem teto.
@@ -213,6 +221,17 @@ class Servidor:
             self._ultimo_estado = evento
         elif tipo == "aviso":
             self._ultimo_aviso = evento
+        elif tipo == "cerebro":
+            self._ultimo_cerebro = evento
+        elif tipo == "conversa_atual":
+            # Conversa nova ou retomada: o histórico da ponte passa a ser ela.
+            # A linha de atividade fica fora, como no histórico ao vivo (o
+            # celular a mostraria como cartão).
+            self._conversa_atual = str(evento.get("id") or "")
+            self._falas.clear()
+            for f in evento.get("falas") or []:
+                if f.get("quem") in ("voce", "jarvis", "painel"):
+                    self._falas.append(f)
         elif tipo in ("voce_disse", "jarvis_disse", "mostrar"):
             # Guardado ANTES de qualquer saída antecipada: o histórico existe
             # justamente para o tempo em que não havia ninguém conectado.
@@ -224,6 +243,9 @@ class Servidor:
             for cliente in self._clientes.values():
                 # A voz vai só para o corpo que pediu, e só se ele quer voz.
                 if tipo == "voz" and (cliente.id != evento.get("para") or not cliente.quer_voz):
+                    continue
+                # A conversa inteira é para a janela; o corpo (celular) não usa.
+                if tipo == "conversa_atual" and cliente.quer_voz:
                     continue
                 if cliente.apresentado:
                     self._enfileirar(cliente, tipo, dados)
@@ -255,6 +277,14 @@ class Servidor:
         """Só o texto do próximo pedido (os testes antigos e o eco usam)."""
         pedido = self.proximo_pedido()
         return pedido.valor if pedido is not None and pedido.tipo == "falar" else None
+
+    def avisar(self, cliente_id: int, motivo: str) -> None:
+        """Um {"ev":"erro"} só para quem pediu (ex.: "nova" no meio de uma
+        tarefa). Chamado da thread de áudio; não bloqueia."""
+        for cliente in list(self._clientes.values()):
+            if cliente.id == cliente_id and cliente.apresentado:
+                self._direto(cliente, {"ev": "erro", "motivo": motivo})
+        self._acordar()
 
     def conectado(self, cliente_id: int) -> bool:
         return any(c.id == cliente_id for c in list(self._clientes.values()))
@@ -360,6 +390,10 @@ class Servidor:
                 self._direto(cliente, self._ultimo_estado)
             if self._ultimo_aviso is not None:
                 self._direto(cliente, self._ultimo_aviso)
+            if self._ultimo_cerebro is not None:
+                self._direto(cliente, self._ultimo_cerebro)
+            if self._conversa_atual and not cliente.quer_voz:
+                self._direto(cliente, {"ev": "conversa_atual", "id": self._conversa_atual})
             quantas = dados.get("historico", 0)
             if quantas:
                 # Devolve o que TEM, e não o que foi pedido: o anel pode ter
@@ -378,6 +412,24 @@ class Servidor:
             except Exception as e:  # um arquivo torto não derruba a ponte
                 conteudo = {"fatos": [], "conversas": [], "erro": str(e)}
             self._direto(cliente, {"ev": "memoria", **conteudo})
+        elif tipo == "conversas":
+            try:
+                lista = self.provedor_conversas() if self.provedor_conversas else []
+            except Exception as e:
+                self._direto(cliente, {"ev": "erro", "motivo": f"não li as conversas ({e})"})
+                return
+            self._direto(cliente, {"ev": "conversas", "lista": lista})
+        elif tipo == "abrir":
+            try:
+                falas = self.provedor_conversa(dados["id"]) if self.provedor_conversa else []
+            except Exception as e:
+                self._direto(cliente, {"ev": "erro", "motivo": f"não abri a conversa ({e})"})
+                return
+            self._direto(cliente, {"ev": "conversa", "id": dados["id"], "falas": falas})
+        elif tipo in ("nova", "continuar", "cerebro"):
+            valor = dados.get("id", "") if tipo == "continuar" else \
+                json.dumps(dados) if tipo == "cerebro" else ""
+            self._pedidos.put(Pedido(tipo, valor, cliente.id, cliente.quer_voz))
 
     def _escrever_todos(self) -> None:
         with self._trava:

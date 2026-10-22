@@ -16,6 +16,7 @@ que sai pela fila `saidas`:
     perguntar  pergunta FALADA; o ciclo devolve a resposta em `Saida.resposta`
     fim        a resposta final (`texto` vira voz, `janela` vai para a janela)
     erro       limite, sem internet, Claude fora
+    sessao     a conversa mudou (`texto` = id; `janela` = "nova" ou "continuada")
 
 **Permissão por voz.** O modo é "auto": o próprio Claude julga o que roda
 direto (medido: leu a pasta antes de apagar, e apagou só o pedido). O que ele
@@ -38,6 +39,7 @@ import shutil
 import socket
 import threading
 import time
+import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -184,6 +186,12 @@ def _casar_opcao(falado: str, opcoes: list[str]) -> str:
 # O dono do Jarvis: a voz que as travas reconhecem (jarvis/quem_fala.py).
 DONO = "Léo"
 
+# O que dá para escolher na janela (out/2026). "auto" são os dois cérebros do
+# config: o rápido atende e passa o pesado para o Opus.
+MODELOS = ("auto", "haiku", "sonnet", "opus")
+ESFORCOS = ("low", "medium", "high", "xhigh", "max")
+SONNET = "claude-sonnet-5-5"
+
 
 def etiqueta_da_voz(voz, dono: str = DONO) -> str:
     """O pedaço do cabeçalho que diz ao Claude quem falou (persona, "Outras vozes")."""
@@ -219,14 +227,21 @@ class Agente:
         # pedido pesado ele passa para o forte (ferramenta chamar_o_opus).
         self._subir = False     # o rápido pediu o Opus: ao fim do turno, troca
         self._no_opus = False   # o pedido atual está com o Opus
+        # A conversa (sessão do Claude Code) aberta agora, e o modelo e o
+        # esforço com que ela está rodando. O que o Léo escolhe na janela fica
+        # em `cerebro` (e no disco) e vale a partir do próximo pedido.
+        self.sessao: str | None = None
+        self._modelo_atual = ""
+        self._esforco_atual = ""
+        self._arquivo_cerebro = self.casa.parent / "cerebro.json"
+        self.cerebro = self._ler_cerebro()
+        self._trava: asyncio.Lock | None = None
         self._cliente: ClaudeSDKClient | None = None
         self._leitor: asyncio.Task | None = None
         self._loop = asyncio.new_event_loop()
         self._thread = threading.Thread(target=self._loop.run_forever, daemon=True,
                                         name="agente")
         self._marca = self.casa / ".ultimo-uso"
-        # As instruções com que a conversa atual começou (hash da persona).
-        self._marca_instrucoes = self.casa / ".instrucoes"
 
     # -- ciclo de vida -----------------------------------------------------
 
@@ -235,24 +250,14 @@ class Agente:
         inicio = time.monotonic()
         self.casa.mkdir(parents=True, exist_ok=True)
         self._thread.start()
-        # Continua a conversa de antes se ela parou há pouco (desligar e ligar
-        # o Jarvis não apaga o papo); senão, começa outra.
-        continuar = self._marca.exists() and \
-            time.time() - self._marca.stat().st_mtime < self.cfg.recomecar_apos_h * 3600
-        # Conversa continuada guarda as instruções de quando COMEÇOU (medido em
-        # 20/10/2026: a Regra nº 1 nova foi ignorada numa conversa continuada e
-        # o Jarvis editou o config.toml; numa conversa nova, obedeceu). Mudou a
-        # persona, começa outra conversa; a memória (CLAUDE.md) continua.
-        try:
-            igual = self._marca_instrucoes.read_text().strip() == self._hash_instrucoes()
-        except OSError:
-            igual = False
-        continuar = continuar and igual
+        # Cada vez que o Jarvis liga é um chat novo (pedido do Léo, 22/10/2026,
+        # com a janela nova: as conversas antigas ficam na barra lateral e dá
+        # para voltar a qualquer uma). Antes ele continuava a de menos de 3 h.
         if not Path(self.binario).is_file():
             raise ErroDoAgente(f"Claude Code não encontrado em {self.binario}.\n"
                                "  Instale: curl -fsSL https://claude.ai/install.sh | bash")
         try:
-            self._rodar(self._conectar(continuar), espera=90)
+            self._rodar(self._conectar(), espera=90)
         except Exception as e:
             # Sem rede na subida o Jarvis sobe assim mesmo: o primeiro pedido
             # tenta de novo e, sem rede, vira a fala de "sem internet".
@@ -273,7 +278,7 @@ class Agente:
         fut = asyncio.run_coroutine_threadsafe(corrotina, self._loop)
         return fut.result(espera) if espera is not None else fut
 
-    def _opcoes(self, continuar: bool) -> ClaudeAgentOptions:
+    def _opcoes(self, retomar: str | None) -> ClaudeAgentOptions:
         servidor = ferramentas.criar_servidor(
             mostrar=lambda titulo, texto: self.saidas.put(Saida("mostrar", texto, titulo)),
             whatsapp=self.whatsapp,
@@ -282,11 +287,13 @@ class Agente:
             chamar_o_opus=self._pedir_o_opus if self.cfg.modelo_rapido else None,
         )
         self._no_opus = False
+        self._modelo_atual = self._modelo_desejado()
+        self._esforco_atual = self.cerebro["esforco"]
         return ClaudeAgentOptions(
             cli_path=self.binario,
             cwd=str(self.casa),
-            model=self.cfg.modelo_rapido or self.cfg.modelo,
-            effort=self.cfg.effort,
+            model=self._modelo_atual,
+            effort=self._esforco_atual,
             # "user": os MCPs, skills e preferências do Léo, iguais ao VS Code.
             # "project": o CLAUDE.md da casa, que é a memória dele.
             setting_sources=["user", "project"],
@@ -298,7 +305,10 @@ class Agente:
             system_prompt={"type": "preset", "preset": "claude_code",
                            "append": self._instrucoes()},
             mcp_servers={"jarvis": servidor},
-            continue_conversation=continuar,
+            # Conversa nova com id escolhido aqui (a janela precisa saber qual
+            # é), ou uma antiga retomada pela barra lateral.
+            session_id=None if retomar else self.sessao,
+            resume=retomar,
             stderr=lambda _linha: None,
             # Uma foto aberta pelo Read volta numa mensagem só, em base64. O
             # padrão (1 MB) quebrava a conexão com uma foto de 2 MB do
@@ -309,31 +319,27 @@ class Agente:
     def _instrucoes(self) -> str:
         return PERSONA.read_text().replace("{nome}", self.nome)
 
-    def _hash_instrucoes(self) -> str:
-        import hashlib
-        return hashlib.sha1(self._instrucoes().encode()).hexdigest()
-
-    async def _conectar(self, continuar: bool = False) -> None:
-        if not continuar:
-            # Conversa nova: começa com as instruções de agora.
-            try:
-                self._marca_instrucoes.write_text(self._hash_instrucoes() + "\n")
-            except OSError:
-                pass
-        self._cliente = ClaudeSDKClient(self._opcoes(continuar))
+    async def _conectar(self, retomar: str | None = None) -> None:
+        """Abre o Claude Code numa conversa nova, ou na `retomar` (um id)."""
+        antes = self.sessao
+        if not retomar:
+            self.sessao = str(uuid.uuid4())
+        self._cliente = ClaudeSDKClient(self._opcoes(retomar))
         try:
             await self._cliente.connect()
         except Exception:
-            if not continuar:
+            if not retomar:
                 raise
-            # A sessão de antes sumiu ou não abriu: começa uma nova.
-            try:
-                self._marca_instrucoes.write_text(self._hash_instrucoes() + "\n")
-            except OSError:
-                pass
-            self._cliente = ClaudeSDKClient(self._opcoes(False))
+            # A conversa de antes sumiu ou não abriu: começa uma nova.
+            retomar, self.sessao = None, str(uuid.uuid4())
+            self._cliente = ClaudeSDKClient(self._opcoes(None))
             await self._cliente.connect()
+        if retomar:
+            self.sessao = retomar
         self._leitor = asyncio.create_task(self._ler(self._cliente))
+        # Reabrir a MESMA conversa (caiu, ou mudou o esforço) não é troca.
+        if self.sessao != antes or not retomar:
+            self.saidas.put(Saida("sessao", self.sessao, janela="continuada" if retomar else "nova"))
 
     async def _desconectar(self) -> None:
         cliente, self._cliente = self._cliente, None
@@ -362,6 +368,77 @@ class Agente:
     def interromper(self) -> None:
         if self._cliente is not None and self.ocupado:
             self._rodar(self._cliente.interrupt())
+
+    # -- a janela: conversas e cérebro --------------------------------------
+
+    def nova_conversa(self) -> bool:
+        """Começa um chat novo. False com uma tarefa em andamento (ela seria
+        cortada no meio). A troca chega pela saída "sessao"."""
+        if self.ocupado:
+            return False
+        self._rodar(self._trocar(None))
+        return True
+
+    def continuar_conversa(self, sessao: str) -> bool:
+        """Volta para uma conversa antiga (a barra lateral). Mesma regra."""
+        if self.ocupado:
+            return False
+        if sessao != self.sessao:
+            self._rodar(self._trocar(sessao))
+        return True
+
+    def definir_cerebro(self, modelo: str | None = None, esforco: str | None = None) -> dict:
+        """O modelo e o esforço escolhidos na janela. Valem a partir do próximo
+        pedido: o modelo troca na mesma conversa; o esforço reabre a conversa
+        por baixo (o SDK só aceita esforço ao abrir), sem perder nada."""
+        if modelo in MODELOS:
+            self.cerebro["modelo"] = modelo
+        if esforco in ESFORCOS:
+            self.cerebro["esforco"] = esforco
+        try:
+            self._arquivo_cerebro.write_text(json.dumps(self.cerebro) + "\n")
+        except OSError:
+            pass
+        return dict(self.cerebro)
+
+    def _ler_cerebro(self) -> dict:
+        cerebro = {"modelo": "auto" if self.cfg.modelo_rapido else "opus",
+                   "esforco": self.cfg.effort}
+        try:
+            salvo = json.loads(self._arquivo_cerebro.read_text())
+        except (OSError, ValueError):
+            salvo = {}
+        if salvo.get("modelo") in MODELOS:
+            cerebro["modelo"] = salvo["modelo"]
+        if salvo.get("esforco") in ESFORCOS:
+            cerebro["esforco"] = salvo["esforco"]
+        if cerebro["modelo"] == "auto" and not self.cfg.modelo_rapido:
+            cerebro["modelo"] = "opus"
+        return cerebro
+
+    def _modelo_desejado(self) -> str:
+        """O modelo que deve atender o PRÓXIMO pedido."""
+        escolha = self.cerebro["modelo"]
+        if escolha == "auto":
+            return self.cfg.modelo_rapido or self.cfg.modelo
+        return {"haiku": self.cfg.modelo_rapido or "claude-haiku-5-5",
+                "sonnet": SONNET}.get(escolha, self.cfg.modelo)
+
+    async def _trocar(self, retomar: str | None) -> None:
+        async with self._travar():
+            try:
+                await self._desconectar()
+                await self._conectar(retomar)
+                self._marca.touch()
+            except Exception as e:
+                self._falhou(e)
+
+    def _travar(self) -> asyncio.Lock:
+        # Criada dentro do laço do agente: trocar de conversa e mandar pedido
+        # nunca se cruzam (o pedido esperaria a conversa nova abrir).
+        if self._trava is None:
+            self._trava = asyncio.Lock()
+        return self._trava
 
     def responder(self, saida: Saida, falado: str | None, voz=None) -> None:
         """A resposta dele a uma pergunta (None: não respondeu a tempo)."""
@@ -396,21 +473,31 @@ class Agente:
         except OSError:
             linhas = []
         fatos = [l.lstrip("-* ").strip() for l in linhas if l.lstrip().startswith(("- ", "* "))]
-        return {"fatos": fatos, "conversas": []}
+        return {"fatos": fatos, "conversas": [], "texto": "\n".join(linhas)}
 
     # -- por dentro ---------------------------------------------------------
 
     async def _enviar(self, mensagem: str) -> None:
-        try:
-            parada = time.time() - self._marca.stat().st_mtime if self._marca.exists() else 0
-            if self._cliente is not None and parada > self.cfg.recomecar_apos_h * 3600:
-                await self._desconectar()  # muito tempo parado: conversa nova
-            if self._cliente is None:
-                await self._conectar()
-            self._marca.touch()
-            await self._cliente.query(mensagem)
-        except Exception as e:
-            self._falhou(e)
+        async with self._travar():
+            try:
+                parada = time.time() - self._marca.stat().st_mtime if self._marca.exists() else 0
+                if self._cliente is not None and parada > self.cfg.recomecar_apos_h * 3600:
+                    await self._desconectar()  # muito tempo parado: conversa nova
+                    self.sessao = None
+                if self._cliente is None:
+                    # Caiu (ou parou demais): reabre a mesma conversa, se tem uma.
+                    await self._conectar(self.sessao)
+                elif self._esforco_atual != self.cerebro["esforco"]:
+                    # O esforço mudou na janela: reabre a MESMA conversa com ele.
+                    await self._desconectar()
+                    await self._conectar(self.sessao)
+                elif self._modelo_atual != self._modelo_desejado():
+                    self._modelo_atual = self._modelo_desejado()
+                    await self._cliente.set_model(self._modelo_atual)
+                self._marca.touch()
+                await self._cliente.query(mensagem)
+            except Exception as e:
+                self._falhou(e)
 
     def _falhou(self, erro: Exception | str) -> None:
         self.ocupado = False
@@ -484,6 +571,9 @@ class Agente:
             self._falhou(e)
 
     def _pedir_o_opus(self, motivo: str) -> str:
+        if self.cerebro["modelo"] != "auto":
+            return ("O Léo escolheu o modelo na janela: siga você mesmo com o pedido, "
+                    "sem chamar o Opus.")
         if self._no_opus:
             return "Você já é o Opus: siga com o pedido."
         self._subir = True
@@ -493,6 +583,7 @@ class Agente:
     async def _subir_pro_opus(self, cliente: ClaudeSDKClient) -> None:
         try:
             await cliente.set_model(self.cfg.modelo)
+            self._modelo_atual = self.cfg.modelo
             await cliente.query("[sistema: o modelo rápido passou este pedido para você, o Opus. "
                                 "Atenda o último pedido do usuário acima, do começo, como se ninguém "
                                 "tivesse respondido. Não chame chamar_o_opus.]")
@@ -502,7 +593,9 @@ class Agente:
 
     async def _voltar_pro_rapido(self, cliente: ClaudeSDKClient) -> None:
         try:
-            await cliente.set_model(self.cfg.modelo_rapido)
+            if self._modelo_desejado() != self._modelo_atual:
+                await cliente.set_model(self._modelo_desejado())
+                self._modelo_atual = self._modelo_desejado()
         except Exception:
             pass
         self._no_opus = False

@@ -55,9 +55,23 @@ ASSISTENTE -> CLIENTES
         eventos ao vivo não têm carimbo, porque para eles "agora" é a chegada.
 
     {"ev":"memoria", "fatos": ["..."], "conversas": [{"quando":"sáb 11/10 02:31",
-     "tema":"...", "resumo":"..."}]}
+     "tema":"...", "resumo":"..."}], "texto": "<o CLAUDE.md inteiro>"}
         Só para quem pediu "memoria". O que o Jarvis sabe do Léo e o diário
-        de conversas, mais novo primeiro.
+        de conversas, mais novo primeiro. `texto` (v3): o arquivo inteiro,
+        em markdown, para a página de memória da janela.
+
+    (v3, a janela grande; o celular ignora todos estes)
+    {"ev":"cerebro", "modelo":"auto|haiku|sonnet|opus",
+     "esforco":"low|medium|high|xhigh|max", "persona":"jarvis"}
+        O que está escolhido. Reenviado a quem diz "ola" e a cada mudança.
+    {"ev":"conversa_atual", "id":"<uuid>", "falas":[...]}
+        A conversa do Jarvis mudou (ligou, "nova", "continuar"): o id da
+        sessão do Claude Code e as falas dela (vazio na nova). O histórico
+        da ponte passa a ser este. Reenviado a quem diz "ola", só o id.
+    {"ev":"conversas", "lista":[{"id", "titulo", "quando", "criada", "origem"}]}
+        Só para quem pediu "conversas". Mais nova primeiro.
+    {"ev":"conversa", "id":"<uuid>", "falas":[...]}
+        Só para quem pediu "abrir": uma conversa qualquer, só para ler.
 
 CLIENTES -> ASSISTENTE
     {"pedir":"ola", "quem":"interface", "historico": 80, "voz": false}
@@ -69,6 +83,14 @@ CLIENTES -> ASSISTENTE
 
     {"pedir":"memoria"}
         Pede a memória (fatos e diário). Resposta: o evento "memoria".
+
+    (v3) {"pedir":"conversas"}            -> "conversas"
+         {"pedir":"abrir", "id":"<uuid>"} -> "conversa" (só para ler)
+         {"pedir":"nova"}                 -> chat novo ("conversa_atual" para todos)
+         {"pedir":"continuar", "id":"..."} -> o Jarvis volta para essa conversa
+         {"pedir":"cerebro", "modelo":"...", "esforco":"..."}  (um ou os dois)
+        "nova" e "continuar" com o Jarvis no meio de uma tarefa voltam
+        {"ev":"erro"} para quem pediu.
 
     {"pedir":"falar", "texto":"abre o loft"}
         Atendido como se tivesse sido falado: acorda mesmo dormindo e a resposta
@@ -101,22 +123,24 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from pathlib import Path
 from typing import Any
 
-VERSAO = 2
+VERSAO = 3
 
 # O que sai do assistente para os clientes. O resto que o Ciclo emite
 # (acordou, dormiu, janela, tempos...) é para o terminal e fica em casa.
 PUBLICOS = frozenset({"sessao", "estado", "nivel", "voce_disse", "jarvis_disse", "aviso",
-                      "mostrar", "atividade", "voz"})
+                      "mostrar", "atividade", "voz", "cerebro", "conversa_atual"})
 ESTADOS = ("dormindo", "ouvindo", "escutando", "pensando", "falando")
-PEDIDOS = frozenset({"ola", "falar", "memoria", "ouvir"})
+PEDIDOS = frozenset({"ola", "falar", "memoria", "ouvir",
+                     "conversas", "abrir", "nova", "continuar", "cerebro"})
 
 # Uma linha maior que isto sem quebra é um cliente com defeito, não um pedido.
 MAX_LINHA = 64 * 1024
-# Comando digitado é uma frase. Quinhentos caracteres é folga, não limite de uso.
-MAX_TEXTO = 500
+# Comando digitado. Na janela grande (out/2026) dá para colar um texto inteiro.
+MAX_TEXTO = 8000
 # Teto do histórico que o assistente guarda e que um cliente pode pedir. É o
 # alcance de UMA sessão, que foi a decisão do Léo na passada 2.
 MAX_HISTORICO = 200
@@ -150,13 +174,32 @@ def ler_pedido(linha: bytes) -> tuple[str, dict[str, Any]]:
         texto = objeto.get("texto")
         if not isinstance(texto, str) or not texto.strip():
             raise ErroDeProtocolo("'falar' sem texto")
-        texto = " ".join(texto.split())
+        # Espaços repetidos saem; as quebras de linha ficam (texto colado).
+        texto = "\n".join(" ".join(l.split()) for l in texto.strip().splitlines()).strip()
         if len(texto) > MAX_TEXTO:
             raise ErroDeProtocolo(f"texto com mais de {MAX_TEXTO} caracteres")
         return tipo, {"texto": texto, "anexos": _anexos(objeto), "mudo": _mudo(objeto)}
 
-    if tipo == "memoria":
+    if tipo in ("memoria", "conversas", "nova"):
         return tipo, {}
+
+    if tipo in ("abrir", "continuar"):
+        sessao = objeto.get("id")
+        if not isinstance(sessao, str) or not re.fullmatch(r"[0-9a-fA-F-]{8,64}", sessao):
+            raise ErroDeProtocolo(f"'{tipo}' sem um id de conversa válido")
+        return tipo, {"id": sessao}
+
+    if tipo == "cerebro":
+        dados = {}
+        for campo in ("modelo", "esforco"):
+            valor = objeto.get(campo)
+            if valor is not None:
+                if not isinstance(valor, str) or len(valor) > 20:
+                    raise ErroDeProtocolo(f"'{campo}' inválido")
+                dados[campo] = valor
+        if not dados:
+            raise ErroDeProtocolo("'cerebro' sem modelo nem esforço")
+        return tipo, dados
 
     if tipo == "ouvir":
         arquivo = objeto.get("arquivo")
