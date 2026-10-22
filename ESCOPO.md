@@ -735,6 +735,11 @@ do Léo falando com o Jarvis é o teste que vale; o resto se confere olhando.
   o Claude entende, mas o Whisper ainda erra nome de programa raro.
 - **WhatsApp:** responder com "pode" ainda não foi testado de verdade.
 - O Piper lê mal letra solta e número com vírgula (só se voltar ao Piper).
+- **App, botão de enviar some (Léo, 22/10/2026, beta 0.7.5):** quando ele
+  começa a digitar, o botão de enviar fica invisível, e só aparece depois que
+  ele toca no lugar dele (parece tocar no nada). Para a próxima atualização.
+  Suspeita: em `BarraDeEscrever` (MainActivity.kt), o `.alpha()` vem depois do
+  `.background()`, ou o `ativo` não recompõe quando o texto muda.
 
 ---
 
