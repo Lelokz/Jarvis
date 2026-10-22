@@ -15,6 +15,7 @@ import json
 import re
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 from . import estudante, khan
@@ -27,10 +28,18 @@ MEDIA = 6.0  # abaixo disso a nota aparece como baixa
 SEM_NOTA = "Sem avaliação ou notas não liberadas."
 
 
+# O que o celular ainda vai buscar (porta_remota.py, /novidades).
+NOVIDADES = Path.home() / ".local/share/jarvis/novidades.jsonl"
+
+
 def notificar(texto: str) -> None:
-    """Notificação no canto da tela do PC (o celular recebe pela vigia)."""
+    """Notificação no canto da tela do PC e na fila do celular."""
     subprocess.run(["notify-send", "-a", "Jarvis", "-i", "jarvis-atomo", "Escola", texto],
                    check=False, timeout=10)
+    NOVIDADES.touch(mode=0o600, exist_ok=True)
+    with NOVIDADES.open("a", encoding="utf-8") as f:
+        f.write(json.dumps({"id": time.time_ns() // 1_000_000, "titulo": "Escola", "texto": texto},
+                           ensure_ascii=False) + "\n")
 
 
 def _avaliacoes(texto: str) -> dict[str, str]:

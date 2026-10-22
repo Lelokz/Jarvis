@@ -153,7 +153,7 @@ VERSAO = 3
 # (acordou, dormiu, janela, tempos...) é para o terminal e fica em casa.
 PUBLICOS = frozenset({"sessao", "estado", "nivel", "voce_disse", "jarvis_disse", "aviso",
                       "mostrar", "atividade", "voz", "cerebro", "conversa_atual", "uso",
-                      "escrevendo", "notificacao"})
+                      "escrevendo"})
 ESTADOS = ("dormindo", "ouvindo", "escutando", "pensando", "falando")
 PEDIDOS = frozenset({"ola", "falar", "memoria", "ouvir",
                      "conversas", "abrir", "nova", "continuar", "cerebro", "parar",

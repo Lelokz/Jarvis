@@ -12,6 +12,8 @@
          a conversa do relógio passa por ele. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
     <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
+    <!-- As novidades da escola: a busca de 15 em 15 min volta depois de reiniciar. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <application
         android:name=".App"
@@ -43,6 +45,10 @@
                 <data android:scheme="wear" android:host="*" android:pathPrefix="/jarvis" />
             </intent-filter>
         </service>
+        <service
+            android:name=".TarefaNovidades"
+            android:exported="false"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
         <service
             android:name=".ServicoPonte"
             android:exported="false"

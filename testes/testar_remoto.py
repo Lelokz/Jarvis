@@ -21,6 +21,8 @@ import sys
 import tempfile
 import threading
 import time
+import urllib.error
+import urllib.request
 import wave
 from pathlib import Path
 
@@ -232,6 +234,30 @@ def main() -> int:
         except protocolo.ErroDeProtocolo:
             recusou = True
         checa("a ponte recusa anexo fora da pasta de recebidos", recusou)
+
+        # 12. As novidades (escola) que o app busca sozinho: só com a chave,
+        # e só as depois do id que ele já mostrou.
+        porta_remota.NOVIDADES = base / "novidades.jsonl"
+        porta_remota.NOVIDADES.write_text(
+            json.dumps({"id": 1, "titulo": "Escola", "texto": "velha"}) + "\n"
+            + json.dumps({"id": 2, "titulo": "Escola", "texto": "Prova de Química"}) + "\n")
+        http = f"http://127.0.0.1:{cfg.remoto.porta}"
+        try:
+            urllib.request.urlopen(f"{http}/novidades?desde=0", timeout=5)
+            sem_chave = None
+        except urllib.error.HTTPError as erro:
+            sem_chave = erro.code
+        checa("novidades sem a chave: 401", sem_chave == 401, f"{sem_chave}")
+        pedido = urllib.request.Request(f"{http}/novidades?desde=1",
+                                        headers={"Authorization": f"Bearer {chave}"})
+        lista = json.load(urllib.request.urlopen(pedido, timeout=5))["novidades"]
+        checa("novidades com a chave: só as depois do id", [n["texto"] for n in lista] == ["Prova de Química"],
+              f"{lista}")
+        try:
+            versao = json.load(urllib.request.urlopen(f"{http}/versao", timeout=5))
+            checa("a versão do APK compilado", isinstance(versao.get("versionCode"), int), f"{versao}")
+        except urllib.error.HTTPError as erro:
+            checa("a versão do APK compilado (sem APK: 404)", erro.code == 404)
 
         celular.close()
         servidor_web.should_exit = True

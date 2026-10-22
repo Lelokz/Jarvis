@@ -74,6 +74,11 @@ class Jarvis(private val app: Application) {
     val voltaCinco = mutableStateOf(0.0)
     val usoSemana = mutableStateOf(-1.0)
     val voltaSemana = mutableStateOf(0.0)
+    // Atualização: o versionCode mais novo no PC (0 = está em dia) e se o
+    // aviso grande está aberto. O grande sai uma vez por versão; depois fica
+    // só o retângulo no topo.
+    val atualizacao = mutableStateOf(0)
+    val avisoAtualizacao = mutableStateOf(false)
     val aviso = mutableStateOf("")           // recado rápido (erro, "mandada pra lixeira")
     val estado = mutableStateOf("dormindo")     // o do PC: pensando, falando...
     val conectado = mutableStateOf(false)
@@ -113,6 +118,7 @@ class Jarvis(private val app: Application) {
 
     init {
         if (configurado.value) conectar()
+        Novidades.agendar(app)
     }
 
     /** O link da página ("https://jarvis.xxx.ts.net/#chave=..."), com ou sem texto em volta. */
@@ -144,6 +150,7 @@ class Jarvis(private val app: Application) {
             motivo.value = porque
             if (ok) {
                 avisarMudo()
+                viewModelScope.launch(Dispatchers.IO) { Novidades.buscar(app); conferirVersao() }
                 // O histórico vem de novo a cada conexão: começa do zero. Os
                 // anexos ainda não enviados sobem de novo (a porta nova não
                 // conhece os da conexão que caiu).
@@ -153,6 +160,26 @@ class Jarvis(private val app: Application) {
                 for (a in anexos.toList()) subir(a.copy(idServidor = null, erro = ""))
             }
         }.also { it.abrir() }
+    }
+
+    private suspend fun conferirVersao() {
+        val noPc = Novidades.versaoNoPc(app) ?: return
+        val instalada = app.packageManager.getPackageInfo(app.packageName, 0).longVersionCode
+        withContext(Dispatchers.Main) {
+            atualizacao.value = if (noPc > instalada) noPc else 0
+            if (atualizacao.value != 0 && prefs.getInt("atualizacao_avisada", 0) != noPc) avisoAtualizacao.value = true
+        }
+    }
+
+    /** Fechou o aviso grande (sim ou não): não volta a abrir sozinho nesta versão. */
+    fun fecharAvisoAtualizacao(atualizar: Boolean) {
+        avisoAtualizacao.value = false
+        prefs.edit().putInt("atualizacao_avisada", atualizacao.value).apply()
+        if (atualizar) {
+            val base = prefs.getString("base", "")?.trimEnd('/') ?: return
+            app.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("$base/jarvis.apk"))
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        }
     }
 
     fun alternarMudo() {

@@ -5,6 +5,9 @@ import android.content.pm.PackageManager
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.material3.OutlinedButton
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -124,7 +127,7 @@ private val Azul = Color(0xFF4DA3FF)
 private val Roxo = Color(0xFF9B7BFF)
 
 /** A versão da janela (a numeração do Léo, igual à do PC) e a do app. */
-const val VERSAO_JANELA = "beta 0.6.5"
+const val VERSAO_JANELA = "beta 0.7"
 
 // A Inter, a fonte da janela do PC (licença OFL). Variável: o peso funciona.
 @OptIn(ExperimentalTextApi::class)
@@ -240,6 +243,20 @@ fun Tela(modelo: Jarvis) {
     val gaveta = rememberDrawerState(DrawerValue.Closed)
     val escopo = rememberCoroutineScope()
     var seletores by remember { mutableStateOf(false) }
+    val contexto = LocalContext.current
+
+    // As notificações da escola precisam da permissão (Android 13+): pede uma
+    // vez só, na primeira abertura desta versão.
+    val pedirNotificacao = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
+    LaunchedEffect(Unit) {
+        val prefs = contexto.getSharedPreferences("jarvis", android.content.Context.MODE_PRIVATE)
+        if (android.os.Build.VERSION.SDK_INT >= 33 && !prefs.getBoolean("pediu_notificacao", false) &&
+            ContextCompat.checkSelfPermission(contexto, Manifest.permission.POST_NOTIFICATIONS) !=
+            PackageManager.PERMISSION_GRANTED) {
+            prefs.edit().putBoolean("pediu_notificacao", true).apply()
+            pedirNotificacao.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
 
     // Voltar: fecha a gaveta, sai da conversa antiga ou da página.
     BackHandler(enabled = gaveta.isOpen || modelo.vendo.value.isNotEmpty() || modelo.pagina.value != "chat") {
@@ -270,9 +287,13 @@ fun Tela(modelo: Jarvis) {
                     else -> Chat(modelo) { seletores = true }
                 }
             }
-            Aviso(modelo, Modifier.align(Alignment.TopCenter).padding(top = 64.dp))
+            val temAtualizacao = modelo.atualizacao.value != 0
+            if (temAtualizacao) RetanguloAtualizacao(modelo, Modifier.align(Alignment.TopCenter).padding(top = 58.dp))
+            Aviso(modelo, Modifier.align(Alignment.TopCenter).padding(top = if (temAtualizacao) 100.dp else 64.dp))
         }
     }
+
+    if (modelo.avisoAtualizacao.value) AvisoAtualizacao(modelo)
 
     if (seletores) {
         ModalBottomSheet(
@@ -280,6 +301,48 @@ fun Tela(modelo: Jarvis) {
             sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
             containerColor = Superficie2,
         ) { Seletores(modelo) }
+    }
+}
+
+/** O retângulo pequeno no topo: tem versão nova e o aviso grande já foi fechado. */
+@Composable
+private fun RetanguloAtualizacao(modelo: Jarvis, modifier: Modifier) {
+    val forma = RoundedCornerShape(10.dp)
+    Row(modifier.clip(forma).background(Superficie2).border(1.dp, TracoForte, forma)
+        .clickable { modelo.avisoAtualizacao.value = true }
+        .padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(7.dp).clip(CircleShape).background(Azul))
+        Spacer(Modifier.width(8.dp))
+        Text("Atualização disponível", color = TextoMedio, fontSize = 12.sp)
+    }
+}
+
+/** O aviso grande: o fundo escurece um pouco (o app continua visível atrás). */
+@Composable
+private fun AvisoAtualizacao(modelo: Jarvis) {
+    BackHandler { modelo.fecharAvisoAtualizacao(false) }
+    Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.45f))
+        .clickable(indication = null, interactionSource = remember { MutableInteractionSource() }) {},
+        contentAlignment = Alignment.Center) {
+        val forma = RoundedCornerShape(20.dp)
+        Column(Modifier.padding(horizontal = 32.dp).fillMaxWidth().clip(forma).background(Superficie2)
+            .border(1.dp, TracoForte, forma).padding(22.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                AtomoFixo(Azul, 26.dp)
+                Spacer(Modifier.width(10.dp))
+                Text("Atualização pendente", color = Texto, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+            }
+            Spacer(Modifier.height(10.dp))
+            Text("Tem uma versão nova do Jarvis. Deseja atualizar agora?", color = TextoMedio,
+                fontSize = 14.sp, lineHeight = 20.sp)
+            Spacer(Modifier.height(20.dp))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedButton(onClick = { modelo.fecharAvisoAtualizacao(false) }, modifier = Modifier.weight(1f),
+                    border = BorderStroke(1.dp, TracoForte)) { Text("Não", color = TextoMedio) }
+                Button(onClick = { modelo.fecharAvisoAtualizacao(true) }, modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.buttonColors(containerColor = Azul, contentColor = Fundo)) { Text("Sim") }
+            }
+        }
     }
 }
 

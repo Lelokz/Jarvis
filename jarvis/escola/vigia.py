@@ -2,8 +2,8 @@
 
 Cada leitura é um processo à parte (`python -m jarvis.escola`), em nice 19:
 o navegador escondido não divide memória nem pausa com o laço de áudio.
-O que for novo fica numa fila; o laço principal pega com `pegar()` e manda
-para o celular. A notificação do PC o próprio processo já mostra.
+O que for novo o próprio processo notifica no PC e guarda em novidades.jsonl,
+que o celular busca na porta remota (/novidades).
 """
 
 from __future__ import annotations
@@ -11,7 +11,6 @@ from __future__ import annotations
 import datetime as dt
 import json
 import os
-import queue
 import subprocess
 import sys
 import threading
@@ -41,24 +40,13 @@ def _ultima_leitura() -> dt.datetime | None:
 class Vigia(threading.Thread):
     def __init__(self) -> None:
         super().__init__(name="vigia-escola", daemon=True)
-        self._fila: queue.Queue[str] = queue.Queue()
-
-    def pegar(self) -> str | None:
-        try:
-            return self._fila.get_nowait()
-        except queue.Empty:
-            return None
 
     def _rodar(self, comando: str) -> None:
         try:
-            saida = subprocess.run([sys.executable, "-m", "jarvis.escola", comando], cwd=RAIZ,
-                                   capture_output=True, text=True, timeout=900,
-                                   preexec_fn=lambda: os.nice(19))
-            novas = json.loads(saida.stdout.strip().splitlines()[-1])["novidades"]
+            subprocess.run([sys.executable, "-m", "jarvis.escola", comando], cwd=RAIZ,
+                           capture_output=True, timeout=900, preexec_fn=lambda: os.nice(19))
         except Exception:
-            return  # falhou desta vez: tenta no próximo horário
-        if novas:
-            self._fila.put("\n".join(novas))
+            pass  # falhou desta vez: tenta no próximo horário
 
     def _devia_ler(self, agora: dt.datetime) -> bool:
         ultima = _ultima_leitura()

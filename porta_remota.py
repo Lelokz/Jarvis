@@ -33,6 +33,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import hmac
 import io
 import json
 import os
@@ -55,6 +56,11 @@ PAGINA = RAIZ / "jarvis" / "remoto" / "pagina.html"
 # /jarvis.apk. Sem chave: o APK não leva segredo nenhum (a chave se cola nele).
 APK = RAIZ / "celular" / "app" / "build" / "outputs" / "apk" / "debug" / "app-debug.apk"
 # Fala gravada maior que isto não é uma frase: 8 MB de webm são vários minutos.
+# A versão do APK compilado: o app compara com a dele e oferece atualizar.
+METADADOS_APK = APK.parent / "output-metadata.json"
+# As notificações que o celular busca sozinho, mesmo com o app fechado
+# (por enquanto, as da escola: jarvis/escola/__main__.py).
+NOVIDADES = Path.home() / ".local/share/jarvis/novidades.jsonl"
 MAX_AUDIO_BYTES = 8 * 1024 * 1024
 # Um minuto de PCM 16 kHz: o resto é cortado antes de ir para o Whisper.
 MAX_PCM_BYTES = 16000 * 2 * 60
@@ -114,7 +120,7 @@ def guardar_audio(pcm: bytes) -> Path:
 
 def criar_app(cfg: config.Config):
     from starlette.applications import Starlette
-    from starlette.responses import FileResponse, HTMLResponse, PlainTextResponse
+    from starlette.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse
     from starlette.routing import Route, WebSocketRoute
     from starlette.websockets import WebSocket, WebSocketDisconnect
 
@@ -135,6 +141,34 @@ def criar_app(cfg: config.Config):
             return PlainTextResponse("o app ainda não foi compilado (celular/compilar.sh)", status_code=404)
         return FileResponse(APK, media_type="application/vnd.android.package-archive",
                             filename="jarvis.apk", headers={"Cache-Control": "no-store"})
+
+    async def versao(_):
+        try:
+            elemento = json.loads(METADADOS_APK.read_text(encoding="utf-8"))["elements"][0]
+        except (OSError, ValueError, KeyError, IndexError):
+            return JSONResponse({}, status_code=404)
+        return JSONResponse({"versionCode": elemento.get("versionCode"),
+                             "versionName": elemento.get("versionName")},
+                            headers={"Cache-Control": "no-store"})
+
+    async def novidades(request):
+        # Com chave: o texto é da vida do Léo (notas, provas).
+        if not hmac.compare_digest(request.headers.get("authorization", ""), f"Bearer {chave}"):
+            return JSONResponse({"erro": "chave"}, status_code=401)
+        try:
+            desde = int(request.query_params.get("desde", "0"))
+        except ValueError:
+            desde = 0
+        lista = []
+        if NOVIDADES.is_file():
+            for linha in NOVIDADES.read_text(encoding="utf-8").splitlines():
+                try:
+                    item = json.loads(linha)
+                except ValueError:
+                    continue
+                if item.get("id", 0) > desde:
+                    lista.append(item)
+        return JSONResponse({"novidades": lista[-20:]}, headers={"Cache-Control": "no-store"})
 
     async def conexao(ws: WebSocket) -> None:
         await ws.accept()
@@ -293,6 +327,7 @@ def criar_app(cfg: config.Config):
                 pass  # já fechado pelo celular
 
     return Starlette(routes=[Route("/", pagina), Route("/saude", saude), Route("/jarvis.apk", apk),
+                               Route("/versao", versao), Route("/novidades", novidades),
                              WebSocketRoute("/ws", conexao)])
 
 

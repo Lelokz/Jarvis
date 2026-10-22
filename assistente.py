@@ -1267,8 +1267,7 @@ def conversar(cfg: config.Config) -> int:
             proximo_aviso = time.monotonic() + 30
             # Escola (Khan e Estudante Online): lê sozinha 3x por dia. O que
             # for novo vira notificação, sem voz (decisão do Léo).
-            vigia = Vigia()
-            vigia.start()
+            Vigia().start()
             proximo_whats = time.monotonic() + cfg.whatsapp.intervalo_s
             while True:
                 if time.monotonic() >= proximo_aviso:
@@ -1278,9 +1277,6 @@ def conversar(cfg: config.Config) -> int:
                 if time.monotonic() >= proximo_whats and not ciclo.vad.falando:
                     ciclo.anunciar_whatsapp()
                     proximo_whats = time.monotonic() + cfg.whatsapp.intervalo_s
-                novidade = vigia.pegar()
-                if novidade is not None:
-                    emissor.emitir("notificacao", titulo="Escola", texto=novidade)
                 bloco = mic.ler_bloco()
                 if bloco is not None:
                     ciclo.passo(bloco)
