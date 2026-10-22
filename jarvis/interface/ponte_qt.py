@@ -22,6 +22,9 @@ from jarvis.ponte import recebidos
 from jarvis.ponte.cliente import Cliente
 
 ESPERA_ENTRE_TENTATIVAS_S = 1.0
+# Onde vão as imagens coladas com Ctrl+V antes de virarem anexo (o envio as
+# copia para a pasta de recebidos). Limpa as de mais de um dia.
+COLADOS = Path.home() / ".cache" / "jarvis" / "colados"
 # Quantas falas anteriores a janela pede ao conectar. O assistente guarda até
 # 200 e devolve o que tiver — este número é o que a conversa mostra ao abrir,
 # inclusive quando a janela foi fechada e reaberta no meio do dia.
@@ -154,6 +157,32 @@ class PonteQt(QObject):
     @Slot(result=bool)
     def parar(self) -> bool:
         return self._pedir({"pedir": "parar"})
+
+    @Slot(result=list)
+    def colar(self) -> list:
+        """O Ctrl+V da barra de escrever. Imagem na área de transferência (um
+        print) vira arquivo; arquivos copiados no gerenciador vêm como estão.
+        Devolve as URLs para anexar, ou [] quando é só texto (cola normal)."""
+        dados = QGuiApplication.clipboard().mimeData()
+        if dados is None:
+            return []
+        if dados.hasUrls():
+            arquivos = [u.toString() for u in dados.urls() if u.isLocalFile() and Path(u.toLocalFile()).is_file()]
+            if arquivos:
+                return arquivos
+        if dados.hasImage():
+            imagem = QGuiApplication.clipboard().image()
+            if imagem.isNull():
+                return []
+            COLADOS.mkdir(parents=True, exist_ok=True)
+            agora = time.time()
+            for velho in COLADOS.glob("*.png"):
+                if agora - velho.stat().st_mtime > 86400:
+                    velho.unlink(missing_ok=True)
+            destino = COLADOS / time.strftime("colado-%Y%m%d-%H%M%S.png")
+            if imagem.save(str(destino), "PNG"):
+                return [QUrl.fromLocalFile(str(destino)).toString()]
+        return []
 
     @Slot(str)
     def copiar(self, texto: str) -> None:

@@ -209,6 +209,14 @@ Item {
                                 && !(evento.modifiers & Qt.ShiftModifier)) {
                             evento.accepted = true;
                             raiz.mandar();
+                        } else if (evento.matches(StandardKey.Paste) && typeof ponte !== "undefined") {
+                            // Imagem ou arquivo copiado vira anexo; texto cola normal.
+                            var colados = ponte.colar();
+                            if (colados.length > 0) {
+                                evento.accepted = true;
+                                for (var i = 0; i < colados.length; i++)
+                                    raiz.adicionar(colados[i]);
+                            }
                         }
                     }
                 }
@@ -333,7 +341,7 @@ Item {
         Text {
             width: parent.width
             horizontalAlignment: Text.AlignHCenter
-            text: "Enter envia · Shift+Enter quebra a linha · arraste arquivos pra cá"
+            text: "Enter envia · Shift+Enter quebra a linha · arraste ou cole (Ctrl+V) imagens e arquivos"
             color: raiz.tema.muitoFraco
             font.family: raiz.tema.familia
             font.pixelSize: 12

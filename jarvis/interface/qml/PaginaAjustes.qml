@@ -38,13 +38,14 @@ Item {
                     ["Cérebro", raiz.nomes[raiz.modelo] || raiz.modelo || "—"],
                     ["Esforço", raiz.nomes[raiz.esforco] || raiz.esforco || "—"],
                     ["Conversa", raiz.conversa ? raiz.conversa.slice(0, 8) : "—"],
-                    ["Versão da janela", "beta 0.3"],
+                    ["Versão da janela", "beta 0.3.5"],
                 ] },
                 { titulo: "Atalhos", linhas: [
                     ["Ctrl + N", "Novo chat"],
                     ["Ctrl + K", "Procurar conversa"],
                     ["Esc", "Voltar pra conversa de agora"],
                     ["Enter / Shift + Enter", "Enviar / quebrar a linha"],
+                    ["Ctrl + V", "Colar texto, ou anexar imagem e arquivo copiados"],
                 ] },
             ]
             Column {
