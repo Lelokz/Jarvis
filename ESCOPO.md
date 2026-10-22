@@ -561,6 +561,18 @@ escrito com ".5" no fim. Ex.: 0.1 (grande) → 0.1.5 (pequena) → 0.2 (pequena)
   inteiro em 8,5 s); com o Opus, 10,2 s contra 16,4 s. A voz continua saindo
   só com o texto inteiro.
 
+**Plano da beta 0.6 (a janela nova no app do celular), esperando o Léo
+aprovar o protótipo** (`rascunho/janela-nova/prints/prototipo-celular.png`):
+chat novo com o átomo grande (segura pra falar, como hoje) e a saudação;
+conversa igual à do PC (markdown, código com copiar, pílula de passos,
+perguntas com botões, texto em pedaços), com o átomo pequeno ao lado do
+campo como botão de falar; ☰ abre a gaveta com as mesmas conversas, Novo
+chat, Memória e Ajustes; tocar no título abre cérebro e esforço. Por baixo:
+o celular entra na ponte como corpo (`"voz": true`) e por isso hoje NÃO
+recebe `conversa_atual`, `escrevendo` e `uso` (o servidor filtra corpos);
+precisa de um `"janela": true` no "ola", e a `porta_remota.py` liberar os
+pedidos novos (`PEDIDOS_DO_CELULAR` hoje só tem os antigos).
+
 **Roteiro da janela (pedido do Léo, 22/10/2026), um commit por etapa:**
 0.2 Parar · 0.2.5 perguntas com botões · 0.3 renomear e apagar conversa ·
 0.3.5 colar imagem (Ctrl+V) · 0.4 uso da assinatura · 0.5 a resposta
