@@ -514,6 +514,12 @@ escrito com ".5" no fim. Ex.: 0.1 (grande) → 0.1.5 (pequena) → 0.2 (pequena)
 - **beta 0.1.5:** os ícones da bandeja, da janela e do atalho viram o átomo
   das mensagens (três anéis e o núcleo, `jarvis/interface/atomo_icone.py`),
   na cor do estado.
+  O painel e o menu usam o ícone do ATALHO, não o da janela, e guardam em
+  cache pelo caminho: trocar o desenho do mesmo arquivo não muda nada. O
+  átomo foi instalado no tema de ícones como `jarvis-atomo`
+  (`~/.local/share/icons/hicolor/<N>x<N>/apps/`, 16 a 256 px) e os atalhos
+  (`~/.local/share/applications/jarvis*.desktop` e o autostart) apontam
+  `Icon=jarvis-atomo`, com `StartupWMClass=Jarvis` (a classe da janela).
 
 Pedido do Léo: "transformar num programa de IA de verdade", do tamanho da
 tela. Protótipo aprovado ("Caralho. Ficou muito bom"), e a janela segue ele:
