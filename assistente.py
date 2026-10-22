@@ -40,6 +40,7 @@ from jarvis import config, cronometro, eventos, microfone, tts, wakeword
 from jarvis.agente import sessoes
 from jarvis.agente.agente import Agente, ErroDoAgente, Saida
 from jarvis.agente.avisos import AvisosWhatsApp
+from jarvis.escola.vigia import Vigia
 from jarvis.agente.reflexos import reflexo
 from jarvis.cronometro import Tempos
 from jarvis.nucleo import relogio
@@ -1264,6 +1265,10 @@ def conversar(cfg: config.Config) -> int:
 
             ciclo.atualizar_aviso()
             proximo_aviso = time.monotonic() + 30
+            # Escola (Khan e Estudante Online): lê sozinha 3x por dia. O que
+            # for novo vira notificação, sem voz (decisão do Léo).
+            vigia = Vigia()
+            vigia.start()
             proximo_whats = time.monotonic() + cfg.whatsapp.intervalo_s
             while True:
                 if time.monotonic() >= proximo_aviso:
@@ -1273,6 +1278,9 @@ def conversar(cfg: config.Config) -> int:
                 if time.monotonic() >= proximo_whats and not ciclo.vad.falando:
                     ciclo.anunciar_whatsapp()
                     proximo_whats = time.monotonic() + cfg.whatsapp.intervalo_s
+                novidade = vigia.pegar()
+                if novidade is not None:
+                    emissor.emitir("notificacao", titulo="Escola", texto=novidade)
                 bloco = mic.ler_bloco()
                 if bloco is not None:
                     ciclo.passo(bloco)

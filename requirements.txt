@@ -74,3 +74,4 @@ claude-agent-sdk==0.2.168
 starlette==1.9.0
 uvicorn==0.54.0
 websockets==17.3
+playwright>=1.64  # escola: navegador escondido (Khan e Estudante Online)
