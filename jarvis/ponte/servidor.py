@@ -46,7 +46,8 @@ _IDS = itertools.count(1)
 class Pedido:
     """O que um cliente pediu para o laço de áudio atender."""
     # "falar" (texto), "ouvir" (arquivo com a fala gravada), ou da janela (v3):
-    # "nova", "continuar" (valor = id da conversa), "cerebro" (valor = JSON)
+    # "nova", "continuar" (valor = id da conversa), "cerebro" (valor = JSON),
+    # "parar" (o botão Parar)
     tipo: str
     valor: str  # o texto, o caminho do arquivo, o id ou o JSON
     cliente: int = 0  # o id de quem pediu
@@ -426,7 +427,7 @@ class Servidor:
                 self._direto(cliente, {"ev": "erro", "motivo": f"não abri a conversa ({e})"})
                 return
             self._direto(cliente, {"ev": "conversa", "id": dados["id"], "falas": falas})
-        elif tipo in ("nova", "continuar", "cerebro"):
+        elif tipo in ("nova", "continuar", "cerebro", "parar"):
             valor = dados.get("id", "") if tipo == "continuar" else \
                 json.dumps(dados) if tipo == "cerebro" else ""
             self._pedidos.put(Pedido(tipo, valor, cliente.id, cliente.quer_voz))

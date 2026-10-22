@@ -89,6 +89,7 @@ CLIENTES -> ASSISTENTE
          {"pedir":"nova"}                 -> chat novo ("conversa_atual" para todos)
          {"pedir":"continuar", "id":"..."} -> o Jarvis volta para essa conversa
          {"pedir":"cerebro", "modelo":"...", "esforco":"..."}  (um ou os dois)
+         {"pedir":"parar"}                -> interrompe a tarefa (o botão Parar)
         "nova" e "continuar" com o Jarvis no meio de uma tarefa voltam
         {"ev":"erro"} para quem pediu.
 
@@ -135,7 +136,7 @@ PUBLICOS = frozenset({"sessao", "estado", "nivel", "voce_disse", "jarvis_disse",
                       "mostrar", "atividade", "voz", "cerebro", "conversa_atual"})
 ESTADOS = ("dormindo", "ouvindo", "escutando", "pensando", "falando")
 PEDIDOS = frozenset({"ola", "falar", "memoria", "ouvir",
-                     "conversas", "abrir", "nova", "continuar", "cerebro"})
+                     "conversas", "abrir", "nova", "continuar", "cerebro", "parar"})
 
 # Uma linha maior que isto sem quebra é um cliente com defeito, não um pedido.
 MAX_LINHA = 64 * 1024
@@ -180,7 +181,7 @@ def ler_pedido(linha: bytes) -> tuple[str, dict[str, Any]]:
             raise ErroDeProtocolo(f"texto com mais de {MAX_TEXTO} caracteres")
         return tipo, {"texto": texto, "anexos": _anexos(objeto), "mudo": _mudo(objeto)}
 
-    if tipo in ("memoria", "conversas", "nova"):
+    if tipo in ("memoria", "conversas", "nova", "parar"):
         return tipo, {}
 
     if tipo in ("abrir", "continuar"):

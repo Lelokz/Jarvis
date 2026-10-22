@@ -143,6 +143,10 @@ class PonteQt(QObject):
             pedido["esforco"] = esforco
         return self._pedir(pedido)
 
+    @Slot(result=bool)
+    def parar(self) -> bool:
+        return self._pedir({"pedir": "parar"})
+
     @Slot(str)
     def copiar(self, texto: str) -> None:
         QGuiApplication.clipboard().setText(texto)

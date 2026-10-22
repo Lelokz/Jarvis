@@ -520,6 +520,16 @@ escrito com ".5" no fim. Ex.: 0.1 (grande) → 0.1.5 (pequena) → 0.2 (pequena)
   (`~/.local/share/icons/hicolor/<N>x<N>/apps/`, 16 a 256 px) e os atalhos
   (`~/.local/share/applications/jarvis*.desktop` e o autostart) apontam
   `Icon=jarvis-atomo`, com `StartupWMClass=Jarvis` (a classe da janela).
+- **beta 0.2:** botão Parar. Com ele trabalhando e o campo vazio, o enviar
+  vira um quadrado; clicar manda `{"pedir":"parar"}`, o mesmo caminho do
+  "para" falado (`agente.interromper()`; uma pergunta pendente fica sem
+  resposta). Medido: parou 0,1 s depois, no meio de 6 pesquisas na web.
+
+**Roteiro da janela (pedido do Léo, 22/10/2026), um commit por etapa:**
+0.2 Parar · 0.2.5 perguntas com botões · 0.3 renomear e apagar conversa ·
+0.3.5 colar imagem (Ctrl+V) · 0.4 uso da assinatura · 0.5 a resposta
+aparecendo enquanto ele escreve (grande) · 0.6 a mesma janela no app do
+celular (grande) · depois, a segunda persona.
 
 Pedido do Léo: "transformar num programa de IA de verdade", do tamanho da
 tela. Protótipo aprovado ("Caralho. Ficou muito bom"), e a janela segue ele:

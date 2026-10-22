@@ -602,12 +602,13 @@ def rodar_janela(base: Path) -> None:
     janela.enviar({"pedir": "nova"})
     janela.enviar({"pedir": "continuar", "id": "a1b2c3d4"})
     janela.enviar({"pedir": "cerebro", "esforco": "high"})
+    janela.enviar({"pedir": "parar"})
     pedidos = []
-    esperar(lambda: pedidos.append(srv.proximo_pedido()) or len([x for x in pedidos if x]) >= 3)
+    esperar(lambda: pedidos.append(srv.proximo_pedido()) or len([x for x in pedidos if x]) >= 4)
     pedidos = [x for x in pedidos if x]
-    checa("nova, continuar e cerebro vão para a fila, em ordem",
+    checa("nova, continuar, cerebro e parar vão para a fila, em ordem",
           [(x.tipo, x.valor) for x in pedidos] == [("nova", ""), ("continuar", "a1b2c3d4"),
-                                                   ("cerebro", '{"esforco": "high"}')],
+                                                   ("cerebro", '{"esforco": "high"}'), ("parar", "")],
           str([(x.tipo, x.valor) for x in pedidos]))
     srv.avisar(pedidos[0].cliente, "espera")
     r = janela.ler(1)

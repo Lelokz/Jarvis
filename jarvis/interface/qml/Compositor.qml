@@ -14,12 +14,15 @@ Item {
     property string esforco: "medium"
     property string persona: "jarvis"
     property bool menusParaCima: true
+    // Ele está trabalhando: com o campo vazio, o enviar vira o Parar.
+    property bool trabalhando: false
     property var anexos: []          // URLs (file://...) esperando a mensagem
     signal enviar(string texto)
     signal enviarComAnexos(string texto, var arquivos)
     signal avisar(string texto)
     signal escolherModelo(string valor)
     signal escolherEsforco(string valor)
+    signal parar()
 
     implicitHeight: coluna.height
 
@@ -285,27 +288,43 @@ Item {
                     }
                 }
                 Rectangle {
-                    readonly property bool ativo: raiz.conectado
-                                                  && (campo.text.trim() !== "" || raiz.anexos.length > 0)
+                    readonly property bool temTexto: campo.text.trim() !== "" || raiz.anexos.length > 0
+                    // Trabalhando e sem nada escrito: Parar. Com texto, envia
+                    // (a fala nova entra na tarefa, como falar no meio).
+                    readonly property bool modoParar: raiz.trabalhando && !temTexto
+                    readonly property bool ativo: raiz.conectado && (temTexto || modoParar)
                     width: 34; height: 34; radius: 10
-                    color: raiz.tema.persona
+                    color: modoParar ? raiz.tema.texto : raiz.tema.persona
                     opacity: ativo ? (areaEnviar.containsMouse ? 1.0 : 0.92) : 0.3
                     scale: areaEnviar.containsPress && ativo ? 0.92 : 1.0
                     Behavior on opacity { NumberAnimation { duration: raiz.tema.rapido } }
                     Behavior on scale { NumberAnimation { duration: 110 } }
+                    Behavior on color { ColorAnimation { duration: raiz.tema.rapido } }
                     Icone {
                         anchors.centerIn: parent
+                        visible: !parent.modoParar
                         caminho: raiz.tema.icones.enviar
                         cor: "#06101d"
                         tamanho: 17
                         espessura: 2.3
+                    }
+                    Rectangle { // o quadrado do Parar
+                        anchors.centerIn: parent
+                        visible: parent.modoParar
+                        width: 11; height: 11; radius: 2.5
+                        color: raiz.tema.fundo
                     }
                     MouseArea {
                         id: areaEnviar
                         anchors.fill: parent
                         hoverEnabled: true
                         cursorShape: parent.ativo ? Qt.PointingHandCursor : Qt.ArrowCursor
-                        onClicked: raiz.mandar()
+                        onClicked: parent.modoParar ? raiz.parar() : raiz.mandar()
+                    }
+                    ToolTipSimples {
+                        tema: raiz.tema
+                        visivel: areaEnviar.containsMouse && parent.modoParar
+                        texto: "Parar"
                     }
                 }
             }

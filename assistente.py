@@ -822,6 +822,16 @@ class Ciclo:
                 self.avisar_cliente(pedido.cliente, "Espera ele terminar o pedido (ou diz "
                                                     "\"para\") pra trocar de conversa.")
             return
+        if pedido.tipo == "parar":
+            # O botão Parar da janela: o mesmo que dizer "para".
+            if self._pergunta is not None:
+                saida, _ = self._pergunta
+                self._pergunta = None
+                self.agente.responder(saida, None)
+            if self.agente.ocupado:
+                self.registrador.registrar_estado("interrompeu", texto="(botão Parar)")
+                self.agente.interromper()
+            return
         if pedido.tipo == "cerebro":
             try:
                 escolha = json.loads(pedido.valor)

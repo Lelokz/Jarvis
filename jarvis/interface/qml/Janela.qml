@@ -582,6 +582,8 @@ Window {
                 esforco: janela.esforco
                 persona: janela.persona
                 menusParaCima: !janela.boasVindas
+                trabalhando: janela.vendo === "" && janela.conectado && janela.estado === "pensando"
+                onParar: if (typeof ponte !== "undefined") ponte.parar()
                 onEnviar: function (texto) { janela.enviar(texto, []) }
                 onEnviarComAnexos: function (texto, arquivos) { janela.enviar(texto, arquivos) }
                 onAvisar: function (texto) { janela.avisar(texto) }
