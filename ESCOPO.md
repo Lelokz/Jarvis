@@ -813,8 +813,21 @@ Sem ordem rígida: faz, o Léo testa o que é de voz, segue.
      sistema**, no canto da tela do Linux e no topo da tela do celular, sem
      som de voz. A notificação é pedido dele, mas pop-up incomoda: só manda
      o que for novo, uma vez, e junta várias coisas numa notificação só.
-   - Precisa: um evento novo na ponte para o app mostrar a notificação do
-     Android, e no PC usar `notify-send`.
+   - **Feito (22/10/2026), `jarvis/escola/`:** a vigia (thread do
+     assistente) lê às 7h, 12h e 18h, nunca de 23h às 7h, e visita o Estudante
+     Online a cada 10 min pra sessão não cair. O PC notifica com `notify-send`,
+     e a ponte manda o evento `notificacao`. O resumo fica em
+     `~/.local/share/jarvis/escola.json`, e a casa (CLAUDE.md) explica o
+     arquivo pro Jarvis.
+   - **Captcha:** o gov.br reprova navegador automatizado, e o Jarvis não
+     resolve captcha. Por isso o login (`python -m jarvis.escola entrar`)
+     abre uma janela COMUM do Chromium, sem automação, onde o Léo digita.
+     Depois que ele entra, o Jarvis se liga pela porta de depuração
+     (127.0.0.1:9333) só pra copiar a sessão. O CPF e a senha ficam em
+     `escola.env`, mas hoje só servem de reserva. Se a sessão cair: uma
+     notificação e a marca `escola-deslogado`.
+   - **Falta:** o app do celular mostrar o evento `notificacao` como
+     notificação do Android.
 8. Depois: ver a tela (o Claude já lê imagem: print + "o que é isso?"),
    personagem feminina, o organizador de prints e vídeos (o Claude usa
    sozinho, sem integração especial).
