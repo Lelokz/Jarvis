@@ -504,10 +504,16 @@ recebidos (`jarvis/ponte/recebidos.py`, o mesmo do celular) e manda
 
 ### A janela grande, no estilo do app do Claude (22/10/2026)
 
-Versões (nomes do Léo): **beta 0.1** = a janela grande; **beta 0.1.5** = os
-ícones da bandeja, da janela e do atalho viram o átomo das mensagens (três
-anéis e o núcleo, `jarvis/interface/atomo_icone.py`), na cor do estado. A
-versão aparece em Ajustes.
+**A numeração da janela (regra do Léo, 22/10/2026):** começa em beta 0.0;
+atualização GRANDE soma 0.1, atualização PEQUENA soma meio passo (0.05),
+escrito com ".5" no fim. Ex.: 0.1 (grande) → 0.1.5 (pequena) → 0.2 (pequena)
+→ 0.3 (grande) → 0.3.5 (pequena). A versão aparece em Ajustes
+(`PaginaAjustes.qml`); subir a cada entrega.
+
+- **beta 0.1:** a janela grande.
+- **beta 0.1.5:** os ícones da bandeja, da janela e do atalho viram o átomo
+  das mensagens (três anéis e o núcleo, `jarvis/interface/atomo_icone.py`),
+  na cor do estado.
 
 Pedido do Léo: "transformar num programa de IA de verdade", do tamanho da
 tela. Protótipo aprovado ("Caralho. Ficou muito bom"), e a janela segue ele:
