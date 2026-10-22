@@ -106,6 +106,13 @@ class AgenteRoteirizado:
         self.resposta: Saida | None = None   # o que o próximo pedir() devolve
         self.depois: Saida | None = None     # o que vem depois da resposta à pergunta
         self.chamadas: list[str] = []
+        self.cerebro = {"modelo": "auto", "esforco": "medium"}
+        # A casa, com o briefing da manhã já dado hoje: sem isto o teste
+        # mudava conforme a hora (antes das 14h o ciclo procura a marca).
+        import datetime, tempfile
+        from pathlib import Path
+        self.casa = Path(tempfile.mkdtemp(prefix="jarvis-casa-teste-"))
+        (self.casa / ".ultimo-briefing").write_text(datetime.date.today().isoformat())
 
     def pedir(self, texto, origem="voz", contexto="", voz=None):
         self.chamadas.append(texto)

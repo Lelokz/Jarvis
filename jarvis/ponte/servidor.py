@@ -266,6 +266,8 @@ class Servidor:
         else:
             fala["acao"] = evento.get("acao")
             fala["perguntando"] = bool(evento.get("perguntando"))
+            if evento.get("opcoes"):
+                fala["opcoes"] = list(evento["opcoes"])
         self._falas.append(fala)
 
     def proximo_pedido(self) -> Pedido | None:

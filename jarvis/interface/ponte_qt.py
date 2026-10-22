@@ -32,7 +32,7 @@ class PonteQt(QObject):
     estadoMudou = Signal(str)
     nivelMudou = Signal(float)
     voceDisse = Signal(str, str)           # texto, origem
-    jarvisDisse = Signal(str, str, bool)   # texto, ação, perguntando
+    jarvisDisse = Signal(str, str, bool, list)   # texto, ação, perguntando, opções
     conexaoMudou = Signal(bool)
     sessaoRecebida = Signal(str, str)      # nome do Jarvis, caminho do log
     historicoRecebido = Signal(list)       # a conversa que já existia
@@ -184,7 +184,7 @@ class PonteQt(QObject):
             self.voceDisse.emit(str(ev.get("texto", "")), str(ev.get("origem", "")))
         elif tipo == "jarvis_disse":
             self.jarvisDisse.emit(str(ev.get("texto", "")), str(ev.get("acao") or ""),
-                                  bool(ev.get("perguntando")))
+                                  bool(ev.get("perguntando")), list(ev.get("opcoes") or []))
         elif tipo == "memoria":
             self.memoriaRecebida.emit(list(ev.get("fatos") or []),
                                       list(ev.get("conversas") or []))

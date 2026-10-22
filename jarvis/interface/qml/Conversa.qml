@@ -14,6 +14,7 @@ Item {
     property color corPersona: tema ? tema.persona : "#4da3ff"
     property real largura: Math.min(780, width - 64)
     signal copiar(string texto)
+    signal responder(string texto)
 
     // "Estou acompanhando o fim da conversa." Só muda quando o Léo rola a
     // lista — e não a cada fala nova (decidir por `atYEnd` na hora da fala
@@ -58,9 +59,11 @@ Item {
             titulo: model.titulo
             quando: model.quando
             perguntando: model.perguntando
+            opcoes: model.opcoes
             passos: model.passos
             animar: model.animar
             onCopiar: function (t) { raiz.copiar(t) }
+            onResponder: function (t) { raiz.responder(t) }
         }
 
         // Enquanto ele trabalha: o átomo roxo e o que está fazendo.

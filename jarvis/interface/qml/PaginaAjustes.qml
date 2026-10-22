@@ -38,7 +38,7 @@ Item {
                     ["Cérebro", raiz.nomes[raiz.modelo] || raiz.modelo || "—"],
                     ["Esforço", raiz.nomes[raiz.esforco] || raiz.esforco || "—"],
                     ["Conversa", raiz.conversa ? raiz.conversa.slice(0, 8) : "—"],
-                    ["Versão da janela", "beta 0.2"],
+                    ["Versão da janela", "beta 0.2.5"],
                 ] },
                 { titulo: "Atalhos", linhas: [
                     ["Ctrl + N", "Novo chat"],

@@ -21,11 +21,13 @@ Item {
     property string titulo: ""
     property real quando: 0
     property bool perguntando: false
+    property string opcoes: ""            // as da pergunta, uma por linha
     property string passos: ""
     property bool animar: true
     property real largura: 780
     property color corPersona: tema ? tema.persona : "#4da3ff"
     signal copiar(string texto)
+    signal responder(string texto)
 
     readonly property bool minha: quem === "voce"
     readonly property bool atividade: quem === "atividade"
@@ -253,6 +255,42 @@ Item {
                             width: parent.width
                             texto: raiz.minha || raiz.atividade ? "" : raiz.texto
                             onCopiar: function (t) { raiz.copiar(t) }
+                        }
+                    }
+                }
+
+                // A pergunta com opções: um botão para cada (ou responder falando).
+                Flow {
+                    visible: raiz.perguntando && raiz.opcoes !== ""
+                    width: parent.width
+                    spacing: 8
+                    Repeater {
+                        model: raiz.perguntando && raiz.opcoes ? raiz.opcoes.split("\n") : []
+                        Rectangle {
+                            required property string modelData
+                            width: textoOpcao.implicitWidth + 30
+                            height: 36
+                            radius: 10
+                            color: areaOpcao.containsMouse ? "#3a2c16" : "#2a2114"
+                            border.width: 1
+                            border.color: areaOpcao.containsMouse ? raiz.tema.pergunta : "#5c4422"
+                            Behavior on color { ColorAnimation { duration: raiz.tema.rapido } }
+                            Text {
+                                id: textoOpcao
+                                anchors.centerIn: parent
+                                text: modelData
+                                color: "#ffcf8a"
+                                font.family: raiz.tema.familia
+                                font.pixelSize: 14
+                                font.weight: Font.Medium
+                            }
+                            MouseArea {
+                                id: areaOpcao
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: raiz.responder(modelData)
+                            }
                         }
                     }
                 }

@@ -525,6 +525,12 @@ escrito com ".5" no fim. Ex.: 0.1 (grande) → 0.1.5 (pequena) → 0.2 (pequena)
   "para" falado (`agente.interromper()`; uma pergunta pendente fica sem
   resposta). Medido: parou 0,1 s depois, no meio de 6 pesquisas na web.
 
+- **beta 0.2.5:** perguntas com botões. O `jarvis_disse` de uma pergunta leva
+  as `opcoes` (do AskUserQuestion); a janela mostra um botão âmbar para cada,
+  e clicar manda o texto da opção como um "falar" (cai na resposta à
+  pergunta, `_casar_opcao`). Medido: "Azul ou verde?" -> clique em Verde ->
+  "Você escolheu verde." Responder falando continua valendo.
+
 **Roteiro da janela (pedido do Léo, 22/10/2026), um commit por etapa:**
 0.2 Parar · 0.2.5 perguntas com botões · 0.3 renomear e apagar conversa ·
 0.3.5 colar imagem (Ctrl+V) · 0.4 uso da assinatura · 0.5 a resposta

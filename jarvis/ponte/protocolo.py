@@ -19,7 +19,9 @@ ASSISTENTE -> CLIENTES
         conectado. Descartável: é o primeiro a sair quando a fila enche.
     {"ev":"voce_disse", "texto":"abre o loft", "origem":"voz|texto"}
     {"ev":"jarvis_disse", "texto":"Abri o Loft.", "acao":"abrir:loft"|null,
-     "perguntando":false}
+     "perguntando":false, "opcoes":["Apagar", "Deixar"]}
+        `opcoes` (v3, só numa pergunta que tem opções): a janela mostra como
+        botões; clicar manda o texto da opção como um "falar".
     {"ev":"aviso", "situacao":"ok|limite|offline", "volta_em": 1791706200|null,
      "uso_5h": 0.21|null}
         O estado do cérebro de nuvem (Claude). Só quando muda; o último é

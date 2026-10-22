@@ -371,7 +371,8 @@ class Ciclo:
         self._mudar_estado("ouvindo")
 
     def _falar(
-        self, texto: str, *, acao: str | None = None, perguntando: bool = False
+        self, texto: str, *, acao: str | None = None, perguntando: bool = False,
+        opcoes: list[str] | None = None,
     ) -> tts.TemposDaFala:
         """Fala com o portão anti-eco fechado.
 
@@ -379,8 +380,10 @@ class Ciclo:
         se responde, e — pior neste etapa — o wake word pode se ouvir e acordar
         de novo em laço.
         """
+        # As opções da pergunta vão junto: a janela mostra como botões.
+        extra = {"opcoes": list(opcoes)} if perguntando and opcoes else {}
         if self._corpo is not None:
-            return self._falar_no_corpo(texto, acao=acao, perguntando=perguntando)
+            return self._falar_no_corpo(texto, acao=acao, perguntando=perguntando, extra=extra)
         self.portao.fechar_portao()
 
         def ao_comecar() -> None:
@@ -388,7 +391,7 @@ class Ciclo:
             # na janela uns 2 s antes do som (o tempo de gerar a voz).
             self._mudar_estado("falando")
             self.emissor.emitir(
-                "jarvis_disse", texto=texto, acao=acao, perguntando=perguntando
+                "jarvis_disse", texto=texto, acao=acao, perguntando=perguntando, **extra
             )
 
         try:
@@ -401,13 +404,14 @@ class Ciclo:
             self.vad.reiniciar()
 
     def _falar_no_corpo(
-        self, texto: str, *, acao: str | None, perguntando: bool
+        self, texto: str, *, acao: str | None, perguntando: bool, extra: dict
     ) -> tts.TemposDaFala:
         """A voz vai para o celular, pedaço por pedaço, pelos eventos "voz"
         da ponte. Sem portão: o microfone do PC não ouve o celular. No mudo,
         só o texto: a voz nem é gerada."""
         if self._mudo:
-            self.emissor.emitir("jarvis_disse", texto=texto, acao=acao, perguntando=perguntando)
+            self.emissor.emitir("jarvis_disse", texto=texto, acao=acao, perguntando=perguntando,
+                                **extra)
             return tts.TemposDaFala(primeiro_audio_s=0.0, sintese_total_s=0.0,
                                     reproducao_s=0.0, duracao_audio_s=0.0)
         inicio = time.monotonic()
@@ -419,14 +423,14 @@ class Ciclo:
                     primeiro = time.monotonic() - inicio
                     self._mudar_estado("falando")
                     self.emissor.emitir("jarvis_disse", texto=texto, acao=acao,
-                                        perguntando=perguntando)
+                                        perguntando=perguntando, **extra)
                 self.emissor.emitir("voz", para=self._corpo, taxa=trecho.taxa,
                                     pcm=base64.b64encode(trecho.pcm).decode("ascii"))
                 duracao += len(trecho.pcm) / 2 / trecho.taxa
         finally:
             if primeiro is None:  # a voz falhou: o texto chega mesmo assim
                 self.emissor.emitir("jarvis_disse", texto=texto, acao=acao,
-                                    perguntando=perguntando)
+                                    perguntando=perguntando, **extra)
             self.emissor.emitir("voz", para=self._corpo, fim=True)
         total = time.monotonic() - inicio
         return tts.TemposDaFala(primeiro_audio_s=primeiro or 0.0, sintese_total_s=total,
@@ -630,7 +634,7 @@ class Ciclo:
             self._acordar_se_dormindo()
             fala = _pergunta_falada(s.texto, s.opcoes)
             self.registrador.registrar_estado("pergunta", fala=fala, opcoes=s.opcoes)
-            self._falar(fala, perguntando=True)
+            self._falar(fala, perguntando=True, opcoes=s.opcoes)
             # O prazo conta de quando ele TERMINA de perguntar.
             self._pergunta = (s, time.monotonic() + self.cfg.agente.validade_pergunta_s)
             self._renovar("pergunta feita")

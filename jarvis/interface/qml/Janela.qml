@@ -185,8 +185,8 @@ Window {
             if (ligado) ponte.pedirConversas();
         }
         function onVoceDisse(texto, origem) { falasAtual.acrescentar("voce", texto, { origem: origem }) }
-        function onJarvisDisse(texto, acao, perguntando) {
-            falasAtual.acrescentar("jarvis", texto, { perguntando: perguntando });
+        function onJarvisDisse(texto, acao, perguntando, opcoes) {
+            falasAtual.acrescentar("jarvis", texto, { perguntando: perguntando, opcoes: opcoes });
             atualizarLista.restart();
         }
         function onHistoricoRecebido(falas) { falasAtual.preencher(falas) }
@@ -375,6 +375,7 @@ Window {
                 textoPensando: janela.textoPensando
                 corPensando: tema.corDoEstado("pensando")
                 onCopiar: function (t) { if (typeof ponte !== "undefined") ponte.copiar(t) }
+                onResponder: function (t) { janela.enviar(t, []) }
             }
 
             // O chat novo: o átomo grande, a saudação e (logo abaixo) a barra.
@@ -681,6 +682,9 @@ Window {
         falasAtual.acrescentar("jarvis", "Pronto. Achei quarenta e sete prints.", {});
         falasAtual.acrescentar("voce", "valeu. abre o vídeo novo do canal", { origem: "texto" });
         falasAtual.acrescentar("jarvis", "Abri no navegador, já tá tocando.", {});
+        falasAtual.acrescentar("voce", "apaga os prints de setembro", { origem: "voz" });
+        falasAtual.acrescentar("jarvis", "Tem 21 prints de setembro. Mando pra lixeira ou deixo?",
+                               { perguntando: true, opcoes: ["Mandar pra lixeira", "Deixar"] });
     }
 
     // -- redimensionar pelas bordas ----------------------------------------

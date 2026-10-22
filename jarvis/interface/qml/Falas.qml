@@ -4,8 +4,9 @@ import QtQuick
 //
 // Papéis: quem ("voce" | "jarvis" | "painel" | "atividade"), texto, origem
 // (voz, texto, celular...), titulo (do painel), quando (segundos desde a
-// época), perguntando, passos (as atividades seguidas, uma por linha) e
-// animar (fala nova chegando; o histórico entra parado).
+// época), perguntando, opcoes (as da pergunta, uma por linha: viram botões),
+// passos (as atividades seguidas, uma por linha) e animar (fala nova
+// chegando; o histórico entra parado).
 ListModel {
     id: raiz
 
@@ -22,7 +23,8 @@ ListModel {
         extra = extra || {};
         return { quem: quem, texto: texto || "", origem: extra.origem || "",
                  titulo: extra.titulo || "", quando: extra.quando || _agora(),
-                 perguntando: extra.perguntando === true, passos: "",
+                 perguntando: extra.perguntando === true,
+                 opcoes: (extra.opcoes || []).join("\n"), passos: "",
                  animar: animar };
     }
 
@@ -37,8 +39,10 @@ ListModel {
 
     function acrescentar(quem, texto, extra) {
         if (_ehAFalaDoPainel(quem)) {
-            if (extra && extra.perguntando)
+            if (extra && extra.perguntando) {
                 setProperty(count - 1, "perguntando", true);
+                setProperty(count - 1, "opcoes", (extra.opcoes || []).join("\n"));
+            }
             return;
         }
         _fecharPerguntas();
@@ -90,7 +94,7 @@ ListModel {
                     continue;
             }
             append(_nova(f.quem, f.texto, {
-                origem: f.origem, titulo: f.titulo, quando: f.quando,
+                origem: f.origem, titulo: f.titulo, quando: f.quando, opcoes: f.opcoes,
                 perguntando: f.perguntando === true && i === anteriores.length - 1
             }, false));
         }
