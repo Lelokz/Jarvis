@@ -95,13 +95,18 @@ object Novidades {
 
     /** A cada 15 min (o mínimo do Android), só com internet. */
     fun agendar(app: Application) {
-        val agenda = app.getSystemService(JobScheduler::class.java)
-        if (agenda.getPendingJob(TarefaNovidades.ID) != null) return
-        agenda.schedule(JobInfo.Builder(TarefaNovidades.ID, ComponentName(app, TarefaNovidades::class.java))
-            .setPeriodic(TimeUnit.MINUTES.toMillis(15))
-            .setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY)
-            .setPersisted(true)
-            .build())
+        // Se o Android recusar, o app segue sem a busca de fundo: nunca derruba
+        // a abertura (a beta 0.7 caía aqui, sem ACCESS_NETWORK_STATE).
+        try {
+            val agenda = app.getSystemService(JobScheduler::class.java)
+            if (agenda.getPendingJob(TarefaNovidades.ID) != null) return
+            agenda.schedule(JobInfo.Builder(TarefaNovidades.ID, ComponentName(app, TarefaNovidades::class.java))
+                .setPeriodic(TimeUnit.MINUTES.toMillis(15))
+                .setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY)
+                .setPersisted(true)
+                .build())
+        } catch (e: Exception) {
+        }
     }
 }
 
