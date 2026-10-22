@@ -18,9 +18,11 @@ mexesse numa só, e o ícone passaria a mentir sobre o estado.
 
 from __future__ import annotations
 
-from PySide6.QtCore import QObject, Qt, Signal, Slot
-from PySide6.QtGui import QAction, QColor, QIcon, QPainter, QPixmap
+from PySide6.QtCore import QObject, Signal, Slot
+from PySide6.QtGui import QAction, QColor
 from PySide6.QtWidgets import QMenu, QSystemTrayIcon
+
+from jarvis.interface import atomo_icone
 
 # Só o texto da dica de ferramenta. O vocabulário de estados é do protocolo.
 _DICAS = {
@@ -30,36 +32,6 @@ _DICAS = {
     "pensando": "pensando",
     "falando": "falando",
 }
-
-
-def _desenhar(cor: QColor, aceso: bool) -> QIcon:
-    """O mesmo átomo da esfera, em 64 pixels: uma órbita inclinada e um núcleo.
-
-    **O aro é inclinado, e isso não é enfeite.** Na primeira versão ele era
-    horizontal, e um anel horizontal com um círculo dentro vira um OLHO —
-    símbolo de vigilância, o oposto do que este ícone deve dizer. Inclinado,
-    lê-se como órbita, que é o que a esfera da janela mostra.
-    """
-    pix = QPixmap(64, 64)
-    pix.fill(Qt.transparent)
-    p = QPainter(pix)
-    p.setRenderHint(QPainter.Antialiasing)
-
-    caneta = p.pen()
-    caneta.setColor(QColor(cor.red(), cor.green(), cor.blue(), 230 if aceso else 120))
-    caneta.setWidth(5)
-    p.setPen(caneta)
-    p.setBrush(Qt.NoBrush)
-    p.translate(32, 32)
-    p.rotate(-30)
-    p.drawEllipse(-28, -13, 56, 26)       # a órbita
-    p.resetTransform()
-
-    p.setPen(Qt.NoPen)
-    p.setBrush(QColor(cor.red(), cor.green(), cor.blue(), 255 if aceso else 140))
-    p.drawEllipse(22, 22, 20, 20)         # o núcleo
-    p.end()
-    return QIcon(pix)
 
 
 class Bandeja(QObject):
@@ -96,7 +68,7 @@ class Bandeja(QObject):
     def definir(self, cor: QColor, estado: str, conectado: bool) -> None:
         """Cor e dica seguem o estado — dá para saber o que ele está fazendo
         sem abrir a janela."""
-        self._icone.setIcon(_desenhar(cor, conectado))
+        self._icone.setIcon(atomo_icone.icone(cor, conectado))
         if conectado:
             self._icone.setToolTip(f"Jarvis — {_DICAS.get(estado, estado)}")
         else:

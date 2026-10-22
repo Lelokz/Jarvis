@@ -24,6 +24,7 @@ from PySide6.QtGui import QFontDatabase, QGuiApplication, QSurfaceFormat
 from PySide6.QtQml import QQmlApplicationEngine
 from PySide6.QtWidgets import QApplication
 
+from jarvis.interface import atomo_icone
 from jarvis.interface.bandeja import Bandeja
 from jarvis.interface.instancia import Instancia
 from jarvis.interface.ponte_qt import PonteQt
@@ -208,6 +209,16 @@ def main(argv: list[str] | None = None) -> int:
     # janelas é o Python.
     olho.mudou.connect(lambda na_frente: janela.setProperty("jogoNaFrente", na_frente))
     olho.definirJanela(int(janela.winId()))
+
+    # O ícone da janela (barra de tarefas) é o átomo na cor do estado, como o
+    # da bandeja. A cor sai da JANELA, que é quem tem o Tema.
+    def pintar_janela(*_):
+        janela.setIcon(atomo_icone.icone(janela.property("corAtual"),
+                                         bool(janela.property("conectado"))))
+
+    ponte.estadoMudou.connect(pintar_janela)
+    ponte.conexaoMudou.connect(pintar_janela)
+    pintar_janela()
 
     def mostrar():
         janela.show()
