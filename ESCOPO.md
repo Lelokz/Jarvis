@@ -735,6 +735,11 @@ do Léo falando com o Jarvis é o teste que vale; o resto se confere olhando.
   o Claude entende, mas o Whisper ainda erra nome de programa raro.
 - **WhatsApp:** responder com "pode" ainda não foi testado de verdade.
 - O Piper lê mal letra solta e número com vírgula (só se voltar ao Piper).
+
+---
+
+## 9. Lições que valem para qualquer mudança
+
 - **As camadas mentem.** O mpv diz que tem próxima faixa e não tem; o player
   diz "tocando" 6 s antes do som. Confira observando.
 - **Comando curto e fixo vai numa lista fechada, antes do modelo:** 0 ms e
