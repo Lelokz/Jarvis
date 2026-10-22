@@ -815,8 +815,10 @@ Sem ordem rígida: faz, o Léo testa o que é de voz, segue.
      o que for novo, uma vez, e junta várias coisas numa notificação só.
    - **Feito (22/10/2026), `jarvis/escola/`:** a vigia (thread do
      assistente) lê às 7h, 12h e 18h, nunca de 23h às 7h, e visita o Estudante
-     Online a cada 10 min pra sessão não cair. O PC notifica com `notify-send`,
-     e a ponte manda o evento `notificacao`. O resumo fica em
+     Online a cada 10 min pra sessão não cair. O PC notifica com `notify-send` e
+     guarda a notificação em `~/.local/share/jarvis/novidades.jsonl`. O app
+     (beta 0.7) busca em `/novidades` (com a chave) ao conectar e a cada 15 min
+     pelo JobScheduler, mesmo com o app fechado. O resumo fica em
      `~/.local/share/jarvis/escola.json`, e a casa (CLAUDE.md) explica o
      arquivo pro Jarvis.
    - **Captcha:** o gov.br reprova navegador automatizado, e o Jarvis não
@@ -826,8 +828,11 @@ Sem ordem rígida: faz, o Léo testa o que é de voz, segue.
      (127.0.0.1:9333) só pra copiar a sessão. O CPF e a senha ficam em
      `escola.env`, mas hoje só servem de reserva. Se a sessão cair: uma
      notificação e a marca `escola-deslogado`.
-   - **Falta:** o app do celular mostrar o evento `notificacao` como
-     notificação do Android.
+   - **Atualização do app (beta 0.7):** `/versao` devolve o versionCode do APK
+     compilado. Se for mais novo que o instalado, o app mostra o aviso grande
+     (fundo escurecido, Sim/Não) uma vez por versão. Depois disso fica só um
+     retângulo pequeno no topo, decisão do Léo. "Sim" abre o `/jarvis.apk`
+     no Chrome.
 8. Depois: ver a tela (o Claude já lê imagem: print + "o que é isso?"),
    personagem feminina, o organizador de prints e vídeos (o Claude usa
    sozinho, sem integração especial).
