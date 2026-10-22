@@ -575,6 +575,12 @@ escrito com ".5" no fim. Ex.: 0.1 (grande) → 0.1.5 (pequena) → 0.2 (pequena)
   porta remota libera os pedidos novos. Escrever ou falar numa conversa
   antiga manda "continuar" e só envia quando a conversa volta (senão a fala
   sumiria da tela ao recarregar).
+- **beta 0.6.5 (app 0.8.1):** o segurar pra falar soltava sozinho, com o Léo
+  ainda falando. O átomo novo ficava dentro da rolagem do chat novo e da
+  gaveta (que abre arrastando): o dedo mexia um pouco, uma delas pegava o
+  toque, o `detectTapGestures` dava o toque como cancelado e a fala ia. Agora
+  o átomo consome o toque no passe Initial, do começo ao fim, e só manda
+  quando todos os dedos saem; gravando, a gaveta não abre arrastando.
 - **Saiu o "conversa nova depois de 3 h parado"** (`recomecar_apos_h`): o
   teste do app pegou que a troca no meio do pedido apagava da tela a fala
   recém-mandada. Agora quem escolhe é o Léo (Novo chat; religar já abre um).

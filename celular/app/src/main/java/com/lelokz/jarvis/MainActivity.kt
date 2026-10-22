@@ -18,7 +18,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -83,6 +84,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboardManager
@@ -122,7 +124,7 @@ private val Azul = Color(0xFF4DA3FF)
 private val Roxo = Color(0xFF9B7BFF)
 
 /** A versão da janela (a numeração do Léo, igual à do PC) e a do app. */
-const val VERSAO_JANELA = "beta 0.6"
+const val VERSAO_JANELA = "beta 0.6.5"
 
 // A Inter, a fonte da janela do PC (licença OFL). Variável: o peso funciona.
 @OptIn(ExperimentalTextApi::class)
@@ -250,6 +252,8 @@ fun Tela(modelo: Jarvis) {
 
     ModalNavigationDrawer(
         drawerState = gaveta,
+        // Gravando, o arrastar não abre a gaveta (o dedo é do átomo).
+        gesturesEnabled = gaveta.isOpen || !modelo.gravando.value,
         drawerContent = {
             ModalDrawerSheet(drawerContainerColor = Lateral, drawerShape = RoundedCornerShape(0.dp),
                 modifier = Modifier.width(310.dp)) {
@@ -353,7 +357,16 @@ private fun Topo(modelo: Jarvis, abrirGaveta: () -> Unit, abrirSeletores: () -> 
 
 // -- o chat ------------------------------------------------------------------------
 
-/** Segurar = gravar a fala; soltar = mandar (o átomo é o botão de falar). */
+/**
+ * Segurar = gravar a fala; soltar = mandar (o átomo é o botão de falar).
+ *
+ * **O dedo é do átomo do começo ao fim.** Com o `detectTapGestures` da 1ª
+ * versão (beta 0.6), o átomo ficava dentro de coisas que também querem o dedo
+ * (a rolagem do chat novo, o arrastar da gaveta): o dedo mexia um pouco, uma
+ * delas pegava o toque, o toque era "cancelado" e a fala ia embora com o Léo
+ * ainda falando (22/10/2026). Aqui o átomo consome cada movimento antes de
+ * todo mundo (passe Initial) e só manda quando TODOS os dedos saem da tela.
+ */
 @Composable
 private fun Modifier.segurarPraFalar(modelo: Jarvis): Modifier {
     val contexto = LocalContext.current
@@ -361,19 +374,25 @@ private fun Modifier.segurarPraFalar(modelo: Jarvis): Modifier {
     val pedirMicrofone = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
     val vivo = modelo.conectado.value
     return this.pointerInput(vivo) {
-        detectTapGestures(onPress = {
-            if (!vivo) return@detectTapGestures
+        awaitEachGesture {
+            awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial).consume()
             val temPermissao = ContextCompat.checkSelfPermission(
                 contexto, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
-            if (!temPermissao) {
-                pedirMicrofone.launch(Manifest.permission.RECORD_AUDIO)
-                return@detectTapGestures
+            val gravar = vivo && temPermissao
+            if (vivo && !temPermissao) pedirMicrofone.launch(Manifest.permission.RECORD_AUDIO)
+            if (gravar) {
+                vibrar.performHapticFeedback(HapticFeedbackType.LongPress)
+                modelo.comecarFala()
             }
-            vibrar.performHapticFeedback(HapticFeedbackType.LongPress)
-            modelo.comecarFala()
-            tryAwaitRelease()
-            modelo.terminarFala()
-        })
+            try {
+                do {
+                    val evento = awaitPointerEvent(PointerEventPass.Initial)
+                    evento.changes.forEach { it.consume() }
+                } while (evento.changes.any { it.pressed })
+            } finally {
+                if (gravar) modelo.terminarFala()
+            }
+        }
     }
 }
 
