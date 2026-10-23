@@ -286,6 +286,8 @@ def main() -> int:
 
         # 14. O anexo grande (app beta 0.11.5): sobe pelo /anexo, aos pedaços,
         # e entra na conversa pelo "anexo_pronto".
+        # Numa pasta do teste: nada de arquivo de mentira nos recebidos do Léo.
+        protocolo.pasta_recebidos = lambda: base / "recebidos"
         try:
             urllib.request.urlopen(urllib.request.Request(f"{http}/anexo?nome=v.mp4", data=b"x", method="POST"),
                                    timeout=5)
