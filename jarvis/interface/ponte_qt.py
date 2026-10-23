@@ -149,6 +149,10 @@ class PonteQt(QObject):
     def mudarVolumeVoz(self, volume: int) -> bool:
         return self._pedir({"pedir": "ajustes", "volume_voz": max(0, min(100, int(volume)))})
 
+    @Slot(str, result=bool)
+    def mudarCor(self, cor: str) -> bool:
+        return self._pedir({"pedir": "ajustes", "cor": cor})
+
     @Slot(bool, result=bool)
     def mudarNotificarEscola(self, ligado: bool) -> bool:
         return self._pedir({"pedir": "ajustes", "notificar_escola": bool(ligado)})
@@ -174,6 +178,10 @@ class PonteQt(QObject):
     @Slot(str, result=bool)
     def apagarConversa(self, sessao: str) -> bool:
         return self._pedir({"pedir": "apagar", "id": sessao})
+
+    @Slot(str, bool, result=bool)
+    def fixarConversa(self, sessao: str, fixar: bool) -> bool:
+        return self._pedir({"pedir": "fixar", "id": sessao, "fixar": fixar})
 
     @Slot(result=bool)
     def parar(self) -> bool:

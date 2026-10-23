@@ -38,8 +38,29 @@ def _sem_cabecalho(texto: str) -> str:
     return "\n".join(linhas).strip()
 
 
+def _arquivo_fixadas(casa: Path) -> Path:
+    return casa.parent / "fixadas.json"
+
+
+def fixadas(casa: Path) -> list[str]:
+    try:
+        lista = json.loads(_arquivo_fixadas(casa).read_text(encoding="utf-8"))
+        return [str(x) for x in lista] if isinstance(lista, list) else []
+    except (OSError, ValueError):
+        return []
+
+
+def fixar(casa: Path, sessao: str, sim: bool) -> None:
+    """Fixa (ou solta) a conversa no topo da barra lateral (janela beta 0.7.0)."""
+    lista = [s for s in fixadas(casa) if s != sessao]
+    if sim:
+        lista.insert(0, sessao)
+    _arquivo_fixadas(casa).write_text(json.dumps(lista), encoding="utf-8")
+
+
 def listar(casa: Path, limite: int = 200) -> list[dict]:
-    """As conversas, da mais nova para a mais antiga."""
+    """As conversas: as fixadas primeiro, depois da mais nova para a mais antiga."""
+    presas = set(fixadas(casa))
     conversas = []
     for s in sdk.list_sessions(directory=str(casa), limit=limite):
         primeiro = s.first_prompt or ""
@@ -50,8 +71,9 @@ def listar(casa: Path, limite: int = 200) -> list[dict]:
             "quando": int(s.last_modified or 0) / 1000,
             "criada": int(s.created_at or s.last_modified or 0) / 1000,
             "origem": _origem(primeiro),
+            "fixada": s.session_id in presas,
         })
-    conversas.sort(key=lambda c: c["quando"], reverse=True)
+    conversas.sort(key=lambda c: (c["fixada"], c["quando"]), reverse=True)
     return conversas
 
 

@@ -395,10 +395,13 @@ class Ciclo:
                 "jarvis_disse", texto=texto, acao=acao, perguntando=perguntando, **extra
             )
 
+        # Vídeo ou música tocando: abaixa enquanto ele fala e volta depois.
+        voltar_o_volume = som.abaixar_os_outros() if getattr(self, "som_ativo", False) else (lambda: None)
         try:
             return tts.falar(self.voz, texto, dispositivo=self.dispositivo_saida,
                              ao_comecar=ao_comecar)
         finally:
+            voltar_o_volume()
             time.sleep(self.guarda_s)
             self.portao.abrir_portao()
             self.ww.reiniciar()
@@ -1298,6 +1301,7 @@ def conversar(cfg: config.Config) -> int:
         ponte.provedor_conversa = lambda sessao: sessoes.falas(agente.casa, sessao)
         ponte.provedor_renomear = lambda sessao, titulo: sessoes.renomear(agente.casa, sessao, titulo)
         ponte.provedor_apagar = lambda sessao: sessoes.apagar(agente.casa, sessao)
+        ponte.provedor_fixar = lambda sessao, sim: sessoes.fixar(agente.casa, sessao, sim)
 
     mic: microfone.Microfone | None = None
     ciclo: Ciclo | None = None

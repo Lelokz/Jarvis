@@ -54,7 +54,10 @@ Window {
         property real nivel: 0.0
     }
 
-    Tema { id: tema }
+    Tema {
+        id: tema
+        persona: janela.ajustes && janela.ajustes.cor ? janela.ajustes.cor : "#4da3ff"
+    }
 
     // -- o estado da tela ---------------------------------------------------
     Falas { id: falasAtual; objectName: "falasAtual" }   // a conversa ao vivo
@@ -105,11 +108,12 @@ Window {
             if (listaDeConversas[i].id === conversaAtual) temAtual = true;
         if (conversaAtual && !temAtual)
             conversas.append({ sessao: conversaAtual, titulo: "Chat novo", origem: "nova",
-                               quando: Date.now() / 1000, grupo: "Hoje" });
+                               quando: Date.now() / 1000, grupo: "Hoje", fixada: false });
         for (var j = 0; j < listaDeConversas.length; j++) {
             var c = listaDeConversas[j];
             conversas.append({ sessao: c.id, titulo: c.titulo || "Conversa", origem: c.origem || "",
-                               quando: c.quando || 0, grupo: grupoDe(c.quando || 0) });
+                               quando: c.quando || 0, fixada: !!c.fixada,
+                               grupo: c.fixada ? "Fixadas" : grupoDe(c.quando || 0) });
         }
     }
 
@@ -296,6 +300,9 @@ Window {
         onAbrir: function (sessao) { janela.abrir(sessao) }
         onRenomear: function (sessao, titulo) {
             if (typeof ponte !== "undefined") ponte.renomearConversa(sessao, titulo);
+        }
+        onFixar: function (sessao, sim) {
+            if (typeof ponte !== "undefined") ponte.fixarConversa(sessao, sim);
         }
         onApagar: function (sessao) {
             if (janela.vendo === sessao) janela.abrir("");
@@ -685,6 +692,7 @@ Window {
             ajustes: janela.ajustes
             onMudarVolume: (volume) => { if (typeof ponte !== "undefined") ponte.mudarVolumeVoz(volume) }
             onMudarNotificar: (ligado) => { if (typeof ponte !== "undefined") ponte.mudarNotificarEscola(ligado) }
+            onMudarCor: (cor) => { if (typeof ponte !== "undefined") ponte.mudarCor(cor) }
             // Ao abrir os Ajustes, a lista vem de novo: um fone plugado agora aparece.
             onVisibleChanged: if (visible && typeof ponte !== "undefined") ponte.pedirSom()
             onEscolherSom: (tipo, aparelho) => { if (typeof ponte !== "undefined") ponte.escolherSom(tipo, aparelho) }

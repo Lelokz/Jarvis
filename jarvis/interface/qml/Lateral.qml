@@ -23,6 +23,7 @@ Rectangle {
     signal abrir(string id)
     signal renomear(string id, string titulo)
     signal apagar(string id)
+    signal fixar(string id, bool sim)
     signal irPara(string pagina)
     signal arrastar()
     signal alternarMaximizar()
@@ -190,6 +191,7 @@ Rectangle {
             required property string sessao
             required property string titulo
             required property string origem
+            required property bool fixada
             property bool editando: false
             function comecarAEditar() {
                 editando = true;
@@ -258,7 +260,7 @@ Rectangle {
                 cursorShape: Qt.PointingHandCursor
                 onClicked: function (evento) {
                     if (evento.button === Qt.RightButton)
-                        menuConversa.abrirPara(item, item.sessao, evento.x, evento.y);
+                        menuConversa.abrirPara(item, item.sessao, evento.x, evento.y, item.fixada);
                     else
                         raiz.abrir(item.sessao);
                 }
@@ -287,13 +289,13 @@ Rectangle {
                     anchors.fill: parent
                     hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
-                    onClicked: menuConversa.abrirPara(botaoMais, item.sessao, 0, botaoMais.height + 4)
+                    onClicked: menuConversa.abrirPara(botaoMais, item.sessao, 0, botaoMais.height + 4, item.fixada)
                 }
             }
         }
     }
 
-    // -- o menu de uma conversa: renomear e apagar -------------------------------
+    // -- o menu de uma conversa: fixar, renomear e apagar ------------------------
     // Apagar pede confirmação NO PRÓPRIO menu (sem janela de pop-up): o
     // primeiro clique troca o texto, o segundo manda para a lixeira.
     Popup {
@@ -301,14 +303,16 @@ Rectangle {
         objectName: "menuConversa"
         property string alvo: ""
         property bool confirmando: false
+        property bool alvoFixada: false
         readonly property bool eAtual: alvo === raiz.atual
         signal pedirRenomear(string alvo)
-        function abrirPara(item, sessao, px, py) {
+        function abrirPara(item, sessao, px, py, fixada) {
             alvo = sessao;
+            alvoFixada = !!fixada;
             confirmando = false;
             var p = item.mapToItem(raiz, px, py);
             x = Math.min(p.x, raiz.width - width - 8);
-            y = Math.min(p.y, raiz.height - 110);
+            y = Math.min(p.y, raiz.height - 150);
             open();
         }
         width: 236
@@ -324,6 +328,7 @@ Rectangle {
             spacing: 2
             Repeater {
                 model: [
+                    { acao: "fixar", nome: "" },
                     { acao: "renomear", nome: "Renomear" },
                     { acao: "apagar", nome: "Apagar" },
                 ]
@@ -342,7 +347,8 @@ Rectangle {
                         x: 12
                         width: parent.width - 24
                         elide: Text.ElideRight
-                        text: parent.bloqueado ? "Apagar (é a conversa de agora)"
+                        text: modelData.acao === "fixar" ? (menuConversa.alvoFixada ? "Desafixar" : "Fixar no topo")
+                            : parent.bloqueado ? "Apagar (é a conversa de agora)"
                             : parent.apagar && menuConversa.confirmando ? "Confirmar: mandar pra lixeira"
                             : modelData.nome
                         color: parent.apagar ? "#ff8a8a" : raiz.tema.texto
@@ -357,7 +363,10 @@ Rectangle {
                         enabled: !parent.bloqueado
                         cursorShape: Qt.PointingHandCursor
                         onClicked: {
-                            if (!parent.apagar) {
+                            if (modelData.acao === "fixar") {
+                                menuConversa.close();
+                                raiz.fixar(menuConversa.alvo, !menuConversa.alvoFixada);
+                            } else if (!parent.apagar) {
                                 menuConversa.close();
                                 menuConversa.pedirRenomear(menuConversa.alvo);
                             } else if (!menuConversa.confirmando) {

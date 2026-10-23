@@ -675,6 +675,19 @@ responde se ele perguntar. Os dois ficam em
 `~/.local/share/jarvis/ajustes.json` (`jarvis/ajustes.py`), com o pedido
 `ajustes` e o evento `ajustes` na ponte.
 
+**Janela beta 0.7.0 (23/10/2026):**
+- **Cor de destaque** nos Ajustes ("Aparência"): o `tema.persona` vem da
+  escolha, uma lista fechada de 6 cores em `ajustes.CORES`.
+- **Fixar conversas:** "Fixar no topo" no menu da conversa. A lista fica em
+  `~/.local/share/jarvis/fixadas.json`, e `sessoes.listar` põe as fixadas
+  primeiro, no grupo "Fixadas". Na ponte, o pedido `fixar`.
+- **Abaixar o som dos outros enquanto o Jarvis fala**
+  (`som.abaixar_os_outros`, em `Ciclo._falar`): cada fluxo do PC vai pra
+  30% e volta ao volume de antes.
+
+**App beta 0.10.5:** "Compartilhar → Jarvis" de qualquer app. Foto, vídeo e
+arquivo viram anexo; link e texto vão pra barra de escrever.
+
 ### Bloquear e desbloquear o PC (23/10/2026, app beta 0.9.5)
 
 - **Tela bloqueada = só o Léo:** `_responder` olha `tela.bloqueada()` (o
@@ -904,7 +917,12 @@ Sem ordem rígida: faz, o Léo testa o que é de voz, segue.
      instalar apps, e depois fica só o "Atualizar?" do sistema. Antes era o
      Chrome, com "app desconhecido", "instalar mesmo assim" e a digital a
      cada vez.
-8. Depois: ver a tela (o Claude já lê imagem: print + "o que é isso?"),
+8. **Versão para Windows:** o beta tester é o padrasto do Léo, que tem a
+   conta e o plano dele (Max), então usa o limite dele. Precisa do aviso de
+   "atualização pendente" também no PC, igual ao do app, para ele ir
+   recebendo as versões. Ninguém usa a conta do Léo em outro PC: é contra os
+   termos da Anthropic.
+9. Depois: ver a tela (o Claude já lê imagem: print + "o que é isso?"),
    a Friday (§3), o organizador de prints e vídeos (o Claude usa
    sozinho, sem integração especial).
 

@@ -73,7 +73,8 @@ ASSISTENTE -> CLIENTES
     {"ev":"desbloqueio", "id":"<hex>", "expira_em":<época>}
         Pediram para desbloquear o PC: o app pergunta "Desbloquear o PC?" e
         responde na porta remota (POST /desbloqueio, com a chave).
-    {"ev":"ajustes", "volume_voz":0-100, "notificar_escola":bool, "tem_escola":bool}
+    {"ev":"ajustes", "volume_voz":0-100, "notificar_escola":bool, "tem_escola":bool,
+     "cor":"#rrggbb"}
         O volume da voz no PC e as notificações da escola (beta 0.6.5).
     {"ev":"conversa_atual", "id":"<uuid>", "falas":[...]}
         A conversa do Jarvis mudou (ligou, "nova", "continuar"): o id da
@@ -117,6 +118,7 @@ CLIENTES -> ASSISTENTE
          {"pedir":"parar"}                -> interrompe a tarefa (o botão Parar)
          {"pedir":"renomear", "id":"...", "titulo":"..."} -> "conversas"
          {"pedir":"apagar", "id":"..."}   -> manda para a lixeira; "conversas"
+         {"pedir":"fixar", "id":"...", "fixar":bool} -> no topo da lista; "conversas"
          {"pedir":"som"}                  -> "som" (a lista de aparelhos)
          {"pedir":"som", "saida":"<id>", "entrada":"<id>"} (um ou os dois;
              "" = o padrão do sistema) -> troca e manda "som" para todos
@@ -171,7 +173,7 @@ PUBLICOS = frozenset({"sessao", "estado", "nivel", "voce_disse", "jarvis_disse",
 ESTADOS = ("dormindo", "ouvindo", "escutando", "pensando", "falando")
 PEDIDOS = frozenset({"ola", "falar", "memoria", "ouvir",
                      "conversas", "abrir", "nova", "continuar", "cerebro", "parar",
-                     "renomear", "apagar", "som", "ajustes"})
+                     "renomear", "apagar", "som", "ajustes", "fixar"})
 
 # Uma linha maior que isto sem quebra é um cliente com defeito, não um pedido.
 MAX_LINHA = 64 * 1024
@@ -219,7 +221,7 @@ def ler_pedido(linha: bytes) -> tuple[str, dict[str, Any]]:
     if tipo in ("memoria", "conversas", "nova", "parar"):
         return tipo, {}
 
-    if tipo in ("abrir", "continuar", "renomear", "apagar"):
+    if tipo in ("abrir", "continuar", "renomear", "apagar", "fixar"):
         sessao = objeto.get("id")
         if not isinstance(sessao, str) or not re.fullmatch(r"[0-9a-fA-F-]{8,64}", sessao):
             raise ErroDeProtocolo(f"'{tipo}' sem um id de conversa válido")
@@ -228,6 +230,8 @@ def ler_pedido(linha: bytes) -> tuple[str, dict[str, Any]]:
             if not isinstance(titulo, str) or not titulo.strip() or len(titulo) > 200:
                 raise ErroDeProtocolo("'renomear' sem um título válido")
             return tipo, {"id": sessao, "titulo": titulo.strip()}
+        if tipo == "fixar":
+            return tipo, {"id": sessao, "fixar": objeto.get("fixar") is not False}
         return tipo, {"id": sessao}
 
     if tipo == "cerebro":
@@ -262,6 +266,12 @@ def ler_pedido(linha: bytes) -> tuple[str, dict[str, Any]]:
             if not isinstance(volume, int) or isinstance(volume, bool) or not 0 <= volume <= 100:
                 raise ErroDeProtocolo("'volume_voz' tem que ser de 0 a 100")
             dados["volume_voz"] = volume
+        cor = objeto.get("cor")
+        if cor is not None:
+            from jarvis.ajustes import CORES
+            if cor not in CORES:
+                raise ErroDeProtocolo("'cor' fora da lista")
+            dados["cor"] = cor
         notificar = objeto.get("notificar_escola")
         if notificar is not None:
             if not isinstance(notificar, bool):

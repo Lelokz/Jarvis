@@ -23,8 +23,9 @@ QtObject {
     // A borda da pergunta que ainda espera resposta. Fixa: se seguisse a cor
     // do estado, a bolha mudaria de cor junto com o átomo.
     readonly property color pergunta:     "#ffb454"
-    // A cor da persona (o Jarvis é azul; a segunda persona terá a dela).
-    readonly property color persona:      "#4da3ff"
+    // A cor da persona (o Jarvis é azul; a segunda persona terá a dela). A
+    // janela troca pela escolhida nos Ajustes (beta 0.7.0).
+    property color persona:               "#4da3ff"
 
     // Uma cor por estado, e a regra é o contraste entre eles: é assim que o
     // Léo reconhece de olho, sem ler. A voz DELE é fria (verde), a do Jarvis

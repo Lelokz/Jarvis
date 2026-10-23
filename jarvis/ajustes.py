@@ -14,7 +14,11 @@ from typing import Any
 ARQUIVO = Path.home() / ".local/share/jarvis/ajustes.json"
 # 100 = o volume de sempre, que é o TETO: o volume já machucou o ouvido do
 # Léo uma vez (HISTORIA). Daqui só se abaixa.
-PADRAO: dict[str, Any] = {"volume_voz": 100, "notificar_escola": True}
+PADRAO: dict[str, Any] = {"volume_voz": 100, "notificar_escola": True, "cor": "#4da3ff"}
+# A cor de destaque da janela (beta 0.7.0): o átomo, os botões e as barras.
+# O azul é o do Jarvis; a lista é fechada para a janela nunca ficar ilegível.
+CORES = {"#4da3ff": "Azul", "#a78bfa": "Roxo", "#3ddc97": "Verde", "#ff9f43": "Laranja",
+         "#ff6fae": "Rosa", "#22d3ee": "Ciano"}
 
 
 def ler() -> dict[str, Any]:
@@ -29,6 +33,8 @@ def ler() -> dict[str, Any]:
             saida["volume_voz"] = int(min(100, max(0, volume)))
         if isinstance(dados.get("notificar_escola"), bool):
             saida["notificar_escola"] = dados["notificar_escola"]
+        if dados.get("cor") in CORES:
+            saida["cor"] = dados["cor"]
     return saida
 
 

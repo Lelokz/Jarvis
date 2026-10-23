@@ -102,6 +102,7 @@ class Servidor:
         self.provedor_conversa = None
         self.provedor_renomear = None
         self.provedor_apagar = None
+        self.provedor_fixar = None
         # O histórico da sessão, para um cliente que chega depois — ou que
         # fechou a janela e voltou. Anel de tamanho fixo: o alcance é a sessão,
         # e memória de processo que roda o dia todo não cresce sem teto.
@@ -452,7 +453,7 @@ class Servidor:
                 self._direto(cliente, {"ev": "erro", "motivo": f"não abri a conversa ({e})"})
                 return
             self._direto(cliente, {"ev": "conversa", "id": dados["id"], "falas": falas})
-        elif tipo in ("renomear", "apagar"):
+        elif tipo in ("renomear", "apagar", "fixar"):
             if tipo == "apagar" and dados["id"] == self._conversa_atual:
                 self._direto(cliente, {"ev": "erro", "motivo": "Essa é a conversa de agora: "
                                        "começa um chat novo antes de apagar ela."})
@@ -462,6 +463,8 @@ class Servidor:
                     self.provedor_renomear(dados["id"], dados["titulo"])
                 elif tipo == "apagar" and self.provedor_apagar:
                     self.provedor_apagar(dados["id"])
+                elif tipo == "fixar" and self.provedor_fixar:
+                    self.provedor_fixar(dados["id"], dados["fixar"])
                 lista = self.provedor_conversas() if self.provedor_conversas else []
             except Exception as e:
                 self._direto(cliente, {"ev": "erro", "motivo": f"não deu ({e})"})

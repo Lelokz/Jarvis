@@ -23,6 +23,11 @@ Item {
     property var ajustes: null
     signal mudarVolume(int volume)
     signal mudarNotificar(bool ligado)
+    signal mudarCor(string cor)
+    readonly property var cores: [
+        { cor: "#4da3ff", nome: "Azul" }, { cor: "#a78bfa", nome: "Roxo" }, { cor: "#3ddc97", nome: "Verde" },
+        { cor: "#ff9f43", nome: "Laranja" }, { cor: "#ff6fae", nome: "Rosa" }, { cor: "#22d3ee", nome: "Ciano" },
+    ]
 
     // "Padrão do sistema" primeiro (com o aparelho que ele é agora), depois
     // todos os aparelhos que o Linux enxerga.
@@ -346,6 +351,65 @@ Item {
         }
         Item { width: 1; height: 24 }
 
+        // -- aparência (beta 0.7.0) --------------------------------------------
+        Text {
+            bottomPadding: 10
+            text: "APARÊNCIA"
+            color: raiz.tema.muitoFraco
+            font.family: raiz.tema.familia
+            font.pixelSize: 11
+            font.weight: Font.DemiBold
+            font.letterSpacing: 0.8
+        }
+        Rectangle {
+            width: parent.width
+            height: 56
+            radius: 14
+            color: raiz.tema.lateral
+            border.width: 1
+            border.color: raiz.tema.traco
+            enabled: !!raiz.ajustes
+            Text {
+                anchors.verticalCenter: parent.verticalCenter
+                x: 18
+                text: "Cor de destaque"
+                color: raiz.tema.textoMedio
+                font.family: raiz.tema.familia
+                font.pixelSize: 14
+            }
+            Row {
+                anchors.verticalCenter: parent.verticalCenter
+                anchors.right: parent.right
+                anchors.rightMargin: 18
+                spacing: 10
+                Repeater {
+                    model: raiz.cores
+                    Rectangle {
+                        required property var modelData
+                        readonly property bool escolhida: raiz.ajustes && raiz.ajustes.cor === modelData.cor
+                        width: 24; height: 24; radius: 12
+                        color: "transparent"
+                        border.width: 2
+                        border.color: escolhida ? raiz.tema.texto : "transparent"
+                        Rectangle {
+                            anchors.centerIn: parent
+                            width: 16; height: 16; radius: 8
+                            color: modelData.cor
+                        }
+                        MouseArea {
+                            id: areaCor
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: raiz.mudarCor(modelData.cor)
+                        }
+                        ToolTipSimples { tema: raiz.tema; texto: modelData.nome; visivel: areaCor.containsMouse }
+                    }
+                }
+            }
+        }
+        Item { width: 1; height: 24 }
+
         Repeater {
             model: [
                 { titulo: "Agora", linhas: [
@@ -353,7 +417,7 @@ Item {
                     ["Cérebro", raiz.nomes[raiz.modelo] || raiz.modelo || "—"],
                     ["Esforço", raiz.nomes[raiz.esforco] || raiz.esforco || "—"],
                     ["Conversa", raiz.conversa ? raiz.conversa.slice(0, 8) : "—"],
-                    ["Versão da janela", "beta 0.6.5"],
+                    ["Versão da janela", "beta 0.7.0"],
                 ] },
                 { titulo: "Atalhos", linhas: [
                     ["Ctrl + N", "Novo chat"],
