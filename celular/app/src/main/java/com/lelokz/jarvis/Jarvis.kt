@@ -19,6 +19,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import okhttp3.MediaType.Companion.toMediaType
+import okio.source
 import org.json.JSONObject
 
 enum class Quem { VOCE, JARVIS, PAINEL, ATIVIDADE, AVISO }
@@ -79,6 +81,9 @@ class Jarvis(private val app: Application) {
     // aviso grande está aberto. O grande sai uma vez por versão; depois fica
     // só o retângulo no topo.
     val atualizacao = mutableStateOf(0)
+    // O download da atualização: -1 = parado; 0 a 1 = baixando; 2 = instalando.
+    // Enquanto não for -1, tocar de novo não começa outro (beta 0.11.5).
+    val atualizando = mutableStateOf(-1f)
     // O pedido de desbloquear o PC esperando o Sim/Não (o id), ou "".
     val desbloqueio = mutableStateOf("")
     // As notificações da escola NO CELULAR (o PC tem o interruptor dele, nos
@@ -211,16 +216,22 @@ class Jarvis(private val app: Application) {
         avisoAtualizacao.value = false
         prefs.edit().putInt("atualizacao_avisada", atualizacao.value).apply()
         if (atualizar) {
+            if (atualizando.value >= 0f) return  // já está baixando ou instalando
             val base = prefs.getString("base", "")?.trimEnd('/') ?: return
             // Primeira vez: o Android pede para liberar o Jarvis a instalar.
             if (!Atualizador.podeInstalar(app)) {
                 aviso.value = "Libera o Jarvis e toca em \"Atualização disponível\" de novo."
                 return
             }
-            aviso.value = "Baixando a atualização…"
+            atualizando.value = 0f
             viewModelScope.launch(Dispatchers.IO) {
-                val erro = Atualizador.baixarEInstalar(app, base)
-                if (erro.isNotEmpty()) withContext(Dispatchers.Main) { aviso.value = erro }
+                val erro = Atualizador.baixarEInstalar(app, base) { p ->
+                    viewModelScope.launch(Dispatchers.Main) { atualizando.value = p }
+                }
+                withContext(Dispatchers.Main) {
+                    if (erro.isNotEmpty()) { aviso.value = erro; atualizando.value = -1f }
+                    else atualizando.value = 2f
+                }
             }
         }
     }
@@ -288,22 +299,52 @@ class Jarvis(private val app: Application) {
         }
     }
 
+    // Os anexos sobem pelo /anexo da porta, aos pedaços (beta 0.11.5): o vídeo
+    // de um minuto passa de 64 MB e não cabia na memória pelo WebSocket.
+    private val clienteDeAnexos = okhttp3.OkHttpClient.Builder()
+        .writeTimeout(10, java.util.concurrent.TimeUnit.MINUTES)
+        .readTimeout(2, java.util.concurrent.TimeUnit.MINUTES).build()
+    private val MAX_ANEXO = 500L * 1024 * 1024
+
+    /** O token do arquivo no PC, ou o erro (começando com "!"). Roda fora da thread principal. */
+    private fun subirArquivo(a: Anexo): String {
+        val base = prefs.getString("base", null)?.trimEnd('/') ?: return "!sem o link do PC"
+        val chave = prefs.getString("chave", null) ?: return "!sem a chave"
+        val tamanho = try {
+            app.contentResolver.query(a.uri, arrayOf(OpenableColumns.SIZE), null, null, null)
+                ?.use { if (it.moveToFirst() && !it.isNull(0)) it.getLong(0) else -1L } ?: -1L
+        } catch (e: Exception) { -1L }
+        if (tamanho > MAX_ANEXO) return "!maior que 500 MB"
+        val corpo = object : okhttp3.RequestBody() {
+            override fun contentType() = "application/octet-stream".toMediaType()
+            override fun contentLength() = tamanho
+            override fun writeTo(sink: okio.BufferedSink) {
+                app.contentResolver.openInputStream(a.uri)?.use { sink.writeAll(it.source()) }
+                    ?: throw java.io.IOException("não abriu")
+            }
+        }
+        val url = "$base/anexo?nome=" + Uri.encode(a.nome)
+        return try {
+            clienteDeAnexos.newCall(okhttp3.Request.Builder().url(url).post(corpo)
+                .header("Authorization", "Bearer $chave").build()).execute().use { r ->
+                val j = JSONObject(r.body?.string() ?: "{}")
+                if (r.isSuccessful) j.optString("token") else "!" + j.optString("erro", "o PC recusou")
+            }
+        } catch (e: Exception) {
+            "!não consegui mandar"
+        }
+    }
+
     private fun subir(a: Anexo) {
         trocar(a)
         viewModelScope.launch {
-            val dados = withContext(Dispatchers.IO) {
-                try {
-                    app.contentResolver.openInputStream(a.uri)?.use { it.readBytes() }
-                } catch (e: Exception) { null } catch (e: OutOfMemoryError) { null }
-            }
+            val token = withContext(Dispatchers.IO) { subirArquivo(a) }
             when {
-                dados == null -> trocar(a.copy(erro = "não consegui ler"))
-                dados.size > 64 * 1024 * 1024 -> trocar(a.copy(erro = "maior que 64 MB"))
-                anexos.none { it.local == a.local } -> {} // tirou antes de subir
+                token.startsWith("!") || token.isEmpty() -> trocar(a.copy(erro = token.removePrefix("!").ifEmpty { "falhou" }))
+                anexos.none { it.local == a.local } -> {} // tirou enquanto subia (o PC apaga em 14 dias)
                 else -> {
                     val c = conexao ?: return@launch
-                    c.enviar(JSONObject().put("pedir", "anexo").put("nome", a.nome))
-                    c.enviar(dados)
+                    c.enviar(JSONObject().put("pedir", "anexo_pronto").put("token", token).put("nome", a.nome))
                     esperandoOk.addLast(a.local)
                 }
             }

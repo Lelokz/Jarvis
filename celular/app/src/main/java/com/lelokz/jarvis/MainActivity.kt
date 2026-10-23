@@ -137,7 +137,7 @@ val CORES_DE_DESTAQUE = listOf(
 private val Roxo = Color(0xFF9B7BFF)
 
 /** A versão da janela (a numeração do Léo, igual à do PC) e a do app. */
-const val VERSAO_JANELA = "beta 0.11.0"
+const val VERSAO_JANELA = "beta 0.11.5"
 
 // A Inter, a fonte da janela do PC (licença OFL). Variável: o peso funciona.
 @OptIn(ExperimentalTextApi::class)
@@ -306,7 +306,7 @@ fun Tela(modelo: Jarvis) {
                 }
             }
             val temAtualizacao = modelo.atualizacao.value != 0
-            if (temAtualizacao) RetanguloAtualizacao(modelo, Modifier.align(Alignment.TopCenter).padding(top = 58.dp))
+            if (temAtualizacao || modelo.atualizando.value >= 0f) RetanguloAtualizacao(modelo, Modifier.align(Alignment.TopCenter).padding(top = 58.dp))
             Aviso(modelo, Modifier.align(Alignment.TopCenter).padding(top = if (temAtualizacao) 100.dp else 64.dp))
         }
     }
@@ -323,16 +323,33 @@ fun Tela(modelo: Jarvis) {
     }
 }
 
-/** O retângulo pequeno no topo: tem versão nova e o aviso grande já foi fechado. */
+/** O retângulo pequeno no topo: tem versão nova e o aviso grande já foi
+ *  fechado. Baixando, vira a barrinha do download (e não abre o aviso de novo). */
 @Composable
 private fun RetanguloAtualizacao(modelo: Jarvis, modifier: Modifier) {
     val forma = RoundedCornerShape(10.dp)
+    val p = modelo.atualizando.value
     Row(modifier.clip(forma).background(Superficie2).border(1.dp, TracoForte, forma)
-        .clickable { modelo.avisoAtualizacao.value = true }
+        .clickable(enabled = p < 0f) { modelo.avisoAtualizacao.value = true }
         .padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(7.dp).clip(CircleShape).background(Azul))
-        Spacer(Modifier.width(8.dp))
-        Text("Atualização disponível", color = TextoMedio, fontSize = 12.sp)
+        when {
+            p < 0f -> {
+                Box(Modifier.size(7.dp).clip(CircleShape).background(Azul))
+                Spacer(Modifier.width(8.dp))
+                Text("Atualização disponível", color = TextoMedio, fontSize = 12.sp)
+            }
+            p > 1f -> Text("Instalando…", color = TextoMedio, fontSize = 12.sp)
+            else -> {
+                Text("Baixando atualização", color = TextoMedio, fontSize = 12.sp)
+                Spacer(Modifier.width(10.dp))
+                Box(Modifier.width(90.dp).height(5.dp).clip(RoundedCornerShape(3.dp)).background(Lateral)) {
+                    Box(Modifier.fillMaxWidth(p.coerceIn(0.02f, 1f)).height(5.dp).clip(RoundedCornerShape(3.dp))
+                        .background(Azul))
+                }
+                Spacer(Modifier.width(8.dp))
+                Text("${(p * 100).toInt()}%", color = Texto, fontSize = 12.sp)
+            }
+        }
     }
 }
 

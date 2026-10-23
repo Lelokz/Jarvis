@@ -31,12 +31,28 @@ object Atualizador {
     }
 
     /** Baixa e manda instalar. Roda fora da thread principal. Devolve o erro, ou "" se foi. */
-    fun baixarEInstalar(c: Context, base: String): String {
+    fun baixarEInstalar(c: Context, base: String, progresso: (Float) -> Unit): String {
         val arquivo = File(c.cacheDir, "jarvis.apk")
         try {
             cliente.newCall(Request.Builder().url("${base.trimEnd('/')}/jarvis.apk").build()).execute().use { r ->
                 if (!r.isSuccessful) return "O PC não entregou o app (${r.code})."
-                arquivo.outputStream().use { saida -> r.body?.byteStream()?.copyTo(saida) ?: return "Veio vazio." }
+                val corpo = r.body ?: return "Veio vazio."
+                val total = corpo.contentLength()
+                var baixado = 0L
+                var ultimo = -1
+                arquivo.outputStream().use { saida ->
+                    corpo.byteStream().use { entrada ->
+                        val buffer = ByteArray(64 * 1024)
+                        while (true) {
+                            val n = entrada.read(buffer)
+                            if (n < 0) break
+                            saida.write(buffer, 0, n)
+                            baixado += n
+                            val pct = if (total > 0) (baixado * 100 / total).toInt() else -1
+                            if (pct != ultimo) { ultimo = pct; if (pct >= 0) progresso(pct / 100f) }
+                        }
+                    }
+                }
             }
         } catch (e: Exception) {
             return "Sem conexão com o PC."
@@ -78,8 +94,11 @@ class ResultadoDaInstalacao : BroadcastReceiver() {
                 confirmar?.let { c.startActivity(it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
             }
             PackageInstaller.STATUS_SUCCESS -> Unit  // o app reinicia na versão nova
-            else -> (c.applicationContext as? App)?.jarvis?.aviso?.value =
-                "A atualização não foi: ${intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE) ?: "cancelada"}"
+            else -> (c.applicationContext as? App)?.jarvis?.let {
+                // Cancelou ou falhou: dá para tentar de novo pelo retângulo.
+                it.atualizando.value = -1f
+                it.aviso.value = "A atualização não foi: ${intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE) ?: "cancelada"}"
+            }
         }
     }
 }

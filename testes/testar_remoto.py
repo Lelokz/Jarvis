@@ -284,6 +284,24 @@ def main() -> int:
         checa("o Sim destrava", responder(pedido["id"], True) == "desbloqueado" and destravou == [1])
         checa("e vale uma vez só", responder(pedido["id"], True) == "expirou" and destravou == [1])
 
+        # 14. O anexo grande (app beta 0.11.5): sobe pelo /anexo, aos pedaços,
+        # e entra na conversa pelo "anexo_pronto".
+        try:
+            urllib.request.urlopen(urllib.request.Request(f"{http}/anexo?nome=v.mp4", data=b"x", method="POST"),
+                                   timeout=5)
+            sem_chave = None
+        except urllib.error.HTTPError as erro:
+            sem_chave = erro.code
+        checa("anexo grande sem a chave: 401", sem_chave == 401, f"{sem_chave}")
+        subida = json.load(urllib.request.urlopen(urllib.request.Request(
+            f"{http}/anexo?nome=video.mp4", data=b"v" * 300_000, method="POST",
+            headers={"Authorization": f"Bearer {chave}"}), timeout=10))
+        celular.send(json.dumps({"pedir": "anexo_pronto", "token": subida.get("token"), "nome": "video.mp4"}))
+        ok = receber_ate(celular, "anexo_ok")
+        checa("anexo grande: chega inteiro e entra na conversa", ok is not None and ok.get("nome") == "video.mp4")
+        celular.send(json.dumps({"pedir": "anexo_pronto", "token": "inventado", "nome": "x"}))
+        checa("token inventado: erro", receber_ate(celular, "anexo_erro") is not None)
+
         celular.close()
         servidor_web.should_exit = True
         srv.encerrar()

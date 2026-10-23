@@ -41,6 +41,13 @@ def guardar(nome: str, dados: bytes) -> Path:
     return caminho
 
 
+def novo(nome: str) -> tuple[Path, int]:
+    """Um arquivo vazio para receber aos pedaços (o vídeo grande do app):
+    o caminho e o descritor aberto para escrita."""
+    caminho = _novo_caminho(nome)
+    return caminho, os.open(caminho, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+
+
 def copiar(origem: Path) -> Path:
     """Um arquivo do próprio PC (o clipe da janela): copiado, e não ligado,
     para o Jarvis não depender de ele continuar onde estava."""

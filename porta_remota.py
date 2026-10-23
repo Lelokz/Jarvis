@@ -72,6 +72,11 @@ PEDIDOS_DO_CELULAR = {"falar", "memoria", "conversas", "abrir", "nova", "continu
 # Foto, vídeo ou arquivo mandado pelo clipe do app. Vídeo de celular passa
 # disso fácil; por enquanto é o teto (o WebSocket guarda tudo na memória).
 MAX_ANEXO_BYTES = 64 * 1024 * 1024
+# Pelo /anexo (HTTP, gravado aos pedaços direto no disco): o vídeo de um
+# minuto do celular passa fácil de 64 MB (pedido do Léo, 23/10/2026).
+MAX_ANEXO_GRANDE = 500 * 1024 * 1024
+# O disco do PC vive cheio (~85%): o anexo nunca deixa menos que isto livre.
+FOLGA_DO_DISCO = 3 * 1024 ** 3
 
 
 
@@ -150,6 +155,40 @@ def criar_app(cfg: config.Config):
         return JSONResponse({"versionCode": elemento.get("versionCode"),
                              "versionName": elemento.get("versionName")},
                             headers={"Cache-Control": "no-store"})
+
+    # O que subiu pelo /anexo esperando o "anexo_pronto" da conexão do app.
+    subidos: dict[str, Path] = {}
+
+    async def anexo_http(request):
+        if not hmac.compare_digest(request.headers.get("authorization", ""), f"Bearer {chave}"):
+            return JSONResponse({"erro": "chave"}, status_code=401)
+        nome = request.query_params.get("nome") or "anexo"
+        try:
+            tamanho = int(request.headers.get("content-length", "0"))
+        except ValueError:
+            tamanho = 0
+        if tamanho > MAX_ANEXO_GRANDE:
+            return JSONResponse({"erro": f"maior que {MAX_ANEXO_GRANDE // 1024 // 1024} MB"}, status_code=413)
+        pasta = protocolo.pasta_recebidos()
+        pasta.mkdir(parents=True, exist_ok=True, mode=0o700)
+        if shutil.disk_usage(pasta).free - tamanho < FOLGA_DO_DISCO:
+            return JSONResponse({"erro": "o disco do PC está quase cheio"}, status_code=507)
+        caminho, fd = recebidos.novo(nome)
+        recebido = 0
+        try:
+            with os.fdopen(fd, "wb") as f:
+                async for pedaco in request.stream():
+                    recebido += len(pedaco)
+                    if recebido > MAX_ANEXO_GRANDE:
+                        raise ValueError("grande demais")
+                    await asyncio.to_thread(f.write, pedaco)
+        except Exception:
+            caminho.unlink(missing_ok=True)
+            return JSONResponse({"erro": "não chegou inteiro"}, status_code=400)
+        token = secrets.token_hex(12)
+        subidos[token] = caminho
+        print(f"{time.strftime('%H:%M:%S')} anexo pelo /anexo: {caminho.name} ({recebido // 1024} KB)", flush=True)
+        return JSONResponse({"token": token})
 
     async def desbloqueio_pc(request):
         # O Sim/Não do "Desbloquear o PC?" no app. Com a chave do app: é ela
@@ -313,6 +352,19 @@ def criar_app(cfg: config.Config):
                     if isinstance(pedido, dict) and pedido.get("pedir") == "anexo":
                         anexo_chegando = {"nome": str(pedido.get("nome") or "anexo")}
                         continue
+                    if isinstance(pedido, dict) and pedido.get("pedir") == "anexo_pronto":
+                        # Subiu pelo /anexo: entra nos pendentes como o do binário.
+                        caminho = subidos.pop(str(pedido.get("token") or ""), None)
+                        nome = str(pedido.get("nome") or "anexo")
+                        if caminho is None:
+                            await ws.send_text(json.dumps({"ev": "anexo_erro", "nome": nome,
+                                                           "motivo": "não chegou no PC"}, ensure_ascii=False))
+                        else:
+                            pendentes[proximo_id] = caminho
+                            await ws.send_text(json.dumps({"ev": "anexo_ok", "id": proximo_id, "nome": nome},
+                                                          ensure_ascii=False))
+                            proximo_id += 1
+                        continue
                     if isinstance(pedido, dict) and pedido.get("pedir") == "mudo":
                         mudo = pedido.get("mudo") is True
                         continue
@@ -348,6 +400,7 @@ def criar_app(cfg: config.Config):
     return Starlette(routes=[Route("/", pagina), Route("/saude", saude), Route("/jarvis.apk", apk),
                                Route("/versao", versao), Route("/novidades", novidades),
                              Route("/desbloqueio", desbloqueio_pc, methods=["GET", "POST"]),
+                             Route("/anexo", anexo_http, methods=["POST"]),
                              WebSocketRoute("/ws", conexao)])
 
 

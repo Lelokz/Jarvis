@@ -684,6 +684,14 @@ responde se ele perguntar. Os dois ficam em
 - ~~Abaixar o som dos outros enquanto o Jarvis fala~~: tirado no mesmo dia,
   a pedido do Léo ("muito bugado e fica muito ruim"). Não refazer.
 
+**App beta 0.11.5:** os anexos sobem por `POST /anexo` (HTTP, aos pedaços,
+direto no disco), até **500 MB**, nunca deixando menos de 3 GB livres no
+disco. Depois entram na conversa pelo `anexo_pronto` do WebSocket. Antes era
+binário no WebSocket, com teto de 64 MB e tudo na memória. A atualização
+agora é uma por vez: tocar de novo durante o download não começa outro, que
+era o bug do Léo de baixar 3 vezes. E o retângulo do topo vira a barrinha
+"Baixando atualização ▓▓░ 58%".
+
 **App beta 0.11.0:** a mesma cor de destaque nos Ajustes do app, escolhida lá (cada aparelho tem a sua).
 
 **App beta 0.10.5:** "Compartilhar → Jarvis" de qualquer app. Foto, vídeo e
