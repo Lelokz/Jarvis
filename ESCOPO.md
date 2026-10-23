@@ -711,9 +711,9 @@ arquivo viram anexo; link e texto vão pra barra de escrever.
   ser falada. Isso corrigiu o bug de bloquear no meio da fala.
 - **Desbloquear:** a ferramenta `pedir_desbloqueio` (só a voz do Léo) cria um
   pedido de 3 min (`jarvis/nucleo/desbloqueio.py`). O evento `desbloqueio`
-  vai pro app (aviso "Desbloquear o PC?" + notificação), e um WhatsApp vai
-  pro chat do próprio Léo (o aviso imediato com o app fechado; o
-  JobScheduler só passa a cada 15 min). O Sim chega em `POST /desbloqueio`
+  vai pro app (aviso "Desbloquear o PC?" + notificação). NADA de WhatsApp:
+  eu tinha posto uma mensagem pro chat do próprio Léo sem ele pedir, e ele
+  mandou tirar (23/10/2026). O Sim chega em `POST /desbloqueio`
   na porta remota, com a chave do app, e só aí `tela.desbloquear()` roda
   (`loginctl unlock-session` + `cinnamon-screensaver-command --deactivate`,
   sem senha).

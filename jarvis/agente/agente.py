@@ -726,17 +726,9 @@ class Agente:
         if not tela.bloqueada():
             return "A tela já está desbloqueada."
         pedido = desbloqueio.criar()
-        # O app (se estiver conectado) mostra na hora; fechado, chega pela
-        # notificação e pelo WhatsApp do próprio Léo.
+        # O aviso é só pelo app do Jarvis (notificação e "Desbloquear o PC?").
+        # Nada de WhatsApp: o Léo não pediu (23/10/2026).
         self.saidas.put(Saida("desbloqueio", pedido["id"]))
-        if self.whatsapp is not None:
-            try:
-                eu = self.whatsapp.meu_jid()
-                if eu:
-                    self.whatsapp.enviar(eu, "🔒 Pediram pra desbloquear o PC. Abre o app do "
-                                             "Jarvis pra confirmar (vale por 3 minutos).")
-            except Exception:
-                pass
         return ("Mandei a confirmação pro celular do Léo. O PC só desbloqueia se ele tocar "
                 "em Sim no app, nos próximos 3 minutos. Diga isso em uma frase.")
 
