@@ -395,13 +395,10 @@ class Ciclo:
                 "jarvis_disse", texto=texto, acao=acao, perguntando=perguntando, **extra
             )
 
-        # Vídeo ou música tocando: abaixa enquanto ele fala e volta depois.
-        voltar_o_volume = som.abaixar_os_outros() if getattr(self, "som_ativo", False) else (lambda: None)
         try:
             return tts.falar(self.voz, texto, dispositivo=self.dispositivo_saida,
                              ao_comecar=ao_comecar)
         finally:
-            voltar_o_volume()
             time.sleep(self.guarda_s)
             self.portao.abrir_portao()
             self.ww.reiniciar()

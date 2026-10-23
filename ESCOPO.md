@@ -681,9 +681,10 @@ responde se ele perguntar. Os dois ficam em
 - **Fixar conversas:** "Fixar no topo" no menu da conversa. A lista fica em
   `~/.local/share/jarvis/fixadas.json`, e `sessoes.listar` põe as fixadas
   primeiro, no grupo "Fixadas". Na ponte, o pedido `fixar`.
-- **Abaixar o som dos outros enquanto o Jarvis fala**
-  (`som.abaixar_os_outros`, em `Ciclo._falar`): cada fluxo do PC vai pra
-  30% e volta ao volume de antes.
+- ~~Abaixar o som dos outros enquanto o Jarvis fala~~: tirado no mesmo dia,
+  a pedido do Léo ("muito bugado e fica muito ruim"). Não refazer.
+
+**App beta 0.11.0:** a mesma cor de destaque nos Ajustes do app, escolhida lá (cada aparelho tem a sua).
 
 **App beta 0.10.5:** "Compartilhar → Jarvis" de qualquer app. Foto, vídeo e
 arquivo viram anexo; link e texto vão pra barra de escrever.

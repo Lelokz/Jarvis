@@ -9,6 +9,7 @@ import android.util.Size
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.graphics.toArgb
 import android.content.Intent
 import android.os.Build
 import android.os.VibrationEffect
@@ -124,6 +125,7 @@ class Jarvis(private val app: Application) {
         }
 
     init {
+        prefs.getInt("cor_destaque", 0).takeIf { it != 0 }?.let { corDestaque.value = androidx.compose.ui.graphics.Color(it) }
         if (configurado.value) conectar()
         Novidades.agendar(app)
     }
@@ -221,6 +223,11 @@ class Jarvis(private val app: Application) {
                 if (erro.isNotEmpty()) withContext(Dispatchers.Main) { aviso.value = erro }
             }
         }
+    }
+
+    fun mudarCor(cor: androidx.compose.ui.graphics.Color) {
+        corDestaque.value = cor
+        prefs.edit().putInt("cor_destaque", cor.toArgb()).apply()
     }
 
     fun alternarNotificarEscola() {

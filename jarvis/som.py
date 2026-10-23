@@ -112,37 +112,3 @@ def aplicar() -> None:
         else:
             os.environ.pop(variavel, None)
 
-
-# O volume dos outros sons enquanto o Jarvis fala (0,3 = 30% do que estava).
-FATOR_ABAIXADO = 0.3
-
-
-def abaixar_os_outros():
-    """Abaixa tudo o que está tocando no PC (vídeo, música, jogo), menos o
-    próprio Jarvis, enquanto ele fala. Devolve a função que volta cada um ao
-    volume de antes. Sem servidor de som, não faz nada."""
-    try:
-        import pulsectl
-        meu = str(os.getpid())
-        antes = []
-        with _pulse() as p:
-            for fluxo in p.sink_input_list():
-                if fluxo.proplist.get("application.process.id") == meu:
-                    continue
-                volume = fluxo.volume
-                antes.append((fluxo.index, pulsectl.PulseVolumeInfo(list(volume.values))))
-                p.volume_set(fluxo, pulsectl.PulseVolumeInfo([v * FATOR_ABAIXADO for v in volume.values]))
-    except Exception:
-        return lambda: None
-
-    def voltar() -> None:
-        try:
-            with _pulse() as p:
-                existentes = {f.index: f for f in p.sink_input_list()}
-                for indice, volume in antes:
-                    if indice in existentes:  # o vídeo pode ter fechado no meio
-                        p.volume_set(existentes[indice], volume)
-        except Exception:
-            pass
-
-    return voltar

@@ -126,11 +126,18 @@ private val Fraco = Color(0xFF7E879B)
 private val MuitoFraco = Color(0xFF4D5568)
 private val Perigo = Color(0xFFFF6B6B)
 private val Pergunta = Color(0xFFFFB454)
-private val Azul = Color(0xFF4DA3FF)
+// A cor de destaque (beta 0.11.0): escolhida nos Ajustes do app, como a da
+// janela do PC. "Azul" ficou como nome: é a cor do Jarvis por padrão.
+val corDestaque = mutableStateOf(Color(0xFF4DA3FF))
+private val Azul: Color get() = corDestaque.value
+val CORES_DE_DESTAQUE = listOf(
+    "Azul" to Color(0xFF4DA3FF), "Roxo" to Color(0xFFA78BFA), "Verde" to Color(0xFF3DDC97),
+    "Laranja" to Color(0xFFFF9F43), "Rosa" to Color(0xFFFF6FAE), "Ciano" to Color(0xFF22D3EE),
+)
 private val Roxo = Color(0xFF9B7BFF)
 
 /** A versão da janela (a numeração do Léo, igual à do PC) e a do app. */
-const val VERSAO_JANELA = "beta 0.10.5"
+const val VERSAO_JANELA = "beta 0.11.0"
 
 // A Inter, a fonte da janela do PC (licença OFL). Variável: o peso funciona.
 @OptIn(ExperimentalTextApi::class)
@@ -1086,6 +1093,23 @@ private fun PaginaAjustes(modelo: Jarvis) {
                 colors = SwitchDefaults.colors(checkedTrackColor = Azul, checkedThumbColor = Texto,
                     uncheckedTrackColor = Superficie2, uncheckedThumbColor = Fraco, uncheckedBorderColor = Traco))
         }
+        }
+        Spacer(Modifier.height(14.dp))
+        Grupo("Aparência")
+        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Lateral)
+            .border(1.dp, Traco, RoundedCornerShape(14.dp)).padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically) {
+            Text("Cor de destaque", color = TextoMedio, fontSize = 14.sp, modifier = Modifier.weight(1f))
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                for ((_, cor) in CORES_DE_DESTAQUE) {
+                    val escolhida = corDestaque.value == cor
+                    Box(Modifier.size(30.dp).clip(CircleShape)
+                        .border(2.dp, if (escolhida) Texto else Color.Transparent, CircleShape)
+                        .clickable { modelo.mudarCor(cor) }, contentAlignment = Alignment.Center) {
+                        Box(Modifier.size(18.dp).clip(CircleShape).background(cor))
+                    }
+                }
+            }
         }
         Spacer(Modifier.height(14.dp))
         Grupo("Agora")
