@@ -74,10 +74,27 @@ O que é **instrução** para o julgamento dele (`persona.md`), e não trava:
 Nome **Jarvis**, voz masculina: **a voz do JARVIS da dublagem brasileira**,
 clonada e treinada no PC do Léo para uso pessoal (19/10/2026, "ficou muito
 bom"). Reserva: Kokoro `pm_alex`, efeito suave, 1,15x. Detalhes em §4. Fala como pessoa
-normal: nem formal, nem cheio de gíria. Respostas curtas: é voz.
+normal, com o jeito do JARVIS dos filmes: mordomo elegante, de humor seco,
+"senhor" de vez em quando (seção "Personalidade" do `persona.md`, 22/10/2026).
+Respostas curtas: é voz.
 
-Tudo no `config.toml` (`[persona]`), nada chumbado no código. **No futuro vira
-uma personagem feminina**, e é aí que a voz troca (Kokoro ou outra).
+Tudo no `config.toml` (`[persona]`), nada chumbado no código.
+
+**A segunda persona: Friday (planejada em 22/10/2026, fazer no fim de semana).**
+- **Jeito:** o oposto do mordomo. Carinhosa, calorosa, extrovertida e
+  eufórica; informal, como uma amiga da idade dele, com gíria leve; zoeira
+  aberta; direta e animada ("Pronto!", "Achei!"). Chama ele de "Léo" num tom
+  carinhoso e, de vez em quando, de "chefe" ou "chefinho", de brincadeira.
+  Segue as mesmas regras de segurança, a mesma memória e fica séria quando o
+  assunto é sério.
+- **Voz:** NÃO é a dos filmes. A da Kerry Condon é adulta, calma e séria, e
+  não combina com o jeito dela. O plano é gerar a mesma frase com várias vozes
+  femininas, mandar os áudios pro Léo e ele escolher.
+- **Palavra:** "Friday", em inglês (openWakeWord, treinar e medir os
+  disparos à toa).
+- **Convivência:** as duas sempre ligadas, "hey Jarvis" chama ele e
+  "Friday" chama ela. Cor do átomo dela: laranja ou rosa, o Léo escolhe junto
+  com a voz.
 
 ---
 
@@ -834,7 +851,7 @@ Sem ordem rígida: faz, o Léo testa o que é de voz, segue.
      retângulo pequeno no topo, decisão do Léo. "Sim" abre o `/jarvis.apk`
      no Chrome.
 8. Depois: ver a tela (o Claude já lê imagem: print + "o que é isso?"),
-   personagem feminina, o organizador de prints e vídeos (o Claude usa
+   a Friday (§3), o organizador de prints e vídeos (o Claude usa
    sozinho, sem integração especial).
 
 Inspiração visual: HUD futurista com cards na tela enquanto ele fala (clima,
