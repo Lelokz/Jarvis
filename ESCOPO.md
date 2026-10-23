@@ -898,8 +898,12 @@ Sem ordem rígida: faz, o Léo testa o que é de voz, segue.
    - **Atualização do app (beta 0.7):** `/versao` devolve o versionCode do APK
      compilado. Se for mais novo que o instalado, o app mostra o aviso grande
      (fundo escurecido, Sim/Não) uma vez por versão. Depois disso fica só um
-     retângulo pequeno no topo, decisão do Léo. "Sim" abre o `/jarvis.apk`
-     no Chrome.
+     retângulo pequeno no topo, decisão do Léo. Desde a beta 0.10.0, o "Sim"
+     baixa o APK e entrega ao instalador do Android (`Atualizador.kt`,
+     PackageInstaller). Na primeira vez o Android pede pra liberar o Jarvis a
+     instalar apps, e depois fica só o "Atualizar?" do sistema. Antes era o
+     Chrome, com "app desconhecido", "instalar mesmo assim" e a digital a
+     cada vez.
 8. Depois: ver a tela (o Claude já lê imagem: print + "o que é isso?"),
    a Friday (§3), o organizador de prints e vídeos (o Claude usa
    sozinho, sem integração especial).

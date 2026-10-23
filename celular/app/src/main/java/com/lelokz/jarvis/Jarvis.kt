@@ -210,8 +210,16 @@ class Jarvis(private val app: Application) {
         prefs.edit().putInt("atualizacao_avisada", atualizacao.value).apply()
         if (atualizar) {
             val base = prefs.getString("base", "")?.trimEnd('/') ?: return
-            app.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("$base/jarvis.apk"))
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            // Primeira vez: o Android pede para liberar o Jarvis a instalar.
+            if (!Atualizador.podeInstalar(app)) {
+                aviso.value = "Libera o Jarvis e toca em \"Atualização disponível\" de novo."
+                return
+            }
+            aviso.value = "Baixando a atualização…"
+            viewModelScope.launch(Dispatchers.IO) {
+                val erro = Atualizador.baixarEInstalar(app, base)
+                if (erro.isNotEmpty()) withContext(Dispatchers.Main) { aviso.value = erro }
+            }
         }
     }
 

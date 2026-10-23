@@ -130,7 +130,7 @@ private val Azul = Color(0xFF4DA3FF)
 private val Roxo = Color(0xFF9B7BFF)
 
 /** A versão da janela (a numeração do Léo, igual à do PC) e a do app. */
-const val VERSAO_JANELA = "beta 0.9.5"
+const val VERSAO_JANELA = "beta 0.10.0"
 
 // A Inter, a fonte da janela do PC (licença OFL). Variável: o peso funciona.
 @OptIn(ExperimentalTextApi::class)
