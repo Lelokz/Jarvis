@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Controls.Basic
 
 // Ajustes: os limites da assinatura no topo, o som (o primeiro ajuste de
 // verdade, beta 0.6.0) e, sempre por último, o que está valendo e os atalhos. O que se troca toda hora (cérebro, esforço,
@@ -18,6 +19,10 @@ Item {
     // O evento "som" da ponte (jarvis/som.py): aparelhos, padrão e escolha.
     property var som: null
     signal escolherSom(string tipo, string aparelho)
+    // O evento "ajustes" (beta 0.6.5): volume da voz no PC e notificações da escola.
+    property var ajustes: null
+    signal mudarVolume(int volume)
+    signal mudarNotificar(bool ligado)
 
     // "Padrão do sistema" primeiro (com o aparelho que ele é agora), depois
     // todos os aparelhos que o Linux enxerga.
@@ -215,6 +220,130 @@ Item {
         }
         Item { width: 1; height: 24 }
 
+        // -- voz e avisos (beta 0.6.5) -----------------------------------------
+        Text {
+            bottomPadding: 10
+            text: "VOZ E AVISOS"
+            color: raiz.tema.muitoFraco
+            font.family: raiz.tema.familia
+            font.pixelSize: 11
+            font.weight: Font.DemiBold
+            font.letterSpacing: 0.8
+        }
+        Rectangle {
+            width: parent.width
+            height: 2 * 56
+            radius: 14
+            color: raiz.tema.lateral
+            border.width: 1
+            border.color: raiz.tema.traco
+            enabled: !!raiz.ajustes
+            opacity: enabled ? 1 : 0.5
+            // O volume da voz do Jarvis no PC. 100% é o de sempre e é o teto:
+            // daqui só se abaixa (o volume já machucou o ouvido do Léo).
+            Item {
+                width: parent.width
+                height: 56
+                Text {
+                    anchors.verticalCenter: parent.verticalCenter
+                    x: 18
+                    text: "Volume da voz do Jarvis"
+                    color: raiz.tema.textoMedio
+                    font.family: raiz.tema.familia
+                    font.pixelSize: 14
+                }
+                Text {
+                    id: rotuloVolume
+                    anchors.verticalCenter: parent.verticalCenter
+                    anchors.right: parent.right
+                    anchors.rightMargin: 18
+                    width: 44
+                    horizontalAlignment: Text.AlignRight
+                    text: Math.round(deslizador.value) + "%"
+                    color: raiz.tema.texto
+                    font.family: raiz.tema.familia
+                    font.pixelSize: 14
+                }
+                Slider {
+                    id: deslizador
+                    anchors.verticalCenter: parent.verticalCenter
+                    anchors.right: rotuloVolume.left
+                    anchors.rightMargin: 12
+                    width: Math.min(260, parent.width * 0.4)
+                    from: 0; to: 100; stepSize: 5
+                    value: raiz.ajustes ? raiz.ajustes.volume_voz : 100
+                    // Manda só quando solta: arrastando não vira uma enxurrada de pedidos.
+                    onPressedChanged: if (!pressed) raiz.mudarVolume(Math.round(value))
+                    background: Rectangle {
+                        x: deslizador.leftPadding
+                        y: deslizador.topPadding + deslizador.availableHeight / 2 - height / 2
+                        width: deslizador.availableWidth
+                        height: 6
+                        radius: 3
+                        color: raiz.tema.superficie2
+                        Rectangle {
+                            width: deslizador.visualPosition * parent.width
+                            height: parent.height
+                            radius: 3
+                            color: raiz.tema.persona
+                        }
+                    }
+                    handle: Rectangle {
+                        x: deslizador.leftPadding + deslizador.visualPosition * (deslizador.availableWidth - width)
+                        y: deslizador.topPadding + deslizador.availableHeight / 2 - height / 2
+                        width: 16; height: 16; radius: 8
+                        color: deslizador.pressed ? raiz.tema.texto : raiz.tema.textoMedio
+                    }
+                }
+            }
+            Item {
+                y: 56
+                width: parent.width
+                height: 56
+                Rectangle { x: 18; width: parent.width - 36; height: 1; color: raiz.tema.traco }
+                Column {
+                    anchors.verticalCenter: parent.verticalCenter
+                    x: 18
+                    spacing: 2
+                    Text {
+                        text: "Notificações da escola"
+                        color: raiz.tema.textoMedio
+                        font.family: raiz.tema.familia
+                        font.pixelSize: 14
+                    }
+                    Text {
+                        text: "Nota nova, média e agenda, no PC e no celular"
+                        color: raiz.tema.textoFraco
+                        font.family: raiz.tema.familia
+                        font.pixelSize: 12
+                    }
+                }
+                // O interruptor.
+                Rectangle {
+                    id: interruptor
+                    readonly property bool ligado: raiz.ajustes ? raiz.ajustes.notificar_escola : true
+                    anchors.verticalCenter: parent.verticalCenter
+                    anchors.right: parent.right
+                    anchors.rightMargin: 18
+                    width: 40; height: 22; radius: 11
+                    color: ligado ? raiz.tema.persona : raiz.tema.superficie2
+                    Behavior on color { ColorAnimation { duration: raiz.tema.rapido } }
+                    Rectangle {
+                        y: 3; width: 16; height: 16; radius: 8
+                        x: interruptor.ligado ? interruptor.width - width - 3 : 3
+                        color: raiz.tema.texto
+                        Behavior on x { NumberAnimation { duration: raiz.tema.rapido; easing.type: Easing.OutCubic } }
+                    }
+                    MouseArea {
+                        anchors.fill: parent
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: raiz.mudarNotificar(!interruptor.ligado)
+                    }
+                }
+            }
+        }
+        Item { width: 1; height: 24 }
+
         Repeater {
             model: [
                 { titulo: "Agora", linhas: [
@@ -222,7 +351,7 @@ Item {
                     ["Cérebro", raiz.nomes[raiz.modelo] || raiz.modelo || "—"],
                     ["Esforço", raiz.nomes[raiz.esforco] || raiz.esforco || "—"],
                     ["Conversa", raiz.conversa ? raiz.conversa.slice(0, 8) : "—"],
-                    ["Versão da janela", "beta 0.6.0"],
+                    ["Versão da janela", "beta 0.6.5"],
                 ] },
                 { titulo: "Atalhos", linhas: [
                     ["Ctrl + N", "Novo chat"],

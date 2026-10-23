@@ -36,7 +36,7 @@ from pathlib import Path
 
 import numpy as np
 
-from jarvis import config, cronometro, eventos, microfone, som, tts, wakeword
+from jarvis import ajustes, config, cronometro, eventos, microfone, som, tts, wakeword
 from jarvis.agente import sessoes
 from jarvis.agente.agente import Agente, ErroDoAgente, Saida
 from jarvis.agente.avisos import AvisosWhatsApp
@@ -847,6 +847,9 @@ class Ciclo:
         except Exception:
             pass  # o servidor de som piscou: a janela pede de novo ao abrir os Ajustes
 
+    def emitir_ajustes(self) -> None:
+        self.emissor.emitir("ajustes", **ajustes.ler())
+
     def emitir_cerebro(self) -> None:
         self.emissor.emitir("cerebro", persona="jarvis", **self.agente.cerebro)
 
@@ -883,6 +886,15 @@ class Ciclo:
                     self.portao.trocar()  # a saída vale já na próxima fala
                 self.registrador.registrar_estado("som", **som.escolha())
             self.emitir_som()
+            return
+        if pedido.tipo == "ajustes":
+            try:
+                novos = json.loads(pedido.valor or "{}")
+            except ValueError:
+                return
+            if novos:
+                self.registrador.registrar_estado("ajustes", **ajustes.mudar(**novos))
+            self.emitir_ajustes()
             return
         if pedido.tipo == "cerebro":
             try:
@@ -1295,6 +1307,7 @@ def conversar(cfg: config.Config) -> int:
             ciclo.som_ativo = usar_som
             ciclo.emitir_cerebro()
             ciclo.emitir_som()
+            ciclo.emitir_ajustes()
             print(REGUA)
             _linha("dormindo", 'diga "hey Jarvis"  (ctrl+c encerra)')
 

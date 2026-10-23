@@ -663,7 +663,15 @@ O Jarvis grava e toca pelo dispositivo `pulse` do PortAudio, que obedece
 próxima fala e o microfone reabre na hora (`Microfone.trocar`). A escolha
 fica em `~/.local/share/jarvis/som.json`. Pela ponte: o pedido `som` e o
 evento `som`. Se o `config.toml` fixar um aparelho, vale o jeito antigo.
-Ordem dos Ajustes (Léo): limites, som e, por último, as informações.
+Ordem dos Ajustes (Léo): limites, som, voz e avisos e, por último, as
+informações.
+
+**Voz e avisos (beta 0.6.5):** o volume da voz do Jarvis no PC (0 a 100%,
+aplicado em `tts.falar`; 100% é o volume de sempre e é o TETO, daqui só se
+abaixa) e o interruptor das notificações da escola. Desligado, a escola
+continua lendo, mas não notifica nem no PC nem no celular. Os dois ficam em
+`~/.local/share/jarvis/ajustes.json` (`jarvis/ajustes.py`), com o pedido
+`ajustes` e o evento `ajustes` na ponte.
 
 ### Dependências de sistema (não vêm com o pip)
 

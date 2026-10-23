@@ -208,6 +208,9 @@ def falar(
     """
     pedido_em = time.monotonic()
     gerador = voz.sintetizar(texto)
+    # O volume da voz nos Ajustes da janela (0 a 100; 100 = o de sempre, o teto).
+    from jarvis import ajustes
+    volume = ajustes.ler()["volume_voz"] / 100
 
     primeiro_audio_s = 0.0
     sintese_total_s = 0.0
@@ -242,7 +245,11 @@ def falar(
                     ao_comecar()
                     ao_comecar = None
 
-            stream.write(trecho.pcm)
+            pcm = trecho.pcm
+            if volume < 1:
+                import numpy as np
+                pcm = (np.frombuffer(pcm, dtype=np.int16) * volume).astype(np.int16).tobytes()
+            stream.write(pcm)
             amostras += len(trecho.pcm) // (2 * trecho.canais)
 
         if stream is None:  # texto vazio ou sem áudio

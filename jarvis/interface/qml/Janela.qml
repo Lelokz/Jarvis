@@ -74,6 +74,7 @@ Window {
     property real usoSemana: -1
     property real voltaSemana: 0
     property var som: null           // o evento "som" (os Ajustes, beta 0.6.0)
+    property var ajustes: null       // o evento "ajustes" (volume da voz, notificações; beta 0.6.5)
     // Escreveu numa conversa antiga: primeiro o Jarvis volta pra ela, depois
     // a mensagem vai (quando a "conversa_atual" chegar com este id).
     property string esperandoContinuar: ""
@@ -261,6 +262,7 @@ Window {
             }
         }
         function onSomMudou(dados) { janela.som = dados; }
+        function onAjustesMudou(dados) { janela.ajustes = dados; }
         function onUsoMudou(cinco, voltaCinco, semana, voltaSemana) {
             janela.usoCinco = cinco; janela.voltaCinco = voltaCinco;
             janela.usoSemana = semana; janela.voltaSemana = voltaSemana;
@@ -680,6 +682,9 @@ Window {
             usoSemana: janela.usoSemana
             voltaSemana: janela.voltaSemana
             som: janela.som
+            ajustes: janela.ajustes
+            onMudarVolume: (volume) => { if (typeof ponte !== "undefined") ponte.mudarVolumeVoz(volume) }
+            onMudarNotificar: (ligado) => { if (typeof ponte !== "undefined") ponte.mudarNotificarEscola(ligado) }
             // Ao abrir os Ajustes, a lista vem de novo: um fone plugado agora aparece.
             onVisibleChanged: if (visible && typeof ponte !== "undefined") ponte.pedirSom()
             onEscolherSom: (tipo, aparelho) => { if (typeof ponte !== "undefined") ponte.escolherSom(tipo, aparelho) }

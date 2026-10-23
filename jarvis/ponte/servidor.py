@@ -92,6 +92,7 @@ class Servidor:
         self._ultimo_aviso: dict[str, Any] | None = None
         self._ultimo_cerebro: dict[str, Any] | None = None
         self._ultimo_som: dict[str, Any] | None = None
+        self._ultimo_ajustes: dict[str, Any] | None = None
         self._ultimo_uso: dict[str, Any] | None = None
         self._conversa_atual: str = ""
         # Quem responde os pedidos "memoria", "conversas" e "abrir" (o
@@ -233,6 +234,8 @@ class Servidor:
             self._ultimo_cerebro = evento
         elif tipo == "som":
             self._ultimo_som = evento
+        elif tipo == "ajustes":
+            self._ultimo_ajustes = evento
         elif tipo == "uso":
             self._ultimo_uso = evento
         elif tipo == "conversa_atual":
@@ -411,6 +414,8 @@ class Servidor:
                 self._direto(cliente, self._ultimo_cerebro)
             if self._ultimo_som is not None and cliente.quer_janela:
                 self._direto(cliente, self._ultimo_som)
+            if self._ultimo_ajustes is not None and cliente.quer_janela:
+                self._direto(cliente, self._ultimo_ajustes)
             if self._ultimo_uso is not None and cliente.quer_janela:
                 self._direto(cliente, self._ultimo_uso)
             if self._conversa_atual and cliente.quer_janela:
@@ -462,10 +467,10 @@ class Servidor:
                 self._direto(cliente, {"ev": "erro", "motivo": f"não deu ({e})"})
                 return
             self._direto(cliente, {"ev": "conversas", "lista": lista})
-        elif tipo in ("nova", "continuar", "cerebro", "parar", "som"):
+        elif tipo in ("nova", "continuar", "cerebro", "parar", "som", "ajustes"):
             # "som" também vai para a thread de áudio: trocar o microfone é lá.
             valor = dados.get("id", "") if tipo == "continuar" else \
-                json.dumps(dados) if tipo in ("cerebro", "som") else ""
+                json.dumps(dados) if tipo in ("cerebro", "som", "ajustes") else ""
             self._pedidos.put(Pedido(tipo, valor, cliente.id, cliente.quer_voz))
 
     def _escrever_todos(self) -> None:

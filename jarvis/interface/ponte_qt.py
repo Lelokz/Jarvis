@@ -54,6 +54,7 @@ class PonteQt(QObject):
     usoMudou = Signal(float, float, float, float)  # 5 h (uso, volta_em), semana (uso, volta_em)
     escrevendo = Signal(int, str, bool, bool)      # bloco, pedaço, fim, descartar
     somMudou = Signal("QVariant")          # aparelhos de som: o evento "som" inteiro (Ajustes)
+    ajustesMudou = Signal("QVariant")      # volume da voz e notificações da escola (Ajustes)
 
     def __init__(self, caminho: Path, parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -143,6 +144,14 @@ class PonteQt(QObject):
     @Slot(result=bool)
     def pedirSom(self) -> bool:
         return self._pedir({"pedir": "som"})
+
+    @Slot(int, result=bool)
+    def mudarVolumeVoz(self, volume: int) -> bool:
+        return self._pedir({"pedir": "ajustes", "volume_voz": max(0, min(100, int(volume)))})
+
+    @Slot(bool, result=bool)
+    def mudarNotificarEscola(self, ligado: bool) -> bool:
+        return self._pedir({"pedir": "ajustes", "notificar_escola": bool(ligado)})
 
     @Slot(str, str, result=bool)
     def escolherSom(self, tipo: str, aparelho: str) -> bool:
@@ -248,6 +257,8 @@ class PonteQt(QObject):
             self.conversasRecebidas.emit(list(ev.get("lista") or []))
         elif tipo == "som":
             self.somMudou.emit({k: v for k, v in ev.items() if k != "ev"})
+        elif tipo == "ajustes":
+            self.ajustesMudou.emit({k: v for k, v in ev.items() if k != "ev"})
         elif tipo == "conversa":
             self.conversaRecebida.emit(str(ev.get("id") or ""), list(ev.get("falas") or []))
         elif tipo == "erro":

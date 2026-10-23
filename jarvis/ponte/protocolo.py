@@ -70,6 +70,8 @@ ASSISTENTE -> CLIENTES
      "padrao_saida":"<nome>", "padrao_entrada":"<nome>",
      "saida":"<id ou ''>", "entrada":"<id ou ''>"}
         Os aparelhos de som do PC (os Ajustes da janela, beta 0.6.0).
+    {"ev":"ajustes", "volume_voz":0-100, "notificar_escola":bool}
+        O volume da voz no PC e as notificações da escola (beta 0.6.5).
     {"ev":"conversa_atual", "id":"<uuid>", "falas":[...]}
         A conversa do Jarvis mudou (ligou, "nova", "continuar"): o id da
         sessão do Claude Code e as falas dela (vazio na nova). O histórico
@@ -115,6 +117,8 @@ CLIENTES -> ASSISTENTE
          {"pedir":"som"}                  -> "som" (a lista de aparelhos)
          {"pedir":"som", "saida":"<id>", "entrada":"<id>"} (um ou os dois;
              "" = o padrão do sistema) -> troca e manda "som" para todos
+         {"pedir":"ajustes", "volume_voz":0-100, "notificar_escola":bool}
+             (um ou os dois; sem nada, só pede) -> "ajustes" para todos
         A conversa de AGORA não pode ser apagada (erro): o Jarvis está nela.
         "nova" e "continuar" com o Jarvis no meio de uma tarefa voltam
         {"ev":"erro"} para quem pediu.
@@ -160,11 +164,11 @@ VERSAO = 3
 # (acordou, dormiu, janela, tempos...) é para o terminal e fica em casa.
 PUBLICOS = frozenset({"sessao", "estado", "nivel", "voce_disse", "jarvis_disse", "aviso",
                       "mostrar", "atividade", "voz", "cerebro", "conversa_atual", "uso",
-                      "escrevendo", "som"})
+                      "escrevendo", "som", "ajustes"})
 ESTADOS = ("dormindo", "ouvindo", "escutando", "pensando", "falando")
 PEDIDOS = frozenset({"ola", "falar", "memoria", "ouvir",
                      "conversas", "abrir", "nova", "continuar", "cerebro", "parar",
-                     "renomear", "apagar", "som"})
+                     "renomear", "apagar", "som", "ajustes"})
 
 # Uma linha maior que isto sem quebra é um cliente com defeito, não um pedido.
 MAX_LINHA = 64 * 1024
@@ -246,6 +250,20 @@ def ler_pedido(linha: bytes) -> tuple[str, dict[str, Any]]:
                         not re.fullmatch(r"[\w.:@+-]*", valor):
                     raise ErroDeProtocolo(f"'{campo}' inválido")
                 dados[campo] = valor
+        return tipo, dados
+
+    if tipo == "ajustes":
+        dados = {}
+        volume = objeto.get("volume_voz")
+        if volume is not None:
+            if not isinstance(volume, int) or isinstance(volume, bool) or not 0 <= volume <= 100:
+                raise ErroDeProtocolo("'volume_voz' tem que ser de 0 a 100")
+            dados["volume_voz"] = volume
+        notificar = objeto.get("notificar_escola")
+        if notificar is not None:
+            if not isinstance(notificar, bool):
+                raise ErroDeProtocolo("'notificar_escola' tem que ser true ou false")
+            dados["notificar_escola"] = notificar
         return tipo, dados
 
     if tipo == "ouvir":
