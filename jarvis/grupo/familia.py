@@ -1,7 +1,10 @@
 """O Jarvis no grupo da família do WhatsApp (23/10/2026, pedido do Léo).
 
 Quem está no grupo conversa com o Jarvis escrevendo "Jarvis" em qualquer
-parte da mensagem; ele lê pelo contexto se é com ele. A resposta sai pelo
+parte da mensagem; ele lê pelo contexto se é com ele. Depois que ele
+responde, a conversa fica aberta por uns minutos: a resposta de quem falou
+com ele chega mesmo sem "Jarvis" (o Chris respondeu ao "em que posso
+ajudar?" e ficou no vácuo, 23/10/2026). A resposta sai pelo
 WhatsApp do dono, com "🤖 Jarvis:" na frente.
 
 **Trancado de verdade:** aqui o Claude roda à parte, sem a memória do dono e
@@ -33,6 +36,9 @@ LISTA = Path.home() / ".local/share/jarvis/grupo-lista.json"
 NOVIDADES = Path.home() / ".local/share/jarvis/novidades.jsonl"
 # O limite do Claude é do dono: a família não pode gastar tudo.
 MAX_POR_HORA = 30
+# Depois de cada resposta no grupo, as mensagens seguintes vão para o Claude
+# mesmo sem "Jarvis", e ele decide se são com ele.
+CONVERSA_ABERTA_S = 5 * 60
 PERMITIDAS = {"WebSearch", "WebFetch", "ToolSearch"}
 _ITENS = {"type": "object", "properties": {"itens": {"type": "array", "items": {"type": "string"}}},
           "required": ["itens"]}
@@ -62,6 +68,7 @@ class GrupoFamilia(threading.Thread):
         self._saidas: queue.Queue[tuple[str, str]] = queue.Queue()
         self._chamadas: deque[float] = deque()
         self._visto = dt.datetime.now()
+        self._aberta_ate = 0.0
 
     def pegar(self) -> tuple[str, str] | None:
         try:
@@ -78,7 +85,9 @@ class GrupoFamilia(threading.Thread):
     def _dono(self) -> str:
         return ajustes.nome_de_quem_usa() or "dono"
 
-    def _quem(self, remetente: str, minha: bool) -> str:
+    def _quem(self, remetente: str, minha: bool, texto: str = "") -> str:
+        if minha and texto.startswith(PREFIXO):
+            return "Jarvis (você)"
         if minha:
             return self._dono()
         try:
@@ -91,11 +100,12 @@ class GrupoFamilia(threading.Thread):
         linhas = self.whatsapp._consultar(
             "SELECT sender, is_from_me, content, timestamp FROM messages WHERE chat_jid = ? "
             "ORDER BY timestamp DESC LIMIT ?", (jid, quantas))
-        return [(self._quem(s or "", bool(eu)), c or "(mídia)", self.whatsapp._quando(t))
+        return [(self._quem(s or "", bool(eu), c or ""), c or "(mídia)", self.whatsapp._quando(t))
                 for s, eu, c, t in reversed(linhas)]
 
     def _mandar(self, jid: str, texto: str) -> None:
         self.whatsapp.enviar(jid, f"{PREFIXO} {texto.strip()}")
+        self._aberta_ate = time.time() + CONVERSA_ABERTA_S
 
     def _notificar(self, texto: str) -> None:
         """Para o dono: notificação no PC e no app (nada de WhatsApp)."""
@@ -138,21 +148,28 @@ class GrupoFamilia(threading.Thread):
         if not novas:
             return
         self._visto = max(m[2] for m in novas)
-        chamadas = [m for m in novas if "jarvis" in normalizar(m[1]) and not m[1].startswith(PREFIXO)]
+        novas = [m for m in novas if not m[1].startswith(PREFIXO)]
+        chamadas = [m for m in novas if "jarvis" in normalizar(m[1])]
+        aberta = time.time() < self._aberta_ate
+        if aberta:
+            chamadas = novas  # pode ser a resposta ao que ele perguntou
         if not chamadas:
             return
         agora = time.time()
         while self._chamadas and self._chamadas[0] < agora - 3600:
             self._chamadas.popleft()
         if len(self._chamadas) >= MAX_POR_HORA:
-            self._mandar(jid, "Por agora já conversei bastante; daqui a pouco eu volto.")
+            if any("jarvis" in normalizar(m[1]) for m in chamadas):
+                # Direto, sem _mandar: não reabre a conversa.
+                self.whatsapp.enviar(jid, f"{PREFIXO} Por agora já conversei bastante; daqui a pouco eu volto.")
             return
         self._chamadas.append(agora)
-        asyncio.run(self._atender(jid, chamadas))
+        asyncio.run(self._atender(jid, chamadas, aberta))
 
     # -- o Claude, trancado --------------------------------------------------------
 
-    async def _atender(self, jid: str, chamadas: list[tuple[str, str, dt.datetime]]) -> None:
+    async def _atender(self, jid: str, chamadas: list[tuple[str, str, dt.datetime]],
+                       aberta: bool = False) -> None:
         from claude_agent_sdk import (ClaudeAgentOptions, HookMatcher, create_sdk_mcp_server, query,
                                       tool)
 
@@ -227,7 +244,9 @@ class GrupoFamilia(threading.Thread):
         agora = dt.datetime.now().astimezone()
         pedido = (f"Agora: {agora:%d/%m/%Y %H:%M} (fuso UTC{agora:%z}).\n\n"
                   "As últimas mensagens do grupo, para contexto:\n" + conversa +
-                  "\n\nAs NOVAS que mencionam o Jarvis (trate cada uma):\n" +
+                  ("\n\nVocê acabou de falar no grupo. As NOVAS (podem ser com você mesmo sem "
+                   "\"Jarvis\", ou só conversa entre eles; trate cada uma):\n" if aberta else
+                   "\n\nAs NOVAS que mencionam o Jarvis (trate cada uma):\n") +
                   "\n".join(f"- {quem}: {texto}" for quem, texto, _ in chamadas))
         async for _ in query(prompt=pedido, options=opcoes):
             pass
