@@ -534,6 +534,14 @@ class Ciclo:
         microfone tem que continuar ouvindo ("para", a resposta da pergunta).
         O que o Claude devolve chega por `atender_agente()`.
         """
+        # Tela bloqueada: só o Léo (decisão dele, 23/10/2026). Outra voz nem
+        # chega ao Claude. Digitado (voz None) vale como ele.
+        if voz is not None and voz.quem != "leo":
+            from jarvis.nucleo import tela
+            if tela.bloqueada():
+                self.registrador.registrar_estado("tela_bloqueada_outra_voz", texto=texto, quem=voz.quem)
+                self.dormir("tela bloqueada: só o Léo")
+                return
         self._mudar_estado("pensando")
         self.emissor.emitir("voce_disse", texto=texto, origem=origem)
 
@@ -648,8 +656,22 @@ class Ciclo:
             # O prazo conta de quando ele TERMINA de perguntar.
             self._pergunta = (s, time.monotonic() + self.cfg.agente.validade_pergunta_s)
             self._renovar("pergunta feita")
+        elif s.tipo == "desbloqueio":
+            # O pedido de desbloquear: o app mostra "Desbloquear o PC?" (se
+            # estiver conectado na hora; fechado, busca em /desbloqueio).
+            from jarvis.nucleo import desbloqueio
+            pedido = desbloqueio.pendente()
+            if pedido is not None:
+                self.registrador.registrar_estado("pediu_desbloqueio", id=pedido["id"])
+                self.emissor.emitir("desbloqueio", id=pedido["id"], expira_em=pedido["expira_em"])
         elif s.tipo == "fim":
             self._fim(s)
+            if getattr(self.agente, "bloquear_ao_terminar", False):
+                # Só agora, com a resposta já falada (antes bloqueava no meio).
+                self.agente.bloquear_ao_terminar = False
+                from jarvis.nucleo import tela
+                self.registrador.registrar_estado("bloqueou_a_tela")
+                tela.bloquear()
             # O que ainda estava "escrevendo" (interrompido, sem fala) fica
             # como texto normal na janela.
             self._fim_da_escrita()

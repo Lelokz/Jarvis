@@ -12,7 +12,9 @@ import android.app.job.JobService
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
+import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Request
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
@@ -82,6 +84,71 @@ object Novidades {
         }
     }
 
+    private const val CANAL_SEGURANCA = "seguranca"
+    private const val ID_NOTIF_DESBLOQUEIO = 77
+
+    /** O pedido de desbloquear o PC esperando resposta: o id, ou null. */
+    fun desbloqueioPendente(c: Context): String? {
+        val p = prefs(c)
+        val base = p.getString("base", null)?.trimEnd('/') ?: return null
+        val chave = p.getString("chave", null) ?: return null
+        return try {
+            cliente.newCall(Request.Builder().url("$base/desbloqueio")
+                .header("Authorization", "Bearer $chave").build()).execute().use { r ->
+                if (!r.isSuccessful) null
+                else JSONObject(r.body?.string() ?: return null).optJSONObject("pedido")?.optString("id")
+                    ?.takeIf { it.isNotEmpty() }
+            }
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    /** Sim ou Não. Devolve "desbloqueado", "recusado", "expirou", "falhou" ou "" (sem conexão). */
+    fun responderDesbloqueio(c: Context, id: String, sim: Boolean): String {
+        val p = prefs(c)
+        val base = p.getString("base", null)?.trimEnd('/') ?: return ""
+        val chave = p.getString("chave", null) ?: return ""
+        tirarNotificacaoDesbloqueio(c)
+        return try {
+            val corpo = JSONObject().put("id", id).put("sim", sim).toString()
+                .toRequestBody("application/json".toMediaType())
+            cliente.newCall(Request.Builder().url("$base/desbloqueio").post(corpo)
+                .header("Authorization", "Bearer $chave").build()).execute().use { r ->
+                JSONObject(r.body?.string() ?: "{}").optString("resultado")
+            }
+        } catch (e: Exception) {
+            ""
+        }
+    }
+
+    /** A notificação "Pediram pra desbloquear o PC": tocar abre o app já no aviso. */
+    fun notificarDesbloqueio(c: Context) {
+        val gerente = c.getSystemService(NotificationManager::class.java)
+        gerente.createNotificationChannel(
+            NotificationChannel(CANAL_SEGURANCA, "Segurança do PC", NotificationManager.IMPORTANCE_HIGH).apply {
+                description = "Quando pedem para desbloquear o PC"
+            })
+        val abrir = PendingIntent.getActivity(c, 1, Intent(c, MainActivity::class.java)
+            .putExtra("desbloqueio", true).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+        val aviso = Notification.Builder(c, CANAL_SEGURANCA)
+            .setContentTitle("Desbloquear o PC?")
+            .setContentText("Pediram pro Jarvis desbloquear o PC. Toque pra responder.")
+            .setSmallIcon(R.drawable.ic_notificacao)
+            .setContentIntent(abrir)
+            .setAutoCancel(true)
+            .setTimeoutAfter(3 * 60 * 1000L)
+            .build()
+        try {
+            gerente.notify(ID_NOTIF_DESBLOQUEIO, aviso)
+        } catch (e: SecurityException) {
+        }
+    }
+
+    fun tirarNotificacaoDesbloqueio(c: Context) =
+        c.getSystemService(NotificationManager::class.java).cancel(ID_NOTIF_DESBLOQUEIO)
+
     /** O versionCode do app compilado no PC, ou null se não deu para saber. */
     fun versaoNoPc(c: Context): Int? {
         val base = prefs(c).getString("base", null)?.trimEnd('/') ?: return null
@@ -117,6 +184,10 @@ class TarefaNovidades : JobService() {
     override fun onStartJob(params: JobParameters): Boolean {
         Thread({
             Novidades.buscar(applicationContext)
+            // App fechado: o pedido de desbloquear também chega por aqui (o
+            // aviso na hora vai pelo WhatsApp do próprio Léo).
+            if (Novidades.desbloqueioPendente(applicationContext) != null)
+                Novidades.notificarDesbloqueio(applicationContext)
             jobFinished(params, false)
         }, "novidades").start()
         return true

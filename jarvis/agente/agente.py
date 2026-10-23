@@ -230,6 +230,8 @@ class Agente:
         # Quem falou por último (jarvis/quem_fala.py): as travas da voz olham
         # isto. None = digitado ou sem o reconhecimento: vale como o Léo.
         self.voz = None
+        # Pedido de bloquear a tela: o Ciclo bloqueia quando a fala terminar.
+        self.bloquear_ao_terminar = False
         # Os dois cérebros (config [agente] modelo_rapido): o rápido atende; o
         # pedido pesado ele passa para o forte (ferramenta chamar_o_opus).
         self._subir = False     # o rápido pediu o Opus: ao fim do turno, troca
@@ -292,6 +294,8 @@ class Agente:
             falas_do_pedido=lambda: list(self._falas),
             ao_mandar=self._mandou_whats,
             chamar_o_opus=self._pedir_o_opus if self.cfg.modelo_rapido else None,
+            bloquear_pc=self._bloquear_pc,
+            pedir_desbloqueio=self._pedir_desbloqueio,
         )
         self._no_opus = False
         self._modelo_atual = self._modelo_desejado()
@@ -685,6 +689,12 @@ class Agente:
                 "hookEventName": "PreToolUse", "permissionDecision": "deny",
                 "permissionDecisionReason": "Use a ferramenta whatsapp_mandar (ela manda arquivo "
                                             "também, no campo `arquivo`), nunca a ponte direto."}}
+        if entrada.get("tool_name") == "Bash" and travas.mexe_na_tela(comando):
+            return {"hookSpecificOutput": {
+                "hookEventName": "PreToolUse", "permissionDecision": "deny",
+                "permissionDecisionReason": "Para bloquear use a ferramenta bloquear_pc; para "
+                                            "desbloquear, pedir_desbloqueio (confirma no "
+                                            "celular). Nunca comando direto."}}
         voz = self.voz
         if voz is None or voz.quem == "leo":
             return {}
@@ -701,6 +711,34 @@ class Agente:
                 f"Bloqueado pelas travas da voz: {quem}, e isso ({o_que}) só o "
                 f"{DONO} pode pedir. Diga isso em uma frase e não tente outro caminho."),
         }}
+
+    def _bloquear_pc(self) -> str:
+        from jarvis.nucleo import tela
+        if tela.bloqueada():
+            return "A tela já está bloqueada."
+        # O Ciclo bloqueia quando a resposta terminar de ser falada (antes,
+        # o Claude bloqueava no meio da fala).
+        self.bloquear_ao_terminar = True
+        return "Feito: a tela bloqueia assim que você terminar de falar."
+
+    def _pedir_desbloqueio(self) -> str:
+        from jarvis.nucleo import desbloqueio, tela
+        if not tela.bloqueada():
+            return "A tela já está desbloqueada."
+        pedido = desbloqueio.criar()
+        # O app (se estiver conectado) mostra na hora; fechado, chega pela
+        # notificação e pelo WhatsApp do próprio Léo.
+        self.saidas.put(Saida("desbloqueio", pedido["id"]))
+        if self.whatsapp is not None:
+            try:
+                eu = self.whatsapp.meu_jid()
+                if eu:
+                    self.whatsapp.enviar(eu, "🔒 Pediram pra desbloquear o PC. Abre o app do "
+                                             "Jarvis pra confirmar (vale por 3 minutos).")
+            except Exception:
+                pass
+        return ("Mandei a confirmação pro celular do Léo. O PC só desbloqueia se ele tocar "
+                "em Sim no app, nos próximos 3 minutos. Diga isso em uma frase.")
 
     def _mandou_whats(self, jid: str, nome: str, texto: str) -> None:
         pessoa = self.whatsapp.pessoa(jid) if self.whatsapp else nome

@@ -4,6 +4,8 @@ Não é a lista de funções de antes: o Claude continua com tudo do Claude Code
 Isto é só o que existe AQUI e não existe em lugar nenhum fora do Jarvis:
 
 - `mostrar`: escrever na janela do Jarvis (o longo não vira voz);
+- bloquear o PC e pedir para desbloquear (out/2026): bloquear espera o
+  Jarvis terminar de falar; desbloquear só depois do Sim do Léo no celular;
 - WhatsApp: a ponte é do Jarvis, e o `whatsapp.py` já resolve o que o
   servidor MCP que veio com ela erra (nome pelo LID, dois contatos com o
   mesmo nome).
@@ -38,7 +40,9 @@ def _texto(t: str, erro: bool = False) -> dict[str, Any]:
 
 def criar_servidor(mostrar: Callable[[str, str], None], whatsapp,
                    falas_do_pedido: Callable[[], list[str]], ao_mandar: Callable[[str, str, str], None],
-                   chamar_o_opus: Callable[[str], str] | None = None):
+                   chamar_o_opus: Callable[[str], str] | None = None,
+                   bloquear_pc: Callable[[], str] | None = None,
+                   pedir_desbloqueio: Callable[[], str] | None = None):
     """`falas_do_pedido()` devolve o que o Léo falou desde que a tarefa começou.
     `chamar_o_opus(motivo)`: passa o pedido do modelo rápido para o forte."""
 
@@ -66,6 +70,27 @@ def criar_servidor(mostrar: Callable[[str, str], None], whatsapp,
             return _texto(chamar_o_opus(str(args.get("motivo") or "")))
 
         ferramentas.append(_opus)
+
+    if bloquear_pc is not None:
+        @tool("bloquear_pc",
+              "Bloqueia a tela do PC. O bloqueio acontece DEPOIS de você terminar de "
+              "falar a resposta. É o único jeito de bloquear: não use comando no Bash.",
+              {})
+        async def _bloquear(args):
+            return _texto(bloquear_pc())
+
+        ferramentas.append(_bloquear)
+
+    if pedir_desbloqueio is not None:
+        @tool("pedir_desbloqueio",
+              "Pede para desbloquear a tela do PC. NÃO desbloqueia na hora: manda uma "
+              "confirmação para o celular do Léo, e só destrava se ele tocar em Sim lá. "
+              "É o único jeito de desbloquear: não existe comando que você possa usar.",
+              {})
+        async def _desbloquear(args):
+            return _texto(pedir_desbloqueio())
+
+        ferramentas.append(_desbloquear)
 
     if whatsapp is not None:
         def _ligado() -> bool:

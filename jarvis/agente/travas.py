@@ -43,6 +43,19 @@ _BASH = [
 
 _EDITAM = {"Write", "Edit", "MultiEdit", "NotebookEdit"}
 
+# A tela de bloqueio por comando direto: sempre barrado, até para o Léo. Só
+# pelas ferramentas bloquear_pc e pedir_desbloqueio (esta pede o Sim no
+# celular; um comando pularia a confirmação).
+_TELA = re.compile(r"\bcinnamon-screensaver-command\b|\bloginctl\s+(un)?lock-sessions?\b"
+                   r"|\bxdg-screensaver\b|ScreenSaver\.(SetActive|Lock)|\bgnome-screensaver-command\b"
+                   r"|\bdm-tool\s+lock\b|\bxdg-screensaver\s+lock\b"
+                   # o código do próprio Jarvis e a porta que recebe o Sim do celular
+                   r"|desbloque|tela\.(bloquear|desbloquear)")
+
+
+def mexe_na_tela(comando: str) -> bool:
+    return bool(_TELA.search(comando))
+
 
 def precisa_do_leo(ferramenta: str, entrada: dict, memoria: Path) -> str | None:
     """O que a ferramenta faria que só o Léo pode pedir, ou None se pode.
@@ -64,6 +77,10 @@ def precisa_do_leo(ferramenta: str, entrada: dict, memoria: Path) -> str | None:
         return None
     if ferramenta.startswith("mcp__"):
         acao = ferramenta.rsplit("__", 1)[-1].lower()
+        if acao == "bloquear_pc":
+            return "bloquear o PC"
+        if acao == "pedir_desbloqueio":
+            return "desbloquear o PC"
         if any(p in acao for p in ("trash", "delete", "remove", "uninstall")):
             return "apagar"
     return None

@@ -151,6 +151,25 @@ def criar_app(cfg: config.Config):
                              "versionName": elemento.get("versionName")},
                             headers={"Cache-Control": "no-store"})
 
+    async def desbloqueio_pc(request):
+        # O Sim/Não do "Desbloquear o PC?" no app. Com a chave do app: é ela
+        # (e o celular na mão do Léo) que fecha o buraco da voz imitada.
+        if not hmac.compare_digest(request.headers.get("authorization", ""), f"Bearer {chave}"):
+            return JSONResponse({"erro": "chave"}, status_code=401)
+        from jarvis.nucleo import desbloqueio
+        if request.method == "GET":
+            pedido = desbloqueio.pendente()
+            return JSONResponse({"pedido": {"id": pedido["id"], "expira_em": pedido["expira_em"]}
+                                 if pedido else None}, headers={"Cache-Control": "no-store"})
+        try:
+            corpo = await request.json()
+            id_pedido, sim = str(corpo["id"]), corpo["sim"] is True
+        except (ValueError, KeyError, TypeError):
+            return JSONResponse({"erro": "pedido torto"}, status_code=400)
+        resultado = await asyncio.to_thread(desbloqueio.responder, id_pedido, sim)
+        print(f"{time.strftime('%H:%M:%S')} desbloqueio pelo celular: {resultado}", flush=True)
+        return JSONResponse({"resultado": resultado})
+
     async def novidades(request):
         # Com chave: o texto é da vida do Léo (notas, provas).
         if not hmac.compare_digest(request.headers.get("authorization", ""), f"Bearer {chave}"):
@@ -328,6 +347,7 @@ def criar_app(cfg: config.Config):
 
     return Starlette(routes=[Route("/", pagina), Route("/saude", saude), Route("/jarvis.apk", apk),
                                Route("/versao", versao), Route("/novidades", novidades),
+                             Route("/desbloqueio", desbloqueio_pc, methods=["GET", "POST"]),
                              WebSocketRoute("/ws", conexao)])
 
 

@@ -246,6 +246,21 @@ class WhatsApp:
                 lista.append(Contato(f"{pn}@s.whatsapp.net", n, pn[-4:], pn in self._salvos))
         return lista
 
+    def meu_jid(self) -> str:
+        """O número do próprio Léo (o chat com ele mesmo): avisos do Jarvis
+        que precisam chegar na hora no celular, como o pedido de desbloqueio."""
+        try:
+            con = sqlite3.connect(f"file:{self.banco_whatsmeow}?mode=ro", uri=True, timeout=5)
+            try:
+                linha = con.execute("select jid from whatsmeow_device").fetchone()
+            finally:
+                con.close()
+        except sqlite3.Error:
+            return ""
+        if not linha:
+            return ""
+        return linha[0].split("@")[0].split(":")[0] + "@s.whatsapp.net"
+
     def esta_salvo(self, jid: str) -> bool:
         """O número está na agenda do Léo (e não só no perfil de alguém)?"""
         lid_pn, _, _ = self._nomes()

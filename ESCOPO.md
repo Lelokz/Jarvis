@@ -675,6 +675,26 @@ responde se ele perguntar. Os dois ficam em
 `~/.local/share/jarvis/ajustes.json` (`jarvis/ajustes.py`), com o pedido
 `ajustes` e o evento `ajustes` na ponte.
 
+### Bloquear e desbloquear o PC (23/10/2026, app beta 0.9.5)
+
+- **Tela bloqueada = só o Léo:** `_responder` olha `tela.bloqueada()` (o
+  ScreenSaver do Cinnamon pelo D-Bus, ou o LockedHint do logind). Voz de outra
+  pessoa nem chega ao Claude; digitado vale como ele.
+- **Bloquear:** a ferramenta `bloquear_pc` (só a voz do Léo, pelas travas).
+  Ela marca `bloquear_ao_terminar`, e o Ciclo bloqueia depois de a resposta
+  ser falada. Isso corrigiu o bug de bloquear no meio da fala.
+- **Desbloquear:** a ferramenta `pedir_desbloqueio` (só a voz do Léo) cria um
+  pedido de 3 min (`jarvis/nucleo/desbloqueio.py`). O evento `desbloqueio`
+  vai pro app (aviso "Desbloquear o PC?" + notificação), e um WhatsApp vai
+  pro chat do próprio Léo (o aviso imediato com o app fechado; o
+  JobScheduler só passa a cada 15 min). O Sim chega em `POST /desbloqueio`
+  na porta remota, com a chave do app, e só aí `tela.desbloquear()` roda
+  (`loginctl unlock-session` + `cinnamon-screensaver-command --deactivate`,
+  sem senha).
+- **Comando direto é sempre barrado**, até para o Léo
+  (`travas.mexe_na_tela`): pularia a confirmação.
+- **Não testado ainda:** destravar a tela de verdade no Cinnamon.
+
 ### Dependências de sistema (não vêm com o pip)
 
 | peça | precisa de | sem ela |

@@ -259,6 +259,31 @@ def main() -> int:
         except urllib.error.HTTPError as erro:
             checa("a versão do APK compilado (sem APK: 404)", erro.code == 404)
 
+        # 13. O desbloqueio do PC (app beta 0.9.5): só com a chave, uma resposta
+        # só, e um id errado não destrava nada.
+        from jarvis.nucleo import desbloqueio, tela
+        desbloqueio.ARQUIVO = base / "desbloqueio.json"
+        destravou = []
+        tela.desbloquear = lambda: destravou.append(1) or True  # nada de mexer na tela de verdade
+        pedido = desbloqueio.criar()
+        try:
+            urllib.request.urlopen(f"{http}/desbloqueio", timeout=5)
+            sem_chave = None
+        except urllib.error.HTTPError as erro:
+            sem_chave = erro.code
+        checa("desbloqueio sem a chave: 401", sem_chave == 401, f"{sem_chave}")
+        cabecalho = {"Authorization": f"Bearer {chave}", "Content-Type": "application/json"}
+        visto = json.load(urllib.request.urlopen(urllib.request.Request(f"{http}/desbloqueio",
+                                                                        headers=cabecalho), timeout=5))
+        checa("desbloqueio: o app vê o pedido", (visto.get("pedido") or {}).get("id") == pedido["id"])
+        def responder(id_pedido, sim):
+            r = urllib.request.Request(f"{http}/desbloqueio", method="POST", headers=cabecalho,
+                                       data=json.dumps({"id": id_pedido, "sim": sim}).encode())
+            return json.load(urllib.request.urlopen(r, timeout=5))["resultado"]
+        checa("id errado não destrava", responder("errado", True) == "expirou" and not destravou)
+        checa("o Sim destrava", responder(pedido["id"], True) == "desbloqueado" and destravou == [1])
+        checa("e vale uma vez só", responder(pedido["id"], True) == "expirou" and destravou == [1])
+
         celular.close()
         servidor_web.should_exit = True
         srv.encerrar()

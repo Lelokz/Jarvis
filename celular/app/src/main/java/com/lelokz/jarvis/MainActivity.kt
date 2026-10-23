@@ -130,7 +130,7 @@ private val Azul = Color(0xFF4DA3FF)
 private val Roxo = Color(0xFF9B7BFF)
 
 /** A versão da janela (a numeração do Léo, igual à do PC) e a do app. */
-const val VERSAO_JANELA = "beta 0.8.5"
+const val VERSAO_JANELA = "beta 0.9.5"
 
 // A Inter, a fonte da janela do PC (licença OFL). Variável: o peso funciona.
 @OptIn(ExperimentalTextApi::class)
@@ -185,8 +185,14 @@ class MainActivity : ComponentActivity() {
     private fun temMicrofone() = ContextCompat.checkSelfPermission(
         this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
 
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        if (intent.getBooleanExtra("desbloqueio", false)) (application as App).jarvis.conferirDesbloqueio()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (intent?.getBooleanExtra("desbloqueio", false) == true) (application as App).jarvis.conferirDesbloqueio()
         enableEdgeToEdge()
         setContent {
             MaterialTheme(colorScheme = darkColorScheme(background = Fundo, surface = Fundo)) {
@@ -297,6 +303,7 @@ fun Tela(modelo: Jarvis) {
     }
 
     if (modelo.avisoAtualizacao.value) AvisoAtualizacao(modelo)
+    if (modelo.desbloqueio.value.isNotEmpty()) AvisoDesbloqueio(modelo)
 
     if (seletores) {
         ModalBottomSheet(
@@ -317,6 +324,35 @@ private fun RetanguloAtualizacao(modelo: Jarvis, modifier: Modifier) {
         Box(Modifier.size(7.dp).clip(CircleShape).background(Azul))
         Spacer(Modifier.width(8.dp))
         Text("Atualização disponível", color = TextoMedio, fontSize = 12.sp)
+    }
+}
+
+/** "Desbloquear o PC?": a segunda trava do desbloqueio (a primeira é a voz do Léo). */
+@Composable
+private fun AvisoDesbloqueio(modelo: Jarvis) {
+    BackHandler { modelo.responderDesbloqueio(false) }
+    Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.45f))
+        .clickable(indication = null, interactionSource = remember { MutableInteractionSource() }) {},
+        contentAlignment = Alignment.Center) {
+        val forma = RoundedCornerShape(20.dp)
+        Column(Modifier.padding(horizontal = 32.dp).fillMaxWidth().clip(forma).background(Superficie2)
+            .border(1.dp, TracoForte, forma).padding(22.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                AtomoFixo(Azul, 26.dp)
+                Spacer(Modifier.width(10.dp))
+                Text("Desbloquear o PC?", color = Texto, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+            }
+            Spacer(Modifier.height(10.dp))
+            Text("Pediram pro Jarvis desbloquear o seu PC. Se não foi você, toque em Não.",
+                color = TextoMedio, fontSize = 14.sp, lineHeight = 20.sp)
+            Spacer(Modifier.height(20.dp))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedButton(onClick = { modelo.responderDesbloqueio(false) }, modifier = Modifier.weight(1f),
+                    border = BorderStroke(1.dp, TracoForte)) { Text("Não", color = TextoMedio) }
+                Button(onClick = { modelo.responderDesbloqueio(true) }, modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.buttonColors(containerColor = Azul, contentColor = Fundo)) { Text("Sim") }
+            }
+        }
     }
 }
 

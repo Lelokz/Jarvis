@@ -78,6 +78,8 @@ class Jarvis(private val app: Application) {
     // aviso grande está aberto. O grande sai uma vez por versão; depois fica
     // só o retângulo no topo.
     val atualizacao = mutableStateOf(0)
+    // O pedido de desbloquear o PC esperando o Sim/Não (o id), ou "".
+    val desbloqueio = mutableStateOf("")
     // As notificações da escola NO CELULAR (o PC tem o interruptor dele, nos
     // Ajustes da janela; decisão do Léo, 23/10/2026).
     val notificarEscola = mutableStateOf(prefs.getBoolean("notificar_escola", true))
@@ -155,7 +157,7 @@ class Jarvis(private val app: Application) {
             motivo.value = porque
             if (ok) {
                 avisarMudo()
-                viewModelScope.launch(Dispatchers.IO) { Novidades.buscar(app); conferirVersao() }
+                viewModelScope.launch(Dispatchers.IO) { Novidades.buscar(app); conferirVersao(); conferirDesbloqueio() }
                 // O histórico vem de novo a cada conexão: começa do zero. Os
                 // anexos ainda não enviados sobem de novo (a porta nova não
                 // conhece os da conexão que caiu).
@@ -173,6 +175,32 @@ class Jarvis(private val app: Application) {
         withContext(Dispatchers.Main) {
             atualizacao.value = if (noPc > instalada) noPc else 0
             if (atualizacao.value != 0 && prefs.getInt("atualizacao_avisada", 0) != noPc) avisoAtualizacao.value = true
+        }
+    }
+
+    /** Tem pedido de desbloquear esperando? (ao conectar e ao tocar na notificação) */
+    fun conferirDesbloqueio() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val id = Novidades.desbloqueioPendente(app) ?: ""
+            withContext(Dispatchers.Main) { desbloqueio.value = id }
+        }
+    }
+
+    fun responderDesbloqueio(sim: Boolean) {
+        val id = desbloqueio.value
+        desbloqueio.value = ""
+        if (id.isEmpty()) return
+        viewModelScope.launch(Dispatchers.IO) {
+            val r = Novidades.responderDesbloqueio(app, id, sim)
+            withContext(Dispatchers.Main) {
+                aviso.value = when (r) {
+                    "desbloqueado" -> "PC desbloqueado."
+                    "recusado" -> "Tudo bem, o PC continua bloqueado."
+                    "expirou" -> "Esse pedido já expirou."
+                    "falhou" -> "Não consegui desbloquear o PC."
+                    else -> "Sem conexão com o PC."
+                }
+            }
         }
     }
 
@@ -459,6 +487,10 @@ class Jarvis(private val app: Application) {
             "cerebro" -> {
                 modelo.value = ev.optString("modelo", modelo.value)
                 esforco.value = ev.optString("esforco", esforco.value)
+            }
+            "desbloqueio" -> {
+                desbloqueio.value = ev.optString("id")
+                Novidades.notificarDesbloqueio(app)
             }
             "ajustes" -> {
                 temEscola.value = ev.optBoolean("tem_escola", false)

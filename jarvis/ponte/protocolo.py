@@ -70,6 +70,9 @@ ASSISTENTE -> CLIENTES
      "padrao_saida":"<nome>", "padrao_entrada":"<nome>",
      "saida":"<id ou ''>", "entrada":"<id ou ''>"}
         Os aparelhos de som do PC (os Ajustes da janela, beta 0.6.0).
+    {"ev":"desbloqueio", "id":"<hex>", "expira_em":<época>}
+        Pediram para desbloquear o PC: o app pergunta "Desbloquear o PC?" e
+        responde na porta remota (POST /desbloqueio, com a chave).
     {"ev":"ajustes", "volume_voz":0-100, "notificar_escola":bool, "tem_escola":bool}
         O volume da voz no PC e as notificações da escola (beta 0.6.5).
     {"ev":"conversa_atual", "id":"<uuid>", "falas":[...]}
@@ -164,7 +167,7 @@ VERSAO = 3
 # (acordou, dormiu, janela, tempos...) é para o terminal e fica em casa.
 PUBLICOS = frozenset({"sessao", "estado", "nivel", "voce_disse", "jarvis_disse", "aviso",
                       "mostrar", "atividade", "voz", "cerebro", "conversa_atual", "uso",
-                      "escrevendo", "som", "ajustes"})
+                      "escrevendo", "som", "ajustes", "desbloqueio"})
 ESTADOS = ("dormindo", "ouvindo", "escutando", "pensando", "falando")
 PEDIDOS = frozenset({"ola", "falar", "memoria", "ouvir",
                      "conversas", "abrir", "nova", "continuar", "cerebro", "parar",
