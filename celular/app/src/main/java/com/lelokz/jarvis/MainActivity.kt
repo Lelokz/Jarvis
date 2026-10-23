@@ -130,7 +130,7 @@ private val Azul = Color(0xFF4DA3FF)
 private val Roxo = Color(0xFF9B7BFF)
 
 /** A versão da janela (a numeração do Léo, igual à do PC) e a do app. */
-const val VERSAO_JANELA = "beta 0.10.0"
+const val VERSAO_JANELA = "beta 0.10.5"
 
 // A Inter, a fonte da janela do PC (licença OFL). Variável: o peso funciona.
 @OptIn(ExperimentalTextApi::class)
@@ -188,11 +188,13 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: android.content.Intent) {
         super.onNewIntent(intent)
         if (intent.getBooleanExtra("desbloqueio", false)) (application as App).jarvis.conferirDesbloqueio()
+        (application as App).jarvis.receberCompartilhado(intent)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         if (intent?.getBooleanExtra("desbloqueio", false) == true) (application as App).jarvis.conferirDesbloqueio()
+        if (savedInstanceState == null) intent?.let { (application as App).jarvis.receberCompartilhado(it) }
         enableEdgeToEdge()
         setContent {
             MaterialTheme(colorScheme = darkColorScheme(background = Fundo, surface = Fundo)) {
@@ -524,6 +526,14 @@ private fun AtomoVivo(modelo: Jarvis, tamanho: androidx.compose.ui.unit.Dp, modi
 @Composable
 private fun Chat(modelo: Jarvis, abrirSeletores: () -> Unit) {
     var texto by remember { mutableStateOf("") }
+    // Link ou texto que chegou por "Compartilhar → Jarvis": entra na barra.
+    LaunchedEffect(modelo.textoCompartilhado.value) {
+        val veio = modelo.textoCompartilhado.value
+        if (veio.isNotEmpty()) {
+            texto = listOf(texto, veio).filter { it.isNotBlank() }.joinToString(" ")
+            modelo.textoCompartilhado.value = ""
+        }
+    }
     val lista = rememberLazyListState()
     val antiga = modelo.vendo.value.isNotEmpty()
     val falas = if (antiga) modelo.mensagensVendo else modelo.mensagens

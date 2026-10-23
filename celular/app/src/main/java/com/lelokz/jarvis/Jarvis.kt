@@ -239,6 +239,36 @@ class Jarvis(private val app: Application) {
         conexao?.enviar(JSONObject().put("pedir", "mudo").put("mudo", mudo.value))
     }
 
+    // -- compartilhar com o Jarvis (beta 0.10.5) ------------------------------
+
+    /** Texto ou link que chegou por "Compartilhar": vai para a barra de escrever. */
+    val textoCompartilhado = mutableStateOf("")
+
+    /** O "Compartilhar → Jarvis" de outro app: anexos viram anexos, link e texto
+     *  vão para a barra. Ele escreve o que quer junto e manda. */
+    fun receberCompartilhado(intent: Intent) {
+        if (!configurado.value) return
+        val uris = mutableListOf<Uri>()
+        @Suppress("DEPRECATION")
+        when (intent.action) {
+            Intent.ACTION_SEND -> (if (Build.VERSION.SDK_INT >= 33)
+                intent.getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java)
+                else intent.getParcelableExtra(Intent.EXTRA_STREAM) as? Uri)?.let { uris += it }
+            Intent.ACTION_SEND_MULTIPLE -> (if (Build.VERSION.SDK_INT >= 33)
+                intent.getParcelableArrayListExtra(Intent.EXTRA_STREAM, Uri::class.java)
+                else intent.getParcelableArrayListExtra(Intent.EXTRA_STREAM))?.let { uris += it }
+            else -> return
+        }
+        // Sempre na conversa de agora.
+        pagina.value = "chat"
+        if (vendo.value.isNotEmpty()) abrir("")
+        uris.take(10).forEach { anexar(it) }
+        val texto = listOfNotNull(intent.getStringExtra(Intent.EXTRA_SUBJECT),
+            intent.getCharSequenceExtra(Intent.EXTRA_TEXT)?.toString())
+            .filter { it.isNotBlank() }.distinct().joinToString("\n")
+        if (texto.isNotBlank()) textoCompartilhado.value = texto
+    }
+
     // -- anexos -----------------------------------------------------------
 
     fun anexar(uri: Uri) {
