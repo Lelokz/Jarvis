@@ -40,7 +40,8 @@ data class Mensagem(
 )
 
 /** Uma conversa da gaveta: uma sessão do Claude Code no PC. */
-data class Conversa(val id: String, val titulo: String, val quando: Double, val origem: String)
+data class Conversa(val id: String, val titulo: String, val quando: Double, val origem: String,
+                    val fixada: Boolean = false)
 
 /** Um anexo do clipe, esperando a mensagem: miniatura, nome e o ✕. */
 data class Anexo(
@@ -436,6 +437,11 @@ class Jarvis(private val app: Application) {
         conexao?.enviar(JSONObject().put("pedir", "renomear").put("id", id).put("titulo", titulo.trim()))
     }
 
+    /** Fixa (ou solta) no topo da gaveta, como na janela do PC (beta 0.12.0). */
+    fun fixar(id: String, sim: Boolean) {
+        conexao?.enviar(JSONObject().put("pedir", "fixar").put("id", id).put("fixar", sim))
+    }
+
     fun apagar(id: String) {
         if (vendo.value == id) vendo.value = ""
         conexao?.enviar(JSONObject().put("pedir", "apagar").put("id", id))
@@ -566,7 +572,7 @@ class Jarvis(private val app: Application) {
                 for (i in 0 until lista.length()) {
                     val c = lista.getJSONObject(i)
                     conversas.add(Conversa(c.optString("id"), c.optString("titulo").ifEmpty { "Conversa" },
-                        c.optDouble("quando", 0.0), c.optString("origem")))
+                        c.optDouble("quando", 0.0), c.optString("origem"), c.optBoolean("fixada", false)))
                 }
             }
             "conversa" -> if (ev.optString("id") == vendo.value) preencher(mensagensVendo, ev.optJSONArray("falas"))

@@ -68,7 +68,7 @@ MAX_PCM_BYTES = 16000 * 2 * 60
 LIMITE_LINHA_PONTE = 32 * 1024 * 1024
 # Os da janela nova (beta 0.6) também: conversas, cérebro, Parar.
 PEDIDOS_DO_CELULAR = {"falar", "memoria", "conversas", "abrir", "nova", "continuar", "cerebro",
-                      "parar", "renomear", "apagar"}
+                      "parar", "renomear", "apagar", "fixar"}
 # Foto, vídeo ou arquivo mandado pelo clipe do app. Vídeo de celular passa
 # disso fácil; por enquanto é o teto (o WebSocket guarda tudo na memória).
 MAX_ANEXO_BYTES = 64 * 1024 * 1024

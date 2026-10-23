@@ -137,7 +137,7 @@ val CORES_DE_DESTAQUE = listOf(
 private val Roxo = Color(0xFF9B7BFF)
 
 /** A versão da janela (a numeração do Léo, igual à do PC) e a do app. */
-const val VERSAO_JANELA = "beta 0.11.5"
+const val VERSAO_JANELA = "beta 0.12.0"
 
 // A Inter, a fonte da janela do PC (licença OFL). Variável: o peso funciona.
 @OptIn(ExperimentalTextApi::class)
@@ -905,7 +905,7 @@ private fun Gaveta(modelo: Jarvis, fechar: () -> Unit) {
         LazyColumn(Modifier.weight(1f)) {
             var grupoAnterior = ""
             for (c in comAtual) {
-                val grupo = grupoDe(c.quando)
+                val grupo = if (c.fixada) "Fixadas" else grupoDe(c.quando)
                 if (grupo != grupoAnterior) {
                     grupoAnterior = grupo
                     item(key = "g-$grupo") {
@@ -999,6 +999,8 @@ private fun ItemDaGaveta(modelo: Jarvis, c: Conversa, escolhida: Boolean, abrir:
         }
         // Segurar abre o menu. Apagar pede confirmação NO PRÓPRIO menu.
         DropdownMenu(menu, { menu = false }, containerColor = Superficie2) {
+            DropdownMenuItem(text = { Text(if (c.fixada) "Desafixar" else "Fixar no topo", color = Texto) },
+                onClick = { menu = false; modelo.fixar(c.id, !c.fixada) })
             DropdownMenuItem(text = { Text("Renomear", color = Texto) }, onClick = {
                 menu = false; novoTitulo = c.titulo; renomeando = true
             })
