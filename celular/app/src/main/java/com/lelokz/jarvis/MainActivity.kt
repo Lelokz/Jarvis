@@ -137,7 +137,7 @@ val CORES_DE_DESTAQUE = listOf(
 private val Roxo = Color(0xFF9B7BFF)
 
 /** A versão da janela (a numeração do Léo, igual à do PC) e a do app. */
-const val VERSAO_JANELA = "beta 0.12.0"
+const val VERSAO_JANELA = "beta 0.12.5"
 
 // A Inter, a fonte da janela do PC (licença OFL). Variável: o peso funciona.
 @OptIn(ExperimentalTextApi::class)
@@ -589,7 +589,7 @@ private fun Chat(modelo: Jarvis, abrirSeletores: () -> Unit) {
                 Text(rotuloDoEstado(modelo.estadoVisivel), color = corDoEstado(modelo.estadoVisivel),
                     fontSize = 11.sp, letterSpacing = 2.sp, fontWeight = FontWeight.SemiBold)
                 Spacer(Modifier.height(14.dp))
-                Text(saudacao(), color = Texto, fontSize = 28.sp, fontWeight = FontWeight.Medium)
+                Text(saudacao(modelo.nomeUsuario.value), color = Texto, fontSize = 28.sp, fontWeight = FontWeight.Medium)
                 Spacer(Modifier.height(6.dp))
                 Text("Segura o átomo pra falar, ou escreve aqui embaixo.", color = Fraco, fontSize = 14.sp,
                     textAlign = TextAlign.Center, modifier = Modifier.padding(horizontal = 30.dp))
@@ -659,9 +659,10 @@ private fun Chat(modelo: Jarvis, abrirSeletores: () -> Unit) {
     }
 }
 
-private fun saudacao(): String {
+private fun saudacao(nome: String): String {
     val h = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
-    return (if (h < 5) "Boa noite" else if (h < 12) "Bom dia" else if (h < 18) "Boa tarde" else "Boa noite") + ", Léo."
+    return (if (h < 5) "Boa noite" else if (h < 12) "Bom dia" else if (h < 18) "Boa tarde" else "Boa noite") +
+        (if (nome.isNotBlank()) ", $nome." else ".")
 }
 
 @Composable
@@ -935,7 +936,9 @@ private fun Gaveta(modelo: Jarvis, fechar: () -> Unit) {
                     "dormindo" -> "DORMINDO"; "ouvindo" -> "OUVINDO"; "escutando" -> "ESCUTANDO VOCÊ"
                     "pensando" -> "PENSANDO"; "falando" -> "FALANDO"; else -> "SEM CONEXÃO"
                 }, color = cor, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 1.6.sp)
-                Text(if (modelo.conectado.value) "No PC do Léo" else modelo.motivo.value, color = Fraco, fontSize = 12.sp)
+                Text(if (!modelo.conectado.value) modelo.motivo.value
+                    else if (modelo.nomePc.value.isNotEmpty()) "No PC ${modelo.nomePc.value}" else "No PC",
+                    color = Fraco, fontSize = 12.sp)
             }
         }
         for ((pagina, nome, icone) in listOf(Triple("memoria", "Memória", Icones.memoria), Triple("ajustes", "Ajustes", Icones.ajustes))) {
@@ -1115,6 +1118,25 @@ private fun PaginaAjustes(modelo: Jarvis) {
         }
         Spacer(Modifier.height(14.dp))
         Grupo("Aparência")
+        var nome by remember(modelo.nomeUsuario.value) { mutableStateOf(modelo.nomeUsuario.value) }
+        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Lateral)
+            .border(1.dp, Traco, RoundedCornerShape(14.dp)).padding(horizontal = 16.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically) {
+            Text("Seu nome", color = TextoMedio, fontSize = 14.sp, modifier = Modifier.weight(1f))
+            Box(Modifier.width(170.dp).clip(RoundedCornerShape(9.dp)).background(Superficie)
+                .border(1.dp, Traco, RoundedCornerShape(9.dp)).padding(horizontal = 12.dp, vertical = 9.dp)) {
+                if (nome.isEmpty()) Text("Como o Jarvis te chama", color = MuitoFraco, fontSize = 14.sp, maxLines = 1)
+                BasicTextField(nome, { nome = it.take(30) }, singleLine = true,
+                    textStyle = TextStyle(color = Texto, fontSize = 14.sp, fontFamily = Inter),
+                    cursorBrush = SolidColor(Azul),
+                    keyboardOptions = KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Done),
+                    keyboardActions = KeyboardActions(onDone = {
+                        if (nome.trim() != modelo.nomeUsuario.value) modelo.mudarNome(nome)
+                    }),
+                    modifier = Modifier.fillMaxWidth())
+            }
+        }
+        Spacer(Modifier.height(8.dp))
         Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Lateral)
             .border(1.dp, Traco, RoundedCornerShape(14.dp)).padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically) {

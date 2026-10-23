@@ -288,6 +288,7 @@ def main() -> int:
         # e entra na conversa pelo "anexo_pronto".
         # Numa pasta do teste: nada de arquivo de mentira nos recebidos do Léo.
         protocolo.pasta_recebidos = lambda: base / "recebidos"
+        porta_remota.FOLGA_DO_DISCO = 0  # a pasta do teste fica na memória (pequena)
         try:
             urllib.request.urlopen(urllib.request.Request(f"{http}/anexo?nome=v.mp4", data=b"x", method="POST"),
                                    timeout=5)

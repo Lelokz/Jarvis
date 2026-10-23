@@ -110,14 +110,14 @@ def ler() -> list[str]:
         except Exception as erro:
             resumo["problemas"].append(f"Khan: {erro}")
         if DESLOGADO.exists():
-            resumo["problemas"].append("Estudante Online: saiu da conta, o Léo precisa entrar de novo")
+            resumo["problemas"].append("Estudante Online: saiu da conta, é preciso entrar de novo")
         else:
             try:
                 resumo["estudante"] = estudante.ler(p)
                 resumo["estudante"]["lido_em"] = resumo["lido_em"]
             except estudante.PrecisaDoLeo:
                 _saiu_da_conta()
-                resumo["problemas"].append("Estudante Online: saiu da conta, o Léo precisa entrar de novo")
+                resumo["problemas"].append("Estudante Online: saiu da conta, é preciso entrar de novo")
             except Exception as erro:
                 resumo["problemas"].append(f"Estudante Online: {erro}")
     novas = []

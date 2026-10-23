@@ -935,6 +935,20 @@ Sem ordem rígida: faz, o Léo testa o que é de voz, segue.
    "atualização pendente" também no PC, igual ao do app, para ele ir
    recebendo as versões. Ninguém usa a conta do Léo em outro PC: é contra os
    termos da Anthropic.
+   **Análise antes do Windows (23/10/2026), o que é do Léo ou do PC dele:**
+   - Texto na tela e na voz: "No PC do Léo" (gaveta do app), "Boa tarde,
+     Léo." (janela e app), "celular do Léo" (fala do desbloqueio), "o Léo
+     precisa entrar" (escola). Resolvido pelo ajuste "Seu nome" (janela beta
+     0.7.5 / app beta 0.12.5).
+   - A cabeça do Jarvis: `persona.md` (17 menções ao Léo), `DONO` das
+     travas, as notas pro Claude ("o Léo escolheu o modelo"). A memória (o
+     `CLAUDE.md` da casa) é pessoal: quem instala começa com ela vazia.
+   - Só existe no PC do Léo e não vai junto: a voz do JARVIS dublado (uso
+     pessoal), o perfil da voz dele (`voz-leo`), os atalhos com pastas do HD
+     dele, a escola, o WhatsApp.
+   - Só funciona no Linux (a lista do Windows em si): som (`pulsectl`),
+     tela de bloqueio (D-Bus do Cinnamon, `loginctl`), `notify-send`,
+     `jarvis.sh`/systemd, os caminhos do `jarvis.sh` e do `compilar.sh`.
 9. Depois: ver a tela (o Claude já lê imagem: print + "o que é isso?"),
    a Friday (§3), o organizador de prints e vídeos (o Claude usa
    sozinho, sem integração especial).

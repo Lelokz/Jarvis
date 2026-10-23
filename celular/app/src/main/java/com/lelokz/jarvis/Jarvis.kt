@@ -92,6 +92,10 @@ class Jarvis(private val app: Application) {
     val notificarEscola = mutableStateOf(prefs.getBoolean("notificar_escola", true))
     // O PC está ligado a uma escola? Sem ela, os Ajustes nem mostram o interruptor.
     val temEscola = mutableStateOf(prefs.getBoolean("tem_escola", false))
+    // Como o Jarvis chama quem usa e o nome do computador (vêm do PC, no
+    // evento "ajustes"; beta 0.12.5). Guardados para o app abrir já com eles.
+    val nomeUsuario = mutableStateOf(prefs.getString("nome_usuario", "") ?: "")
+    val nomePc = mutableStateOf(prefs.getString("nome_pc", "") ?: "")
     val avisoAtualizacao = mutableStateOf(false)
     val aviso = mutableStateOf("")           // recado rápido (erro, "mandada pra lixeira")
     val estado = mutableStateOf("dormindo")     // o do PC: pensando, falando...
@@ -235,6 +239,11 @@ class Jarvis(private val app: Application) {
                 }
             }
         }
+    }
+
+    /** O mesmo "Seu nome" da janela: o nome é um só, guardado no PC. */
+    fun mudarNome(nome: String) {
+        conexao?.enviar(JSONObject().put("pedir", "ajustes").put("nome", nome.trim().take(30)))
     }
 
     fun mudarCor(cor: androidx.compose.ui.graphics.Color) {
@@ -586,7 +595,10 @@ class Jarvis(private val app: Application) {
             }
             "ajustes" -> {
                 temEscola.value = ev.optBoolean("tem_escola", false)
-                prefs.edit().putBoolean("tem_escola", temEscola.value).apply()
+                nomeUsuario.value = ev.optString("nome", "")
+                nomePc.value = ev.optString("pc", "")
+                prefs.edit().putBoolean("tem_escola", temEscola.value)
+                    .putString("nome_usuario", nomeUsuario.value).putString("nome_pc", nomePc.value).apply()
             }
             "uso" -> {
                 ev.optJSONObject("cinco_horas")?.let {

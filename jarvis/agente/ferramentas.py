@@ -84,7 +84,7 @@ def criar_servidor(mostrar: Callable[[str, str], None], whatsapp,
     if pedir_desbloqueio is not None:
         @tool("pedir_desbloqueio",
               "Pede para desbloquear a tela do PC. NÃO desbloqueia na hora: manda uma "
-              "confirmação para o celular do Léo, e só destrava se ele tocar em Sim lá. "
+              "confirmação para o celular do usuário, e só destrava se ele tocar em Sim lá. "
               "É o único jeito de desbloquear: não existe comando que você possa usar.",
               {})
         async def _desbloquear(args):

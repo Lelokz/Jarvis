@@ -24,6 +24,7 @@ Item {
     signal mudarVolume(int volume)
     signal mudarNotificar(bool ligado)
     signal mudarCor(string cor)
+    signal mudarNome(string nome)
     readonly property var cores: [
         { cor: "#4da3ff", nome: "Azul" }, { cor: "#a78bfa", nome: "Roxo" }, { cor: "#3ddc97", nome: "Verde" },
         { cor: "#ff9f43", nome: "Laranja" }, { cor: "#ff6fae", nome: "Rosa" }, { cor: "#22d3ee", nome: "Ciano" },
@@ -363,14 +364,60 @@ Item {
         }
         Rectangle {
             width: parent.width
-            height: 56
+            height: 2 * 56
             radius: 14
             color: raiz.tema.lateral
             border.width: 1
             border.color: raiz.tema.traco
             enabled: !!raiz.ajustes
+            // Como o Jarvis chama quem usa (a saudação, as falas, a persona).
+            Item {
+                width: parent.width
+                height: 56
+                Text {
+                    anchors.verticalCenter: parent.verticalCenter
+                    x: 18
+                    text: "Seu nome"
+                    color: raiz.tema.textoMedio
+                    font.family: raiz.tema.familia
+                    font.pixelSize: 14
+                }
+                Rectangle {
+                    anchors.verticalCenter: parent.verticalCenter
+                    anchors.right: parent.right
+                    anchors.rightMargin: 12
+                    width: 220; height: 34; radius: 9
+                    color: raiz.tema.superficie
+                    border.width: 1
+                    border.color: campoNome.activeFocus ? raiz.tema.persona : raiz.tema.traco
+                    TextInput {
+                        id: campoNome
+                        anchors.fill: parent
+                        anchors.leftMargin: 12; anchors.rightMargin: 12
+                        verticalAlignment: TextInput.AlignVCenter
+                        maximumLength: 30
+                        clip: true
+                        color: raiz.tema.texto
+                        selectionColor: raiz.tema.persona
+                        font.family: raiz.tema.familia
+                        font.pixelSize: 14
+                        text: raiz.ajustes ? (raiz.ajustes.nome || "") : ""
+                        // Salva quando sai do campo ou dá Enter.
+                        onEditingFinished: if (raiz.ajustes && text.trim() !== (raiz.ajustes.nome || "")) raiz.mudarNome(text.trim())
+                        Text {
+                            visible: !campoNome.text && !campoNome.activeFocus
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: "Como o Jarvis te chama"
+                            color: raiz.tema.muitoFraco
+                            font.family: raiz.tema.familia
+                            font.pixelSize: 14
+                        }
+                    }
+                }
+            }
+            Rectangle { y: 56; x: 18; width: parent.width - 36; height: 1; color: raiz.tema.traco }
             Text {
-                anchors.verticalCenter: parent.verticalCenter
+                y: 56 + (56 - height) / 2
                 x: 18
                 text: "Cor de destaque"
                 color: raiz.tema.textoMedio
@@ -378,7 +425,7 @@ Item {
                 font.pixelSize: 14
             }
             Row {
-                anchors.verticalCenter: parent.verticalCenter
+                y: 56 + (56 - height) / 2
                 anchors.right: parent.right
                 anchors.rightMargin: 18
                 spacing: 10
@@ -417,7 +464,7 @@ Item {
                     ["Cérebro", raiz.nomes[raiz.modelo] || raiz.modelo || "—"],
                     ["Esforço", raiz.nomes[raiz.esforco] || raiz.esforco || "—"],
                     ["Conversa", raiz.conversa ? raiz.conversa.slice(0, 8) : "—"],
-                    ["Versão da janela", "beta 0.7.0"],
+                    ["Versão da janela", "beta 0.7.5"],
                 ] },
                 { titulo: "Atalhos", linhas: [
                     ["Ctrl + N", "Novo chat"],

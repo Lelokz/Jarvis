@@ -150,6 +150,10 @@ class PonteQt(QObject):
         return self._pedir({"pedir": "ajustes", "volume_voz": max(0, min(100, int(volume)))})
 
     @Slot(str, result=bool)
+    def mudarNome(self, nome: str) -> bool:
+        return self._pedir({"pedir": "ajustes", "nome": nome.strip()[:60]})
+
+    @Slot(str, result=bool)
     def mudarCor(self, cor: str) -> bool:
         return self._pedir({"pedir": "ajustes", "cor": cor})
 

@@ -540,7 +540,7 @@ class Ciclo:
             from jarvis.nucleo import tela
             if tela.bloqueada():
                 self.registrador.registrar_estado("tela_bloqueada_outra_voz", texto=texto, quem=voz.quem)
-                self.dormir("tela bloqueada: só o Léo")
+                self.dormir("tela bloqueada: só o dono")
                 return
         self._mudar_estado("pensando")
         self.emissor.emitir("voce_disse", texto=texto, origem=origem)
@@ -873,7 +873,8 @@ class Ciclo:
         # tem_escola: este PC está ligado a uma escola (jarvis/escola). Sem
         # ela, a janela e o app nem mostram o interruptor.
         from jarvis.escola.__main__ import RESUMO
-        self.emissor.emitir("ajustes", **ajustes.ler(), tem_escola=RESUMO.exists())
+        import socket
+        self.emissor.emitir("ajustes", **ajustes.ler(), tem_escola=RESUMO.exists(), pc=socket.gethostname())
 
     def emitir_cerebro(self) -> None:
         self.emissor.emitir("cerebro", persona="jarvis", **self.agente.cerebro)
@@ -932,7 +933,7 @@ class Ciclo:
             return
         if pedido.anexos:
             # Vai junto do pedido para o Claude, como o contexto do WhatsApp.
-            nota = ("[Anexos que o Léo mandou, já no PC (imagem: abra com o Read; "
+            nota = ("[Anexos que o usuário mandou, já no PC (imagem: abra com o Read; "
                     "vídeo: tire alguns quadros com ffmpeg e olhe): "
                     + ", ".join(pedido.anexos) + "]")
             self._contexto = "\n".join(p for p in (self._contexto, nota) if p)

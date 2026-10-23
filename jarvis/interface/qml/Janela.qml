@@ -87,7 +87,9 @@ Window {
 
     function saudacao() {
         var h = new Date().getHours();
-        return (h < 5 ? "Boa noite" : h < 12 ? "Bom dia" : h < 18 ? "Boa tarde" : "Boa noite") + ", Léo.";
+        // O nome de quem usa (Ajustes, "Seu nome"); sem nome, só o cumprimento.
+        var nome = ajustes && ajustes.nome ? ", " + ajustes.nome : "";
+        return (h < 5 ? "Boa noite" : h < 12 ? "Bom dia" : h < 18 ? "Boa tarde" : "Boa noite") + nome + ".";
     }
 
     function grupoDe(quando) {
@@ -693,6 +695,7 @@ Window {
             onMudarVolume: (volume) => { if (typeof ponte !== "undefined") ponte.mudarVolumeVoz(volume) }
             onMudarNotificar: (ligado) => { if (typeof ponte !== "undefined") ponte.mudarNotificarEscola(ligado) }
             onMudarCor: (cor) => { if (typeof ponte !== "undefined") ponte.mudarCor(cor) }
+            onMudarNome: (nome) => { if (typeof ponte !== "undefined") ponte.mudarNome(nome) }
             // Ao abrir os Ajustes, a lista vem de novo: um fone plugado agora aparece.
             onVisibleChanged: if (visible && typeof ponte !== "undefined") ponte.pedirSom()
             onEscolherSom: (tipo, aparelho) => { if (typeof ponte !== "undefined") ponte.escolherSom(tipo, aparelho) }

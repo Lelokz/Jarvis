@@ -74,7 +74,7 @@ ASSISTENTE -> CLIENTES
         Pediram para desbloquear o PC: o app pergunta "Desbloquear o PC?" e
         responde na porta remota (POST /desbloqueio, com a chave).
     {"ev":"ajustes", "volume_voz":0-100, "notificar_escola":bool, "tem_escola":bool,
-     "cor":"#rrggbb"}
+     "cor":"#rrggbb", "nome":"<como chamar quem usa>", "pc":"<nome do computador>"}
         O volume da voz no PC e as notificações da escola (beta 0.6.5).
     {"ev":"conversa_atual", "id":"<uuid>", "falas":[...]}
         A conversa do Jarvis mudou (ligou, "nova", "continuar"): o id da
@@ -266,6 +266,11 @@ def ler_pedido(linha: bytes) -> tuple[str, dict[str, Any]]:
             if not isinstance(volume, int) or isinstance(volume, bool) or not 0 <= volume <= 100:
                 raise ErroDeProtocolo("'volume_voz' tem que ser de 0 a 100")
             dados["volume_voz"] = volume
+        nome = objeto.get("nome")
+        if nome is not None:
+            if not isinstance(nome, str) or len(nome) > 60:
+                raise ErroDeProtocolo("'nome' inválido")
+            dados["nome"] = nome
         cor = objeto.get("cor")
         if cor is not None:
             from jarvis.ajustes import CORES

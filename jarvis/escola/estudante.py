@@ -99,7 +99,7 @@ def entrar_com_o_leo(playwright, espera_s: int = 600):
         except OSError:
             pass
     else:
-        raise PrecisaDoLeo("o Léo não entrou a tempo")
+        raise PrecisaDoLeo("ninguém entrou a tempo")
     time.sleep(3)
     navegador = playwright.chromium.connect_over_cdp(f"http://127.0.0.1:{PORTA}")
     contexto = navegador.contexts[0]

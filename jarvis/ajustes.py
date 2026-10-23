@@ -14,11 +14,21 @@ from typing import Any
 ARQUIVO = Path.home() / ".local/share/jarvis/ajustes.json"
 # 100 = o volume de sempre, que é o TETO: o volume já machucou o ouvido do
 # Léo uma vez (HISTORIA). Daqui só se abaixa.
-PADRAO: dict[str, Any] = {"volume_voz": 100, "notificar_escola": True, "cor": "#4da3ff"}
+PADRAO: dict[str, Any] = {"volume_voz": 100, "notificar_escola": True, "cor": "#4da3ff", "nome": ""}
 # A cor de destaque da janela (beta 0.7.0): o átomo, os botões e as barras.
 # O azul é o do Jarvis; a lista é fechada para a janela nunca ficar ilegível.
 CORES = {"#4da3ff": "Azul", "#a78bfa": "Roxo", "#3ddc97": "Verde", "#ff9f43": "Laranja",
          "#ff6fae": "Rosa", "#22d3ee": "Ciano"}
+
+
+def limpar_nome(nome: str) -> str:
+    """O nome de quem usa (beta 0.7.5): curto, uma linha, sem caractere estranho."""
+    return " ".join("".join(c for c in nome if c.isalnum() or c in " -'.").split())[:30]
+
+
+def nome_de_quem_usa() -> str:
+    """Para as frases e para a persona; sem nome, "o usuário"."""
+    return ler()["nome"]
 
 
 def ler() -> dict[str, Any]:
@@ -35,6 +45,8 @@ def ler() -> dict[str, Any]:
             saida["notificar_escola"] = dados["notificar_escola"]
         if dados.get("cor") in CORES:
             saida["cor"] = dados["cor"]
+        if isinstance(dados.get("nome"), str):
+            saida["nome"] = limpar_nome(dados["nome"])
     return saida
 
 

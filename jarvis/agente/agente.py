@@ -187,7 +187,10 @@ def _casar_opcao(falado: str, opcoes: list[str]) -> str:
 
 
 # O dono do Jarvis: a voz que as travas reconhecem (jarvis/quem_fala.py).
-DONO = "Léo"
+def _dono() -> str:
+    """O nome de quem usa (Ajustes, "Seu nome"); sem nome, "usuário"."""
+    from jarvis import ajustes
+    return ajustes.nome_de_quem_usa() or "usuário"
 
 # O que dá para escolher na janela (out/2026). "auto" são os dois cérebros do
 # config: o rápido atende e passa o pesado para o Opus.
@@ -196,7 +199,8 @@ ESFORCOS = ("low", "medium", "high", "xhigh", "max")
 SONNET = "claude-sonnet-5-5"
 
 
-def etiqueta_da_voz(voz, dono: str = DONO) -> str:
+def etiqueta_da_voz(voz, dono: str | None = None) -> str:
+    dono = dono or _dono()
     """O pedaço do cabeçalho que diz ao Claude quem falou (persona, "Outras vozes")."""
     if voz.quem == "leo":
         return f"voz do {dono}"
@@ -330,7 +334,7 @@ class Agente:
         )
 
     def _instrucoes(self) -> str:
-        return PERSONA.read_text().replace("{nome}", self.nome)
+        return PERSONA.read_text().replace("{nome}", self.nome).replace("{usuario}", _dono())
 
     async def _conectar(self, retomar: str | None = None) -> None:
         """Abre o Claude Code numa conversa nova, ou na `retomar` (um id)."""
@@ -373,7 +377,7 @@ class Agente:
         self.ocupado = True
         self.voz = voz
         agora = dt.datetime.now()
-        quem = "" if voz is None else ", " + etiqueta_da_voz(voz, DONO)
+        quem = "" if voz is None else ", " + etiqueta_da_voz(voz)
         cabecalho = f"[{origem}, {relogio.data_curta(agora.date())}, {agora:%H:%M}{quem}]"
         mensagem = "\n".join(p for p in (cabecalho, contexto, texto) if p)
         self._rodar(self._enviar(mensagem))
@@ -615,7 +619,7 @@ class Agente:
 
     def _pedir_o_opus(self, motivo: str) -> str:
         if self.cerebro["modelo"] != "auto":
-            return ("O Léo escolheu o modelo na janela: siga você mesmo com o pedido, "
+            return ("O usuário escolheu o modelo na janela: siga você mesmo com o pedido, "
                     "sem chamar o Opus.")
         if self._no_opus:
             return "Você já é o Opus: siga com o pedido."
@@ -703,13 +707,13 @@ class Agente:
         if o_que is None:
             return {}
         quem = ("a fala foi curta demais para reconhecer a voz" if voz.quem == "curta"
-                else f"a voz não é a do {DONO} (nota {voz.nota:.2f})")
+                else f"a voz não é a do {_dono()} (nota {voz.nota:.2f})")
         return {"hookSpecificOutput": {
             "hookEventName": "PreToolUse",
             "permissionDecision": "deny",
             "permissionDecisionReason": (
                 f"Bloqueado pelas travas da voz: {quem}, e isso ({o_que}) só o "
-                f"{DONO} pode pedir. Diga isso em uma frase e não tente outro caminho."),
+                f"{_dono()} pode pedir. Diga isso em uma frase e não tente outro caminho."),
         }}
 
     def _bloquear_pc(self) -> str:
@@ -729,7 +733,7 @@ class Agente:
         # O aviso é só pelo app do Jarvis (notificação e "Desbloquear o PC?").
         # Nada de WhatsApp: o Léo não pediu (23/10/2026).
         self.saidas.put(Saida("desbloqueio", pedido["id"]))
-        return ("Mandei a confirmação pro celular do Léo. O PC só desbloqueia se ele tocar "
+        return ("Mandei a confirmação pro celular do usuário. O PC só desbloqueia se ele tocar "
                 "em Sim no app, nos próximos 3 minutos. Diga isso em uma frase.")
 
     def _mandou_whats(self, jid: str, nome: str, texto: str) -> None:
