@@ -70,7 +70,7 @@ ASSISTENTE -> CLIENTES
      "padrao_saida":"<nome>", "padrao_entrada":"<nome>",
      "saida":"<id ou ''>", "entrada":"<id ou ''>"}
         Os aparelhos de som do PC (os Ajustes da janela, beta 0.6.0).
-    {"ev":"ajustes", "volume_voz":0-100, "notificar_escola":bool}
+    {"ev":"ajustes", "volume_voz":0-100, "notificar_escola":bool, "tem_escola":bool}
         O volume da voz no PC e as notificações da escola (beta 0.6.5).
     {"ev":"conversa_atual", "id":"<uuid>", "falas":[...]}
         A conversa do Jarvis mudou (ligou, "nova", "continuar"): o id da

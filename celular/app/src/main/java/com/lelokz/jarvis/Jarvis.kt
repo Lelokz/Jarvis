@@ -81,6 +81,8 @@ class Jarvis(private val app: Application) {
     // As notificações da escola NO CELULAR (o PC tem o interruptor dele, nos
     // Ajustes da janela; decisão do Léo, 23/10/2026).
     val notificarEscola = mutableStateOf(prefs.getBoolean("notificar_escola", true))
+    // O PC está ligado a uma escola? Sem ela, os Ajustes nem mostram o interruptor.
+    val temEscola = mutableStateOf(prefs.getBoolean("tem_escola", false))
     val avisoAtualizacao = mutableStateOf(false)
     val aviso = mutableStateOf("")           // recado rápido (erro, "mandada pra lixeira")
     val estado = mutableStateOf("dormindo")     // o do PC: pensando, falando...
@@ -457,6 +459,10 @@ class Jarvis(private val app: Application) {
             "cerebro" -> {
                 modelo.value = ev.optString("modelo", modelo.value)
                 esforco.value = ev.optString("esforco", esforco.value)
+            }
+            "ajustes" -> {
+                temEscola.value = ev.optBoolean("tem_escola", false)
+                prefs.edit().putBoolean("tem_escola", temEscola.value).apply()
             }
             "uso" -> {
                 ev.optJSONObject("cinco_horas")?.let {

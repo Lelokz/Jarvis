@@ -231,8 +231,9 @@ Item {
             font.letterSpacing: 0.8
         }
         Rectangle {
+            readonly property bool temEscola: !!raiz.ajustes && !!raiz.ajustes.tem_escola
             width: parent.width
-            height: 2 * 56
+            height: (temEscola ? 2 : 1) * 56
             radius: 14
             color: raiz.tema.lateral
             border.width: 1
@@ -297,6 +298,7 @@ Item {
                 }
             }
             Item {
+                visible: parent.temEscola
                 y: 56
                 width: parent.width
                 height: 56
@@ -312,7 +314,7 @@ Item {
                         font.pixelSize: 14
                     }
                     Text {
-                        text: "Nota nova, média e agenda, no canto da tela do PC (o celular tem o dele)"
+                        text: "Avisa quando aparecer algo novo"
                         color: raiz.tema.textoFraco
                         font.family: raiz.tema.familia
                         font.pixelSize: 12

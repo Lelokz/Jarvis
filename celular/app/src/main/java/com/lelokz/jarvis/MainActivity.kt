@@ -1026,6 +1026,7 @@ private fun PaginaAjustes(modelo: Jarvis) {
             BarraDeUso("Últimas 5 horas", modelo.usoCinco.value, modelo.voltaCinco.value, false)
             BarraDeUso("Esta semana", modelo.usoSemana.value, modelo.voltaSemana.value, true)
         }
+        if (modelo.temEscola.value) {
         Spacer(Modifier.height(14.dp))
         Grupo("Avisos")
         Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Lateral)
@@ -1033,11 +1034,12 @@ private fun PaginaAjustes(modelo: Jarvis) {
             .padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text("Notificações da escola", color = TextoMedio, fontSize = 14.sp)
-                Text("Nota nova, média e agenda, neste celular", color = Fraco, fontSize = 12.sp)
+                Text("Avisa quando aparecer algo novo", color = Fraco, fontSize = 12.sp)
             }
             Switch(checked = modelo.notificarEscola.value, onCheckedChange = { modelo.alternarNotificarEscola() },
                 colors = SwitchDefaults.colors(checkedTrackColor = Azul, checkedThumbColor = Texto,
                     uncheckedTrackColor = Superficie2, uncheckedThumbColor = Fraco, uncheckedBorderColor = Traco))
+        }
         }
         Spacer(Modifier.height(14.dp))
         Grupo("Agora")

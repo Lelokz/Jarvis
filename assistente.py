@@ -848,7 +848,10 @@ class Ciclo:
             pass  # o servidor de som piscou: a janela pede de novo ao abrir os Ajustes
 
     def emitir_ajustes(self) -> None:
-        self.emissor.emitir("ajustes", **ajustes.ler())
+        # tem_escola: este PC está ligado a uma escola (jarvis/escola). Sem
+        # ela, a janela e o app nem mostram o interruptor.
+        from jarvis.escola.__main__ import RESUMO
+        self.emissor.emitir("ajustes", **ajustes.ler(), tem_escola=RESUMO.exists())
 
     def emitir_cerebro(self) -> None:
         self.emissor.emitir("cerebro", persona="jarvis", **self.agente.cerebro)
