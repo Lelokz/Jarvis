@@ -47,8 +47,9 @@ object Novidades {
         } catch (e: Exception) {
             return  // PC desligado ou sem Tailscale: tenta na próxima
         }
-        // Desligadas nos Ajustes do app: marca como vistas, sem mostrar.
-        val mostrarAqui = p.getBoolean("notificar_escola", true)
+        // Desligadas nos Ajustes do app: marca como vistas, sem mostrar. O
+        // interruptor é o da escola; os avisos do grupo da família sempre saem.
+        val mostrarEscola = p.getBoolean("notificar_escola", true)
         var maior = ultima
         for (i in 0 until lista.length()) {
             val n = lista.getJSONObject(i)
@@ -56,7 +57,7 @@ object Novidades {
             if (id <= ultima) continue
             maior = maxOf(maior, id)
             // Na primeira vez só marca o que já existia: nada de enxurrada.
-            if (!primeiraVez && mostrarAqui) mostrar(c, id, n.optString("titulo", "Jarvis"), n.optString("texto"))
+            if (!primeiraVez && (n.optString("tipo") == "grupo" || mostrarEscola)) mostrar(c, id, n.optString("titulo", "Jarvis"), n.optString("texto"))
         }
         p.edit().putLong("novidade_ultima", maior).apply()
     }
@@ -86,6 +87,65 @@ object Novidades {
 
     private const val CANAL_SEGURANCA = "seguranca"
     private const val ID_NOTIF_DESBLOQUEIO = 77
+
+    // -- pedidos do grupo da família (beta 0.13.0) -----------------------------
+
+    /** O primeiro pedido esperando o Sim: (id, quem, pedido), ou null. */
+    fun pedidoPendente(c: Context): Triple<String, String, String>? {
+        val p = prefs(c)
+        val base = p.getString("base", null)?.trimEnd('/') ?: return null
+        val chave = p.getString("chave", null) ?: return null
+        return try {
+            cliente.newCall(Request.Builder().url("$base/aprovacao")
+                .header("Authorization", "Bearer $chave").build()).execute().use { r ->
+                if (!r.isSuccessful) null
+                else JSONObject(r.body?.string() ?: return null).optJSONArray("pedidos")?.optJSONObject(0)
+                    ?.let { Triple(it.optString("id"), it.optString("quem"), it.optString("pedido")) }
+            }
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    fun responderPedido(c: Context, id: String, sim: Boolean): String {
+        val p = prefs(c)
+        val base = p.getString("base", null)?.trimEnd('/') ?: return ""
+        val chave = p.getString("chave", null) ?: return ""
+        c.getSystemService(NotificationManager::class.java).cancel(ID_NOTIF_PEDIDO)
+        return try {
+            val corpo = JSONObject().put("id", id).put("sim", sim).toString()
+                .toRequestBody("application/json".toMediaType())
+            cliente.newCall(Request.Builder().url("$base/aprovacao").post(corpo)
+                .header("Authorization", "Bearer $chave").build()).execute().use { r ->
+                JSONObject(r.body?.string() ?: "{}").optString("resultado")
+            }
+        } catch (e: Exception) {
+            ""
+        }
+    }
+
+    private const val ID_NOTIF_PEDIDO = 78
+
+    fun notificarPedido(c: Context, quem: String, pedido: String) {
+        val gerente = c.getSystemService(NotificationManager::class.java)
+        gerente.createNotificationChannel(
+            NotificationChannel(CANAL_SEGURANCA, "Segurança do PC", NotificationManager.IMPORTANCE_HIGH).apply {
+                description = "Quando pedem para desbloquear o PC ou algo pelo grupo da família"
+            })
+        val abrir = PendingIntent.getActivity(c, 3, Intent(c, MainActivity::class.java)
+            .putExtra("aprovacao", true).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+        val aviso = Notification.Builder(c, CANAL_SEGURANCA)
+            .setContentTitle("Pedido de $quem pro Jarvis")
+            .setContentText(pedido)
+            .setStyle(Notification.BigTextStyle().bigText(pedido))
+            .setSmallIcon(R.drawable.ic_notificacao)
+            .setContentIntent(abrir)
+            .setAutoCancel(true)
+            .setTimeoutAfter(5 * 60 * 1000L)
+            .build()
+        try { gerente.notify(ID_NOTIF_PEDIDO, aviso) } catch (e: SecurityException) { }
+    }
 
     /** O pedido de desbloquear o PC esperando resposta: o id, ou null. */
     fun desbloqueioPendente(c: Context): String? {
@@ -188,6 +248,9 @@ class TarefaNovidades : JobService() {
             // aviso na hora vai pelo WhatsApp do próprio Léo).
             if (Novidades.desbloqueioPendente(applicationContext) != null)
                 Novidades.notificarDesbloqueio(applicationContext)
+            Novidades.pedidoPendente(applicationContext)?.let { (_, quem, pedido) ->
+                Novidades.notificarPedido(applicationContext, quem, pedido)
+            }
             jobFinished(params, false)
         }, "novidades").start()
         return true

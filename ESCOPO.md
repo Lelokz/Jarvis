@@ -721,6 +721,28 @@ arquivo viram anexo; link e texto vão pra barra de escrever.
   (`travas.mexe_na_tela`): pularia a confirmação.
 - **Não testado ainda:** destravar a tela de verdade no Cinnamon.
 
+### O Jarvis no grupo da família (23/10/2026, janela beta 0.8.0, app beta 0.13.5)
+
+- O grupo "Nós 4 ♟️🩵" fica no `ajustes.json`: `grupo_jid` e `grupo_ligado`.
+  Tem botão liga/desliga nos Ajustes da janela e do app, e começa desligado.
+- `jarvis/grupo/familia.py`, uma thread, olha o grupo a cada 3 s. Mensagem
+  com "jarvis" em qualquer parte vai pra um Claude **à parte e trancado**:
+  sem a memória do dono (`setting_sources=[]`, casa própria em
+  `~/.local/share/jarvis/grupo`), e o gancho barra toda ferramenta que não
+  for a do grupo, o WebSearch ou o WebFetch. O modelo é o rápido. São no
+  máximo 30 chamadas por hora (o limite é do dono).
+- Ferramentas do grupo: `responder` (sai com "🤖 Jarvis:" na frente),
+  `nao_era_comigo` (notificação pro dono, no PC e no app, nada de
+  WhatsApp), `pedir_ao_dono` e a lista de compras (`grupo-lista.json`).
+- `pedir_ao_dono` → `jarvis/nucleo/aprovacoes.py` (5 min) → evento
+  `aprovacao` → o app mostra "Pedido de X pro Jarvis" (Sim/Não) e
+  notificação → `POST /aprovacao`. Aprovado: o Jarvis do PC faz, como pedido
+  digitado, e responde no grupo pelo `whatsapp_mandar` (o grupo é liberado
+  na trava de "número fora da agenda"). Recusado ou vencido: o grupo é
+  avisado.
+- Testado com um WhatsApp de mentira (pergunta, comentário, pedido do PC,
+  lista): os quatro caminhos certos. Falta o teste no grupo de verdade.
+
 ### Dependências de sistema (não vêm com o pip)
 
 | peça | precisa de | sem ela |

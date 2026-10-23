@@ -149,6 +149,10 @@ class PonteQt(QObject):
     def mudarVolumeVoz(self, volume: int) -> bool:
         return self._pedir({"pedir": "ajustes", "volume_voz": max(0, min(100, int(volume)))})
 
+    @Slot(bool, result=bool)
+    def mudarGrupo(self, ligado: bool) -> bool:
+        return self._pedir({"pedir": "ajustes", "grupo_ligado": bool(ligado)})
+
     @Slot(str, result=bool)
     def mudarNome(self, nome: str) -> bool:
         return self._pedir({"pedir": "ajustes", "nome": nome.strip()[:60]})

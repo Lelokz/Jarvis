@@ -25,6 +25,7 @@ Item {
     signal mudarNotificar(bool ligado)
     signal mudarCor(string cor)
     signal mudarNome(string nome)
+    signal mudarGrupo(bool ligado)
     readonly property var cores: [
         { cor: "#4da3ff", nome: "Azul" }, { cor: "#a78bfa", nome: "Roxo" }, { cor: "#3ddc97", nome: "Verde" },
         { cor: "#ff9f43", nome: "Laranja" }, { cor: "#ff6fae", nome: "Rosa" }, { cor: "#22d3ee", nome: "Ciano" },
@@ -238,8 +239,9 @@ Item {
         }
         Rectangle {
             readonly property bool temEscola: !!raiz.ajustes && !!raiz.ajustes.tem_escola
+            readonly property bool temGrupo: !!raiz.ajustes && !!raiz.ajustes.grupo_jid
             width: parent.width
-            height: (temEscola ? 2 : 1) * 56
+            height: (1 + (temEscola ? 1 : 0) + (temGrupo ? 1 : 0)) * 56
             radius: 14
             color: raiz.tema.lateral
             border.width: 1
@@ -346,6 +348,52 @@ Item {
                         anchors.fill: parent
                         cursorShape: Qt.PointingHandCursor
                         onClicked: raiz.mudarNotificar(!interruptor.ligado)
+                    }
+                }
+            }
+            // O Jarvis no grupo da família do WhatsApp (só onde o grupo foi configurado).
+            Item {
+                visible: parent.temGrupo
+                y: 56 * (parent.temEscola ? 2 : 1)
+                width: parent.width
+                height: 56
+                Rectangle { x: 18; width: parent.width - 36; height: 1; color: raiz.tema.traco }
+                Column {
+                    anchors.verticalCenter: parent.verticalCenter
+                    x: 18
+                    spacing: 2
+                    Text {
+                        text: "Jarvis no grupo da família"
+                        color: raiz.tema.textoMedio
+                        font.family: raiz.tema.familia
+                        font.pixelSize: 14
+                    }
+                    Text {
+                        text: "Responde no WhatsApp quando chamam o Jarvis"
+                        color: raiz.tema.textoFraco
+                        font.family: raiz.tema.familia
+                        font.pixelSize: 12
+                    }
+                }
+                Rectangle {
+                    id: interruptorGrupo
+                    readonly property bool ligado: raiz.ajustes ? !!raiz.ajustes.grupo_ligado : false
+                    anchors.verticalCenter: parent.verticalCenter
+                    anchors.right: parent.right
+                    anchors.rightMargin: 18
+                    width: 40; height: 22; radius: 11
+                    color: ligado ? raiz.tema.persona : raiz.tema.superficie2
+                    Behavior on color { ColorAnimation { duration: raiz.tema.rapido } }
+                    Rectangle {
+                        y: 3; width: 16; height: 16; radius: 8
+                        x: interruptorGrupo.ligado ? interruptorGrupo.width - width - 3 : 3
+                        color: raiz.tema.texto
+                        Behavior on x { NumberAnimation { duration: raiz.tema.rapido; easing.type: Easing.OutCubic } }
+                    }
+                    MouseArea {
+                        anchors.fill: parent
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: raiz.mudarGrupo(!interruptorGrupo.ligado)
                     }
                 }
             }
@@ -464,7 +512,7 @@ Item {
                     ["Cérebro", raiz.nomes[raiz.modelo] || raiz.modelo || "—"],
                     ["Esforço", raiz.nomes[raiz.esforco] || raiz.esforco || "—"],
                     ["Conversa", raiz.conversa ? raiz.conversa.slice(0, 8) : "—"],
-                    ["Versão da janela", "beta 0.7.5"],
+                    ["Versão da janela", "beta 0.8.0"],
                 ] },
                 { titulo: "Atalhos", linhas: [
                     ["Ctrl + N", "Novo chat"],

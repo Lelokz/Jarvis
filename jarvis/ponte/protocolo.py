@@ -70,6 +70,11 @@ ASSISTENTE -> CLIENTES
      "padrao_saida":"<nome>", "padrao_entrada":"<nome>",
      "saida":"<id ou ''>", "entrada":"<id ou ''>"}
         Os aparelhos de som do PC (os Ajustes da janela, beta 0.6.0).
+    {"ev":"aprovacao", "id":"<hex>", "quem":"...", "pedido":"..."}
+        Alguém do grupo da família pediu algo que precisa do dono: o app
+        pergunta Sim/Não e responde em POST /aprovacao (com a chave).
+    {"ev":"notificacao"}
+        Tem notificação nova em /novidades: o app busca na hora.
     {"ev":"desbloqueio", "id":"<hex>", "expira_em":<época>}
         Pediram para desbloquear o PC: o app pergunta "Desbloquear o PC?" e
         responde na porta remota (POST /desbloqueio, com a chave).
@@ -169,7 +174,8 @@ VERSAO = 3
 # (acordou, dormiu, janela, tempos...) é para o terminal e fica em casa.
 PUBLICOS = frozenset({"sessao", "estado", "nivel", "voce_disse", "jarvis_disse", "aviso",
                       "mostrar", "atividade", "voz", "cerebro", "conversa_atual", "uso",
-                      "escrevendo", "som", "ajustes", "desbloqueio"})
+                      "escrevendo", "som", "ajustes", "desbloqueio",
+                      "aprovacao", "notificacao"})
 ESTADOS = ("dormindo", "ouvindo", "escutando", "pensando", "falando")
 PEDIDOS = frozenset({"ola", "falar", "memoria", "ouvir",
                      "conversas", "abrir", "nova", "continuar", "cerebro", "parar",
@@ -266,6 +272,11 @@ def ler_pedido(linha: bytes) -> tuple[str, dict[str, Any]]:
             if not isinstance(volume, int) or isinstance(volume, bool) or not 0 <= volume <= 100:
                 raise ErroDeProtocolo("'volume_voz' tem que ser de 0 a 100")
             dados["volume_voz"] = volume
+        grupo = objeto.get("grupo_ligado")
+        if grupo is not None:
+            if not isinstance(grupo, bool):
+                raise ErroDeProtocolo("'grupo_ligado' tem que ser true ou false")
+            dados["grupo_ligado"] = grupo
         nome = objeto.get("nome")
         if nome is not None:
             if not isinstance(nome, str) or len(nome) > 60:

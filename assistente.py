@@ -869,6 +869,21 @@ class Ciclo:
         except Exception:
             pass  # o servidor de som piscou: a janela pede de novo ao abrir os Ajustes
 
+    def do_grupo(self, tipo: str, valor: str) -> None:
+        """O que o Jarvis do grupo da família manda para cá (jarvis/grupo)."""
+        if tipo == "notificar":
+            self.emissor.emitir("notificacao")
+        elif tipo == "aprovacao":
+            from jarvis.nucleo import aprovacoes
+            for a in aprovacoes.pendentes():
+                if a["id"] == valor:
+                    self.registrador.registrar_estado("pedido_do_grupo", quem=a["quem"], pedido=a["pedido"])
+                    self.emissor.emitir("aprovacao", id=a["id"], quem=a["quem"], pedido=a["pedido"])
+        elif tipo == "executar":
+            # Aprovado pelo dono no celular: o Jarvis do PC faz, como um pedido digitado.
+            self.registrador.registrar_estado("grupo_aprovado", texto=valor[:300])
+            self._responder(valor, origem="grupo")
+
     def emitir_ajustes(self) -> None:
         # tem_escola: este PC está ligado a uma escola (jarvis/escola). Sem
         # ela, a janela e o app nem mostram o interruptor.
@@ -1343,6 +1358,12 @@ def conversar(cfg: config.Config) -> int:
             # Escola (Khan e Estudante Online): lê sozinha 3x por dia. O que
             # for novo vira notificação, sem voz (decisão do Léo).
             Vigia().start()
+            # O Jarvis no grupo da família (WhatsApp): só com o grupo ligado nos Ajustes.
+            grupo = None
+            if agente.whatsapp is not None:
+                from jarvis.grupo.familia import GrupoFamilia
+                grupo = GrupoFamilia(agente.whatsapp, agente.binario, cfg.agente.modelo_rapido or "sonnet")
+                grupo.start()
             proximo_whats = time.monotonic() + cfg.whatsapp.intervalo_s
             while True:
                 if time.monotonic() >= proximo_aviso:
@@ -1352,6 +1373,9 @@ def conversar(cfg: config.Config) -> int:
                 if time.monotonic() >= proximo_whats and not ciclo.vad.falando:
                     ciclo.anunciar_whatsapp()
                     proximo_whats = time.monotonic() + cfg.whatsapp.intervalo_s
+                do_grupo = grupo.pegar() if grupo is not None else None
+                if do_grupo is not None:
+                    ciclo.do_grupo(*do_grupo)
                 bloco = mic.ler_bloco()
                 if bloco is not None:
                     ciclo.passo(bloco)

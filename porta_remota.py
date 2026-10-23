@@ -190,6 +190,24 @@ def criar_app(cfg: config.Config):
         print(f"{time.strftime('%H:%M:%S')} anexo pelo /anexo: {caminho.name} ({recebido // 1024} KB)", flush=True)
         return JSONResponse({"token": token})
 
+    async def aprovacao(request):
+        # Os pedidos do grupo da família que esperam o Sim do dono (com a chave do app).
+        if not hmac.compare_digest(request.headers.get("authorization", ""), f"Bearer {chave}"):
+            return JSONResponse({"erro": "chave"}, status_code=401)
+        from jarvis.nucleo import aprovacoes
+        if request.method == "GET":
+            return JSONResponse({"pedidos": [{"id": a["id"], "quem": a["quem"], "pedido": a["pedido"]}
+                                             for a in aprovacoes.pendentes()]},
+                                headers={"Cache-Control": "no-store"})
+        try:
+            corpo = await request.json()
+            id_pedido, sim = str(corpo["id"]), corpo["sim"] is True
+        except (ValueError, KeyError, TypeError):
+            return JSONResponse({"erro": "pedido torto"}, status_code=400)
+        resultado = await asyncio.to_thread(aprovacoes.responder, id_pedido, sim)
+        print(f"{time.strftime('%H:%M:%S')} pedido do grupo pelo celular: {resultado}", flush=True)
+        return JSONResponse({"resultado": resultado})
+
     async def desbloqueio_pc(request):
         # O Sim/Não do "Desbloquear o PC?" no app. Com a chave do app: é ela
         # (e o celular na mão do Léo) que fecha o buraco da voz imitada.
@@ -377,10 +395,11 @@ def criar_app(cfg: config.Config):
                     if not isinstance(pedido, dict) or pedido.get("pedir") not in PEDIDOS_DO_CELULAR:
                         continue
                     if pedido.get("pedir") == "ajustes":
-                        # Do celular, só o "Seu nome": volume e notificações do PC são da janela.
-                        if not isinstance(pedido.get("nome"), str):
+                        # Do celular, só o "Seu nome" e o grupo da família: volume e
+                        # notificações do PC são da janela.
+                        pedido = {k: v for k, v in pedido.items() if k in ("pedir", "nome", "grupo_ligado")}
+                        if len(pedido) == 1:
                             continue
-                        pedido = {"pedir": "ajustes", "nome": pedido["nome"]}
                     if pedido.get("pedir") == "falar":
                         relogio.clear()
                         relogio.update(pedido=time.monotonic(), tipo="texto")
@@ -406,6 +425,7 @@ def criar_app(cfg: config.Config):
                                Route("/versao", versao), Route("/novidades", novidades),
                              Route("/desbloqueio", desbloqueio_pc, methods=["GET", "POST"]),
                              Route("/anexo", anexo_http, methods=["POST"]),
+                             Route("/aprovacao", aprovacao, methods=["GET", "POST"]),
                              WebSocketRoute("/ws", conexao)])
 
 

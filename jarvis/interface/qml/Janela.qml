@@ -696,6 +696,7 @@ Window {
             onMudarNotificar: (ligado) => { if (typeof ponte !== "undefined") ponte.mudarNotificarEscola(ligado) }
             onMudarCor: (cor) => { if (typeof ponte !== "undefined") ponte.mudarCor(cor) }
             onMudarNome: (nome) => { if (typeof ponte !== "undefined") ponte.mudarNome(nome) }
+            onMudarGrupo: (ligado) => { if (typeof ponte !== "undefined") ponte.mudarGrupo(ligado) }
             // Ao abrir os Ajustes, a lista vem de novo: um fone plugado agora aparece.
             onVisibleChanged: if (visible && typeof ponte !== "undefined") ponte.pedirSom()
             onEscolherSom: (tipo, aparelho) => { if (typeof ponte !== "undefined") ponte.escolherSom(tipo, aparelho) }

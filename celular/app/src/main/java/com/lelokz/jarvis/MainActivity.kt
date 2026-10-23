@@ -137,7 +137,7 @@ val CORES_DE_DESTAQUE = listOf(
 private val Roxo = Color(0xFF9B7BFF)
 
 /** A versão da janela (a numeração do Léo, igual à do PC) e a do app. */
-const val VERSAO_JANELA = "beta 0.12.5"
+const val VERSAO_JANELA = "beta 0.13.5"
 
 // A Inter, a fonte da janela do PC (licença OFL). Variável: o peso funciona.
 @OptIn(ExperimentalTextApi::class)
@@ -195,12 +195,14 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: android.content.Intent) {
         super.onNewIntent(intent)
         if (intent.getBooleanExtra("desbloqueio", false)) (application as App).jarvis.conferirDesbloqueio()
+        if (intent.getBooleanExtra("aprovacao", false)) (application as App).jarvis.conferirPedidos()
         (application as App).jarvis.receberCompartilhado(intent)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         if (intent?.getBooleanExtra("desbloqueio", false) == true) (application as App).jarvis.conferirDesbloqueio()
+        if (intent?.getBooleanExtra("aprovacao", false) == true) (application as App).jarvis.conferirPedidos()
         if (savedInstanceState == null) intent?.let { (application as App).jarvis.receberCompartilhado(it) }
         enableEdgeToEdge()
         setContent {
@@ -313,6 +315,7 @@ fun Tela(modelo: Jarvis) {
 
     if (modelo.avisoAtualizacao.value) AvisoAtualizacao(modelo)
     if (modelo.desbloqueio.value.isNotEmpty()) AvisoDesbloqueio(modelo)
+    modelo.pedidoGrupo.value?.let { AvisoPedido(modelo, it.second, it.third) }
 
     if (seletores) {
         ModalBottomSheet(
@@ -348,6 +351,37 @@ private fun RetanguloAtualizacao(modelo: Jarvis, modifier: Modifier) {
                 }
                 Spacer(Modifier.width(8.dp))
                 Text("${(p * 100).toInt()}%", color = Texto, fontSize = 12.sp)
+            }
+        }
+    }
+}
+
+/** O pedido de alguém do grupo da família que precisa do Sim (beta 0.13.0). */
+@Composable
+private fun AvisoPedido(modelo: Jarvis, quem: String, pedido: String) {
+    BackHandler { modelo.responderPedido(false) }
+    Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.45f))
+        .clickable(indication = null, interactionSource = remember { MutableInteractionSource() }) {},
+        contentAlignment = Alignment.Center) {
+        val forma = RoundedCornerShape(20.dp)
+        Column(Modifier.padding(horizontal = 32.dp).fillMaxWidth().clip(forma).background(Superficie2)
+            .border(1.dp, TracoForte, forma).padding(22.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                AtomoFixo(Azul, 26.dp)
+                Spacer(Modifier.width(10.dp))
+                Text("Pedido de $quem pro Jarvis", color = Texto, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+            }
+            Spacer(Modifier.height(10.dp))
+            Text("\"$pedido\"", color = Texto, fontSize = 15.sp, lineHeight = 21.sp)
+            Spacer(Modifier.height(6.dp))
+            Text("Veio do grupo da família. Se você liberar, o Jarvis do PC faz.",
+                color = TextoMedio, fontSize = 13.sp, lineHeight = 19.sp)
+            Spacer(Modifier.height(20.dp))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedButton(onClick = { modelo.responderPedido(false) }, modifier = Modifier.weight(1f),
+                    border = BorderStroke(1.dp, TracoForte)) { Text("Não", color = TextoMedio) }
+                Button(onClick = { modelo.responderPedido(true) }, modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.buttonColors(containerColor = Azul, contentColor = Fundo)) { Text("Sim") }
             }
         }
     }
@@ -1101,9 +1135,25 @@ private fun PaginaAjustes(modelo: Jarvis) {
             BarraDeUso("Últimas 5 horas", modelo.usoCinco.value, modelo.voltaCinco.value, false)
             BarraDeUso("Esta semana", modelo.usoSemana.value, modelo.voltaSemana.value, true)
         }
-        if (modelo.temEscola.value) {
+        if (modelo.temEscola.value || modelo.temGrupo.value) {
         Spacer(Modifier.height(14.dp))
         Grupo("Avisos")
+        }
+        if (modelo.temGrupo.value) {
+        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Lateral)
+            .border(1.dp, Traco, RoundedCornerShape(14.dp)).clickable { modelo.alternarGrupo() }
+            .padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("Jarvis no grupo da família", color = TextoMedio, fontSize = 14.sp)
+                Text("Responde no WhatsApp quando chamam o Jarvis", color = Fraco, fontSize = 12.sp)
+            }
+            Switch(checked = modelo.grupoLigado.value, onCheckedChange = { modelo.alternarGrupo() },
+                colors = SwitchDefaults.colors(checkedTrackColor = Azul, checkedThumbColor = Texto,
+                    uncheckedTrackColor = Superficie2, uncheckedThumbColor = Fraco, uncheckedBorderColor = Traco))
+        }
+        if (modelo.temEscola.value) Spacer(Modifier.height(8.dp))
+        }
+        if (modelo.temEscola.value) {
         Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Lateral)
             .border(1.dp, Traco, RoundedCornerShape(14.dp)).clickable { modelo.alternarNotificarEscola() }
             .padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {

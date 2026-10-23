@@ -96,6 +96,11 @@ class Jarvis(private val app: Application) {
     // evento "ajustes"; beta 0.12.5). Guardados para o app abrir já com eles.
     val nomeUsuario = mutableStateOf(prefs.getString("nome_usuario", "") ?: "")
     val nomePc = mutableStateOf(prefs.getString("nome_pc", "") ?: "")
+    // O Jarvis no grupo da família (beta 0.13.0): configurado no PC? ligado?
+    val temGrupo = mutableStateOf(prefs.getBoolean("tem_grupo", false))
+    val grupoLigado = mutableStateOf(false)
+    // O pedido de alguém do grupo esperando o Sim: (id, quem, pedido).
+    val pedidoGrupo = mutableStateOf<Triple<String, String, String>?>(null)
     val avisoAtualizacao = mutableStateOf(false)
     val aviso = mutableStateOf("")           // recado rápido (erro, "mandada pra lixeira")
     val estado = mutableStateOf("dormindo")     // o do PC: pensando, falando...
@@ -169,7 +174,7 @@ class Jarvis(private val app: Application) {
             motivo.value = porque
             if (ok) {
                 avisarMudo()
-                viewModelScope.launch(Dispatchers.IO) { Novidades.buscar(app); conferirVersao(); conferirDesbloqueio() }
+                viewModelScope.launch(Dispatchers.IO) { Novidades.buscar(app); conferirVersao(); conferirDesbloqueio(); conferirPedidos() }
                 // O histórico vem de novo a cada conexão: começa do zero. Os
                 // anexos ainda não enviados sobem de novo (a porta nova não
                 // conhece os da conexão que caiu).
@@ -191,6 +196,33 @@ class Jarvis(private val app: Application) {
     }
 
     /** Tem pedido de desbloquear esperando? (ao conectar e ao tocar na notificação) */
+    fun conferirPedidos() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val p = Novidades.pedidoPendente(app)
+            withContext(Dispatchers.Main) { pedidoGrupo.value = p }
+        }
+    }
+
+    fun responderPedido(sim: Boolean) {
+        val p = pedidoGrupo.value ?: return
+        pedidoGrupo.value = null
+        viewModelScope.launch(Dispatchers.IO) {
+            val r = Novidades.responderPedido(app, p.first, sim)
+            withContext(Dispatchers.Main) {
+                aviso.value = when (r) {
+                    "aprovado" -> "Liberado: o Jarvis vai fazer."
+                    "recusado" -> "Recusado. O Jarvis avisa no grupo."
+                    "expirou" -> "Esse pedido já expirou."
+                    else -> "Sem conexão com o PC."
+                }
+            }
+        }
+    }
+
+    fun alternarGrupo() {
+        conexao?.enviar(JSONObject().put("pedir", "ajustes").put("grupo_ligado", !grupoLigado.value))
+    }
+
     fun conferirDesbloqueio() {
         viewModelScope.launch(Dispatchers.IO) {
             val id = Novidades.desbloqueioPendente(app) ?: ""
@@ -593,9 +625,17 @@ class Jarvis(private val app: Application) {
                 desbloqueio.value = ev.optString("id")
                 Novidades.notificarDesbloqueio(app)
             }
+            "aprovacao" -> {
+                pedidoGrupo.value = Triple(ev.optString("id"), ev.optString("quem"), ev.optString("pedido"))
+                Novidades.notificarPedido(app, ev.optString("quem"), ev.optString("pedido"))
+            }
+            "notificacao" -> viewModelScope.launch(Dispatchers.IO) { Novidades.buscar(app) }
             "ajustes" -> {
                 temEscola.value = ev.optBoolean("tem_escola", false)
                 nomeUsuario.value = ev.optString("nome", "")
+                temGrupo.value = ev.optString("grupo_jid", "").isNotEmpty()
+                grupoLigado.value = ev.optBoolean("grupo_ligado", false)
+                prefs.edit().putBoolean("tem_grupo", temGrupo.value).apply()
                 nomePc.value = ev.optString("pc", "")
                 prefs.edit().putBoolean("tem_escola", temEscola.value)
                     .putString("nome_usuario", nomeUsuario.value).putString("nome_pc", nomePc.value).apply()
