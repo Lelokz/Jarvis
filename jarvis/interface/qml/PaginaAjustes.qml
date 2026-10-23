@@ -1,8 +1,8 @@
 import QtQuick
 
-// Ajustes: o que está valendo agora e os atalhos. Pequena de propósito: o
-// que se troca toda hora (cérebro, esforço, persona) fica na barra de
-// escrever, à mão.
+// Ajustes: os limites da assinatura no topo, o som (o primeiro ajuste de
+// verdade, beta 0.6.0) e, sempre por último, o que está valendo e os atalhos. O que se troca toda hora (cérebro, esforço,
+// persona) fica na barra de escrever, à mão.
 Item {
     id: raiz
     property var tema
@@ -15,6 +15,19 @@ Item {
     property real voltaCinco: 0
     property real usoSemana: -1
     property real voltaSemana: 0
+    // O evento "som" da ponte (jarvis/som.py): aparelhos, padrão e escolha.
+    property var som: null
+    signal escolherSom(string tipo, string aparelho)
+
+    // "Padrão do sistema" primeiro (com o aparelho que ele é agora), depois
+    // todos os aparelhos que o Linux enxerga.
+    function opcoesDeSom(aparelhos, padrao) {
+        var lista = [{ valor: "", nome: "Padrão" + (padrao ? " (" + padrao + ")" : ""),
+                       descricao: "Acompanha o padrão das configurações de som do Linux" }];
+        for (var i = 0; i < (aparelhos || []).length; i++)
+            lista.push({ valor: aparelhos[i].id, nome: aparelhos[i].nome, descricao: "" });
+        return lista;
+    }
 
     function quandoRenova(seg, comDia) {
         if (!seg) return "";
@@ -30,7 +43,14 @@ Item {
         low: "Baixo", medium: "Médio", high: "Alto", xhigh: "Muito alto", max: "Máximo"
     })
 
+    Flickable {
+        anchors.fill: parent
+        contentHeight: coluna.height + 80
+        clip: true
+        boundsBehavior: Flickable.StopAtBounds
+
     Column {
+        id: coluna
         x: Math.max(32, (parent.width - width) / 2)
         y: 40
         width: Math.min(780, raiz.width - 64)
@@ -124,6 +144,77 @@ Item {
         }
         Item { width: 1; height: 24 }
 
+        // -- o som --------------------------------------------------------------
+        Text {
+            bottomPadding: 10
+            text: "SOM"
+            color: raiz.tema.muitoFraco
+            font.family: raiz.tema.familia
+            font.pixelSize: 11
+            font.weight: Font.DemiBold
+            font.letterSpacing: 0.8
+        }
+        Rectangle {
+            width: parent.width
+            height: raiz.som ? 2 * 56 : 56
+            radius: 14
+            color: raiz.tema.lateral
+            border.width: 1
+            border.color: raiz.tema.traco
+            Text {
+                visible: !raiz.som
+                anchors.verticalCenter: parent.verticalCenter
+                x: 18
+                text: raiz.conectado ? "Procurando os aparelhos de som…" : "Aparece quando o Jarvis subir."
+                color: raiz.tema.textoFraco
+                font.family: raiz.tema.familia
+                font.pixelSize: 14
+            }
+            Column {
+                visible: !!raiz.som
+                width: parent.width
+                Repeater {
+                    model: [
+                        { tipo: "saida", nome: "Saída (alto-falante)", lista: "saidas", padrao: "padrao_saida" },
+                        { tipo: "entrada", nome: "Entrada (microfone)", lista: "entradas", padrao: "padrao_entrada" },
+                    ]
+                    Item {
+                        required property var modelData
+                        required property int index
+                        width: parent.width
+                        height: 56
+                        z: 2 - index  // o menu de cima abre por cima da linha de baixo
+                        Rectangle {
+                            visible: index > 0
+                            x: 18; width: parent.width - 36; height: 1
+                            color: raiz.tema.traco
+                        }
+                        Text {
+                            anchors.verticalCenter: parent.verticalCenter
+                            x: 18
+                            text: modelData.nome
+                            color: raiz.tema.textoMedio
+                            font.family: raiz.tema.familia
+                            font.pixelSize: 14
+                        }
+                        Seletor {
+                            anchors.verticalCenter: parent.verticalCenter
+                            anchors.right: parent.right
+                            anchors.rightMargin: 12
+                            tema: raiz.tema
+                            paraCima: false
+                            alinharDireita: true
+                            rotulo: modelData.nome
+                            opcoes: raiz.som ? raiz.opcoesDeSom(raiz.som[modelData.lista], raiz.som[modelData.padrao]) : []
+                            valor: raiz.som ? (raiz.som[modelData.tipo] || "") : ""
+                            onEscolhido: (valor) => raiz.escolherSom(modelData.tipo, valor)
+                        }
+                    }
+                }
+            }
+        }
+        Item { width: 1; height: 24 }
+
         Repeater {
             model: [
                 { titulo: "Agora", linhas: [
@@ -131,7 +222,7 @@ Item {
                     ["Cérebro", raiz.nomes[raiz.modelo] || raiz.modelo || "—"],
                     ["Esforço", raiz.nomes[raiz.esforco] || raiz.esforco || "—"],
                     ["Conversa", raiz.conversa ? raiz.conversa.slice(0, 8) : "—"],
-                    ["Versão da janela", "beta 0.5"],
+                    ["Versão da janela", "beta 0.6.0"],
                 ] },
                 { titulo: "Atalhos", linhas: [
                     ["Ctrl + N", "Novo chat"],
@@ -200,5 +291,6 @@ Item {
                 }
             }
         }
+    }
     }
 }

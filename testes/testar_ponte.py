@@ -625,6 +625,18 @@ def rodar_janela(base: Path) -> None:
           [(x.tipo, x.valor) for x in pedidos] == [("nova", ""), ("continuar", "a1b2c3d4"),
                                                    ("cerebro", '{"esforco": "high"}'), ("parar", "")],
           str([(x.tipo, x.valor) for x in pedidos]))
+    # O som dos Ajustes (beta 0.6.0): a escolha vai para a thread de áudio
+    # (o microfone reabre lá); nome torto de aparelho é recusado.
+    janela.enviar({"pedir": "som", "entrada": "alsa_input.usb-fifine_Microphone-00.mono-fallback"})
+    pedidos_som = []
+    esperar(lambda: pedidos_som.append(srv.proximo_pedido()) or any(pedidos_som))
+    p_som = next((x for x in pedidos_som if x), None)
+    checa("som: a escolha vai para a fila",
+          p_som is not None and p_som.tipo == "som"
+          and json.loads(p_som.valor) == {"entrada": "alsa_input.usb-fifine_Microphone-00.mono-fallback"})
+    janela.enviar({"pedir": "som", "saida": "x; rm -rf ~"})
+    r = janela.ler(1)
+    checa("som com nome torto: erro", r and r[0]["ev"] == "erro")
     janela.enviar({"pedir": "renomear", "id": "a1b2c3d4", "titulo": "  Meu nome  "})
     r = janela.ler(1)
     checa("renomear: chama o provedor e devolve a lista", r and r[0]["ev"] == "conversas"

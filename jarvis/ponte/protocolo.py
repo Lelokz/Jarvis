@@ -66,6 +66,10 @@ ASSISTENTE -> CLIENTES
     {"ev":"cerebro", "modelo":"auto|haiku|sonnet|opus",
      "esforco":"low|medium|high|xhigh|max", "persona":"jarvis"}
         O que está escolhido. Reenviado a quem diz "ola" e a cada mudança.
+    {"ev":"som", "saidas":[{"id","nome"}], "entradas":[...],
+     "padrao_saida":"<nome>", "padrao_entrada":"<nome>",
+     "saida":"<id ou ''>", "entrada":"<id ou ''>"}
+        Os aparelhos de som do PC (os Ajustes da janela, beta 0.6.0).
     {"ev":"conversa_atual", "id":"<uuid>", "falas":[...]}
         A conversa do Jarvis mudou (ligou, "nova", "continuar"): o id da
         sessão do Claude Code e as falas dela (vazio na nova). O histórico
@@ -108,6 +112,9 @@ CLIENTES -> ASSISTENTE
          {"pedir":"parar"}                -> interrompe a tarefa (o botão Parar)
          {"pedir":"renomear", "id":"...", "titulo":"..."} -> "conversas"
          {"pedir":"apagar", "id":"..."}   -> manda para a lixeira; "conversas"
+         {"pedir":"som"}                  -> "som" (a lista de aparelhos)
+         {"pedir":"som", "saida":"<id>", "entrada":"<id>"} (um ou os dois;
+             "" = o padrão do sistema) -> troca e manda "som" para todos
         A conversa de AGORA não pode ser apagada (erro): o Jarvis está nela.
         "nova" e "continuar" com o Jarvis no meio de uma tarefa voltam
         {"ev":"erro"} para quem pediu.
@@ -153,11 +160,11 @@ VERSAO = 3
 # (acordou, dormiu, janela, tempos...) é para o terminal e fica em casa.
 PUBLICOS = frozenset({"sessao", "estado", "nivel", "voce_disse", "jarvis_disse", "aviso",
                       "mostrar", "atividade", "voz", "cerebro", "conversa_atual", "uso",
-                      "escrevendo"})
+                      "escrevendo", "som"})
 ESTADOS = ("dormindo", "ouvindo", "escutando", "pensando", "falando")
 PEDIDOS = frozenset({"ola", "falar", "memoria", "ouvir",
                      "conversas", "abrir", "nova", "continuar", "cerebro", "parar",
-                     "renomear", "apagar"})
+                     "renomear", "apagar", "som"})
 
 # Uma linha maior que isto sem quebra é um cliente com defeito, não um pedido.
 MAX_LINHA = 64 * 1024
@@ -226,6 +233,19 @@ def ler_pedido(linha: bytes) -> tuple[str, dict[str, Any]]:
                 dados[campo] = valor
         if not dados:
             raise ErroDeProtocolo("'cerebro' sem modelo nem esforço")
+        return tipo, dados
+
+    if tipo == "som":
+        # Sem campos: só a lista. Com "saida"/"entrada": a escolha ("" = o
+        # padrão do sistema), um nome de aparelho do PipeWire/PulseAudio.
+        dados = {}
+        for campo in ("saida", "entrada"):
+            valor = objeto.get(campo)
+            if valor is not None:
+                if not isinstance(valor, str) or len(valor) > 300 or \
+                        not re.fullmatch(r"[\w.:@+-]*", valor):
+                    raise ErroDeProtocolo(f"'{campo}' inválido")
+                dados[campo] = valor
         return tipo, dados
 
     if tipo == "ouvir":

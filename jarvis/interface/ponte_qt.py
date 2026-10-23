@@ -53,6 +53,7 @@ class PonteQt(QObject):
     erroRecebido = Signal(str)             # "espera ele terminar", pedido inválido
     usoMudou = Signal(float, float, float, float)  # 5 h (uso, volta_em), semana (uso, volta_em)
     escrevendo = Signal(int, str, bool, bool)      # bloco, pedaço, fim, descartar
+    somMudou = Signal("QVariant")          # aparelhos de som: o evento "som" inteiro (Ajustes)
 
     def __init__(self, caminho: Path, parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -138,6 +139,15 @@ class PonteQt(QObject):
     @Slot(str, result=bool)
     def continuarConversa(self, sessao: str) -> bool:
         return self._pedir({"pedir": "continuar", "id": sessao})
+
+    @Slot(result=bool)
+    def pedirSom(self) -> bool:
+        return self._pedir({"pedir": "som"})
+
+    @Slot(str, str, result=bool)
+    def escolherSom(self, tipo: str, aparelho: str) -> bool:
+        """tipo = "saida" ou "entrada"; aparelho "" = o padrão do sistema."""
+        return self._pedir({"pedir": "som", tipo: aparelho})
 
     @Slot(str, str, result=bool)
     def definirCerebro(self, modelo: str, esforco: str) -> bool:
@@ -236,6 +246,8 @@ class PonteQt(QObject):
                                     "falas" in ev)
         elif tipo == "conversas":
             self.conversasRecebidas.emit(list(ev.get("lista") or []))
+        elif tipo == "som":
+            self.somMudou.emit({k: v for k, v in ev.items() if k != "ev"})
         elif tipo == "conversa":
             self.conversaRecebida.emit(str(ev.get("id") or ""), list(ev.get("falas") or []))
         elif tipo == "erro":

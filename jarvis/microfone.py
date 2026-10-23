@@ -127,6 +127,13 @@ class Microfone:
             self._stream.close()
             self._stream = None
 
+    def trocar(self) -> None:
+        """Reabre o fluxo: o microfone escolhido nos Ajustes (jarvis/som.py)
+        só vale num fluxo novo. O que estava na fila é descartado."""
+        self.__exit__()
+        self._drenar()
+        self.__enter__()
+
     # -- captura -----------------------------------------------------------
 
     def _callback(self, indata, frames, tempo, status) -> None:

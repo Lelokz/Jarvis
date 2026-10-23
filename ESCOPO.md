@@ -650,6 +650,21 @@ janela grande é opaca, sem efeito na janela inteira, intervalo 3 (60 fps), e
 só anima o que aparece: medido com `--medir-quadros`, parada ela desenha
 **0 quadros** (6,8% de um núcleo só na subida).
 
+### Som nos Ajustes (janela beta 0.6.0, 22/10/2026)
+
+O primeiro ajuste de verdade: escolher a saída e a entrada de som.
+`jarvis/som.py` pergunta ao servidor de som do Linux (PipeWire ou
+PulseAudio, pelo `pulsectl`) quais aparelhos existem, com nomes que a pessoa
+reconhece ("LG ULTRAGEAR (HDMI)", "fifine Microphone"). Nada fica chumbado, e
+no PC de outra pessoa aparecem os aparelhos dela. Porta sem nada plugado não
+aparece. A opção "Padrão (…)" acompanha o padrão das configurações de som.
+O Jarvis grava e toca pelo dispositivo `pulse` do PortAudio, que obedece
+`PULSE_SOURCE`/`PULSE_SINK` na hora em que o fluxo abre. A saída vale na
+próxima fala e o microfone reabre na hora (`Microfone.trocar`). A escolha
+fica em `~/.local/share/jarvis/som.json`. Pela ponte: o pedido `som` e o
+evento `som`. Se o `config.toml` fixar um aparelho, vale o jeito antigo.
+Ordem dos Ajustes (Léo): limites, som e, por último, as informações.
+
 ### Dependências de sistema (não vêm com o pip)
 
 | peça | precisa de | sem ela |

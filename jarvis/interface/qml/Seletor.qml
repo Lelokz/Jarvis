@@ -14,6 +14,7 @@ Item {
     property bool iconeCheio: false
     property color corDaBola: "transparent"
     property bool paraCima: true
+    property bool alinharDireita: false
     signal escolhido(string valor)
 
     readonly property var atual: {
@@ -81,6 +82,7 @@ Item {
     Popup {
         id: menu
         y: raiz.paraCima ? -height - 8 : botao.height + 8
+        x: raiz.alinharDireita ? botao.width - width : 0
         width: 300
         padding: 6
         focus: true

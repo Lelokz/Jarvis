@@ -36,7 +36,7 @@ from pathlib import Path
 
 import numpy as np
 
-from jarvis import config, cronometro, eventos, microfone, tts, wakeword
+from jarvis import config, cronometro, eventos, microfone, som, tts, wakeword
 from jarvis.agente import sessoes
 from jarvis.agente.agente import Agente, ErroDoAgente, Saida
 from jarvis.agente.avisos import AvisosWhatsApp
@@ -838,6 +838,15 @@ class Ciclo:
         self.registrador.registrar_estado("texto_digitado", texto=texto)
         self._responder(texto, origem="texto")
 
+    def emitir_som(self) -> None:
+        """Os aparelhos de som para os Ajustes da janela."""
+        if not getattr(self, "som_ativo", False):
+            return
+        try:
+            self.emissor.emitir("som", **som.listar())
+        except Exception:
+            pass  # o servidor de som piscou: a janela pede de novo ao abrir os Ajustes
+
     def emitir_cerebro(self) -> None:
         self.emissor.emitir("cerebro", persona="jarvis", **self.agente.cerebro)
 
@@ -861,6 +870,19 @@ class Ciclo:
             if self.agente.ocupado:
                 self.registrador.registrar_estado("interrompeu", texto="(botão Parar)")
                 self.agente.interromper()
+            return
+        if pedido.tipo == "som":
+            try:
+                escolha = json.loads(pedido.valor or "{}")
+            except ValueError:
+                return
+            if escolha and getattr(self, "som_ativo", False):
+                som.guardar(escolha.get("saida"), escolha.get("entrada"))
+                som.aplicar()
+                if "entrada" in escolha and hasattr(self.portao, "trocar"):
+                    self.portao.trocar()  # a saída vale já na próxima fala
+                self.registrador.registrar_estado("som", **som.escolha())
+            self.emitir_som()
             return
         if pedido.tipo == "cerebro":
             try:
@@ -1206,7 +1228,18 @@ def conversar(cfg: config.Config) -> int:
     except ValueError as e:
         print(f"\n{e}\n", file=sys.stderr)
         return 1
-    _partida("microfone", microfone.nome_do_dispositivo(indice_entrada, entrada=True))
+    # Sem aparelho fixo no config.toml: vale o que foi escolhido nos Ajustes
+    # da janela (beta 0.6.0), pelo servidor de som do Linux (jarvis/som.py).
+    usar_som = not cfg.audio.dispositivo_entrada.strip() and not cfg.audio.dispositivo_saida.strip() \
+        and som.disponivel()
+    if usar_som:
+        som.aplicar()
+        indice_entrada = indice_saida = som.DISPOSITIVO
+        lista = som.listar()
+        _partida("microfone", next((e["nome"] for e in lista["entradas"] if e["id"] == lista["entrada"]),
+                                   f"{lista['padrao_entrada']} (padrão do sistema)"))
+    else:
+        _partida("microfone", microfone.nome_do_dispositivo(indice_entrada, entrada=True))
 
     try:
         detector_vad, detector_ww, transcritor, voz, agente = _montar(cfg)
@@ -1259,7 +1292,9 @@ def conversar(cfg: config.Config) -> int:
             )
             if ponte is not None:
                 ciclo.avisar_cliente = ponte.avisar
+            ciclo.som_ativo = usar_som
             ciclo.emitir_cerebro()
+            ciclo.emitir_som()
             print(REGUA)
             _linha("dormindo", 'diga "hey Jarvis"  (ctrl+c encerra)')
 
