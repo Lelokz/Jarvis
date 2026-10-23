@@ -8,6 +8,8 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.SwitchDefaults
+import androidx.compose.material3.Switch
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -128,7 +130,7 @@ private val Azul = Color(0xFF4DA3FF)
 private val Roxo = Color(0xFF9B7BFF)
 
 /** A versão da janela (a numeração do Léo, igual à do PC) e a do app. */
-const val VERSAO_JANELA = "beta 0.8.0"
+const val VERSAO_JANELA = "beta 0.8.5"
 
 // A Inter, a fonte da janela do PC (licença OFL). Variável: o peso funciona.
 @OptIn(ExperimentalTextApi::class)
@@ -1023,6 +1025,19 @@ private fun PaginaAjustes(modelo: Jarvis) {
                 Text("Aparece depois do primeiro pedido ao Claude.", color = Fraco, fontSize = 14.sp)
             BarraDeUso("Últimas 5 horas", modelo.usoCinco.value, modelo.voltaCinco.value, false)
             BarraDeUso("Esta semana", modelo.usoSemana.value, modelo.voltaSemana.value, true)
+        }
+        Spacer(Modifier.height(14.dp))
+        Grupo("Avisos")
+        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Lateral)
+            .border(1.dp, Traco, RoundedCornerShape(14.dp)).clickable { modelo.alternarNotificarEscola() }
+            .padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("Notificações da escola", color = TextoMedio, fontSize = 14.sp)
+                Text("Nota nova, média e agenda, neste celular", color = Fraco, fontSize = 12.sp)
+            }
+            Switch(checked = modelo.notificarEscola.value, onCheckedChange = { modelo.alternarNotificarEscola() },
+                colors = SwitchDefaults.colors(checkedTrackColor = Azul, checkedThumbColor = Texto,
+                    uncheckedTrackColor = Superficie2, uncheckedThumbColor = Fraco, uncheckedBorderColor = Traco))
         }
         Spacer(Modifier.height(14.dp))
         Grupo("Agora")

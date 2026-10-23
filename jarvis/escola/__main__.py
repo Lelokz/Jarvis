@@ -33,13 +33,13 @@ NOVIDADES = Path.home() / ".local/share/jarvis/novidades.jsonl"
 
 
 def notificar(texto: str) -> None:
-    """Notificação no canto da tela do PC e na fila do celular. Desligada nos
-    Ajustes da janela: não sai em lugar nenhum (o resumo continua sendo lido)."""
+    """Notificação no canto da tela do PC e na fila do celular. Cada um tem o
+    seu interruptor (decisão do Léo): o da janela desliga só a do PC; o do
+    app decide lá se mostra o que vem da fila."""
     from jarvis import ajustes
-    if not ajustes.ler()["notificar_escola"]:
-        return
-    subprocess.run(["notify-send", "-a", "Jarvis", "-i", "jarvis-atomo", "Escola", texto],
-                   check=False, timeout=10)
+    if ajustes.ler()["notificar_escola"]:
+        subprocess.run(["notify-send", "-a", "Jarvis", "-i", "jarvis-atomo", "Escola", texto],
+                       check=False, timeout=10)
     NOVIDADES.touch(mode=0o600, exist_ok=True)
     with NOVIDADES.open("a", encoding="utf-8") as f:
         f.write(json.dumps({"id": time.time_ns() // 1_000_000, "titulo": "Escola", "texto": texto},

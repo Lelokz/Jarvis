@@ -668,8 +668,10 @@ informações.
 
 **Voz e avisos (beta 0.6.5):** o volume da voz do Jarvis no PC (0 a 100%,
 aplicado em `tts.falar`; 100% é o volume de sempre e é o TETO, daqui só se
-abaixa) e o interruptor das notificações da escola. Desligado, a escola
-continua lendo, mas não notifica nem no PC nem no celular. Os dois ficam em
+abaixa) e o interruptor das notificações da escola NO PC. O app do celular
+tem o interruptor dele (Ajustes do app, beta 0.8.5), e cada aparelho decide
+o seu (Léo, 23/10/2026). Desligado, a escola continua lendo e o Jarvis
+responde se ele perguntar. Os dois ficam em
 `~/.local/share/jarvis/ajustes.json` (`jarvis/ajustes.py`), com o pedido
 `ajustes` e o evento `ajustes` na ponte.
 

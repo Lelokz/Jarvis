@@ -312,7 +312,7 @@ Item {
                         font.pixelSize: 14
                     }
                     Text {
-                        text: "Nota nova, média e agenda, no PC e no celular"
+                        text: "Nota nova, média e agenda, no canto da tela do PC (o celular tem o dele)"
                         color: raiz.tema.textoFraco
                         font.family: raiz.tema.familia
                         font.pixelSize: 12

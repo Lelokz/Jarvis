@@ -45,6 +45,8 @@ object Novidades {
         } catch (e: Exception) {
             return  // PC desligado ou sem Tailscale: tenta na próxima
         }
+        // Desligadas nos Ajustes do app: marca como vistas, sem mostrar.
+        val mostrarAqui = p.getBoolean("notificar_escola", true)
         var maior = ultima
         for (i in 0 until lista.length()) {
             val n = lista.getJSONObject(i)
@@ -52,7 +54,7 @@ object Novidades {
             if (id <= ultima) continue
             maior = maxOf(maior, id)
             // Na primeira vez só marca o que já existia: nada de enxurrada.
-            if (!primeiraVez) mostrar(c, id, n.optString("titulo", "Jarvis"), n.optString("texto"))
+            if (!primeiraVez && mostrarAqui) mostrar(c, id, n.optString("titulo", "Jarvis"), n.optString("texto"))
         }
         p.edit().putLong("novidade_ultima", maior).apply()
     }

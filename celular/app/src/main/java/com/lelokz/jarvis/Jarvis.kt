@@ -78,6 +78,9 @@ class Jarvis(private val app: Application) {
     // aviso grande está aberto. O grande sai uma vez por versão; depois fica
     // só o retângulo no topo.
     val atualizacao = mutableStateOf(0)
+    // As notificações da escola NO CELULAR (o PC tem o interruptor dele, nos
+    // Ajustes da janela; decisão do Léo, 23/10/2026).
+    val notificarEscola = mutableStateOf(prefs.getBoolean("notificar_escola", true))
     val avisoAtualizacao = mutableStateOf(false)
     val aviso = mutableStateOf("")           // recado rápido (erro, "mandada pra lixeira")
     val estado = mutableStateOf("dormindo")     // o do PC: pensando, falando...
@@ -180,6 +183,11 @@ class Jarvis(private val app: Application) {
             app.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("$base/jarvis.apk"))
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         }
+    }
+
+    fun alternarNotificarEscola() {
+        notificarEscola.value = !notificarEscola.value
+        prefs.edit().putBoolean("notificar_escola", notificarEscola.value).apply()
     }
 
     fun alternarMudo() {

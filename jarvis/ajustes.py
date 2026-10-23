@@ -1,5 +1,6 @@
 """Os ajustes da janela (beta 0.6.5) que não são som: o volume da voz do
-Jarvis no PC e as notificações da escola. Ficam em
+Jarvis no PC e as notificações da escola NO PC (o app do celular tem o
+interruptor dele). Ficam em
 ~/.local/share/jarvis/ajustes.json; quem usa lê na hora (a escola roda em
 outro processo).
 """
