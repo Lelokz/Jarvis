@@ -690,7 +690,11 @@ disco. Depois entram na conversa pelo `anexo_pronto` do WebSocket. Antes era
 binário no WebSocket, com teto de 64 MB e tudo na memória. A atualização
 agora é uma por vez: tocar de novo durante o download não começa outro, que
 era o bug do Léo de baixar 3 vezes. E o retângulo do topo vira a barrinha
-"Baixando atualização ▓▓░ 58%".
+"Baixando atualização ▓▓░ 58%". **Testado pelo Léo (23/10/2026, beta
+0.12.0):** com o Play Protect desligado (decisão dele), o caminho ficou Sim →
+barrinha → "Instalar" do Android → pronto. O Play Protect pedia "Verificar
+app" (2-3 min a cada versão) ou "Instalar sem análise" com a digital, porque
+o Google nunca viu o APK do Jarvis, e não tem como liberar um app só.
 
 **App beta 0.11.0:** a mesma cor de destaque nos Ajustes do app, escolhida lá (cada aparelho tem a sua).
 
