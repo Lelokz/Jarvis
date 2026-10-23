@@ -88,8 +88,13 @@ Tudo no `config.toml` (`[persona]`), nada chumbado no código.
   Segue as mesmas regras de segurança, a mesma memória e fica séria quando o
   assunto é sério.
 - **Voz:** NÃO é a dos filmes. A da Kerry Condon é adulta, calma e séria, e
-  não combina com o jeito dela. O plano é gerar a mesma frase com várias vozes
-  femininas, mandar os áudios pro Léo e ele escolher.
+  não combina com o jeito dela. As 14 vozes prontas (Microsoft e Kokoro)
+  foram reprovadas: "robóticas e zero personalidade". O caminho é o mesmo do
+  JARVIS, clonar uma dubladora (Kokoro + RVC), só pra uso pessoal e nunca em
+  vídeo do canal. As candidatas são a voz pt-BR da **Mitsuri** (Demon Slayer,
+  arco da Vila dos Ferreiros), a primeira opção, e a da **Emilia** (Re:Zero).
+  Plano: juntar uns 5 min de fala limpa de cada uma, separar da música, fazer
+  um teste rápido de cada e o Léo escolher.
 - **Palavra:** "Friday", em inglês (openWakeWord, treinar e medir os
   disparos à toa).
 - **Convivência:** as duas sempre ligadas, "hey Jarvis" chama ele e
