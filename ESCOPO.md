@@ -95,10 +95,17 @@ Tudo no `config.toml` (`[persona]`), nada chumbado no código.
   arco da Vila dos Ferreiros), a primeira opção, e a da **Emilia** (Re:Zero).
   Plano: juntar uns 5 min de fala limpa de cada uma, separar da música, fazer
   um teste rápido de cada e o Léo escolher.
-- **Palavra:** "Friday", em inglês (openWakeWord, treinar e medir os
-  disparos à toa).
+- **Palavra:** "Hey Friday", em inglês (openWakeWord, treinar e medir os
+  disparos à toa). Não só "Friday" (Léo, 24/10/2026).
+- **A voz é a prioridade (Léo, 24/10/2026):** tem que soar real, nada
+  robótico; uma voz parecida mas robotizada "não adianta nada" (robótico era
+  o JARVIS). Ferramenta que melhore muito a qualidade: pode adotar direto e
+  avisar. Por isso, antes de repetir Kokoro + RVC (a entonação robótica vem
+  do Kokoro), testar modelos que copiam a entonação da referência em pt-BR
+  (Qwen3-TTS, Chatterbox Multilingual, F5-TTS pt-BR), com ou sem RVC por
+  cima.
 - **Convivência:** as duas sempre ligadas, "hey Jarvis" chama ele e
-  "Friday" chama ela. Cor do átomo dela: laranja ou rosa, o Léo escolhe junto
+  "Hey Friday" chama ela. Cor do átomo dela: laranja ou rosa, o Léo escolhe junto
   com a voz.
 
 ---
