@@ -199,7 +199,10 @@ _IGUAIS = {"para": "pra", "está": "tá", "estou": "tô", "hum": "hmm", "hm": "h
 
 
 def _palavras(texto: str) -> list[str]:
-    return [_IGUAIS.get(p, p) for p in re.findall(r"[^\W\d_]+", texto.lower())]
+    # Número por extenso dos dois lados: "dia doze" escrito e "dia 12" ouvido
+    # são a mesma coisa (antes contava como palavra faltando e gerava 3 vezes).
+    t = re.sub(r"\d+", lambda m: num2words(int(m[0]), lang="pt_BR"), texto.lower())
+    return [_IGUAIS.get(p, p) for p in re.findall(r"[^\W\d_]+", t)]
 
 
 def _bate(a: str, b: str) -> bool:
@@ -295,18 +298,23 @@ def main() -> int:
         melhor = None
         for tentativa in range(max(1, a.tentativas)):
             torch.manual_seed(int.from_bytes(os.urandom(4), "little"))
+            marca = time.monotonic()
             wav, taxa, _ = next(utils_infer.infer_batch_process(ref, ref_texto, [chave], tts.ema_model, tts.vocoder,
-                                                                nfe_step=a.nfe, fix_duration=duracao(chave), device="cuda"))
+                                                                progress=None, nfe_step=a.nfe,
+                                                                fix_duration=duracao(chave), device="cuda"))
             bruto = np.asarray(wav, dtype=np.float32)
+            gerou_s = time.monotonic() - marca
             if whisper is None:
                 melhor = (0, bruto)
                 break
+            marca = time.monotonic()
             ouvir = tirar_pedacinho(bruto, taxa) if not (a.cru or a.sem_corte_inicio) else bruto
             a16 = np.interp(np.arange(0, len(ouvir), taxa / 16000), np.arange(len(ouvir)), ouvir).astype(np.float32)
             ouvido = " ".join(x.text for x in whisper.transcribe(a16, language="pt", beam_size=1,
                                                                    condition_on_previous_text=False)[0])
             nota = defeitos(frase, ouvido)
-            print(f"[{tentativa + 1}] {nota} defeito(s): {frase!r} -> {ouvido.strip()!r}", flush=True)
+            print(f"[{tentativa + 1}] {nota} defeito(s) ({gerou_s:.2f}s + {time.monotonic() - marca:.2f}s): "
+                  f"{frase!r} -> {ouvido.strip()!r}", flush=True)
             if melhor is None or nota < melhor[0]:
                 melhor = (nota, bruto)
             if nota == 0:
@@ -330,8 +338,15 @@ def main() -> int:
             arquivo.write_bytes(pcm)
         return pcm, taxa
 
-    for fixa in FIXAS:  # aquece a placa e deixa as respostas fixas prontas
+    for fixa in FIXAS:  # deixa as respostas fixas prontas
         gerar(fixa)
+    # Aquece de verdade: as fixas saem do cache do disco, então o modelo e o
+    # Whisper só rodavam no 1º pedido, que levava o dobro (2,3 s em vez de
+    # 1,2 s; medido em 25/10/2026).
+    aquecer = f"aquecendo a voz, {time.time_ns() % 1000}."
+    gerar(aquecer)
+    guardadas.pop(normalizar(aquecer), None)
+    (disco / (hashlib.sha1(normalizar(aquecer).encode()).hexdigest() + ".pcm")).unlink(missing_ok=True)
     if os.path.exists(a.socket):
         os.unlink(a.socket)
     srv = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
