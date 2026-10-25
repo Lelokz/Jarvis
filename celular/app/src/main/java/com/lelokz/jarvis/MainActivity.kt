@@ -129,7 +129,11 @@ private val Pergunta = Color(0xFFFFB454)
 // A cor de destaque (beta 0.11.0): escolhida nos Ajustes do app, como a da
 // janela do PC. "Azul" ficou como nome: é a cor do Jarvis por padrão.
 val corDestaque = mutableStateOf(Color(0xFF4DA3FF))
-private val Azul: Color get() = corDestaque.value
+// A persona ativa (beta 0.14.5): com a Friday, o destaque vira a cor dela
+// (rosa, do config do PC); com o Jarvis, a escolhida nos Ajustes.
+val personaAtiva = mutableStateOf("jarvis")
+val corDaFriday = mutableStateOf(Color(0xFFFF6FB5))
+private val Azul: Color get() = if (personaAtiva.value == "friday") corDaFriday.value else corDestaque.value
 val CORES_DE_DESTAQUE = listOf(
     "Azul" to Color(0xFF4DA3FF), "Roxo" to Color(0xFFA78BFA), "Verde" to Color(0xFF3DDC97),
     "Laranja" to Color(0xFFFF9F43), "Rosa" to Color(0xFFFF6FAE), "Ciano" to Color(0xFF22D3EE),
@@ -137,7 +141,7 @@ val CORES_DE_DESTAQUE = listOf(
 private val Roxo = Color(0xFF9B7BFF)
 
 /** A versão da janela (a numeração do Léo, igual à do PC) e a do app. */
-const val VERSAO_JANELA = "beta 0.13.5"
+const val VERSAO_JANELA = "beta 0.14.5"
 
 // A Inter, a fonte da janela do PC (licença OFL). Variável: o peso funciona.
 @OptIn(ExperimentalTextApi::class)
@@ -282,6 +286,8 @@ fun Tela(modelo: Jarvis) {
     BackHandler(enabled = gaveta.isOpen || modelo.vendo.value.isNotEmpty() || modelo.pagina.value != "chat") {
         when {
             gaveta.isOpen -> escopo.launch { gaveta.close() }
+            // Uma memória aberta: o voltar volta para a lista das Memórias.
+            modelo.pagina.value == "memoria" && modelo.memoriaAberta.value != null -> modelo.pedirMemorias()
             modelo.pagina.value != "chat" -> modelo.pagina.value = "chat"
             else -> modelo.abrir("")
         }
@@ -479,7 +485,7 @@ private fun Topo(modelo: Jarvis, abrirGaveta: () -> Unit, abrirSeletores: () -> 
     val antiga = modelo.vendo.value.isNotEmpty()
     val vazio = !antiga && modelo.mensagens.isEmpty()
     val titulo = when {
-        pagina == "memoria" -> "Memória"
+        pagina == "memoria" -> "Memórias"
         pagina == "ajustes" -> "Ajustes"
         else -> modelo.conversas.firstOrNull { it.id == (modelo.vendo.value.ifEmpty { modelo.conversaAtual.value }) }
             ?.titulo ?: "Chat novo"
@@ -683,7 +689,7 @@ private fun Chat(modelo: Jarvis, abrirSeletores: () -> Unit) {
         if (boasVindas) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp).padding(bottom = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Pilula(null, "Jarvis", Azul, abrirSeletores)
+                Pilula(null, if (personaAtiva.value == "friday") "Friday" else "Jarvis", Azul, abrirSeletores)
                 Pilula(Icones.raio, nomesModelo[modelo.modelo.value] ?: modelo.modelo.value, null, abrirSeletores)
                 Pilula(Icones.barras, nomesEsforco[modelo.esforco.value] ?: modelo.esforco.value, null, abrirSeletores)
             }
@@ -975,7 +981,7 @@ private fun Gaveta(modelo: Jarvis, fechar: () -> Unit) {
                     color = Fraco, fontSize = 12.sp)
             }
         }
-        for ((pagina, nome, icone) in listOf(Triple("memoria", "Memória", Icones.memoria), Triple("ajustes", "Ajustes", Icones.ajustes))) {
+        for ((pagina, nome, icone) in listOf(Triple("memoria", "Memórias", Icones.memoria), Triple("ajustes", "Ajustes", Icones.ajustes))) {
             val aqui = modelo.pagina.value == pagina
             Row(
                 Modifier.padding(horizontal = 8.dp).fillMaxWidth().height(42.dp).clip(RoundedCornerShape(9.dp))
@@ -1062,8 +1068,8 @@ private fun ItemDaGaveta(modelo: Jarvis, c: Conversa, escolhida: Boolean, abrir:
 private fun Seletores(modelo: Jarvis) {
     Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 28.dp)) {
         Grupo("Persona")
-        Opcao("Jarvis", "O de sempre", true) {}
-        Opcao("Segunda persona", "Em breve", false, habilitada = false) {}
+        Opcao("Jarvis", "O mordomo de humor seco", personaAtiva.value == "jarvis") { modelo.escolherPersona("jarvis") }
+        Opcao("Friday", "Carinhosa e animada", personaAtiva.value == "friday") { modelo.escolherPersona("friday") }
         Grupo("Cérebro")
         for ((v, n, d) in listOf(
             Triple("auto", "Automático", "O Haiku atende e chama o Opus no pedido pesado"),
@@ -1108,16 +1114,110 @@ private fun Opcao(nome: String, descricao: String, escolhida: Boolean, habilitad
 
 @Composable
 private fun PaginaMemoria(modelo: Jarvis) {
-    LaunchedEffect(Unit) { modelo.pedirMemoria() }
+    // As Memórias (beta 0.14.5): a lista (Jarvis/Friday, grupos, pessoas) e,
+    // ao tocar, a memória aberta para editar e salvar. Salvar não passa por
+    // cima do que o Jarvis escreveu enquanto o Léo editava: vem o aviso.
+    LaunchedEffect(Unit) { modelo.pedirMemorias() }
+    val aberta = modelo.memoriaAberta.value
+    if (aberta == null) ListaDeMemorias(modelo) else MemoriaEditando(modelo, aberta)
+}
+
+private fun quandoCurto(iso: String) =
+    if (iso.length >= 16) "${iso.substring(8, 10)}/${iso.substring(5, 7)} às ${iso.substring(11, 16)}" else ""
+
+@Composable
+private fun ListaDeMemorias(modelo: Jarvis) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp)) {
-        Text("Memória", color = Texto, fontSize = 26.sp, fontWeight = FontWeight.SemiBold)
+        Text("Memórias", color = Texto, fontSize = 26.sp, fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(4.dp))
-        Text("O que o Jarvis sabe de ti. Pra mudar, é só falar: \"lembra que…\" ou \"esquece…\".",
-            color = Fraco, fontSize = 14.sp)
+        Text("Tudo o que o Jarvis guarda. Toca numa pra ler, corrigir e salvar.", color = Fraco, fontSize = 14.sp)
         Spacer(Modifier.height(18.dp))
-        Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Lateral)
-            .border(1.dp, Traco, RoundedCornerShape(14.dp)).padding(18.dp)) {
-            Markdown(modelo.memoriaTexto.value.ifEmpty { "Carregando…" }, TextoMedio)
+        if (modelo.memorias.isEmpty())
+            Text(if (modelo.memoriasCarregando.value) "Carregando…" else "Nenhuma memória ainda.", color = Fraco, fontSize = 15.sp)
+        for (m in modelo.memorias) {
+            Row(
+                Modifier.fillMaxWidth().padding(bottom = 8.dp).clip(RoundedCornerShape(14.dp)).background(Lateral)
+                    .border(1.dp, Traco, RoundedCornerShape(14.dp)).clickable { modelo.abrirMemoria(m) }
+                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Box(Modifier.size(38.dp).clip(RoundedCornerShape(10.dp)).background(Realce), contentAlignment = Alignment.Center) {
+                    Text(when (m.tipo) { "personas" -> "★"; "recados" -> "⏰"; "grupo" -> "👥"; "pessoa" -> "👤"; else -> "•" },
+                        color = Azul, fontSize = 17.sp)
+                }
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(m.titulo, color = Texto, fontSize = 15.5.sp, fontWeight = FontWeight.Medium, maxLines = 1,
+                        overflow = TextOverflow.Ellipsis)
+                    Text(when (m.tipo) {
+                        "personas" -> "O que o Jarvis e a Friday sabem de ti"
+                        "recados" -> "Recados marcados do Jarvis"
+                        "grupo" -> "Grupo de WhatsApp"
+                        "pessoa" -> "Pessoa"
+                        else -> ""
+                    } + quandoCurto(m.atualizado).let { if (it.isEmpty()) "" else " · $it" },
+                        color = Fraco, fontSize = 12.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MemoriaEditando(modelo: Jarvis, aberta: MemoriaAberta) {
+    var texto by remember(aberta.id, aberta.versao) { mutableStateOf(aberta.texto) }
+    val mudou = texto != aberta.texto && aberta.versao.isNotEmpty()
+    val conflito = modelo.memoriaConflito.value
+    Column(Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 12.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(40.dp).clip(CircleShape).clickable { modelo.pedirMemorias() }, contentAlignment = Alignment.Center) {
+                Text("‹", color = TextoMedio, fontSize = 26.sp)
+            }
+            Text(aberta.titulo, color = Texto, fontSize = 19.sp, fontWeight = FontWeight.SemiBold, maxLines = 1,
+                overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            Box(
+                Modifier.clip(RoundedCornerShape(10.dp)).background(Azul)
+                    .alpha(if (mudou && conflito == null && !modelo.memoriaSalvando.value) 1f else 0.4f)
+                    .clickable(enabled = mudou && conflito == null && !modelo.memoriaSalvando.value) { modelo.salvarMemoria(texto) }
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+            ) {
+                Text(if (modelo.memoriaSalvando.value) "Salvando…" else "Salvar", color = Color(0xFF06101D),
+                    fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+            }
+        }
+        if (conflito != null) {
+            Spacer(Modifier.height(10.dp))
+            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Superficie)
+                .border(1.dp, Pergunta, RoundedCornerShape(12.dp)).padding(14.dp)) {
+                Text("O Jarvis mudou esta memória enquanto tu editava. Nada foi salvo ainda: escolhe o que fica.",
+                    color = Texto, fontSize = 14.sp)
+                Spacer(Modifier.height(10.dp))
+                Row {
+                    Box(Modifier.clip(RoundedCornerShape(9.dp)).border(1.dp, Traco, RoundedCornerShape(9.dp))
+                        .clickable { modelo.usarMemoriaDoJarvis() }.padding(horizontal = 12.dp, vertical = 7.dp)) {
+                        Text("Usar a do Jarvis", color = TextoMedio, fontSize = 13.sp)
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    Box(Modifier.clip(RoundedCornerShape(9.dp)).background(Azul)
+                        .clickable { modelo.salvarMemoria(texto, conflito.second) }.padding(horizontal = 12.dp, vertical = 7.dp)) {
+                        Text("Salvar a minha por cima", color = Color(0xFF06101D), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    }
+                }
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+        Box(Modifier.fillMaxWidth().weight(1f).clip(RoundedCornerShape(14.dp)).background(Lateral)
+            .border(1.dp, Traco, RoundedCornerShape(14.dp))) {
+            if (aberta.versao.isEmpty()) {
+                Text("Carregando…", color = Fraco, fontSize = 15.sp, modifier = Modifier.padding(16.dp))
+            } else {
+                BasicTextField(
+                    texto, { texto = it },
+                    modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
+                    textStyle = androidx.compose.ui.text.TextStyle(color = Texto, fontSize = 15.sp, lineHeight = 22.sp),
+                    cursorBrush = androidx.compose.ui.graphics.SolidColor(Azul),
+                )
+            }
         }
     }
 }

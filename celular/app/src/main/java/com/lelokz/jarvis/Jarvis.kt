@@ -40,6 +40,12 @@ data class Mensagem(
 )
 
 /** Uma conversa da gaveta: uma sessão do Claude Code no PC. */
+/** Uma memória da lista (beta 0.14.5): a do Jarvis/Friday, um grupo, uma pessoa. */
+data class MemoriaItem(val id: String, val titulo: String, val tipo: String, val atualizado: String)
+
+/** A memória aberta para editar; `versao` é a que veio do PC (para o conflito). */
+data class MemoriaAberta(val id: String, val titulo: String, val texto: String, val versao: String)
+
 data class Conversa(val id: String, val titulo: String, val quando: Double, val origem: String,
                     val fixada: Boolean = false)
 
@@ -74,6 +80,13 @@ class Jarvis(private val app: Application) {
     val modelo = mutableStateOf("auto")
     val esforco = mutableStateOf("medium")
     val memoriaTexto = mutableStateOf("")
+    // A aba Memórias (beta 0.14.5): a lista, a aberta, e o conflito (o Jarvis
+    // mudou o arquivo enquanto o Léo editava: o texto e a versão dele).
+    val memorias = mutableStateListOf<MemoriaItem>()
+    val memoriasCarregando = mutableStateOf(false)
+    val memoriaAberta = mutableStateOf<MemoriaAberta?>(null)
+    val memoriaConflito = mutableStateOf<Pair<String, String>?>(null)
+    val memoriaSalvando = mutableStateOf(false)
     val usoCinco = mutableStateOf(-1.0)
     val voltaCinco = mutableStateOf(0.0)
     val usoSemana = mutableStateOf(-1.0)
@@ -501,7 +514,43 @@ class Jarvis(private val app: Application) {
 
     fun parar() { conexao?.enviar(JSONObject().put("pedir", "parar")) }
 
-    fun pedirMemoria() { conexao?.enviar(JSONObject().put("pedir", "memoria")) }
+    fun pedirMemoria() { pedirMemorias() }
+
+    /** A lista das memórias (a aba Memórias). */
+    fun pedirMemorias() {
+        memoriaAberta.value = null
+        memoriaConflito.value = null
+        memoriasCarregando.value = memorias.isEmpty()
+        conexao?.enviar(JSONObject().put("pedir", "memorias"))
+    }
+
+    fun abrirMemoria(item: MemoriaItem) {
+        memoriaAberta.value = MemoriaAberta(item.id, item.titulo, "", "")
+        conexao?.enviar(JSONObject().put("pedir", "ler_memoria").put("id", item.id))
+    }
+
+    /** Salva o que foi editado; `versao` vazia = a que abriu (o normal). */
+    fun salvarMemoria(texto: String, versao: String = "") {
+        val aberta = memoriaAberta.value ?: return
+        memoriaSalvando.value = true
+        memoriaConflito.value = null
+        val enviou = conexao?.enviar(JSONObject().put("pedir", "salvar_memoria").put("id", aberta.id)
+            .put("texto", texto).put("versao", versao.ifEmpty { aberta.versao }))
+        if (enviou != true) { memoriaSalvando.value = false; aviso.value = "Sem conexão com o PC: não salvou" }
+    }
+
+    /** No conflito: fica com a versão que o Jarvis escreveu. */
+    fun usarMemoriaDoJarvis() {
+        val (texto, versao) = memoriaConflito.value ?: return
+        memoriaAberta.value = memoriaAberta.value?.copy(texto = texto, versao = versao)
+        memoriaConflito.value = null
+    }
+
+    /** Quem responde: "jarvis" ou "friday" (o seletor; vale também para a voz no PC). */
+    fun escolherPersona(p: String) {
+        personaAtiva.value = p
+        conexao?.enviar(JSONObject().put("pedir", "cerebro").put("persona", p))
+    }
 
     /** Ele está trabalhando no pedido (o enviar vira Parar). */
     val trabalhando: Boolean
@@ -620,6 +669,32 @@ class Jarvis(private val app: Application) {
             "cerebro" -> {
                 modelo.value = ev.optString("modelo", modelo.value)
                 esforco.value = ev.optString("esforco", esforco.value)
+                // A persona ativa (beta 0.14.5): "hey Friday" no PC deixa o app rosa também.
+                personaAtiva.value = ev.optString("persona", "jarvis")
+                ev.optString("cor_persona").takeIf { it.length == 7 && it.startsWith("#") }?.let {
+                    runCatching { corDaFriday.value = androidx.compose.ui.graphics.Color(android.graphics.Color.parseColor(it)) }
+                }
+            }
+            "memorias" -> {
+                memoriasCarregando.value = false
+                memorias.clear()
+                val lista = ev.optJSONArray("lista")
+                for (i in 0 until (lista?.length() ?: 0)) {
+                    val m = lista!!.getJSONObject(i)
+                    memorias.add(MemoriaItem(m.optString("id"), m.optString("titulo"), m.optString("tipo"), m.optString("atualizado")))
+                }
+            }
+            "memoria_aberta" -> if (ev.optString("id") == memoriaAberta.value?.id) {
+                memoriaAberta.value = MemoriaAberta(ev.optString("id"), ev.optString("titulo"), ev.optString("texto"), ev.optString("versao"))
+            }
+            "memoria_salva" -> if (ev.optString("id") == memoriaAberta.value?.id) {
+                memoriaSalvando.value = false
+                if (ev.optBoolean("ok")) {
+                    memoriaAberta.value = memoriaAberta.value?.copy(texto = ev.optString("texto"), versao = ev.optString("versao"))
+                    aviso.value = "Memória salva"
+                } else if (ev.optBoolean("conflito")) {
+                    memoriaConflito.value = ev.optString("texto") to ev.optString("versao")
+                }
             }
             "desbloqueio" -> {
                 desbloqueio.value = ev.optString("id")

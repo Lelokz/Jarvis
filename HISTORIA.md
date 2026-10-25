@@ -2278,3 +2278,22 @@ mostrava 58 min na semana, e o navegador do Léo, 2h40. Em vez de consertar,
 o Léo mandou tirar ("tá muito bugada"). Saíram o `jarvis/escola/khan.py`, a
 leitura no `ler`, a aba do Khan na janela de login e a parte do Khan na
 memória do Jarvis; a escola é só o Estudante Online agora.
+
+### A Friday e as Memórias (25/10/2026; janela beta 0.9.0, app beta 0.14.5)
+
+- **A Friday**: "hey Friday" (modelo pronto da comunidade, 5/5 com a voz do
+  Léo, zero alarme falso em 2,2 h de anime) acorda a segunda persona, com a
+  voz da Emilia dublada (`servidor_friday.py`: F5 treinado com 20 min dela,
+  12 etapas, gera e confere com o Whisper, ~0,8 s até o 1º som), as frases
+  dela ("Oi, chefinho!") e a cor rosa na janela e no app. As duas personas
+  dividem a conversa e a memória; o cabeçalho do pedido diz quem foi chamada.
+- **Jarvis do grupo**: deixou de ser um segundo cérebro trancado com
+  ferramentas fechadas. Agora é o Claude completo com as coisas do dono
+  barradas; "lembra a Karyn que segunda tem o CIEE" ele resolve sozinho, sem
+  pedir aprovação (antes pedia, e o pedido morria com o app fora do ar).
+- **Relógio interno** (`jarvis/nucleo/recados.py`): o Jarvis anota recados
+  com hora e o corpo devolve na hora certa. Python puro, sem agendador do
+  sistema: o Jarvis vai rodar no Windows do padrasto.
+- **Memórias**: uma aba com a lista (Jarvis e Friday, cada grupo, cada
+  pessoa), editável, com Salvar e aviso quando o Jarvis mudou o arquivo no
+  meio da edição. Cada memória é um arquivo de texto que o próprio Jarvis cria.
