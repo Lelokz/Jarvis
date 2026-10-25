@@ -13,7 +13,6 @@ from pathlib import Path
 
 PERFIL = Path.home() / ".local/share/jarvis/escola-navegador"
 CHROMIUM = Path.home() / ".cache/ms-playwright/chromium-1247/chrome-linux64/chrome"
-KHAN = "https://pt.khanacademy.org/login"
 ESTUDANTE = "https://estudanteonline.sed.sc.gov.br/loginweb.aspx"
 
 # O mesmo cofre de senhas que o Playwright usa: sem isso os cookies salvos
@@ -24,7 +23,7 @@ ARGS = ["--password-store=basic", "--use-mock-keychain", "--no-first-run",
 
 def entrar() -> None:
     PERFIL.mkdir(parents=True, exist_ok=True)
-    subprocess.run([str(CHROMIUM), f"--user-data-dir={PERFIL}", *ARGS, KHAN, ESTUDANTE])
+    subprocess.run([str(CHROMIUM), f"--user-data-dir={PERFIL}", *ARGS, ESTUDANTE])
 
 
 if __name__ == "__main__":

@@ -1,6 +1,6 @@
 """python -m jarvis.escola ler | manter | entrar
 
-- ler: lê o Khan e o Estudante Online, grava o resumo em escola.json (que o
+- ler: lê o Estudante Online, grava o resumo em escola.json (que o
   Jarvis consulta quando o Léo pergunta) e notifica o que for NOVO;
 - manter: só visita o Estudante Online para a sessão não cair;
 - entrar: abre a janela para o Léo entrar de novo no Estudante Online.
@@ -18,7 +18,10 @@ import sys
 import time
 from pathlib import Path
 
-from . import estudante, khan
+from . import estudante
+
+# O Khan saiu em 25/10/2026: a leitura dele estava "muito bugada" (mostrava
+# 58 min com 2h40 no navegador do Léo). Só o Estudante Online fica.
 
 RESUMO = Path.home() / ".local/share/jarvis/escola.json"
 # Marca de "o Estudante Online saiu da conta e o Léo já foi avisado": avisa
@@ -90,25 +93,12 @@ def novidades(antes: dict, agora: dict) -> list[str]:
     return saida
 
 
-def _khan_resumo(k: dict) -> dict:
-    meta = k["meta_semana_minutos"]
-    feitos = k["minutos_semana"] or 0
-    dias = 7 - dt.date.today().weekday()  # contando hoje, até domingo
-    falta = max(0, meta - feitos)
-    return {**k, "faltam_minutos": falta, "por_dia_para_bater_a_meta": -(-falta // dias)}
-
-
 def ler() -> list[str]:
     from playwright.sync_api import sync_playwright
     antes = json.loads(RESUMO.read_text(encoding="utf-8")) if RESUMO.exists() else {}
     resumo = {"lido_em": dt.datetime.now().isoformat(timespec="minutes"), "media_minima": MEDIA,
-              "khan": antes.get("khan"), "estudante": antes.get("estudante"), "problemas": []}
+              "estudante": antes.get("estudante"), "problemas": []}
     with sync_playwright() as p:
-        try:
-            resumo["khan"] = _khan_resumo(khan.ler(p))
-            resumo["khan"]["lido_em"] = resumo["lido_em"]
-        except Exception as erro:
-            resumo["problemas"].append(f"Khan: {erro}")
         if DESLOGADO.exists():
             resumo["problemas"].append("Estudante Online: saiu da conta, é preciso entrar de novo")
         else:

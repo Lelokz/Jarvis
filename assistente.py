@@ -1355,7 +1355,7 @@ def conversar(cfg: config.Config) -> int:
 
             ciclo.atualizar_aviso()
             proximo_aviso = time.monotonic() + 30
-            # Escola (Khan e Estudante Online): lê sozinha 3x por dia. O que
+            # Escola (Estudante Online): lê sozinha 3x por dia. O que
             # for novo vira notificação, sem voz (decisão do Léo).
             Vigia().start()
             # O Jarvis no grupo da família (WhatsApp): só com o grupo ligado nos Ajustes.

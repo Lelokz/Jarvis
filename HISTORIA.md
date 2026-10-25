@@ -2270,3 +2270,11 @@ descrição da foto para a janela). Agora o hash das instruções fica em
 No mesmo dia: a fala passou a ser a resposta inteira (antes cortava em duas
 frases com "o resto tá na janela") e o esforço baixou para "medium".
 
+
+### O Khan sai do Jarvis (25/10/2026)
+
+Pedido anotado pelo próprio Jarvis no PEDIDOS.md: o Khan lido por ele
+mostrava 58 min na semana, e o navegador do Léo, 2h40. Em vez de consertar,
+o Léo mandou tirar ("tá muito bugada"). Saíram o `jarvis/escola/khan.py`, a
+leitura no `ler`, a aba do Khan na janela de login e a parte do Khan na
+memória do Jarvis; a escola é só o Estudante Online agora.
