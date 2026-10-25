@@ -214,6 +214,9 @@ class Agente:
         self.cfg = cfg
         self.nome = nome
         self.persona_cfg = persona_cfg
+        # Quem foi chamada por último: "jarvis" ou "friday" (o ciclo troca no
+        # "hey Friday" e a janela/app no seletor). Vai no cabeçalho do pedido.
+        self.persona = "jarvis"
         self.whatsapp = whatsapp
         self.casa = Path(cfg.casa).expanduser()
         self.binario = shutil.which(str(Path(cfg.binario).expanduser())) or cfg.binario
@@ -335,8 +338,9 @@ class Agente:
 
     def _instrucoes(self) -> str:
         from jarvis.nucleo import recados
-        return PERSONA.read_text().replace("{nome}", self.nome).replace("{usuario}", _dono()) \
-            .replace("{recados}", recados.COMO_USAR)
+        friday = PERSONA.with_name("personalidade_friday.md").read_text().strip()
+        return PERSONA.read_text().replace("{personalidade_friday}", friday).replace("{nome}", self.nome) \
+            .replace("{usuario}", _dono()).replace("{recados}", recados.COMO_USAR)
 
     async def _conectar(self, retomar: str | None = None) -> None:
         """Abre o Claude Code numa conversa nova, ou na `retomar` (um id)."""
@@ -380,7 +384,9 @@ class Agente:
         self.voz = voz
         agora = dt.datetime.now()
         quem = "" if voz is None else ", " + etiqueta_da_voz(voz)
-        cabecalho = f"[{origem}, {relogio.data_curta(agora.date())}, {agora:%H:%M}{quem}]"
+        # A persona chamada (25/10/2026): sem marca, é o JARVIS.
+        persona = ", FRIDAY" if self.persona == "friday" else ""
+        cabecalho = f"[{origem}, {relogio.data_curta(agora.date())}, {agora:%H:%M}{quem}{persona}]"
         mensagem = "\n".join(p for p in (cabecalho, contexto, texto) if p)
         self._rodar(self._enviar(mensagem))
 

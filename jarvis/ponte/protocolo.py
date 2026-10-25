@@ -64,8 +64,10 @@ ASSISTENTE -> CLIENTES
 
     (v3, a janela grande; o celular ignora todos estes)
     {"ev":"cerebro", "modelo":"auto|haiku|sonnet|opus",
-     "esforco":"low|medium|high|xhigh|max", "persona":"jarvis"}
-        O que está escolhido. Reenviado a quem diz "ola" e a cada mudança.
+     "esforco":"low|medium|high|xhigh|max", "persona":"jarvis|friday",
+     "cor_persona":"#rrggbb"}
+        O que está escolhido. Reenviado a quem diz "ola" e a cada mudança
+        (também quando um "hey Friday"/"hey Jarvis" troca a persona).
     {"ev":"som", "saidas":[{"id","nome"}], "entradas":[...],
      "padrao_saida":"<nome>", "padrao_entrada":"<nome>",
      "saida":"<id ou ''>", "entrada":"<id ou ''>"}
@@ -119,7 +121,8 @@ CLIENTES -> ASSISTENTE
          {"pedir":"abrir", "id":"<uuid>"} -> "conversa" (só para ler)
          {"pedir":"nova"}                 -> chat novo ("conversa_atual" para todos)
          {"pedir":"continuar", "id":"..."} -> o Jarvis volta para essa conversa
-         {"pedir":"cerebro", "modelo":"...", "esforco":"..."}  (um ou os dois)
+         {"pedir":"cerebro", "modelo":"...", "esforco":"...", "persona":"jarvis|friday"}
+             (um, dois ou os três)
          {"pedir":"parar"}                -> interrompe a tarefa (o botão Parar)
          {"pedir":"renomear", "id":"...", "titulo":"..."} -> "conversas"
          {"pedir":"apagar", "id":"..."}   -> manda para a lixeira; "conversas"
@@ -248,8 +251,13 @@ def ler_pedido(linha: bytes) -> tuple[str, dict[str, Any]]:
                 if not isinstance(valor, str) or len(valor) > 20:
                     raise ErroDeProtocolo(f"'{campo}' inválido")
                 dados[campo] = valor
+        persona = objeto.get("persona")
+        if persona is not None:
+            if persona not in ("jarvis", "friday"):
+                raise ErroDeProtocolo("'persona' tem que ser jarvis ou friday")
+            dados["persona"] = persona
         if not dados:
-            raise ErroDeProtocolo("'cerebro' sem modelo nem esforço")
+            raise ErroDeProtocolo("'cerebro' sem modelo, esforço nem persona")
         return tipo, dados
 
     if tipo == "som":

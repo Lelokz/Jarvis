@@ -246,6 +246,7 @@ class Ciclo:
         voz: tts.Voz,
         agente: Agente,
         registrador: Registrador,
+        voz_friday: tts.Voz | None = None,
         portao,
         dispositivo_saida: int | None,
         emissor: eventos.Emissor | None = None,
@@ -285,6 +286,11 @@ class Ciclo:
         self.ww = detector_ww
         self.transcritor = transcritor
         self.voz = voz
+        # As duas personas (25/10/2026): "hey Friday" troca a voz, as frases
+        # fixas e a marca no pedido; "hey Jarvis" volta. Sem a Friday no
+        # config (ou sem a voz dela), fica tudo como antes.
+        self._vozes = {"jarvis": voz, "friday": voz_friday or voz}
+        self.persona = "jarvis"
         self.registrador = registrador
         self.portao = portao
         self.dispositivo_saida = dispositivo_saida
@@ -324,8 +330,32 @@ class Ciclo:
             self.tempo_acordado += agora - self._desde
         self._desde = agora
 
+    @property
+    def persona_cfg(self) -> config.Persona:
+        """As frases fixas da persona ativa ("Pois não?" ou "Oi, chefinho!")."""
+        if self.persona == "friday" and self.cfg.persona_friday is not None:
+            return self.cfg.persona_friday
+        return self.cfg.persona
+
+    def trocar_persona(self, nome: str) -> None:
+        """Quem responde a partir de agora: voz, frases fixas e o pedido ao
+        Claude. Avisa a janela e o app (a cor do átomo)."""
+        if nome == "friday" and self.cfg.friday is None:
+            nome = "jarvis"
+        mudou = nome != self.persona
+        self.persona = nome
+        self.voz = self._vozes.get(nome, self._vozes["jarvis"])
+        self.agente.persona = nome
+        if mudou:
+            self.registrador.registrar_estado("persona", persona=nome)
+            self.emitir_cerebro()
+
     def acordar(self, score: float) -> None:
         self._corpo = None  # chamaram aqui no PC: a voz volta para a caixa de som
+        # Qual palavra acordou: "hey Friday" chama a Friday; "hey Jarvis", ele.
+        friday = self.cfg.friday
+        self.trocar_persona("friday" if friday is not None and friday.ligada
+                            and getattr(self.ww, "ultimo_rotulo", None) == friday.modelo_wake else "jarvis")
         self._contabilizar()
         self.despertares += 1
         self.emissor.emitir("acordou", score=score)
@@ -339,7 +369,7 @@ class Ciclo:
         if pendente is not None:
             self._registrar_evento(pendente)
 
-        self._falar(self.cfg.persona.saudacao)
+        self._falar(self.persona_cfg.saudacao)
         self.estado = Estado.ACORDADO
         self._renovar("janela aberta")
 
@@ -559,7 +589,7 @@ class Ciclo:
         #    acorda o Jarvis para ser dito.
         if e_comando_de_dormir(texto):
             self.registrador.registrar_estado("pediu_para_dormir", texto=texto)
-            self._falar(self.cfg.persona.indo_dormir)
+            self._falar(self.persona_cfg.indo_dormir)
             self.dormir("você pediu")
             return
 
@@ -688,8 +718,8 @@ class Ciclo:
             self.emissor.emitir("conversa_atual", id=s.texto, falas=falas)
         elif s.tipo == "erro":
             fala = {"limite": self._fala_de_limite(self.agente.limite.volta_em),
-                    "offline": self.cfg.persona.sem_internet}.get(
-                        s.texto, self.cfg.persona.cerebro_falhou)
+                    "offline": self.persona_cfg.sem_internet}.get(
+                        s.texto, self.persona_cfg.cerebro_falhou)
             self.registrador.registrar_estado("erro_do_claude", tipo=s.texto, detalhe=s.titulo)
             self._fim_da_escrita()
             self._pedido = None
@@ -709,7 +739,7 @@ class Ciclo:
         claude_s = time.monotonic() - pedido[0] if pedido else 0.0
         if s.janela:
             self.emissor.emitir("mostrar", titulo="", texto=s.janela)
-        fala_texto = self.cfg.persona.parei if s.interrompido else s.texto
+        fala_texto = self.persona_cfg.parei if s.interrompido else s.texto
         self.registrador.registrar_estado("resposta", fala=fala_texto, janela=s.janela,
                                           interrompido=s.interrompido, claude_s=round(claude_s, 2))
         if not fala_texto:
@@ -765,7 +795,7 @@ class Ciclo:
             self._acordar_por_texto()
 
     def _fala_de_limite(self, volta_em: float | None) -> str:
-        p = self.cfg.persona
+        p = self.persona_cfg
         if not volta_em:
             return p.limite_acabou_sem_hora
         volta = dt.datetime.fromtimestamp(volta_em)
@@ -899,7 +929,8 @@ class Ciclo:
         self.emissor.emitir("ajustes", **ajustes.ler(), tem_escola=RESUMO.exists(), pc=socket.gethostname())
 
     def emitir_cerebro(self) -> None:
-        self.emissor.emitir("cerebro", persona="jarvis", **self.agente.cerebro)
+        cor = self.cfg.friday.cor if self.persona == "friday" and self.cfg.friday else ""
+        self.emissor.emitir("cerebro", persona=self.persona, cor_persona=cor, **self.agente.cerebro)
 
     def atender_pedido(self, pedido: Pedido) -> None:
         """Um pedido da ponte. Da janela (sem voz própria), é o texto
@@ -949,7 +980,10 @@ class Ciclo:
                 escolha = json.loads(pedido.valor)
             except ValueError:
                 return
-            self.agente.definir_cerebro(escolha.get("modelo"), escolha.get("esforco"))
+            if escolha.get("persona"):
+                self.trocar_persona(escolha["persona"])
+            if escolha.get("modelo") or escolha.get("esforco"):
+                self.agente.definir_cerebro(escolha.get("modelo"), escolha.get("esforco"))
             self.registrador.registrar_estado("cerebro", **self.agente.cerebro)
             self.emitir_cerebro()
             return
@@ -1087,6 +1121,8 @@ def _montar(cfg: config.Config):
         cfg.dir_modelos_wake,
         amostras_por_bloco=detector_vad.amostras_por_bloco,
         taxa=cfg.audio.taxa_amostragem,
+        # "Hey Friday" no mesmo detector (divide o mel e o embedding).
+        extras={cfg.friday.modelo_wake: cfg.friday.limiar} if cfg.friday and cfg.friday.ligada else None,
     )
     _partida("wake word", detector_ww.descricao, detector_ww.segundos_de_carga)
 
@@ -1096,6 +1132,10 @@ def _montar(cfg: config.Config):
 
     voz = tts.criar_voz(cfg.tts, cfg.dir_vozes)
     _partida("voz", voz.nome, voz.segundos_de_carga)
+    voz_friday = None
+    if cfg.friday is not None and cfg.friday.ligada:
+        voz_friday = tts.criar_voz_friday(cfg.tts, cfg.friday.socket, cfg.dir_vozes)
+        _partida("voz da Friday", voz_friday.nome, voz_friday.segundos_de_carga)
 
     w = cfg.whatsapp
     whatsapp = WhatsApp(w.banco, w.api, w.avisar_grupos) if w.ativo else None
@@ -1134,7 +1174,7 @@ def _montar(cfg: config.Config):
     _partida("VRAM em uso", f"{_vram()}   (residente)")
     _partida("janela", f"{cfg.ciclo.janela_s:g} s")
 
-    return detector_vad, detector_ww, transcritor, voz, agente
+    return detector_vad, detector_ww, transcritor, voz, agente, voz_friday
 
 
 def _nomes_do_vocabulario(caminho: Path) -> list[str]:
@@ -1218,7 +1258,7 @@ def teste_ciclo(cfg: config.Config) -> int:
     cfg = dataclasses.replace(cfg, ciclo=config.Ciclo(janela_s=janela_curta))
 
     try:
-        detector_vad, detector_ww, transcritor, voz, agente = _montar(cfg)
+        detector_vad, detector_ww, transcritor, voz, agente, voz_friday = _montar(cfg)
     except (ErroDeCuda, ErroDoAgente, wakeword.ModeloAusente, FileNotFoundError) as e:
         print(f"\n{e}\n", file=sys.stderr)
         return 1
@@ -1229,6 +1269,7 @@ def teste_ciclo(cfg: config.Config) -> int:
         detector_ww=detector_ww,
         transcritor=transcritor,
         voz=voz,
+        voz_friday=voz_friday,
         agente=agente,
         registrador=Registrador.criar(cfg, prefixo="teste-ciclo"),
         portao=_PortaoFalso(),
@@ -1302,7 +1343,7 @@ def conversar(cfg: config.Config) -> int:
         _partida("microfone", microfone.nome_do_dispositivo(indice_entrada, entrada=True))
 
     try:
-        detector_vad, detector_ww, transcritor, voz, agente = _montar(cfg)
+        detector_vad, detector_ww, transcritor, voz, agente, voz_friday = _montar(cfg)
     except ErroDeCuda as e:
         print(f"\nCUDA não subiu:\n{e}\n", file=sys.stderr)
         return 1
@@ -1343,6 +1384,7 @@ def conversar(cfg: config.Config) -> int:
                 detector_ww=detector_ww,
                 transcritor=transcritor,
                 voz=voz,
+                voz_friday=voz_friday,
                 agente=agente,
                 registrador=registrador,
                 portao=mic,

@@ -290,9 +290,11 @@ class VozF5(Voz):
 
     _RMS_ALVO = VozKokoro._RMS_ALVO  # o mesmo volume da Kokoro, nunca acima
 
-    def __init__(self, cfg: ConfigTts, reserva: Voz, espera_s: float = 45.0) -> None:
+    def __init__(self, cfg: ConfigTts, reserva: Voz, espera_s: float = 45.0,
+                 rotulo: str = "jarvis dublado") -> None:
         import os
 
+        self.rotulo = rotulo
         self.cfg = cfg
         self.reserva = reserva
         self.caminho = cfg.socket_f5 if cfg.socket_f5.startswith("/") else os.path.join(
@@ -320,7 +322,7 @@ class VozF5(Voz):
     @property
     def nome(self) -> str:
         estado = "servidor no ar" if self._vivo() else "SERVIDOR FORA: falando com a reserva"
-        return f"jarvis dublado (F5, {estado}); reserva {self.reserva.nome}"
+        return f"{self.rotulo} (F5, {estado}); reserva {self.reserva.nome}"
 
     def sintetizar(self, texto: str) -> Iterator[Trecho]:
         import json
@@ -524,6 +526,17 @@ class VozRVC(Voz):
                 # Caiu: o que já foi dito fica, o resto sai na voz de reserva.
                 yield from self.reserva.sintetizar(" ".join(pedacos[i:]))
                 return
+
+
+def criar_voz_friday(cfg: ConfigTts, socket: str, dir_vozes: Path) -> Voz:
+    """A voz da Friday (25/10/2026): a Emilia dublada no servidor_friday.py
+    (F5, mesmo protocolo do servidor_voz.py). Reserva: a Kokoro feminina
+    (pf_dora), para nunca sair na voz do JARVIS nem ficar muda."""
+    from dataclasses import replace
+
+    reserva = VozKokoro(replace(cfg, voz="pf_dora", efeito="", tom=0.0), dir_vozes)
+    # Espera curta: o servidor leva ~25 s carregando; até lá vale a reserva.
+    return VozF5(replace(cfg, socket_f5=socket), reserva=reserva, espera_s=5.0, rotulo="friday (Emilia)")
 
 
 def criar_voz(cfg: ConfigTts, dir_vozes: Path) -> Voz:

@@ -28,7 +28,8 @@ sys.path.insert(0, str(RAIZ))
 
 import assistente  # noqa: E402
 import terminal_identico as ti  # noqa: E402
-from jarvis import config, eventos  # noqa: E402
+from jarvis import config, eventos, tts  # noqa: E402
+from jarvis.ponte.servidor import Pedido  # noqa: E402
 from jarvis.agente.agente import Saida  # noqa: E402
 from jarvis.ponte.cliente import Cliente  # noqa: E402
 from jarvis.registro import Registrador  # noqa: E402
@@ -533,11 +534,63 @@ def rodar_celular(tmp: Path) -> None:
         tts.falar = original
 
 
+def rodar_personas(tmp: Path) -> None:
+    """As duas personas (25/10/2026): "hey Friday" troca voz, frases e a marca
+    do pedido; "hey Jarvis" volta; a janela troca pelo pedido "cerebro"."""
+    print("\nAS DUAS PERSONAS")
+
+    class VozQueAnota(tts.Voz):
+        def __init__(self, nome):
+            self._nome, self.falas = nome, []
+
+        @property
+        def nome(self):
+            return self._nome
+
+        def sintetizar(self, texto):
+            self.falas.append(texto)
+            return iter(())
+
+    class WakeWordComRotulo(ti.WakeWordParado):
+        ultimo_rotulo = "hey_jarvis_v0.1"
+
+    cfg = config.carregar(RAIZ / "config.toml")
+    gravador = Gravador()
+    emissor = eventos.Emissor()
+    emissor.assinar(gravador.receber, quer=gravador.quer, nome="gravador")
+    vj, vf, ww = VozQueAnota("jarvis"), VozQueAnota("friday"), WakeWordComRotulo()
+    agente = ti.AgenteRoteirizado()
+    agente.persona = "jarvis"
+    reg = Registrador(caminho_jsonl=tmp / "personas.jsonl", dir_audio=None, dir_audio_wake=None)
+    ciclo = assistente.Ciclo(
+        cfg, detector_vad=ti.VadRoteirizado(), detector_ww=ww, transcritor=ti.TranscritorRoteirizado(),
+        voz=vj, voz_friday=vf, agente=agente, registrador=reg,
+        portao=assistente._PortaoFalso(), dispositivo_saida=None, emissor=emissor,
+    )
+    ciclo._ultimo_aviso = ("ok", None)
+    ww.ultimo_rotulo = cfg.friday.modelo_wake
+    ciclo.acordar(0.9)
+    checa("'hey Friday' acorda a Friday", ciclo.persona == "friday" and agente.persona == "friday")
+    checa("a saudação sai na voz dela, com a frase dela", vf.falas[-1:] == [cfg.persona_friday.saudacao],
+          f"{vf.falas} / {vj.falas}")
+    cerebro = [e for e in gravador.eventos if e["ev"] == "cerebro"]
+    checa("a janela fica sabendo (persona e cor)", cerebro and cerebro[-1]["persona"] == "friday"
+          and cerebro[-1]["cor_persona"] == cfg.friday.cor, str(cerebro[-1:]))
+    ciclo.dormir("teste")
+    ww.ultimo_rotulo = cfg.wakeword.modelo
+    ciclo.acordar(0.9)
+    checa("'hey Jarvis' volta para o JARVIS", ciclo.persona == "jarvis" and vj.falas[-1:] == [cfg.persona.saudacao],
+          f"{vj.falas}")
+    ciclo.atender_pedido(Pedido(cliente=1, tipo="cerebro", valor='{"persona": "friday"}'))
+    checa("o seletor da janela troca para a Friday", ciclo.persona == "friday" and ciclo.voz is vf)
+
+
 def main() -> int:
     tmp = Path(tempfile.mkdtemp(prefix="jarvis-ciclo-"))
     try:
         rodar(tmp)
         rodar_celular(tmp)
+        rodar_personas(tmp)
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
     print(f"\n  {ok} passaram, {falhou} falharam")

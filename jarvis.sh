@@ -25,6 +25,12 @@ voz_ligada() { pgrep -f "$PROJETO/servidor_voz.py" > /dev/null; }
 # (no HD, junto do treino), troca o timbre pelo do JARVIS.
 APPLIO="/mnt/cab1286d-6765-4c73-9c77-8d3119b4b644/Arquivo/Jarvis - Treino da voz dublada/applio"
 rvc_ligado() { pgrep -f "$PROJETO/servidor_rvc.py" > /dev/null; }
+# A voz da Friday (servidor_friday.py, out/2026): a Emilia dublada (F5) na
+# venv da voz; modelo pessoal, fora do projeto. Sem a pasta, ela fala com a
+# Kokoro feminina.
+FRIDAY="$HOME/.local/share/jarvis/voz-friday"
+friday_ligada() { pgrep -f "$PROJETO/servidor_friday.py" > /dev/null; }
+FRIDAY_ON="$(sed -n '/^\[friday\]/,/^\[/s/^ligada *= *\(true\|false\).*/\1/p' config.toml | head -1)"
 # A porta do celular (porta_remota.py): só em 127.0.0.1; o `tailscale serve`
 # a leva para os aparelhos do Léo.
 porta_ligada() { pgrep -f "$PROJETO/porta_remota.py" > /dev/null; }
@@ -37,6 +43,7 @@ if [ "${1:-}" = "--desligar" ]; then
   pkill -TERM -f "^./whatsapp-bridge$"
   pkill -TERM -f "$PROJETO/servidor_voz.py"
   pkill -TERM -f "$PROJETO/servidor_rvc.py"
+  pkill -TERM -f "$PROJETO/servidor_friday.py"
   pkill -TERM -f "$PROJETO/porta_remota.py"
   pkill -f "$PROJETO/interface.py"
   # Até 20 s: ao desligar, o assistente resume a conversa em andamento para
@@ -69,6 +76,13 @@ if [ "$MOTOR" = "f5" ] && [ -f "$VOZ/modelo/jarvis-dublado.safetensors" ] && ! v
       --ref "$VOZ/ref/bomdia-limpa.wav" --ref-texto "$(cat "$VOZ/ref/bomdia-limpa.txt")" \
       --nfe 32 --filtro "volume=-6dB,bass=g=4:f=150:w=0.8" \
       >> logs/servidor-voz.log 2>&1 &
+fi
+
+if [ "$FRIDAY_ON" = "true" ] && [ -f "$FRIDAY/modelo/friday-emilia-v1.safetensors" ] \
+    && [ -x "$VOZ/venv/bin/python" ] && ! friday_ligada; then
+  mkdir -p logs
+  PATH="$HOME/.local/share/lelokz-estudio/ffmpeg:$PATH" nohup "$VOZ/venv/bin/python" -u \
+      "$PROJETO/servidor_friday.py" --modelo friday-emilia-v1 >> logs/servidor-friday.log 2>&1 &
 fi
 
 if ! ligado; then
