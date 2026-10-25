@@ -352,7 +352,7 @@ Window {
                     anchors.verticalCenter: parent.verticalCenter
                     width: Math.min(implicitWidth, topo.width - 420)
                     elide: Text.ElideRight
-                    text: janela.pagina === "memoria" ? "Memória"
+                    text: janela.pagina === "memoria" ? "Memórias"
                         : janela.pagina === "ajustes" ? "Ajustes"
                         : janela.tituloDe(janela.vendo || janela.conversaAtual)
                     color: janela.boasVindas ? tema.textoFraco : tema.texto
