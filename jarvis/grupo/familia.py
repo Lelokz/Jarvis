@@ -7,11 +7,15 @@ com ele chega mesmo sem "Jarvis" (o Chris respondeu ao "em que posso
 ajudar?" e ficou no vácuo, 23/10/2026). A resposta sai pelo
 WhatsApp do dono, com "🤖 Jarvis:" na frente.
 
-**Trancado de verdade:** aqui o Claude roda à parte, sem a memória do dono e
-SÓ com as ferramentas deste arquivo mais a pesquisa na internet; qualquer
-outra é barrada no gancho, antes de rodar. O que mexe no PC ou nas coisas do
-dono vira um pedido no celular dele (`jarvis/nucleo/aprovacoes.py`); se ele
-aprovar, quem faz é o Jarvis do PC (`pegar()` -> o laço principal).
+**O Claude completo, com as coisas do dono fechadas (25/10/2026).** Antes
+era trancado com meia dúzia de ferramentas fechadas (lista de compras etc.)
+e, sem ter como lembrar alguém numa hora, pediu aprovação do Léo para
+"lembra a Karyn que segunda tem o CIEE". O Léo: o Jarvis tem que saber fazer,
+sem ferramenta para tudo. Agora ele tem terminal, internet e uma pasta só
+dele para anotar; o que é do dono (pastas, conversas, memória, e-mail,
+agenda, código do Jarvis) é barrado no gancho (`trava_do_grupo`), e mexer no
+PC ou nas coisas dele vira um pedido no celular (`jarvis/nucleo/aprovacoes.py`;
+se ele aprovar, quem faz é o Jarvis do PC: `pegar()` -> o laço principal).
 """
 
 from __future__ import annotations
@@ -20,6 +24,7 @@ import asyncio
 import datetime as dt
 import json
 import queue
+import re
 import subprocess
 import threading
 import time
@@ -27,35 +32,63 @@ from collections import deque
 from pathlib import Path
 
 from jarvis import ajustes
-from jarvis.nucleo import aprovacoes
+from jarvis.agente import travas
+from jarvis.nucleo import aprovacoes, recados
 from jarvis.nucleo.atalhos import normalizar
 
 PREFIXO = "🤖 Jarvis:"
 PERSONA = Path(__file__).with_name("persona_grupo.md")
-LISTA = Path.home() / ".local/share/jarvis/grupo-lista.json"
+CASA = Path.home() / ".local/share/jarvis/grupo"  # a pasta só dele: anotações, listas, lembretes
 NOVIDADES = Path.home() / ".local/share/jarvis/novidades.jsonl"
 # O limite do Claude é do dono: a família não pode gastar tudo.
 MAX_POR_HORA = 30
 # Depois de cada resposta no grupo, as mensagens seguintes vão para o Claude
 # mesmo sem "Jarvis", e ele decide se são com ele.
 CONVERSA_ABERTA_S = 5 * 60
-PERMITIDAS = {"WebSearch", "WebFetch", "ToolSearch"}
-_ITENS = {"type": "object", "properties": {"itens": {"type": "array", "items": {"type": "string"}}},
-          "required": ["itens"]}
+_MEXE_EM_ARQUIVO = {"criar ou editar arquivo", "apagar, mover ou mexer em arquivo", "apagar ou mexer em arquivo"}
+_CAMINHO_DE_FORA = re.compile(r"(^|[\s\"'=<>|;&(])/(?!dev/null\b)")
+_NUNCA = re.compile(r"\b(sudo|chmod|chown|dd|crontab|shred|truncate|git|ln)\b")
+_COM_CAMINHO = {"Read", "Write", "Edit", "MultiEdit", "NotebookEdit", "Glob", "Grep", "LS"}
+# No terminal: qualquer caminho da casa do dono que não seja a pasta do grupo,
+# sair da pasta com "..", e os bancos/segredos pelo nome.
+_PESSOAL = re.compile(r"(~|\$HOME|\$\{HOME\}|/home/[\w.-]+)(?!/\.local/share/jarvis/grupo\b)"
+                      r"|\.\./|/root\b|/etc/(shadow|passwd)|\bsqlite3?\b|messages\.db|whatsapp\.db"
+                      r"|\.ssh\b|\.env\b|senha|password|token|cookie", re.I)
 
 
-def _ler_lista() -> list[str]:
-    try:
-        lista = json.loads(LISTA.read_text(encoding="utf-8"))
-        return [str(i) for i in lista] if isinstance(lista, list) else []
-    except (OSError, ValueError):
-        return []
+def trava_do_grupo(ferramenta: str, entrada: dict, casa: Path | None = None) -> str | None:
+    """Por que a ferramenta é barrada no grupo, ou None se pode.
 
-
-def _gravar_lista(itens: list[str]) -> str:
-    LISTA.parent.mkdir(parents=True, exist_ok=True)
-    LISTA.write_text(json.dumps(itens, ensure_ascii=False), encoding="utf-8")
-    return "Lista de compras:\n" + "\n".join(f"- {i}" for i in itens) if itens else "A lista está vazia."
+    Livre: conversar, internet, terminal e anotar na própria pasta. Barrado:
+    tudo que é do dono (fora da pasta do grupo), o que as travas da voz
+    barram para outra pessoa (apagar, instalar, desligar...), a tela e os
+    conectores da conta dele (Gmail, Agenda, Drive)."""
+    casa = casa or CASA
+    if ferramenta.startswith("mcp__"):
+        return None if ferramenta.startswith("mcp__grupo__") else "as contas do dono (e-mail, agenda...)"
+    if ferramenta in _COM_CAMINHO:
+        caminho = str(entrada.get("file_path") or entrada.get("notebook_path") or entrada.get("path") or "")
+        padrao = str(entrada.get("pattern") or "") if ferramenta == "Glob" else ""
+        for c in (caminho, padrao):
+            if c and (c.startswith(("/", "~")) or ".." in c):
+                alvo = Path(c.split("*")[0] or "/").expanduser()
+                alvo = (casa / alvo).resolve() if not alvo.is_absolute() else alvo.resolve()
+                if alvo != casa.resolve() and casa.resolve() not in alvo.parents:
+                    return "abrir ou mexer em coisa do dono (fora da sua pasta)"
+        return None
+    if ferramenta == "Bash":
+        comando = str(entrada.get("command") or "")
+        if travas.mexe_na_tela(comando):
+            return "bloquear ou desbloquear o PC"
+        if _PESSOAL.search(comando):
+            return "abrir coisa do dono (fora da sua pasta)"
+        motivo = travas.precisa_do_leo("Bash", entrada, casa / "nada.md")
+        # Gravar, mover e apagar na própria pasta (o terminal roda dentro dela)
+        # pode; com qualquer caminho de fora, ou sudo/permissões, não.
+        if motivo in _MEXE_EM_ARQUIVO and not _CAMINHO_DE_FORA.search(comando) and not _NUNCA.search(comando):
+            return None
+        return motivo
+    return None
 
 
 class GrupoFamilia(threading.Thread):
@@ -144,6 +177,10 @@ class GrupoFamilia(threading.Thread):
         if not jid:
             self._visto = dt.datetime.now()
             return
+        # O relógio interno: recados que ele deixou para si mesmo (jarvis/nucleo/recados.py).
+        venceram = recados.vencidos(CASA / recados.NOME)
+        if venceram:
+            asyncio.run(self._atender(jid, [], recados_da_hora=venceram))
         novas = [m for m in self._mensagens(jid, 20) if m[2] > self._visto]
         if not novas:
             return
@@ -169,7 +206,7 @@ class GrupoFamilia(threading.Thread):
     # -- o Claude, trancado --------------------------------------------------------
 
     async def _atender(self, jid: str, chamadas: list[tuple[str, str, dt.datetime]],
-                       aberta: bool = False) -> None:
+                       aberta: bool = False, recados_da_hora: list[str] | None = None) -> None:
         from claude_agent_sdk import (ClaudeAgentOptions, HookMatcher, create_sdk_mcp_server, query,
                                       tool)
 
@@ -194,43 +231,22 @@ class GrupoFamilia(threading.Thread):
             self._saidas.put(("aprovacao", a["id"]))
             return _t(f"Pedi para o {self._dono()} liberar (vale por 5 minutos). Avise no grupo.")
 
-        @tool("lista_ver", "Mostra a lista de compras do grupo.", {})
-        async def lista_ver(args):
-            itens = _ler_lista()
-            return _t("\n".join(itens) if itens else "(vazia)")
-
-        @tool("lista_adicionar", "Põe itens na lista de compras.", _ITENS)
-        async def lista_adicionar(args):
-            itens = _ler_lista()
-            itens += [str(i).strip() for i in args.get("itens") or [] if str(i).strip()]
-            return _t(_gravar_lista(itens))
-
-        @tool("lista_remover", "Tira itens da lista de compras (pelo nome).", _ITENS)
-        async def lista_remover(args):
-            tirar = {normalizar(str(i)) for i in args.get("itens") or []}
-            return _t(_gravar_lista([i for i in _ler_lista() if normalizar(i) not in tirar]))
-
-        @tool("lista_limpar", "Esvazia a lista de compras.", {})
-        async def lista_limpar(args):
-            return _t(_gravar_lista([]))
-
-        servidor = create_sdk_mcp_server("grupo", tools=[responder, nao_era_comigo, pedir_ao_dono, lista_ver,
-                                                         lista_adicionar, lista_remover, lista_limpar])
+        servidor = create_sdk_mcp_server("grupo", tools=[responder, nao_era_comigo, pedir_ao_dono])
 
         async def trancar(entrada, _id, _ctx) -> dict:
-            nome = str(entrada.get("tool_name") or "")
-            if nome.startswith("mcp__grupo__") or nome in PERMITIDAS:
+            motivo = trava_do_grupo(str(entrada.get("tool_name") or ""), entrada.get("tool_input") or {})
+            if motivo is None:
                 return {}
             return {"hookSpecificOutput": {
                 "hookEventName": "PreToolUse", "permissionDecision": "deny",
-                "permissionDecisionReason": "No grupo da família você não tem essa ferramenta. "
-                                            "Se precisar do PC ou das coisas do dono, use pedir_ao_dono."}}
+                "permissionDecisionReason": f"No grupo da família você não pode {motivo}. Se a pessoa "
+                                            "precisa disso, use pedir_ao_dono; senão, resolva de outro jeito."}}
 
-        casa = Path.home() / ".local/share/jarvis/grupo"
+        casa = CASA
         casa.mkdir(parents=True, exist_ok=True)
         nome_grupo = self.whatsapp.nome_de(jid) if hasattr(self.whatsapp, "nome_de") else "grupo"
         instrucoes = PERSONA.read_text(encoding="utf-8").replace("{usuario}", self._dono()) \
-            .replace("{grupo}", nome_grupo)
+            .replace("{grupo}", nome_grupo).replace("{casa}", str(casa)).replace("{recados}", recados.COMO_USAR)
         opcoes = ClaudeAgentOptions(
             cli_path=self.binario, cwd=str(casa), model=self.modelo,
             setting_sources=[],  # nada do dono: nem memória, nem MCPs, nem preferências
@@ -238,11 +254,20 @@ class GrupoFamilia(threading.Thread):
             mcp_servers={"grupo": servidor},
             permission_mode="bypassPermissions",
             hooks={"PreToolUse": [HookMatcher(matcher=None, hooks=[trancar])]},
-            max_turns=12, stderr=lambda _linha: None,
+            max_turns=20, stderr=lambda _linha: None,
         )
         conversa = "\n".join(f"[{q:%H:%M}] {quem}: {texto}" for quem, texto, q in self._mensagens(jid, 15))
         agora = dt.datetime.now().astimezone()
-        pedido = (f"Agora: {agora:%d/%m/%Y %H:%M} (fuso UTC{agora:%z}).\n\n"
+        if recados_da_hora:
+            pedido = (f"Agora: {agora:%A, %d/%m/%Y %H:%M} (fuso UTC{agora:%z}).\n\n"
+                      "As últimas mensagens do grupo, para contexto:\n" + conversa +
+                      "\n\nCHEGOU A HORA destes recados que VOCÊ deixou para si mesmo; faça o que anotou "
+                      "(normalmente, mandar no grupo com `responder`):\n" +
+                      "\n".join(f"- {r}" for r in recados_da_hora))
+            async for _ in query(prompt=pedido, options=opcoes):
+                pass
+            return
+        pedido = (f"Agora: {agora:%A, %d/%m/%Y %H:%M} (fuso UTC{agora:%z}).\n\n"
                   "As últimas mensagens do grupo, para contexto:\n" + conversa +
                   ("\n\nVocê acabou de falar no grupo. As NOVAS (podem ser com você mesmo sem "
                    "\"Jarvis\", ou só conversa entre eles; trate cada uma):\n" if aberta else

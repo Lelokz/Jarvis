@@ -32,7 +32,8 @@ _BASH = [
                 r"(install|remove|purge|uninstall|i|add|rm)\b|\|\s*(sudo\s+)?(sh|bash)\b"),
      "instalar ou desinstalar programa"),
     (re.compile(r"(^|[;&|`(]|\s)(shutdown|poweroff|reboot|halt|kill|pkill|killall)\b"
-                r"|\bsystemctl\s+(poweroff|reboot|suspend|hibernate|halt|stop|disable|mask)\b"
+                # com ou sem opções no meio ("systemctl --user stop ...", furo achado em 25/10/2026)
+                r"|\bsystemctl\s+(-{1,2}[\w=-]+\s+)*(poweroff|reboot|suspend|hibernate|halt|stop|disable|mask|kill|restart)\b"
                 r"|\bloginctl\s+(lock|terminate|poweroff|reboot|kill)"),
      "desligar o PC ou fechar programa à força"),
     (re.compile(r"\bcinnamon-screensaver-command\s+(-l|--lock|-a|--activate)\b|\bxdg-screensaver\s+lock\b"),
