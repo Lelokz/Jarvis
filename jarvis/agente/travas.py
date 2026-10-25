@@ -66,6 +66,10 @@ def precisa_do_leo(ferramenta: str, entrada: dict, memoria: Path) -> str | None:
     """
     if ferramenta in _EDITAM:
         caminho = str(entrada.get("file_path") or entrada.get("notebook_path") or "")
+        # Recado para ele mesmo ("me lembra daqui a 10 min") qualquer um pode
+        # deixar: fica num arquivo dele, ao lado da memória.
+        if caminho and Path(caminho).expanduser().resolve() == (memoria.parent / "recados.md").resolve():
+            return None
         if caminho and Path(caminho).expanduser().resolve() == memoria.resolve():
             return None if _so_acrescenta(ferramenta, entrada, memoria) else \
                 "apagar ou trocar o que está na memória"

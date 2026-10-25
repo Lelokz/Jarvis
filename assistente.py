@@ -43,7 +43,7 @@ from jarvis.agente.avisos import AvisosWhatsApp
 from jarvis.escola.vigia import Vigia
 from jarvis.agente.reflexos import reflexo
 from jarvis.cronometro import Tempos
-from jarvis.nucleo import relogio
+from jarvis.nucleo import recados, relogio
 from jarvis.nucleo.atalhos import normalizar
 from jarvis.nucleo.whatsapp import WhatsApp
 from jarvis.quem_fala import QuemFala, Voz
@@ -869,6 +869,13 @@ class Ciclo:
         except Exception:
             pass  # o servidor de som piscou: a janela pede de novo ao abrir os Ajustes
 
+    def do_recado(self, recado: str) -> None:
+        """Chegou a hora de um recado que o Jarvis deixou para si mesmo
+        (jarvis/nucleo/recados.py): vira um pedido, e ele faz do jeito dele."""
+        self.registrador.registrar_estado("recado", texto=recado[:300])
+        self._responder(f"[Chegou a hora de um recado que VOCÊ deixou para si mesmo: {recado}] "
+                        "Faça o que anotou.", origem="recado")
+
     def do_grupo(self, tipo: str, valor: str) -> None:
         """O que o Jarvis do grupo da família manda para cá (jarvis/grupo)."""
         if tipo == "notificar":
@@ -1369,6 +1376,9 @@ def conversar(cfg: config.Config) -> int:
                 if time.monotonic() >= proximo_aviso:
                     ciclo.atualizar_aviso(conferir_internet=True)
                     proximo_aviso = time.monotonic() + 30
+                    # O relógio interno: recados que ele deixou para si mesmo.
+                    for recado in recados.vencidos(agente.casa / recados.NOME):
+                        ciclo.do_recado(recado)
                 # Nunca no meio de você falando: espera a frase acabar.
                 if time.monotonic() >= proximo_whats and not ciclo.vad.falando:
                     ciclo.anunciar_whatsapp()

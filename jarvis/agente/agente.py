@@ -334,7 +334,9 @@ class Agente:
         )
 
     def _instrucoes(self) -> str:
-        return PERSONA.read_text().replace("{nome}", self.nome).replace("{usuario}", _dono())
+        from jarvis.nucleo import recados
+        return PERSONA.read_text().replace("{nome}", self.nome).replace("{usuario}", _dono()) \
+            .replace("{recados}", recados.COMO_USAR)
 
     async def _conectar(self, retomar: str | None = None) -> None:
         """Abre o Claude Code numa conversa nova, ou na `retomar` (um id)."""
