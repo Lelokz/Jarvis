@@ -16,6 +16,9 @@ em 24/10/2026:
   falta para subir uns 4 semitons.
 - **Sem estouro**: o F5 gera com pico de até 1,5; cada frase é baixada para
   pico 0,9 antes de virar int16 (antes, era cortada no teto).
+- **Dicionário de pronúncia**: o modelo lê letra por letra e erra a sílaba
+  forte ("láfora" em vez de "lá fóra"). `pronuncia.txt` na pasta da voz,
+  uma troca por linha: `lá fora = lá fóra`.
 
 Protocolo (socket unix, uma conexão por fala):
     -> {"texto": "..."}\\n          ou  {"ping": true}\\n
@@ -55,13 +58,33 @@ utils_infer.remove_silence_edges = lambda seg, *a, **k: _tirar_bordas(seg, *a, *
 ABERTA = re.compile(r"^\W*(o que|que|qual|quais|quem|quando|onde|como|por ?que|pra que|quanto|cad[eê])\b", re.I)
 
 
+PRONUNCIA: list[tuple[re.Pattern, str]] = []
+
+
+def carregar_pronuncia(arquivo: Path) -> None:
+    """`errado = certo` por linha (# comenta). Recarrega a cada fala: dá para
+    acrescentar palavra sem reiniciar o servidor."""
+    PRONUNCIA.clear()
+    if not arquivo.exists():
+        return
+    for linha in arquivo.read_text(encoding="utf-8").splitlines():
+        if "=" in linha and not linha.lstrip().startswith("#"):
+            errado, certo = (x.strip().lower() for x in linha.split("=", 1))
+            if errado and certo:
+                PRONUNCIA.append((re.compile(rf"(?<!\w){re.escape(errado)}(?!\w)"), certo))
+
+
 def normalizar(texto: str) -> str:
-    """O modelo PT-BR quer minúsculas e número por extenso."""
+    """O modelo PT-BR quer minúsculas, número por extenso e as trocas do
+    dicionário de pronúncia."""
     t = re.sub(r"[*_`#>]+", "", texto)
     t = re.sub(r"(\d+)h(\d+)", lambda m: f"{m[1]} e {m[2]}", t)
     t = re.sub(r"(\d+)%", r"\1 por cento", t)
     t = re.sub(r"\d+", lambda m: num2words(int(m[0]), lang="pt_BR"), t)
-    return " ".join(t.lower().split())
+    t = " ".join(t.lower().split())
+    for errado, certo in PRONUNCIA:
+        t = errado.sub(certo, t)
+    return t
 
 
 def frases(texto: str) -> list[str]:
@@ -138,8 +161,17 @@ def subir_pergunta(audio: np.ndarray, sr: int, alvo: float = 4.0, janela: float 
             call(tier, "Remove point", n)
             call(tier, "Add point", t, f * 2 ** (semitons / 12 * min(1.0, (t - ini) / janela) ** 1.5))
     call([tier, man], "Replace pitch tier")
-    novo = call(man, "Get resynthesis (overlap-add)")
-    return np.asarray(novo.values[0], dtype=np.float32)[: len(audio)]
+    novo = np.asarray(call(man, "Get resynthesis (overlap-add)").values[0], dtype=np.float32)[: len(audio)]
+    # Só o fim vem da ressíntese; antes dele, o áudio original (a ressíntese
+    # inteira deixava a frase toda um pouco áspera: o Léo preferiu a versão
+    # sem acabamento, 25/10/2026). Emenda cruzada de 40 ms.
+    corte = int(max(0.0, ini - 0.05) * sr)
+    n = min(int(0.04 * sr), len(novo) - corte)
+    saida = audio.copy()
+    rampa = np.linspace(0, 1, n, dtype=np.float32)
+    saida[corte:corte + n] = audio[corte:corte + n] * (1 - rampa) + novo[corte:corte + n] * rampa
+    saida[corte + n:len(novo)] = novo[corte + n:]
+    return saida
 
 
 # O que a Friday fala sempre igual: pronto desde a subida.
@@ -158,6 +190,7 @@ def main() -> int:
 
     inicio = time.monotonic()
     pasta = Path(a.pasta)
+    carregar_pronuncia(pasta / "pronuncia.txt")
     tts = F5TTS(model="F5TTS_Base", ckpt_file=str(pasta / "modelo/friday-emilia.safetensors"),
                 vocab_file=str(pasta / "modelo/vocab.txt"), device="cuda")
     # A referência é preparada uma vez só (antes, a cada frase).
@@ -166,7 +199,7 @@ def main() -> int:
     ref = torchaudio.load(arq)
 
     guardadas: OrderedDict[str, bytes] = OrderedDict()
-    receita = hashlib.sha1(f"friday|{a.ref}|{a.nfe}|{'cru' if a.cru else 'v1'}".encode()).hexdigest()[:12]
+    receita = hashlib.sha1(f"friday|{a.ref}|{a.nfe}|{'cru' if a.cru else 'v2'}".encode()).hexdigest()[:12]
     disco = pasta / "cache" / receita
     disco.mkdir(parents=True, exist_ok=True)
 
@@ -215,6 +248,7 @@ def main() -> int:
                 if pedido.get("ping"):
                     con.sendall(b'{"ok": true}\n')
                     continue
+                carregar_pronuncia(pasta / "pronuncia.txt")
                 for frase in frases(str(pedido.get("texto") or "")):
                     pcm, taxa = gerar(frase)
                     con.sendall(json.dumps({"taxa": taxa, "n": len(pcm)}).encode() + b"\n" + pcm)
