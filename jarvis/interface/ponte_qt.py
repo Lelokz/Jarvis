@@ -45,6 +45,10 @@ class PonteQt(QObject):
     atividade = Signal(str)                # o que o Claude está fazendo agora
     anexoFalhou = Signal(str)              # não deu para copiar/mandar o anexo
     memoriaTexto = Signal(str)             # o CLAUDE.md inteiro, em markdown
+    # A aba Memórias (25/10/2026): a lista, uma aberta e o resultado do salvar.
+    memoriasLista = Signal("QVariant")     # [{id, titulo, tipo, atualizado}]
+    memoriaAberta = Signal(str, str, str, str)          # id, título, texto, versão
+    memoriaSalva = Signal(str, bool, bool, str, str)    # id, ok, conflito, texto, versão
     # A janela grande (protocolo v3).
     cerebroMudou = Signal(str, str, str, str)   # modelo, esforço, persona, cor da persona ("" = a dos Ajustes)
     conversaAtual = Signal(str, list, bool)  # id, falas, veio com as falas (troca)
@@ -124,6 +128,18 @@ class PonteQt(QObject):
         except OSError:
             return False
         return True
+
+    @Slot(result=bool)
+    def pedirMemorias(self) -> bool:
+        return self._pedir({"pedir": "memorias"})
+
+    @Slot(str, result=bool)
+    def lerMemoria(self, ident: str) -> bool:
+        return self._pedir({"pedir": "ler_memoria", "id": ident})
+
+    @Slot(str, str, str, result=bool)
+    def salvarMemoria(self, ident: str, texto: str, versao: str) -> bool:
+        return self._pedir({"pedir": "salvar_memoria", "id": ident, "texto": texto, "versao": versao})
 
     @Slot(result=bool)
     def pedirConversas(self) -> bool:
@@ -268,6 +284,14 @@ class PonteQt(QObject):
             self.memoriaRecebida.emit(list(ev.get("fatos") or []),
                                       list(ev.get("conversas") or []))
             self.memoriaTexto.emit(str(ev.get("texto") or ""))
+        elif tipo == "memorias":
+            self.memoriasLista.emit(list(ev.get("lista") or []))
+        elif tipo == "memoria_aberta":
+            self.memoriaAberta.emit(str(ev.get("id") or ""), str(ev.get("titulo") or ""),
+                                    str(ev.get("texto") or ""), str(ev.get("versao") or ""))
+        elif tipo == "memoria_salva":
+            self.memoriaSalva.emit(str(ev.get("id") or ""), bool(ev.get("ok")), bool(ev.get("conflito")),
+                                   str(ev.get("texto") or ""), str(ev.get("versao") or ""))
         elif tipo == "cerebro":
             self.cerebroMudou.emit(str(ev.get("modelo") or ""), str(ev.get("esforco") or ""),
                                    str(ev.get("persona") or "jarvis"), str(ev.get("cor_persona") or ""))

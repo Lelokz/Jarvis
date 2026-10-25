@@ -235,7 +235,10 @@ Window {
         }
         function onAnexoFalhou(texto) { janela.avisar(texto) }
         function onAvisoMudou(tipo, voltaEm) { faixa.tipo = tipo; faixa.voltaEm = voltaEm }
-        function onMemoriaTexto(texto) { memoria.texto = texto; memoria.carregando = false }
+        function onMemoriaTexto(texto) { }
+        function onMemoriasLista(lista) { memoria.lista = lista; memoria.carregando = false }
+        function onMemoriaAberta(id, titulo, texto, versao) { memoria.abrir(id, titulo, texto, versao) }
+        function onMemoriaSalva(id, ok, conflito, texto, versao) { memoria.salvou(id, ok, conflito, texto, versao) }
         function onCerebroMudou(modelo, esforco, persona, cor) {
             janela.modelo = modelo; janela.esforco = esforco; janela.persona = persona;
             if (cor !== "") janela.corPersona = cor;
@@ -318,8 +321,9 @@ Window {
         onIrPara: function (p) {
             janela.pagina = p;
             if (p === "memoria") {
-                memoria.carregando = memoria.texto === "";
-                if (typeof ponte === "undefined" || !ponte.pedirMemoria())
+                memoria.voltarParaLista();
+                memoria.carregando = memoria.lista.length === 0;
+                if (typeof ponte === "undefined" || !ponte.pedirMemorias())
                     memoria.carregando = false;
             }
         }
@@ -684,6 +688,13 @@ Window {
             visible: janela.pagina === "memoria"
             tema: tema
             onCopiar: function (t) { if (typeof ponte !== "undefined") ponte.copiar(t) }
+            onPedirLista: if (typeof ponte !== "undefined") ponte.pedirMemorias()
+            onPedirAbrir: function (id) { if (typeof ponte !== "undefined") ponte.lerMemoria(id) }
+            onPedirSalvar: function (id, texto, versao) {
+                if (typeof ponte === "undefined" || !ponte.salvarMemoria(id, texto, versao))
+                    janela.avisar("Sem conexão com o Jarvis: não deu pra salvar")
+            }
+            onAvisar: function (t) { janela.avisar(t) }
         }
 
         PaginaAjustes {

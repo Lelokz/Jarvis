@@ -441,7 +441,7 @@ Rectangle {
         }
         Repeater {
             model: [
-                { pagina: "memoria", nome: "Memória", icone: "memoria" },
+                { pagina: "memoria", nome: "Memórias", icone: "memoria" },
                 { pagina: "ajustes", nome: "Ajustes", icone: "ajustes" },
             ]
             Rectangle {
