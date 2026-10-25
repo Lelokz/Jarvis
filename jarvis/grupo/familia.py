@@ -33,6 +33,7 @@ from pathlib import Path
 
 from jarvis import ajustes
 from jarvis.agente import travas
+from jarvis.agente.agente import sim_ou_nao
 from jarvis.nucleo import aprovacoes, recados
 from jarvis.nucleo.atalhos import normalizar
 
@@ -50,6 +51,8 @@ MAX_POR_HORA = 30
 # Depois de cada resposta no grupo, as mensagens seguintes vão para o Claude
 # mesmo sem "Jarvis", e ele decide se são com ele.
 CONVERSA_ABERTA_S = 5 * 60
+# O pedido ao dono que o app não recebeu vai para o WhatsApp dele depois disto.
+ESPERA_DO_APP_S = 45
 _MEXE_EM_ARQUIVO = {"criar ou editar arquivo", "apagar, mover ou mexer em arquivo", "apagar ou mexer em arquivo"}
 _CAMINHO_DE_FORA = re.compile(r"(^|[\s\"'=<>|;&(])/(?!dev/null\b)")
 _NUNCA = re.compile(r"\b(sudo|chmod|chown|dd|crontab|shred|truncate|git|ln)\b")
@@ -97,11 +100,18 @@ def trava_do_grupo(ferramenta: str, entrada: dict, casa: Path | None = None) -> 
 
 
 class GrupoFamilia(threading.Thread):
-    def __init__(self, whatsapp, binario: str, modelo: str) -> None:
+    def __init__(self, whatsapp, binario: str, modelo: str, app_desde=None) -> None:
         super().__init__(name="grupo-familia", daemon=True)
         self.whatsapp = whatsapp
         self.binario = binario
         self.modelo = modelo
+        # Desde quando o app do celular está conectado (a ponte), ou None.
+        self._app_desde = app_desde or (lambda: None)
+        # Pedidos ao dono que foram para o WhatsApp dele: id -> quando foi.
+        self._pelo_whats: dict[str, dt.datetime] = {}
+        self._pelo_app: set[str] = set()
+        # Até onde as respostas dele já foram usadas: um "sim" vale um pedido só.
+        self._resposta_usada = dt.datetime.now()
         # Para o laço principal: ("executar", texto) e ("notificar", texto).
         self._saidas: queue.Queue[tuple[str, str]] = queue.Queue()
         self._chamadas: deque[float] = deque()
@@ -165,8 +175,62 @@ class GrupoFamilia(threading.Thread):
             except Exception:
                 pass  # banco ocupado, ponte fora: tenta na próxima
 
+    def _aprovacoes_pelo_whatsapp(self) -> None:
+        """O pedido ao dono que o app não recebeu (app fechado, sem internet,
+        Tailscale fora) vai para o WhatsApp dele, no chat com ele mesmo, e ele
+        responde "sim" ou "não" ali. Só quando o app não funciona (decisão do
+        Léo, 25/10/2026): com o app conectado desde antes do pedido, fica lá."""
+        pendentes = [a for a in aprovacoes.pendentes() if a.get("origem") == "grupo"]
+        ids = {a["id"] for a in pendentes}
+        self._pelo_whats = {i: q for i, q in self._pelo_whats.items() if i in ids}
+        self._pelo_app &= ids
+        eu = ""
+        for a in pendentes:
+            if a["id"] in self._pelo_whats or a["id"] in self._pelo_app \
+                    or time.time() - a["criado"] < ESPERA_DO_APP_S:
+                continue
+            desde = self._app_desde()
+            if desde is not None and desde <= a["criado"]:
+                self._pelo_app.add(a["id"])  # o app estava lá: recebeu
+                continue
+            eu = eu or self.whatsapp.meu_jid()
+            if not eu:
+                return
+            ate = dt.datetime.fromtimestamp(a["expira_em"]).strftime("%H:%M")
+            ok, _ = self.whatsapp.enviar(eu, f"{PREFIXO} {a['quem']} pediu no grupo da família: "
+                                             f"\"{a['pedido']}\". O app não está conectado, então pergunto "
+                                             f"aqui: responde *sim* para liberar ou *não* para recusar "
+                                             f"(vale até {ate}).")
+            if ok:
+                self._pelo_whats[a["id"]] = dt.datetime.now()
+        if not self._pelo_whats:
+            return
+        eu = eu or self.whatsapp.meu_jid()
+        if not eu:
+            return
+        # A resposta: "sim" ou "não" curtinho, escrita por ele depois do pedido
+        # (a ponte não guarda o que o Jarvis manda; o que aparece veio dele).
+        desde = max(min(self._pelo_whats.values()), self._resposta_usada)
+        for quando, texto in sorted(self.whatsapp.eu_mandei_desde(eu, desde)):
+            if texto.startswith(PREFIXO) or len(normalizar(texto).split()) > 3:
+                continue
+            sim = sim_ou_nao(texto)
+            antes = [(q, i) for i, q in self._pelo_whats.items() if q < quando]
+            if sim is None or not antes:
+                continue
+            _, id_pedido = max(antes)  # o pedido mais recente antes da resposta
+            del self._pelo_whats[id_pedido]
+            self._resposta_usada = quando
+            resultado = aprovacoes.responder(id_pedido, sim)
+            self.whatsapp.enviar(eu, f"{PREFIXO} " + {"aprovado": "Liberado, já vou fazer.",
+                                                      "recusado": "Recusado, aviso no grupo."}
+                                 .get(resultado, "Esse pedido já tinha vencido."))
+            if not self._pelo_whats:
+                return
+
     def _uma_volta(self) -> None:
         jid = self._jid()
+        self._aprovacoes_pelo_whatsapp()
         for a in aprovacoes.resolvidas("grupo"):
             if not jid:
                 continue

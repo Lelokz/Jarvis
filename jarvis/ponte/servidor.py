@@ -68,6 +68,9 @@ class _Cliente:
     # celular) e quer os eventos dela. Quem não é corpo sempre quer.
     quer_janela: bool = False
     quem: str = ""
+    # Quando disse "ola" (time.time()): o pedido de aprovação do grupo só
+    # conta como entregue no app se ele já estava conectado antes do pedido.
+    desde: float = 0.0
     # Quem não disse "ola" não recebe difusão. É o que garante que tudo o que
     # chega depois do histórico seja novo: sem isso, um evento ao vivo podia
     # escapar pela brecha entre conectar e pedir, e aparecer duas vezes na tela.
@@ -210,6 +213,14 @@ class Servidor:
     @property
     def n_clientes(self) -> int:
         return len(self._clientes)
+
+    def app_desde(self) -> float | None:
+        """Desde quando o app do celular (corpo com a janela) está conectado,
+        sem cair; None se não está. A conexão morta cai sozinha em ~40 s (o
+        ping do WebSocket da porta remota)."""
+        apps = [c.desde for c in list(self._clientes.values())
+                if c.apresentado and c.quer_voz and c.quer_janela]
+        return min(apps) if apps else None
 
     # -- o lado do laço de áudio -------------------------------------------
 
@@ -403,6 +414,7 @@ class Servidor:
             return
         if tipo == "ola":
             cliente.apresentado = True
+            cliente.desde = time.time()
             cliente.quer_voz = dados.get("voz", False)
             cliente.quer_janela = dados.get("janela", False) or not cliente.quer_voz
             cliente.quem = dados.get("quem", "")

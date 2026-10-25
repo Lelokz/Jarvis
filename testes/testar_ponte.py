@@ -143,6 +143,22 @@ def rodar(base: Path) -> None:
           len(ev) == 2 and ev[1] == {"ev": "estado", "estado": "dormindo"}, ev)
     checa("com cliente, o nível passa a ser pedido", esperar(lambda: srv.quer("nivel")))
 
+    print("-- o app do celular conectado (o pedido do grupo vai para o WhatsApp sem ele) --")
+    checa("a janela não conta como o app", srv.app_desde() is None)
+    relogio = Conexao(caminho)
+    relogio.enviar({"pedir": "ola", "voz": True})
+    relogio.ler(2)
+    checa("nem o relógio (corpo sem a janela)", srv.app_desde() is None)
+    antes = time.time()
+    app = Conexao(caminho)
+    app.enviar({"pedir": "ola", "voz": True, "janela": True})
+    app.ler(2)
+    checa("o app conta, com a hora em que conectou",
+          esperar(lambda: (srv.app_desde() or 0) >= antes), srv.app_desde())
+    app.fechar()
+    relogio.fechar()
+    checa("e deixa de contar quando cai", esperar(lambda: srv.app_desde() is None))
+
     print("-- filtro e difusão --")
     b = Conexao(caminho)
     b.enviar({"pedir": "ola"})
