@@ -244,6 +244,14 @@ def main() -> int:
     p.add_argument("--tentativas", type=int, default=3)
     a = p.parse_args()
 
+    # ~2,5 GB de RAM: se faltar memória (jogo aberto), o sistema derruba este
+    # servidor primeiro, nunca o jogo nem o VS Code; a Friday segue na voz
+    # reserva. Só existe no Linux; em outro sistema não faz nada.
+    try:
+        Path("/proc/self/oom_score_adj").write_text("700")
+    except OSError:
+        pass
+
     inicio = time.monotonic()
     pasta = Path(a.pasta)
     carregar_pronuncia(pasta / "pronuncia.txt")
