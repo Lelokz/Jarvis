@@ -83,6 +83,9 @@ if [ "$FRIDAY_ON" = "true" ] && [ -f "$FRIDAY/modelo/friday-emilia-v1.safetensor
   mkdir -p logs
   PATH="$HOME/.local/share/lelokz-estudio/ffmpeg:$PATH" nohup "$VOZ/venv/bin/python" -u \
       "$PROJETO/servidor_friday.py" --modelo friday-emilia-v1 >> logs/servidor-friday.log 2>&1 &
+  # ~2,5 GB de RAM: se faltar memória (jogo aberto), cai ele primeiro, nunca o
+  # jogo nem o VS Code; a Friday segue na voz reserva.
+  echo 700 > "/proc/$!/oom_score_adj" 2>/dev/null || true
 fi
 
 if ! ligado; then
