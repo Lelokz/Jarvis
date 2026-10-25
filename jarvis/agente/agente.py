@@ -20,6 +20,10 @@ que sai pela fila `saidas`:
     parcial    um pedaço do texto enquanto ele escreve (`texto` = o pedaço,
                `titulo` = o número do bloco; `janela` = "descartar": jogue
                fora o que veio, o rápido passou para o Opus)
+    frase      uma frase já fechada do bloco `titulo`, para falar enquanto ele
+               ainda escreve (`texto` = como se fala, `ate` = onde termina no
+               texto do bloco); `texto` vazio = acabaram as frases do bloco.
+               O "falar"/"fim" desse bloco traz em `resto` só o que faltou
 
 **Permissão por voz.** O modo é "auto": o próprio Claude julga o que roda
 direto (medido: leu a pasta antes de apagar, e apagou só o pedido). O que ele
@@ -96,6 +100,11 @@ class Saida:
     opcoes: list[str] = field(default_factory=list)
     resposta: concurrent.futures.Future | None = None
     interrompido: bool = False
+    # "frase": onde ela termina no texto do bloco (`titulo`).
+    ate: int = 0
+    # "falar" e "fim" de um bloco que já foi falado em frases: só o que
+    # falta dizer (pode ser ""). None = nada foi falado ainda: diga `texto`.
+    resto: str | None = None
 
 
 @dataclass
@@ -157,6 +166,41 @@ def dividir(texto: str, deixei: str = "Deixei na janela.") -> tuple[str, str | N
     if _tem_codigo(t):
         fala = f"{fala} O código tá na janela." if fala else deixei
     return fala, t
+
+
+# -- a fala em fluxo: frase por frase, enquanto ele escreve -------------------
+#
+# Antes a voz só começava com a resposta inteira escrita, e o texto chegava na
+# tela segundos antes dela (o Léo, com a Friday, 25/10/2026: "isso é um
+# problema sério"). Agora cada frase fechada vai para a voz na hora.
+
+_FIM_DE_FRASE = re.compile(r"[.!?…]+[\"')\]*_]*(?=\s)|\n")
+
+
+def frases_prontas(texto: str, desde: int, fim: bool = False) -> tuple[list[tuple[str, int]], int, bool]:
+    """As frases de `texto[desde:]` que já dá para falar, como (falada, onde
+    termina no texto); o novo `desde`; e se parou. Pronta é a frase que já
+    fechou (ponto, exclamação, interrogação, quebra de linha); com `fim`, o
+    resto também. Lista, código ou tabela param as frases: o resto do bloco
+    sai no fim, do jeito de sempre (`dividir`)."""
+    saida = []
+    cortes = [m.end() for m in _FIM_DE_FRASE.finditer(texto, desde)]
+    if fim:
+        cortes.append(len(texto))
+    for corte in cortes:
+        if _formatado(texto[:corte]):
+            return saida, desde, True
+        falada = _limpar(texto[desde:corte])
+        if falada:
+            saida.append((falada, corte))
+        desde = corte
+    return saida, desde, False
+
+
+def _resto(fala: str, ja: int) -> str | None:
+    """O que falta dizer de `fala` depois das `ja` palavras faladas em frases
+    (o `dividir` e as frases limpam o texto do mesmo jeito, palavra a palavra)."""
+    return " ".join(fala.split()[ja:]) if ja else None
 
 
 def _resumo_de_ferramenta(b: ToolUseBlock) -> str:
@@ -537,6 +581,26 @@ class Agente:
         # Os pedaços do texto. O começo de cada bloco fica segurado enquanto
         # pode ser um "[calado]" (fala que não era com ele: nada aparece).
         bloco, segurado, soltou = 0, "", False
+        # A fala em fluxo, por bloco: o texto, até onde já virou frase, quantas
+        # palavras foram faladas e se as frases do bloco acabaram. A conta das
+        # palavras é feita no "falar"/"fim", não no TextBlock: o TextBlock chega
+        # ANTES do content_block_stop, que solta a última frase (medido).
+        fluxo: dict[int, dict] = {}
+
+        def em_frases(n: int, fim: bool = False) -> None:
+            f = fluxo[n]
+            if f["parou"]:
+                return
+            prontas, f["desde"], parou = frases_prontas(f["texto"], f["desde"], fim)
+            for falada, ate in prontas:
+                f["palavras"] += len(falada.split())
+                self.saidas.put(Saida("frase", falada, titulo=str(n), ate=ate))
+            if parou or fim:
+                f["parou"] = True
+                self.saidas.put(Saida("frase", titulo=str(n)))
+
+        def falado(texto: str) -> int:
+            return next((f["palavras"] for f in fluxo.values() if f["texto"] == texto), 0)
 
         def no_meio(texto: str) -> None:
             t = texto.strip()
@@ -546,7 +610,7 @@ class Agente:
             if janela:
                 self.saidas.put(Saida("mostrar", janela))
             if fala:
-                self.saidas.put(Saida("falar", fala))
+                self.saidas.put(Saida("falar", fala, resto=_resto(fala, falado(texto))))
 
         try:
             async for m in cliente.receive_messages():
@@ -567,7 +631,14 @@ class Agente:
                                     or not inicio:
                                 continue
                             pedaco, soltou = segurado, True
+                            fluxo[bloco] = {"texto": "", "desde": 0, "palavras": 0, "parou": False}
                         self.saidas.put(Saida("parcial", pedaco, titulo=str(bloco)))
+                        fluxo[bloco]["texto"] += pedaco
+                        em_frases(bloco)
+                    elif e.get("type") == "content_block_stop" and bloco in fluxo:
+                        # O bloco de texto fechou: a última frase vai já, sem
+                        # esperar o fim do turno.
+                        em_frases(bloco, fim=True)
                     continue
                 if isinstance(m, AssistantMessage):
                     if m.parent_tool_use_id:  # dentro de um subagente: só ele vê
@@ -600,6 +671,7 @@ class Agente:
                     # O rápido passou o pedido: o que ele escreveu não vale, e o
                     # turno continua com o Opus (mesma conversa).
                     self._subir, self._no_opus, pendente = False, True, None
+                    fluxo.clear()
                     self.saidas.put(Saida("parcial", janela="descartar"))
                     self.saidas.put(Saida("atividade", "Pensando com calma"))
                     asyncio.create_task(self._subir_pro_opus(cliente))
@@ -607,7 +679,9 @@ class Agente:
                     self._subir = False
                     if self._no_opus:
                         asyncio.create_task(self._voltar_pro_rapido(cliente))
+                    ja = falado(pendente) if pendente is not None else 0
                     final, pendente = (pendente if pendente is not None else m.result or ""), None
+                    fluxo.clear()
                     self.ocupado = False
                     self.offline = False
                     motivo = getattr(m, "terminal_reason", None) or ""
@@ -619,7 +693,7 @@ class Agente:
                         self._falhou(m.result or m.subtype)
                     else:
                         fala, janela = dividir(final)
-                        self.saidas.put(Saida("fim", fala, janela=janela))
+                        self.saidas.put(Saida("fim", fala, janela=janela, resto=_resto(fala, ja)))
         except asyncio.CancelledError:
             raise
         except Exception as e:

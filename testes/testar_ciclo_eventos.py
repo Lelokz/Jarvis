@@ -585,12 +585,217 @@ def rodar_personas(tmp: Path) -> None:
     checa("o seletor da janela troca para a Friday", ciclo.persona == "friday" and ciclo.voz is vf)
 
 
+def _turno(mensagens):
+    """Roda o `_ler` do Agente de verdade sobre mensagens do SDK montadas à
+    mão (sem Claude) e devolve as saídas, na ordem."""
+    import asyncio
+    import queue
+    import types
+
+    from jarvis.agente.agente import Agente, Limite
+
+    class Cliente:
+        async def receive_messages(self):
+            for m in mensagens:
+                yield m
+
+    falso = types.SimpleNamespace(saidas=queue.Queue(), limite=Limite(), uso={}, _subir=False,
+                                  _no_opus=False, ocupado=True, offline=False, _cliente=None,
+                                  _falhou=lambda e: falso.saidas.put(Saida("erro", str(e))))
+    asyncio.run(Agente._ler(falso, Cliente()))
+    saidas = []
+    while not falso.saidas.empty():
+        saidas.append(falso.saidas.get())
+    return saidas
+
+
+def _bloco_de_texto(i, pedacos):
+    from claude_agent_sdk import AssistantMessage, StreamEvent, TextBlock
+
+    def ev(e):
+        return StreamEvent(uuid="u", session_id="s", event=e)
+    # Na ordem medida no Claude Code de verdade (25/10/2026): o AssistantMessage
+    # com o bloco inteiro chega ANTES do content_block_stop.
+    return ([ev({"type": "content_block_start", "index": i, "content_block": {"type": "text", "text": ""}})]
+            + [ev({"type": "content_block_delta", "index": i, "delta": {"type": "text_delta", "text": p}})
+               for p in pedacos]
+            + [AssistantMessage(content=[TextBlock("".join(pedacos))], model="teste"),
+               ev({"type": "content_block_stop", "index": i})])
+
+
+def _fim_do_turno(texto):
+    from claude_agent_sdk import ResultMessage
+    return [ResultMessage(subtype="success", duration_ms=1, duration_api_ms=1, is_error=False,
+                          num_turns=1, session_id="s", result=texto)]
+
+
+def rodar_fluxo(tmp: Path) -> None:
+    """A fala em fluxo (25/10/2026): cada frase vai para a voz enquanto o
+    Claude ainda escreve, e o texto aparece no ritmo da voz."""
+    import threading
+
+    from claude_agent_sdk import AssistantMessage, StreamEvent, ToolUseBlock
+
+    print("\nA FALA EM FLUXO")
+    print("-- F1. o agente solta as frases enquanto escreve --")
+    s = _turno(_bloco_de_texto(1, ["Achei, chefinho! O show", " é dia 15. Quer", " ir?"])
+               + _fim_do_turno("Achei, chefinho! O show é dia 15. Quer ir?"))
+    tipos = [(x.tipo, x.texto) for x in s if x.tipo != "parcial"]
+    checa("cada frase sai assim que fecha; a última, quando o bloco fecha",
+          tipos == [("frase", "Achei, chefinho!"), ("frase", "O show é dia 15."), ("frase", "Quer ir?"),
+                    ("frase", ""), ("fim", "Achei, chefinho! O show é dia 15. Quer ir?")], tipos)
+    ordem = [x.tipo for x in s]
+    checa("a 1ª frase sai logo depois do 1º pedaço, sem esperar o resto",
+          ordem[:2] == ["parcial", "frase"], ordem)
+    checa("o fim não repete nada (resto vazio)", s[-1].resto == "", repr(s[-1].resto))
+
+    print("-- F2. texto, ferramenta, texto: cada bloco na sua vez --")
+    uso = [StreamEvent(uuid="u", session_id="s", event={"type": "content_block_start", "index": 1,
+                                                         "content_block": {"type": "tool_use"}}),
+           AssistantMessage(content=[ToolUseBlock(id="t", name="WebSearch", input={"query": "show"})],
+                            model="teste"),
+           StreamEvent(uuid="u", session_id="s", event={"type": "content_block_stop", "index": 1})]
+    # O índice recomeça em 0 a cada mensagem, como no Claude Code de verdade.
+    s = _turno(_bloco_de_texto(0, ["Vou procurar."]) + uso + _bloco_de_texto(0, ["Achei."])
+               + _fim_do_turno("Achei."))
+    tipos = [(x.tipo, x.texto, x.resto) for x in s if x.tipo in ("frase", "falar", "fim")]
+    checa("a fala do meio vai em frase, e o 'falar' dela não repete",
+          tipos == [("frase", "Vou procurar.", None), ("frase", "", None),
+                    ("falar", "Vou procurar.", ""), ("frase", "Achei.", None), ("frase", "", None),
+                    ("fim", "Achei.", "")], tipos)
+
+    print("-- F3. lista: as frases param, e o resto sai no fim --")
+    s = _turno(_bloco_de_texto(1, ["Tem três:\n", "- a primeira\n", "- a segunda"])
+               + _fim_do_turno(""))
+    tipos = [(x.tipo, x.texto) for x in s if x.tipo == "frase"]
+    fim = s[-1]
+    checa("só o que vem antes da lista vira frase", tipos == [("frase", "Tem três:"), ("frase", "")], tipos)
+    checa("o fim traz a lista inteira para a janela e só o que falta para a voz",
+          fim.tipo == "fim" and fim.janela and fim.resto == "A primeira. A segunda.", (fim.texto, fim.resto))
+
+    print("-- F4. '[calado]' não vira frase --")
+    s = _turno(_bloco_de_texto(1, ["[cal", "ado]"]) + _fim_do_turno("[calado]"))
+    checa("nem frase nem texto", [x.tipo for x in s] == ["fim"] and s[0].texto == "", [x.tipo for x in s])
+
+    class VozQueAnota(tts.Voz):
+        """Anota o que pediram para falar; `trava` segura cada fala até soltar."""
+        nome = "anota"
+
+        def __init__(self, trecho=False):
+            self.falas, self.trecho = [], trecho
+            self.trava = threading.Event()
+            self.trava.set()
+
+        def sintetizar(self, texto):
+            self.trava.wait(5)
+            self.falas.append(texto)
+            if self.trecho:
+                yield tts.Trecho(pcm=b"\x01\x00" * 400, taxa=24000, canais=1)
+
+    class PortaoContado:
+        def __init__(self):
+            self.fechado = 0
+            self.aberto = 0
+
+        def fechar_portao(self):
+            self.fechado += 1
+
+        def abrir_portao(self):
+            self.aberto += 1
+
+    def esperar(cond, ciclo, s=2.0):
+        fim = time.monotonic() + s
+        while not cond() and time.monotonic() < fim:
+            ciclo.atender_locutor()
+            time.sleep(0.01)
+        return cond()
+
+    def escrito(g):
+        return "".join(e["delta"] for e in g.eventos if e["ev"] == "escrevendo" and "delta" in e)
+
+    print("-- F5. no PC: frase por frase, sem repetir, com o texto inteiro no fim --")
+    g = Gravador()
+    _, ciclo, _, _, agente, _ = montar(tmp, g)
+    voz, portao = VozQueAnota(), PortaoContado()
+    ciclo.voz, ciclo.portao, ciclo.guarda_s = voz, portao, 0.0
+    for x in [Saida("parcial", "Achei! ", titulo="1"), Saida("frase", "Achei!", titulo="1", ate=7),
+              Saida("parcial", "O show é dia 15.", titulo="1"),
+              Saida("frase", "O show é dia 15.", titulo="1", ate=23), Saida("frase", titulo="1"),
+              Saida("fim", "Achei! O show é dia 15.", resto="")]:
+        agente.saidas.put(x)
+    ciclo.atender_agente()
+    checa("cada frase foi para a voz uma vez, na ordem", voz.falas == ["Achei!", "O show é dia 15."], voz.falas)
+    checa("o texto apareceu inteiro, em pedaços", escrito(g) == "Achei! O show é dia 15.", escrito(g))
+    tipos = ["pedaco" if e["ev"] == "escrevendo" and "delta" in e else e["ev"] for e in g.eventos]
+    checa("e o texto inteiro (jarvis_disse) só depois de todos os pedaços",
+          tipos.count("jarvis_disse") == 1
+          and tipos.index("jarvis_disse") > max(i for i, t in enumerate(tipos) if t == "pedaco"), tipos)
+    checa("o portão fechou para falar e abriu no fim", (portao.fechado, portao.aberto) == (1, 1),
+          (portao.fechado, portao.aberto))
+    checa("e o locutor terminou", ciclo._locutor is None)
+
+    print("-- F6. o texto espera a voz da frase começar --")
+    g = Gravador()
+    _, ciclo, _, _, agente, _ = montar(tmp, g)
+    voz = VozQueAnota()
+    voz.trava.clear()
+    ciclo.voz, ciclo.portao, ciclo.guarda_s = voz, PortaoContado(), 0.0
+    agente.saidas.put(Saida("parcial", "Oi! ", titulo="1"))
+    agente.saidas.put(Saida("frase", "Oi!", titulo="1", ate=4))
+    agente.saidas.put(Saida("parcial", "Tudo", titulo="1"))
+    ciclo.atender_agente()
+    time.sleep(0.1)
+    ciclo.atender_locutor()
+    checa("enquanto a voz gera, o texto fica segurado", escrito(g) == "", escrito(g))
+    voz.trava.set()
+    checa("a voz começou: a frase aparece (e só ela)", esperar(lambda: escrito(g) == "Oi! ", ciclo),
+          escrito(g))
+    agente.saidas.put(Saida("frase", titulo="1"))
+    agente.saidas.put(Saida("fim", "Oi! Tudo", resto="Tudo"))
+    ciclo.atender_agente()
+    checa("no fim, o que faltava falar sai e o texto todo aparece",
+          voz.falas == ["Oi!", "Tudo"] and escrito(g) == "Oi! Tudo", (voz.falas, escrito(g)))
+
+    print("-- F7. no celular: a lista sai depois das frases, sem repetir --")
+    g = Gravador()
+    _, ciclo, _, _, agente, _ = montar(tmp, g)
+    voz = VozQueAnota(trecho=True)
+    ciclo.voz, ciclo._corpo = voz, 7
+    for x in [Saida("parcial", "Tem três:\n- a\n- b", titulo="1"),
+              Saida("frase", "Tem três:", titulo="1", ate=10), Saida("frase", titulo="1"),
+              Saida("fim", "Tem três: A. B.", janela="Tem três:\n- a\n- b", resto="A. B.")]:
+        agente.saidas.put(x)
+    ciclo.atender_agente()
+    vozes = [e for e in g.eventos if e["ev"] == "voz"]
+    checa("a voz falou a frase e depois só o resto", voz.falas == ["Tem três:", "A. B."], voz.falas)
+    checa("os dois vão para o celular, cada um com o seu fim",
+          [bool(v.get("fim")) for v in vozes] == [False, True, False, True]
+          and all(v["para"] == 7 for v in vozes), vozes)
+    disse = [e["texto"] for e in g.eventos if e["ev"] == "jarvis_disse"]
+    checa("o texto inteiro vai junto", disse == ["Tem três: A. B."], disse)
+
+    print("-- F8. 'para' no meio: a fala em fluxo corta --")
+    g = Gravador()
+    _, ciclo, _, _, agente, _ = montar(tmp, g)
+    voz = VozQueAnota()
+    voz.trava.clear()
+    ciclo.voz, ciclo.portao, ciclo.guarda_s = voz, PortaoContado(), 0.0
+    for x in [Saida("parcial", "Um. Dois. ", titulo="1"), Saida("frase", "Um.", titulo="1", ate=3),
+              Saida("frase", "Dois.", titulo="1", ate=8), Saida("fim", interrompido=True)]:
+        agente.saidas.put(x)
+    threading.Timer(0.2, voz.trava.set).start()
+    ciclo.atender_agente()
+    checa("a frase seguinte nem é gerada, e ele diz que parou",
+          "Dois." not in voz.falas and voz.falas[-1:] == [ciclo.persona_cfg.parei], voz.falas)
+
+
 def main() -> int:
     tmp = Path(tempfile.mkdtemp(prefix="jarvis-ciclo-"))
     try:
         rodar(tmp)
         rodar_celular(tmp)
         rodar_personas(tmp)
+        rodar_fluxo(tmp)
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
     print(f"\n  {ok} passaram, {falhou} falharam")

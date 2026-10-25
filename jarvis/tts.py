@@ -278,6 +278,155 @@ def falar(
             stream.close()
 
 
+class Locutor:
+    """A fala em fluxo (25/10/2026): o texto chega aos pedaços, enquanto o
+    Claude ainda escreve, e cada pedaço sai assim que a voz fica pronta; o
+    próximo é gerado enquanto o anterior toca.
+
+    Duas threads: uma gera a voz; a outra toca no PC (`no_pc`) ou, para o
+    celular, só passa os trechos adiante (ele toca lá). Quem usa recolhe os
+    avisos na thread de áudio, com `avisos()`:
+
+        ("comecou", marca)   o pedaço com essa marca começou a soar
+        ("trecho", Trecho)   só fora do PC: o áudio para mandar ao celular
+        ("acabou", None)     tudo dito (ou cancelado): o locutor terminou
+    """
+
+    _FIM = object()
+    _SEM_MARCA = object()  # trecho do meio de um pedaço
+
+    def __init__(self, voz: Voz, *, no_pc: bool, dispositivo: int | None = None) -> None:
+        import queue
+        import threading
+
+        self.voz = voz
+        self.dispositivo = dispositivo
+        self.fechado = False
+        self.primeiro_som: float | None = None  # time.monotonic() do 1º som
+        self.duracao_s = 0.0
+        self._textos: queue.Queue = queue.Queue()
+        self._trechos: queue.Queue = queue.Queue()
+        self._avisos: queue.Queue = queue.Queue()
+        self._parar = threading.Event()
+        threading.Thread(target=self._gerar, args=(no_pc,), daemon=True, name="locutor-voz").start()
+        if no_pc:
+            threading.Thread(target=self._tocar, daemon=True, name="locutor-som").start()
+
+    def dizer(self, texto: str, marca=None) -> None:
+        """Enfileira um pedaço. Texto vazio não soa, mas o aviso "comecou" da
+        marca sai na vez dele (serve de marcador)."""
+        self._textos.put((texto, marca))
+
+    def fechar(self) -> None:
+        """Não vem mais nada: termina o que está na fila e acaba."""
+        self.fechado = True
+        self._textos.put(None)
+
+    def cancelar(self) -> None:
+        """Para já, no meio da frase."""
+        self._parar.set()
+        self.fechar()
+
+    @property
+    def cancelado(self) -> bool:
+        return self._parar.is_set()
+
+    def avisos(self) -> list[tuple]:
+        import queue
+
+        saida = []
+        while True:
+            try:
+                saida.append(self._avisos.get_nowait())
+            except queue.Empty:
+                return saida
+
+    def _gerar(self, no_pc: bool) -> None:
+        destino = self._trechos if no_pc else self._avisos
+        try:
+            while not self._parar.is_set():
+                item = self._textos.get()
+                if item is None:
+                    break
+                texto, marca = item
+                primeiro = True
+                try:
+                    for trecho in self.voz.sintetizar(texto) if texto.strip() else ():
+                        if self._parar.is_set():
+                            break
+                        if no_pc:
+                            self._trechos.put((trecho, marca if primeiro else self._SEM_MARCA))
+                        else:
+                            if primeiro:
+                                self._avisos.put(("comecou", marca))
+                                if self.primeiro_som is None:
+                                    self.primeiro_som = time.monotonic()
+                            self.duracao_s += len(trecho.pcm) / 2 / trecho.taxa
+                            self._avisos.put(("trecho", trecho))
+                        primeiro = False
+                except Exception as e:  # a voz caiu: o texto segue na tela, o resto também
+                    print(f"  locutor: a voz falhou ({e.__class__.__name__}: {e})", flush=True)
+                if primeiro:  # não soou nada: o marcador sai mesmo assim
+                    destino.put((None, marca) if no_pc else ("comecou", marca))
+        finally:
+            if no_pc:
+                self._trechos.put(self._FIM)
+            else:
+                self._avisos.put(("acabou", None))
+
+    def _tocar(self) -> None:
+        import numpy as np
+
+        from jarvis import ajustes
+        volume = ajustes.ler()["volume_voz"] / 100
+        stream: sd.RawOutputStream | None = None
+        taxa = 0
+        fim_do_som = 0.0  # quando o que já foi escrito na placa termina de soar
+        try:
+            while not self._parar.is_set():
+                item = self._trechos.get()
+                if item is self._FIM:
+                    break
+                trecho, marca = item
+                if marca is not self._SEM_MARCA:
+                    self._avisos.put(("comecou", marca))
+                if trecho is None:
+                    continue
+                if stream is None or trecho.taxa != taxa:
+                    # A voz reserva pode vir em outra taxa no meio da fala.
+                    if stream is not None:
+                        time.sleep(max(0.0, fim_do_som - time.monotonic()))
+                        stream.stop()
+                        stream.close()
+                    taxa = trecho.taxa
+                    stream = sd.RawOutputStream(samplerate=taxa, channels=trecho.canais,
+                                                dtype="int16", device=self.dispositivo)
+                    stream.start()
+                if self.primeiro_som is None:
+                    self.primeiro_som = time.monotonic()
+                pcm = trecho.pcm
+                if volume < 1:
+                    pcm = (np.frombuffer(pcm, dtype=np.int16) * volume).astype(np.int16).tobytes()
+                segundos = len(pcm) / 2 / trecho.canais / taxa
+                self.duracao_s += segundos
+                fim_do_som = max(time.monotonic(), fim_do_som) + segundos
+                # Em fatias de 0,1 s: cancelar para no meio da frase.
+                passo = int(taxa * 0.1) * 2 * trecho.canais
+                for i in range(0, len(pcm), passo):
+                    if self._parar.is_set():
+                        break
+                    stream.write(pcm[i:i + passo])
+            if stream is not None and not self._parar.is_set():
+                # O write volta antes de a placa terminar: espera o fim, para
+                # não cortar a última sílaba nem reabrir o microfone cedo.
+                time.sleep(max(0.0, fim_do_som - time.monotonic()))
+        finally:
+            if stream is not None:
+                stream.abort() if self._parar.is_set() else stream.stop()
+                stream.close()
+            self._avisos.put(("acabou", None))
+
+
 class VozF5(Voz):
     """A voz do JARVIS dublado (out/2026): F5-TTS treinado com 93 falas do
     filme, rodando no `servidor_voz.py` (outra venv, com PyTorch).

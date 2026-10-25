@@ -279,6 +279,16 @@ class Ciclo:
         self._corpo: int | None = None
         # O corpo está no mudo (o botão do app): a resposta vai só em texto.
         self._mudo = False
+        # A fala em fluxo (25/10/2026): o locutor fala frase por frase enquanto
+        # o Claude escreve, e o texto de cada bloco fica segurado até a voz da
+        # frase começar (antes o texto chegava segundos antes da voz). Por
+        # bloco: [o que chegou, até onde já apareceu, segurando].
+        self._locutor: tts.Locutor | None = None
+        self._locutor_corpo: int | None = None
+        self._escrita: dict[int, list] = {}
+        # Do pedido atual: quando chegou a 1ª frase e quando ela soou.
+        self._primeira_frase: float | None = None
+        self._primeiro_som: float | None = None
         # Manda um erro só para quem pediu (a ponte põe aqui; ex.: "nova" no
         # meio de uma tarefa).
         self.avisar_cliente = lambda _id, _motivo: None
@@ -403,18 +413,31 @@ class Ciclo:
 
     def _falar(
         self, texto: str, *, acao: str | None = None, perguntando: bool = False,
-        opcoes: list[str] | None = None,
+        opcoes: list[str] | None = None, mostrar: str | None = None,
     ) -> tts.TemposDaFala:
         """Fala com o portão anti-eco fechado.
 
         Sem isto o microfone pega a própria voz do Jarvis: o VAD dispara e ele
         se responde, e — pior neste etapa — o wake word pode se ouvir e acordar
         de novo em laço.
+
+        `mostrar` é o texto da janela quando não é o falado: o bloco inteiro,
+        quando só falta dizer o resto dele (o começo já foi em frases).
         """
+        # Uma fala de cada vez, na ordem: a que está em fluxo termina antes.
+        self._esperar_locutor()
+        mostrar = texto if mostrar is None else mostrar
         # As opções da pergunta vão junto: a janela mostra como botões.
         extra = {"opcoes": list(opcoes)} if perguntando and opcoes else {}
+        if not texto.strip() and mostrar:
+            # Tudo já foi falado em frases: falta só o texto inteiro na janela.
+            self.emissor.emitir("jarvis_disse", texto=mostrar, acao=acao,
+                                perguntando=perguntando, **extra)
+            return tts.TemposDaFala(primeiro_audio_s=0.0, sintese_total_s=0.0,
+                                    reproducao_s=0.0, duracao_audio_s=0.0)
         if self._corpo is not None:
-            return self._falar_no_corpo(texto, acao=acao, perguntando=perguntando, extra=extra)
+            return self._falar_no_corpo(texto, acao=acao, perguntando=perguntando, extra=extra,
+                                        mostrar=mostrar)
         self.portao.fechar_portao()
 
         def ao_comecar() -> None:
@@ -422,7 +445,7 @@ class Ciclo:
             # na janela uns 2 s antes do som (o tempo de gerar a voz).
             self._mudar_estado("falando")
             self.emissor.emitir(
-                "jarvis_disse", texto=texto, acao=acao, perguntando=perguntando, **extra
+                "jarvis_disse", texto=mostrar, acao=acao, perguntando=perguntando, **extra
             )
 
         try:
@@ -435,13 +458,13 @@ class Ciclo:
             self.vad.reiniciar()
 
     def _falar_no_corpo(
-        self, texto: str, *, acao: str | None, perguntando: bool, extra: dict
+        self, texto: str, *, acao: str | None, perguntando: bool, extra: dict, mostrar: str
     ) -> tts.TemposDaFala:
         """A voz vai para o celular, pedaço por pedaço, pelos eventos "voz"
         da ponte. Sem portão: o microfone do PC não ouve o celular. No mudo,
         só o texto: a voz nem é gerada."""
         if self._mudo:
-            self.emissor.emitir("jarvis_disse", texto=texto, acao=acao, perguntando=perguntando,
+            self.emissor.emitir("jarvis_disse", texto=mostrar, acao=acao, perguntando=perguntando,
                                 **extra)
             return tts.TemposDaFala(primeiro_audio_s=0.0, sintese_total_s=0.0,
                                     reproducao_s=0.0, duracao_audio_s=0.0)
@@ -453,19 +476,119 @@ class Ciclo:
                 if primeiro is None:
                     primeiro = time.monotonic() - inicio
                     self._mudar_estado("falando")
-                    self.emissor.emitir("jarvis_disse", texto=texto, acao=acao,
+                    self.emissor.emitir("jarvis_disse", texto=mostrar, acao=acao,
                                         perguntando=perguntando, **extra)
                 self.emissor.emitir("voz", para=self._corpo, taxa=trecho.taxa,
                                     pcm=base64.b64encode(trecho.pcm).decode("ascii"))
                 duracao += len(trecho.pcm) / 2 / trecho.taxa
         finally:
             if primeiro is None:  # a voz falhou: o texto chega mesmo assim
-                self.emissor.emitir("jarvis_disse", texto=texto, acao=acao,
+                self.emissor.emitir("jarvis_disse", texto=mostrar, acao=acao,
                                     perguntando=perguntando, **extra)
             self.emissor.emitir("voz", para=self._corpo, fim=True)
         total = time.monotonic() - inicio
         return tts.TemposDaFala(primeiro_audio_s=primeiro or 0.0, sintese_total_s=total,
                                 reproducao_s=0.0, duracao_audio_s=duracao)
+
+    # -- a fala em fluxo: frase por frase, enquanto o Claude escreve -------
+
+    @property
+    def em_fluxo(self) -> bool:
+        return self._locutor is not None
+
+    def _com_voz(self) -> bool:
+        return not (self._corpo is not None and self._mudo)
+
+    def _escrever(self, bloco: int, delta: str) -> None:
+        """O texto enquanto ele escreve. Com voz, fica segurado e aparece frase
+        a frase, quando a voz de cada uma começa."""
+        e = self._escrita.setdefault(bloco, ["", 0, self._com_voz()])
+        e[0] += delta
+        if not e[2]:
+            self._liberar(bloco, len(e[0]))
+
+    def _liberar(self, bloco: int, ate: int) -> None:
+        e = self._escrita.get(bloco)
+        if e is not None and ate > e[1]:
+            self.emissor.emitir("escrevendo", bloco=bloco, delta=e[0][e[1]:ate])
+            e[1] = ate
+
+    def _soltar(self, bloco: int) -> None:
+        """O bloco não fica mais segurado: o que chegou aparece, e o que vier, na hora."""
+        e = self._escrita.get(bloco)
+        if e is not None:
+            e[2] = False
+            self._liberar(bloco, len(e[0]))
+
+    def _frase(self, s: Saida) -> None:
+        bloco = int(s.titulo or 0)
+        if not s.texto:
+            # Acabaram as frases do bloco: o resto do texto (lista, código)
+            # aparece quando a última frase começar a soar.
+            if self._locutor is not None and not self._locutor.fechado:
+                self._locutor.dizer("", (bloco, None))
+                self._locutor.fechar()
+            else:
+                self._soltar(bloco)
+            return
+        if not self._com_voz():
+            return
+        if self._locutor is not None and self._locutor.fechado:
+            self._esperar_locutor()  # o bloco anterior ainda falando: na ordem
+        if self._locutor is None:
+            self._acordar_se_dormindo()
+            if self._primeira_frase is None:
+                self._primeira_frase = time.monotonic()
+            self._locutor_corpo = self._corpo
+            if self._corpo is None:
+                self.portao.fechar_portao()
+            self._locutor = tts.Locutor(self.voz, no_pc=self._corpo is None,
+                                        dispositivo=self.dispositivo_saida)
+        self._locutor.dizer(s.texto, (bloco, s.ate))
+
+    def atender_locutor(self) -> None:
+        """Os avisos do locutor. Chamado a cada volta do laço (e enquanto
+        outra fala espera por ele)."""
+        loc = self._locutor
+        if loc is None:
+            return
+        for tipo, valor in loc.avisos():
+            if tipo == "comecou":
+                bloco, ate = valor
+                if ate is None:
+                    self._soltar(bloco)
+                else:
+                    self._liberar(bloco, ate)
+                if loc.primeiro_som is not None:
+                    if self._primeiro_som is None:
+                        self._primeiro_som = loc.primeiro_som
+                    self._mudar_estado("falando")
+            elif tipo == "trecho":
+                self.emissor.emitir("voz", para=self._locutor_corpo, taxa=valor.taxa,
+                                    pcm=base64.b64encode(valor.pcm).decode("ascii"))
+            elif tipo == "acabou":
+                self._locutor = None
+                if self._locutor_corpo is None:
+                    time.sleep(self.guarda_s)
+                    self.portao.abrir_portao()
+                    self.ww.reiniciar()
+                    self.vad.reiniciar()
+                else:
+                    self.emissor.emitir("voz", para=self._locutor_corpo, fim=True)
+                if loc.cancelado:  # parou no meio: o texto que faltava aparece
+                    for b in list(self._escrita):
+                        self._soltar(b)
+                if self.agente.ocupado:
+                    self._mudar_estado("pensando")
+
+    def _esperar_locutor(self) -> None:
+        """Termina a fala em fluxo antes de outra (uma de cada vez, na ordem)."""
+        if self._locutor is None:
+            return
+        self._locutor.fechar()
+        while self._locutor is not None:
+            self.atender_locutor()
+            time.sleep(0.01)
 
     # -- laço --------------------------------------------------------------
 
@@ -522,7 +645,7 @@ class Ciclo:
             # ou esperando resposta: a resposta dele tem que ser ouvida.
             if agora >= self.prazo and not self.vad.falando and \
                     not self.agente.ocupado and self._pergunta is None \
-                    and self.agente.saidas.empty():
+                    and self.agente.saidas.empty() and self._locutor is None:
                 self.dormir(f"{self.cfg.ciclo.janela_s:g} s sem fala")
             return
 
@@ -625,6 +748,7 @@ class Ciclo:
         self.registrador.registrar_estado("pedido", texto=texto, origem=origem,
                                           contexto=contexto or None)
         self._pedido = (time.monotonic(), segmento, transcricao)
+        self._primeira_frase = self._primeiro_som = None
         self.agente.pedir(texto, origem, contexto, voz)
 
     def _primeira_da_manha(self) -> bool:
@@ -659,12 +783,18 @@ class Ciclo:
     def _saida(self, s: Saida) -> None:
         if s.tipo == "parcial":
             # O texto enquanto ele escreve: só para a janela (fora do log e do
-            # histórico). A fala continua saindo só com o texto inteiro.
+            # histórico), no ritmo da voz (`_escrever`).
             if s.janela == "descartar":
+                if self._locutor is not None:
+                    self._locutor.cancelar()
+                self._escrita.clear()
                 self.emissor.emitir("escrevendo", fim=True, descartar=True)
             else:
                 self._escreveu = True
-                self.emissor.emitir("escrevendo", bloco=int(s.titulo or 0), delta=s.texto)
+                self._escrever(int(s.titulo or 0), s.texto)
+            return
+        if s.tipo == "frase":
+            self._frase(s)
             return
         if s.tipo == "atividade":
             self.acoes += 1
@@ -676,7 +806,7 @@ class Ciclo:
         elif s.tipo == "falar":
             self._acordar_se_dormindo()
             self.registrador.registrar_estado("fala_no_meio_da_tarefa", fala=s.texto)
-            self._falar(s.texto)
+            self._falar(s.texto if s.resto is None else s.resto, mostrar=s.texto)
             self._mudar_estado("pensando")
         elif s.tipo == "perguntar":
             self._acordar_se_dormindo()
@@ -730,6 +860,9 @@ class Ciclo:
 
     def _fim_da_escrita(self) -> None:
         """Fecha o texto em pedaços do turno, se houve (beta 0.5)."""
+        for bloco in list(self._escrita):
+            self._soltar(bloco)
+        self._escrita.clear()
         if getattr(self, "_escreveu", False):
             self._escreveu = False
             self.emissor.emitir("escrevendo", fim=True, descartar=False)
@@ -737,6 +870,12 @@ class Ciclo:
     def _fim(self, s: Saida) -> None:
         pedido, self._pedido = self._pedido, None
         claude_s = time.monotonic() - pedido[0] if pedido else 0.0
+        if s.interrompido and self._locutor is not None:
+            self._locutor.cancelar()
+        # O que já está sendo falado em frases termina antes do painel e do resto.
+        self._esperar_locutor()
+        primeira_frase, primeiro_som = self._primeira_frase, self._primeiro_som
+        self._primeira_frase = self._primeiro_som = None
         if s.janela:
             self.emissor.emitir("mostrar", titulo="", texto=s.janela)
         fala_texto = self.persona_cfg.parei if s.interrompido else s.texto
@@ -751,7 +890,13 @@ class Ciclo:
                 self._mudar_estado("ouvindo")
             return
         self._acordar_se_dormindo()
-        fala = self._falar(fala_texto)
+        falta = fala_texto if s.resto is None or s.interrompido else s.resto
+        fala = self._falar(falta, mostrar=fala_texto)
+        if primeiro_som is not None and primeira_frase is not None and pedido:
+            # Fala em fluxo: o Claude até a 1ª frase; a voz, dela até soar.
+            nucleo_s, tts_s = primeira_frase - pedido[0], primeiro_som - primeira_frase
+        else:
+            nucleo_s, tts_s = claude_s, fala.primeiro_audio_s
 
         # Tempos e .wav só existem para o que foi FALADO: texto digitado não
         # tem segmento, nem Whisper, nem espera de silêncio para medir.
@@ -761,8 +906,8 @@ class Ciclo:
                 duracao_segmento_s=segmento.duracao_total_s,
                 espera_silencio_s=segmento.espera_silencio_s,
                 stt_s=transcricao.segundos,
-                nucleo_s=claude_s,
-                tts_primeiro_s=fala.primeiro_audio_s,
+                nucleo_s=nucleo_s,
+                tts_primeiro_s=tts_s,
                 tts_total_s=fala.sintese_total_s,
                 reproducao_s=fala.reproducao_s,
             )
@@ -778,8 +923,8 @@ class Ciclo:
             self.emissor.emitir(
                 "tempos",
                 stt_s=transcricao.segundos,
-                nucleo_s=claude_s,
-                tts_s=fala.primeiro_audio_s,
+                nucleo_s=nucleo_s,
+                tts_s=tts_s,
                 latencia_s=tempos.latencia_percebida_s,
             )
         self.atualizar_aviso()
@@ -838,8 +983,9 @@ class Ciclo:
         """Fala o que chegou no WhatsApp e fica ouvindo, para o Léo poder
         responder sem dizer "hey Jarvis" ("responde que eu chego às oito")."""
         # Com uma pergunta do Claude no ar, o aviso espera: a próxima fala do
-        # Léo é a resposta dela, e um aviso no meio embaralharia as duas.
-        if self.avisos is None or self._pergunta is not None:
+        # Léo é a resposta dela, e um aviso no meio embaralharia as duas. Com
+        # uma resposta sendo falada em frases, também: não corta no meio.
+        if self.avisos is None or self._pergunta is not None or self._locutor is not None:
             return
         aviso = self.avisos.checar()
         if aviso is None:
@@ -1428,9 +1574,12 @@ def conversar(cfg: config.Config) -> int:
                 do_grupo = grupo.pegar() if grupo is not None else None
                 if do_grupo is not None:
                     ciclo.do_grupo(*do_grupo)
-                bloco = mic.ler_bloco()
+                # Com a voz em fluxo o portão fecha e não chega bloco: espera
+                # pouco, para os avisos do locutor (texto no ritmo da voz).
+                bloco = mic.ler_bloco(0.02 if ciclo.em_fluxo else 0.5)
                 if bloco is not None:
                     ciclo.passo(bloco)
+                ciclo.atender_locutor()
                 # O que o Claude devolveu (fala, pergunta, janela). Nunca no
                 # meio de você falando: espera a frase acabar.
                 if not ciclo.vad.falando:
