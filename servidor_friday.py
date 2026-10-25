@@ -16,6 +16,10 @@ em 24/10/2026:
   falta para subir uns 4 semitons.
 - **Sem estouro**: o F5 gera com pico de até 1,5; cada frase é baixada para
   pico 0,9 antes de virar int16 (antes, era cortada no teto).
+- **Gera e confere** (25/10/2026): o F5 tem sorte a cada geração; ~37% saíam
+  com palavra inventada no começo ("E prontinho...", vício dos recortes) ou
+  com palavra faltando, em qualquer configuração. O Whisper ouve cada frase
+  e, se não bater com o texto, gera de novo (até 3 vezes; fica a melhor).
 - **Dicionário de pronúncia**: o modelo lê letra por letra e erra a sílaba
   forte ("láfora" em vez de "lá fóra"). `pronuncia.txt` na pasta da voz,
   uma troca por linha: `lá fora = lá fóra`.
@@ -34,6 +38,8 @@ A voz e o modelo são PESSOAIS (ESCOPO §4): ficam fora do git, em
 from __future__ import annotations
 
 import argparse
+import ctypes
+import glob
 import hashlib
 import json
 import os
@@ -45,6 +51,7 @@ from pathlib import Path
 
 import numpy as np
 import parselmouth
+import torch
 import torchaudio
 from f5_tts.api import F5TTS
 from f5_tts.infer import utils_infer
@@ -175,6 +182,45 @@ def subir_pergunta(audio: np.ndarray, sr: int, alvo: float = 4.0, janela: float 
     return saida
 
 
+def carregar_whisper():
+    """O faster-whisper (ctranslate2) quer o CUDA 12 que a venv da voz não
+    tem: carrega as bibliotecas da venv do Jarvis antes (como o
+    jarvis/cuda_setup.py faz lá)."""
+    base = Path.home() / "Projetos/Jarvis/.venv/lib/python3.12/site-packages/nvidia"
+    for padrao in ("cublas/lib/libcublasLt.so.12", "cublas/lib/libcublas.so.12", "cudnn/lib/libcudnn*.so.9"):
+        for so in sorted(glob.glob(str(base / padrao))):
+            ctypes.CDLL(so, mode=ctypes.RTLD_GLOBAL)
+    from faster_whisper import WhisperModel
+    return WhisperModel("large-v3-turbo", device="cuda", compute_type="int8")
+
+
+_INTERJEICOES = {"hmm", "hum", "ahn", "aham", "uhum", "ué", "eita", "opa", "oba", "nossa"}
+_IGUAIS = {"para": "pra", "está": "tá", "estou": "tô", "hum": "hmm", "hm": "hmm", "um": "hmm"}
+
+
+def _palavras(texto: str) -> list[str]:
+    return [_IGUAIS.get(p, p) for p in re.findall(r"[^\W\d_]+", texto.lower())]
+
+
+def _bate(a: str, b: str) -> bool:
+    """Tolerante com o que o próprio Whisper erra (diminutivo, gênero):
+    mesma palavra ou mesmo começo de 4 letras."""
+    return a == b or (len(a) >= 4 and len(b) >= 4 and a[:4] == b[:4])
+
+
+def defeitos(alvo_texto: str, ouvido_texto: str) -> int:
+    """2 por palavra inventada no começo + 1 por palavra (de 3+ letras) que faltou."""
+    alvo, ouvido = _palavras(alvo_texto), _palavras(ouvido_texto)
+    if not alvo:
+        return 0
+    if not ouvido:
+        return 9
+    inventada = not any(_bate(ouvido[0], p) for p in alvo[:2])
+    # Interjeição ("hmm", "ah") o Whisper não escreve: não conta como faltando.
+    faltou = sum(1 for p in alvo if len(p) >= 3 and p not in _INTERJEICOES and not any(_bate(p, o) for o in ouvido))
+    return 2 * inventada + faltou
+
+
 # O que a Friday fala sempre igual: pronto desde a subida.
 FIXAS = ["oi, chefinho!", "tá bom!", "parei.", "pausei.", "voltando!", "próxima!", "anterior.", "prontinho!"]
 
@@ -194,6 +240,8 @@ def main() -> int:
     # sem o corte do "sonzinho" e com folga de duração (segundos a mais).
     p.add_argument("--sem-corte-inicio", action="store_true")
     p.add_argument("--folga", type=float, default=0.0)
+    # Gerar e conferir com o Whisper: quantas tentativas no máximo (1 = não confere).
+    p.add_argument("--tentativas", type=int, default=3)
     a = p.parse_args()
 
     inicio = time.monotonic()
@@ -205,6 +253,7 @@ def main() -> int:
     arq, ref_texto = utils_infer.preprocess_ref_audio_text(
         str(pasta / f"ref/{a.ref}.wav"), normalizar((pasta / f"ref/{a.ref}.txt").read_text()), show_info=lambda *_: None)
     ref = torchaudio.load(arq)
+    whisper = carregar_whisper() if a.tentativas > 1 else None
     ref_quadros = ref[0].shape[-1] // 256
     ref_bytes = len(ref_texto.encode("utf-8"))
 
@@ -222,7 +271,7 @@ def main() -> int:
         return audio[: min(len(audio), (voz[-1] + 1) * q + int(0.15 * sr))] if len(voz) else audio
 
     guardadas: OrderedDict[str, bytes] = OrderedDict()
-    receita = hashlib.sha1(f"friday|{a.ref}|{a.nfe}|{a.modelo}|{'cru' if a.cru else 'v2'}|{a.sem_corte_inicio}|{a.folga}".encode()).hexdigest()[:12]
+    receita = hashlib.sha1(f"friday|{a.ref}|{a.nfe}|{a.modelo}|{'cru' if a.cru else 'v2'}|{a.sem_corte_inicio}|{a.folga}|{a.tentativas}".encode()).hexdigest()[:12]
     disco = pasta / "cache" / receita
     disco.mkdir(parents=True, exist_ok=True)
 
@@ -235,9 +284,26 @@ def main() -> int:
         if arquivo.exists():
             guardadas[chave] = arquivo.read_bytes()
             return guardadas[chave], 24000
-        wav, taxa, _ = next(utils_infer.infer_batch_process(ref, ref_texto, [chave], tts.ema_model, tts.vocoder,
-                                                            nfe_step=a.nfe, fix_duration=duracao(chave), device="cuda"))
-        audio = np.asarray(wav, dtype=np.float32)
+        melhor = None
+        for tentativa in range(max(1, a.tentativas)):
+            torch.manual_seed(int.from_bytes(os.urandom(4), "little"))
+            wav, taxa, _ = next(utils_infer.infer_batch_process(ref, ref_texto, [chave], tts.ema_model, tts.vocoder,
+                                                                nfe_step=a.nfe, fix_duration=duracao(chave), device="cuda"))
+            bruto = np.asarray(wav, dtype=np.float32)
+            if whisper is None:
+                melhor = (0, bruto)
+                break
+            ouvir = tirar_pedacinho(bruto, taxa) if not (a.cru or a.sem_corte_inicio) else bruto
+            a16 = np.interp(np.arange(0, len(ouvir), taxa / 16000), np.arange(len(ouvir)), ouvir).astype(np.float32)
+            ouvido = " ".join(x.text for x in whisper.transcribe(a16, language="pt", beam_size=1,
+                                                                   condition_on_previous_text=False)[0])
+            nota = defeitos(frase, ouvido)
+            print(f"[{tentativa + 1}] {nota} defeito(s): {frase!r} -> {ouvido.strip()!r}", flush=True)
+            if melhor is None or nota < melhor[0]:
+                melhor = (nota, bruto)
+            if nota == 0:
+                break
+        audio = melhor[1]
         if a.cru:
             pcm = (np.clip(audio, -1, 1) * 32767).astype(np.int16).tobytes()
         else:
