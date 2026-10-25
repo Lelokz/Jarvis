@@ -28,7 +28,8 @@ Protocolo (socket unix, uma conexão por fala):
 A voz e o modelo são PESSOAIS (ESCOPO §4): ficam fora do git, em
 ~/.local/share/jarvis/voz-friday.
 
-    servidor_friday.py [--pasta ~/.local/share/jarvis/voz-friday] [--ref limpa1] [--nfe 12]
+    servidor_friday.py [--pasta ~/.local/share/jarvis/voz-friday] [--modelo friday-emilia-v1]
+                       [--ref limpa1] [--nfe 12]
 """
 from __future__ import annotations
 
@@ -181,6 +182,9 @@ FIXAS = ["oi, chefinho!", "tá bom!", "parei.", "pausei.", "voltando!", "próxim
 def main() -> int:
     p = argparse.ArgumentParser()
     p.add_argument("--pasta", default=str(Path.home() / ".local/share/jarvis/voz-friday"))
+    # Só as 2 últimas versões boas ficam guardadas (pedido do Léo, 25/10/2026):
+    # v1 = a aprovada (24/10), v2 = treinada com os recortes limpos (25/10).
+    p.add_argument("--modelo", default="friday-emilia-v1")
     p.add_argument("--ref", default="limpa1")
     p.add_argument("--socket", default=os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "jarvis-friday.sock"))
     p.add_argument("--nfe", type=int, default=12)
@@ -191,7 +195,7 @@ def main() -> int:
     inicio = time.monotonic()
     pasta = Path(a.pasta)
     carregar_pronuncia(pasta / "pronuncia.txt")
-    tts = F5TTS(model="F5TTS_Base", ckpt_file=str(pasta / "modelo/friday-emilia.safetensors"),
+    tts = F5TTS(model="F5TTS_Base", ckpt_file=str(pasta / f"modelo/{a.modelo}.safetensors"),
                 vocab_file=str(pasta / "modelo/vocab.txt"), device="cuda")
     # A referência é preparada uma vez só (antes, a cada frase).
     arq, ref_texto = utils_infer.preprocess_ref_audio_text(
@@ -199,7 +203,7 @@ def main() -> int:
     ref = torchaudio.load(arq)
 
     guardadas: OrderedDict[str, bytes] = OrderedDict()
-    receita = hashlib.sha1(f"friday|{a.ref}|{a.nfe}|{'cru' if a.cru else 'v2'}".encode()).hexdigest()[:12]
+    receita = hashlib.sha1(f"friday|{a.ref}|{a.nfe}|{a.modelo}|{'cru' if a.cru else 'v2'}".encode()).hexdigest()[:12]
     disco = pasta / "cache" / receita
     disco.mkdir(parents=True, exist_ok=True)
 
