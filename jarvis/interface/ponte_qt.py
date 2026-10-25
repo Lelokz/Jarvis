@@ -46,7 +46,7 @@ class PonteQt(QObject):
     anexoFalhou = Signal(str)              # não deu para copiar/mandar o anexo
     memoriaTexto = Signal(str)             # o CLAUDE.md inteiro, em markdown
     # A janela grande (protocolo v3).
-    cerebroMudou = Signal(str, str, str)   # modelo, esforço, persona
+    cerebroMudou = Signal(str, str, str, str)   # modelo, esforço, persona, cor da persona ("" = a dos Ajustes)
     conversaAtual = Signal(str, list, bool)  # id, falas, veio com as falas (troca)
     conversasRecebidas = Signal(list)      # a barra lateral
     conversaRecebida = Signal(str, list)   # uma conversa aberta só para ler
@@ -179,6 +179,11 @@ class PonteQt(QObject):
             pedido["esforco"] = esforco
         return self._pedir(pedido)
 
+    @Slot(str, result=bool)
+    def definirPersona(self, persona: str) -> bool:
+        """Quem responde: "jarvis" ou "friday" (o seletor da barra de escrever)."""
+        return self._pedir({"pedir": "cerebro", "persona": persona})
+
     @Slot(str, str, result=bool)
     def renomearConversa(self, sessao: str, titulo: str) -> bool:
         return self._pedir({"pedir": "renomear", "id": sessao, "titulo": titulo})
@@ -265,7 +270,7 @@ class PonteQt(QObject):
             self.memoriaTexto.emit(str(ev.get("texto") or ""))
         elif tipo == "cerebro":
             self.cerebroMudou.emit(str(ev.get("modelo") or ""), str(ev.get("esforco") or ""),
-                                   str(ev.get("persona") or "jarvis"))
+                                   str(ev.get("persona") or "jarvis"), str(ev.get("cor_persona") or ""))
         elif tipo == "conversa_atual":
             self.conversaAtual.emit(str(ev.get("id") or ""), list(ev.get("falas") or []),
                                     "falas" in ev)

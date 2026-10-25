@@ -56,7 +56,9 @@ Window {
 
     Tema {
         id: tema
-        persona: janela.ajustes && janela.ajustes.cor ? janela.ajustes.cor : "#4da3ff"
+        // A Friday tem a cor dela (rosa, do config); o Jarvis, a dos Ajustes.
+        persona: janela.persona === "friday" && janela.corPersona !== "" ? janela.corPersona
+                 : (janela.ajustes && janela.ajustes.cor ? janela.ajustes.cor : "#4da3ff")
     }
 
     // -- o estado da tela ---------------------------------------------------
@@ -71,6 +73,7 @@ Window {
     property string modelo: "auto"
     property string esforco: "medium"
     property string persona: "jarvis"
+    property string corPersona: ""
     property string textoPensando: "Pensando…"
     property real usoCinco: -1
     property real voltaCinco: 0
@@ -233,8 +236,9 @@ Window {
         function onAnexoFalhou(texto) { janela.avisar(texto) }
         function onAvisoMudou(tipo, voltaEm) { faixa.tipo = tipo; faixa.voltaEm = voltaEm }
         function onMemoriaTexto(texto) { memoria.texto = texto; memoria.carregando = false }
-        function onCerebroMudou(modelo, esforco, persona) {
+        function onCerebroMudou(modelo, esforco, persona, cor) {
             janela.modelo = modelo; janela.esforco = esforco; janela.persona = persona;
+            if (cor !== "") janela.corPersona = cor;
         }
         function onConversaAtual(sessao, falas, veioComFalas) {
             janela.conversaAtual = sessao;
@@ -655,6 +659,10 @@ Window {
                 onEscolherEsforco: function (v) {
                     janela.esforco = v;
                     if (typeof ponte !== "undefined") ponte.definirCerebro("", v);
+                }
+                onEscolherPersona: function (v) {
+                    janela.persona = v;
+                    if (typeof ponte !== "undefined") ponte.definirPersona(v);
                 }
 
                 function nomeDoModelo() {

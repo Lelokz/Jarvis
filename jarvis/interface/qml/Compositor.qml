@@ -22,6 +22,7 @@ Item {
     signal avisar(string texto)
     signal escolherModelo(string valor)
     signal escolherEsforco(string valor)
+    signal escolherPersona(string valor)
     signal parar()
 
     implicitHeight: coluna.height
@@ -60,8 +61,8 @@ Item {
     }
 
     readonly property var opcoesPersona: [
-        { valor: "jarvis", nome: "Jarvis", descricao: "O de sempre" },
-        { valor: "segunda", nome: "Segunda persona", descricao: "Em breve", habilitado: false },
+        { valor: "jarvis", nome: "Jarvis", descricao: "O mordomo de humor seco" },
+        { valor: "friday", nome: "Friday", descricao: "Carinhosa e animada" },
     ]
     readonly property var opcoesModelo: [
         { valor: "auto", nome: "Automático", descricao: "O Haiku atende e chama o Opus no pedido pesado" },
@@ -248,6 +249,7 @@ Item {
                     valor: raiz.persona
                     corDaBola: raiz.tema.persona
                     paraCima: raiz.menusParaCima
+                    onEscolhido: function (v) { raiz.escolherPersona(v) }
                 }
                 Seletor {
                     tema: raiz.tema
