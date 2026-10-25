@@ -433,6 +433,20 @@ class Servidor:
         elif tipo == "ouvir":
             self._pedidos.put(Pedido("ouvir", dados["arquivo"], cliente.id, cliente.quer_voz,
                                      tuple(dados["anexos"]), dados["mudo"]))
+        elif tipo in ("memorias", "ler_memoria", "salvar_memoria"):
+            # As Memórias (jarvis/memorias.py): arquivos de texto, respondidos
+            # aqui mesmo, sem passar pelo laço de áudio.
+            from jarvis import memorias
+            try:
+                if tipo == "memorias":
+                    resposta = {"ev": "memorias", "lista": memorias.listar()}
+                elif tipo == "ler_memoria":
+                    resposta = {"ev": "memoria_aberta", **memorias.ler(dados["id"])}
+                else:
+                    resposta = {"ev": "memoria_salva", **memorias.salvar(dados["id"], dados["texto"], dados["versao"])}
+            except (OSError, ValueError) as e:
+                resposta = {"ev": "erro", "motivo": f"memória: {e}"}
+            self._direto(cliente, resposta)
         elif tipo == "memoria":
             try:
                 conteudo = self.provedor_memoria() if self.provedor_memoria else {}

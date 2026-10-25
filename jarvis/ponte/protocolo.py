@@ -132,6 +132,14 @@ CLIENTES -> ASSISTENTE
              "" = o padrão do sistema) -> troca e manda "som" para todos
          {"pedir":"ajustes", "volume_voz":0-100, "notificar_escola":bool}
              (um ou os dois; sem nada, só pede) -> "ajustes" para todos
+    (as Memórias, 25/10/2026; janela e app)
+         {"pedir":"memorias"}             -> {"ev":"memorias", "lista":[{"id","titulo","tipo","atualizado"}]}
+         {"pedir":"ler_memoria", "id":"jarvis|recados|grupo:<id>|pessoa:<nome>"}
+             -> {"ev":"memoria_aberta", "id","titulo","texto","versao"}
+         {"pedir":"salvar_memoria", "id":"...", "texto":"...", "versao":"<a que abriu>"}
+             -> {"ev":"memoria_salva", "id","ok","conflito","texto","versao"}
+             (conflito: o Jarvis mudou o arquivo enquanto o Léo editava; nada
+             é sobrescrito, e vem o texto atual)
         A conversa de AGORA não pode ser apagada (erro): o Jarvis está nela.
         "nova" e "continuar" com o Jarvis no meio de uma tarefa voltam
         {"ev":"erro"} para quem pediu.
@@ -182,7 +190,8 @@ PUBLICOS = frozenset({"sessao", "estado", "nivel", "voce_disse", "jarvis_disse",
 ESTADOS = ("dormindo", "ouvindo", "escutando", "pensando", "falando")
 PEDIDOS = frozenset({"ola", "falar", "memoria", "ouvir",
                      "conversas", "abrir", "nova", "continuar", "cerebro", "parar",
-                     "renomear", "apagar", "som", "ajustes", "fixar"})
+                     "renomear", "apagar", "som", "ajustes", "fixar",
+                     "memorias", "ler_memoria", "salvar_memoria"})
 
 # Uma linha maior que isto sem quebra é um cliente com defeito, não um pedido.
 MAX_LINHA = 64 * 1024
@@ -227,8 +236,21 @@ def ler_pedido(linha: bytes) -> tuple[str, dict[str, Any]]:
             raise ErroDeProtocolo(f"texto com mais de {MAX_TEXTO} caracteres")
         return tipo, {"texto": texto, "anexos": _anexos(objeto), "mudo": _mudo(objeto)}
 
-    if tipo in ("memoria", "conversas", "nova", "parar"):
+    if tipo in ("memoria", "conversas", "nova", "parar", "memorias"):
         return tipo, {}
+
+    if tipo in ("ler_memoria", "salvar_memoria"):
+        ident = objeto.get("id")
+        if not isinstance(ident, str) or not re.fullmatch(r"(jarvis|recados|(grupo|pessoa):[\w.-]{1,80})", ident):
+            raise ErroDeProtocolo(f"'{tipo}' sem um id de memória válido")
+        if tipo == "ler_memoria":
+            return tipo, {"id": ident}
+        texto, versao = objeto.get("texto"), objeto.get("versao")
+        if not isinstance(texto, str) or len(texto) > 200_000:
+            raise ErroDeProtocolo("'salvar_memoria' sem texto (ou grande demais)")
+        if not isinstance(versao, str) or len(versao) > 64:
+            raise ErroDeProtocolo("'salvar_memoria' sem a versão que foi aberta")
+        return tipo, {"id": ident, "texto": texto, "versao": versao}
 
     if tipo in ("abrir", "continuar", "renomear", "apagar", "fixar"):
         sessao = objeto.get("id")

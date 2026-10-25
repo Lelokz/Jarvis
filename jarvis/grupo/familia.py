@@ -38,7 +38,12 @@ from jarvis.nucleo.atalhos import normalizar
 
 PREFIXO = "🤖 Jarvis:"
 PERSONA = Path(__file__).with_name("persona_grupo.md")
-CASA = Path.home() / ".local/share/jarvis/grupo"  # a pasta só dele: anotações, listas, lembretes
+# A pasta de cada grupo (memorias/grupos/<id>/): só o Jarvis daquele grupo
+# entra nela. A memória do grupo (anotações, lista, recados) é o memoria.md,
+# que o Léo vê e edita na aba "Memórias" da janela e do app.
+from jarvis import memorias  # noqa: E402
+CASA = memorias.GRUPOS  # trocado por grupo em _atender (pasta_do_grupo)
+MEMORIA = "memoria.md"
 NOVIDADES = Path.home() / ".local/share/jarvis/novidades.jsonl"
 # O limite do Claude é do dono: a família não pode gastar tudo.
 MAX_POR_HORA = 30
@@ -177,8 +182,9 @@ class GrupoFamilia(threading.Thread):
         if not jid:
             self._visto = dt.datetime.now()
             return
-        # O relógio interno: recados que ele deixou para si mesmo (jarvis/nucleo/recados.py).
-        venceram = recados.vencidos(CASA / recados.NOME)
+        # O relógio interno: recados que ele deixou para si mesmo (jarvis/nucleo/recados.py),
+        # dentro da memória do grupo.
+        venceram = recados.vencidos(memorias.pasta_do_grupo(jid) / MEMORIA)
         if venceram:
             asyncio.run(self._atender(jid, [], recados_da_hora=venceram))
         novas = [m for m in self._mensagens(jid, 20) if m[2] > self._visto]
@@ -233,8 +239,10 @@ class GrupoFamilia(threading.Thread):
 
         servidor = create_sdk_mcp_server("grupo", tools=[responder, nao_era_comigo, pedir_ao_dono])
 
+        casa = memorias.pasta_do_grupo(jid)
+
         async def trancar(entrada, _id, _ctx) -> dict:
-            motivo = trava_do_grupo(str(entrada.get("tool_name") or ""), entrada.get("tool_input") or {})
+            motivo = trava_do_grupo(str(entrada.get("tool_name") or ""), entrada.get("tool_input") or {}, casa)
             if motivo is None:
                 return {}
             return {"hookSpecificOutput": {
@@ -242,11 +250,10 @@ class GrupoFamilia(threading.Thread):
                 "permissionDecisionReason": f"No grupo da família você não pode {motivo}. Se a pessoa "
                                             "precisa disso, use pedir_ao_dono; senão, resolva de outro jeito."}}
 
-        casa = CASA
         casa.mkdir(parents=True, exist_ok=True)
         nome_grupo = self.whatsapp.nome_de(jid) if hasattr(self.whatsapp, "nome_de") else "grupo"
         instrucoes = PERSONA.read_text(encoding="utf-8").replace("{usuario}", self._dono()) \
-            .replace("{grupo}", nome_grupo).replace("{casa}", str(casa)).replace("{recados}", recados.COMO_USAR)
+            .replace("{grupo}", nome_grupo).replace("{casa}", str(casa)).replace("{recados}", recados.como_usar(MEMORIA))
         opcoes = ClaudeAgentOptions(
             cli_path=self.binario, cwd=str(casa), model=self.modelo,
             setting_sources=[],  # nada do dono: nem memória, nem MCPs, nem preferências

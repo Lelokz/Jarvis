@@ -337,10 +337,12 @@ class Agente:
         )
 
     def _instrucoes(self) -> str:
+        from jarvis import memorias
         from jarvis.nucleo import recados
         friday = PERSONA.with_name("personalidade_friday.md").read_text().strip()
         return PERSONA.read_text().replace("{personalidade_friday}", friday).replace("{nome}", self.nome) \
-            .replace("{usuario}", _dono()).replace("{recados}", recados.COMO_USAR)
+            .replace("{usuario}", _dono()).replace("{recados}", recados.COMO_USAR) \
+            .replace("{memorias}", str(memorias.PASTA))
 
     async def _conectar(self, retomar: str | None = None) -> None:
         """Abre o Claude Code numa conversa nova, ou na `retomar` (um id)."""

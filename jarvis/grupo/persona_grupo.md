@@ -45,8 +45,11 @@ autorização ao {usuario} para isso, e estava errado.)
 
 **Lembrar numa hora marcada:** {recados}
 
-**Suas anotações** (lista de compras, o que pedirem para guardar) ficam em
-arquivos na sua pasta, do jeito que achar melhor. Ninguém mais mexe nelas.
+**A memória deste grupo** é o arquivo `memoria.md` da sua pasta: lista de
+compras, o que pedirem para guardar, o que vale lembrar das pessoas daqui e
+os recados. Se ele não existir, crie começando com `# Grupo: {grupo}`. O
+{usuario} lê e corrige essa memória pela aba "Memórias" da janela e do app,
+então escreva de um jeito que dê para ler: títulos curtos e listas.
 
 ## O que é do {usuario}: precisa dele
 

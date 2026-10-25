@@ -27,13 +27,18 @@ NOME = "recados.md"
 _LINHA = re.compile(r"^\s*[-*]?\s*(\d{4}-\d{2}-\d{2})[ T](\d{1,2}):(\d{2})\s*[|—-]\s*(.+?)\s*$")
 _trava = threading.Lock()
 
-COMO_USAR = (
-    "Para fazer algo numa hora marcada (lembrar alguém, avisar, conferir algo depois), "
-    f"anote um recado no arquivo `{NOME}` da sua pasta, uma linha por recado, no formato "
-    "`- AAAA-MM-DD HH:MM | o que fazer` (ex.: `- 2026-10-26 07:30 | lembrar a Karyn do CIEE no grupo`). "
-    "Na hora, o recado volta para você como uma mensagem e você faz o que anotou. "
-    "Para desmarcar, apague a linha."
-)
+
+def como_usar(arquivo: str = NOME) -> str:
+    """A explicação para as instruções do Claude (o arquivo muda: no grupo, os
+    recados ficam dentro da memória do grupo)."""
+    return ("Para fazer algo numa hora marcada (lembrar alguém, avisar, conferir algo depois), "
+            f"anote um recado no arquivo `{arquivo}` da sua pasta, uma linha por recado, no formato "
+            "`- AAAA-MM-DD HH:MM | o que fazer` (ex.: `- 2026-10-26 07:30 | lembrar a Karyn do CIEE no grupo`). "
+            "Na hora, o recado volta para você como uma mensagem e você faz o que anotou. "
+            "Para desmarcar, apague a linha.")
+
+
+COMO_USAR = como_usar()
 
 
 def vencidos(arquivo: Path, agora: dt.datetime | None = None) -> list[str]:
