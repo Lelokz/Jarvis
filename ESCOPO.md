@@ -296,7 +296,12 @@ aceito pelo Léo (o padrasto dele usa algo assim há meses).
   - o banco abre em modo WAL: sem isso, ele travava a leitura do Jarvis
     enquanto a ponte gravava (achado na sincronização do histórico);
   - o `whatsmeow` foi atualizado (o de 2025 era velho), e as chamadas
-    ganharam o `context` que a versão nova pede.
+    ganharam o `context` que a versão nova pede;
+  - o download de mídia (`/api/download`) dava 403 em tudo: a ponte tirava
+    os parâmetros (`?ccb=...&oh=...&oe=...`) do caminho da mídia, e o
+    `whatsmeow` novo monta o endereço como servidor + caminho + `&hash=...`.
+    Agora o caminho vai com eles (25/10/2026). O binário anterior ficou em
+    `whatsapp-bridge.antes`.
 - **Sobe e desce com o Jarvis** (`jarvis.sh`), com `umask 077`: o banco e o
   log (`~/.local/share/jarvis/whatsapp-bridge.log`) só o Léo lê. Conectado por
   QR code em out/2026; a conexão fica salva (uma fonte diz que pode pedir QR
