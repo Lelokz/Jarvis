@@ -190,6 +190,10 @@ def main() -> int:
     p.add_argument("--nfe", type=int, default=12)
     # Sem o acabamento (corte, pergunta, volume): só para comparar de ouvido.
     p.add_argument("--cru", action="store_true")
+    # Testes de 25/10 (o Léo ouviu palavras cortadas no começo e no fim):
+    # sem o corte do "sonzinho" e com folga de duração (segundos a mais).
+    p.add_argument("--sem-corte-inicio", action="store_true")
+    p.add_argument("--folga", type=float, default=0.0)
     a = p.parse_args()
 
     inicio = time.monotonic()
@@ -201,9 +205,24 @@ def main() -> int:
     arq, ref_texto = utils_infer.preprocess_ref_audio_text(
         str(pasta / f"ref/{a.ref}.wav"), normalizar((pasta / f"ref/{a.ref}.txt").read_text()), show_info=lambda *_: None)
     ref = torchaudio.load(arq)
+    ref_quadros = ref[0].shape[-1] // 256
+    ref_bytes = len(ref_texto.encode("utf-8"))
+
+    def duracao(chave: str) -> float | None:
+        """A conta do F5 (referência + texto proporcional) mais a folga fixa."""
+        if a.folga <= 0:
+            return None
+        gen = len(chave.encode("utf-8"))
+        return (ref_quadros + int(ref_quadros / ref_bytes * gen) + int(a.folga * 24000 / 256)) * 256 / 24000
+
+    def tirar_silencio_do_fim(audio: np.ndarray, sr: int) -> np.ndarray:
+        q = int(0.01 * sr)
+        env = np.array([np.sqrt(np.mean(audio[i:i + q] ** 2)) for i in range(0, len(audio) - q, q)])
+        voz = np.where(env > env.max() * 0.03)[0]
+        return audio[: min(len(audio), (voz[-1] + 1) * q + int(0.15 * sr))] if len(voz) else audio
 
     guardadas: OrderedDict[str, bytes] = OrderedDict()
-    receita = hashlib.sha1(f"friday|{a.ref}|{a.nfe}|{a.modelo}|{'cru' if a.cru else 'v2'}".encode()).hexdigest()[:12]
+    receita = hashlib.sha1(f"friday|{a.ref}|{a.nfe}|{a.modelo}|{'cru' if a.cru else 'v2'}|{a.sem_corte_inicio}|{a.folga}".encode()).hexdigest()[:12]
     disco = pasta / "cache" / receita
     disco.mkdir(parents=True, exist_ok=True)
 
@@ -217,12 +236,15 @@ def main() -> int:
             guardadas[chave] = arquivo.read_bytes()
             return guardadas[chave], 24000
         wav, taxa, _ = next(utils_infer.infer_batch_process(ref, ref_texto, [chave], tts.ema_model, tts.vocoder,
-                                                            nfe_step=a.nfe, device="cuda"))
+                                                            nfe_step=a.nfe, fix_duration=duracao(chave), device="cuda"))
         audio = np.asarray(wav, dtype=np.float32)
         if a.cru:
             pcm = (np.clip(audio, -1, 1) * 32767).astype(np.int16).tobytes()
         else:
-            audio = tirar_pedacinho(audio, taxa)
+            if not a.sem_corte_inicio:
+                audio = tirar_pedacinho(audio, taxa)
+            if a.folga > 0:
+                audio = tirar_silencio_do_fim(audio, taxa)
             if frase.strip().endswith("?") and not ABERTA.search(frase):
                 audio = subir_pergunta(audio, taxa)
             audio = audio * (0.9 / max(1e-4, float(np.abs(audio).max())))
