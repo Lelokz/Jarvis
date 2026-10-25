@@ -34,7 +34,7 @@ PRE_ROLL_S = 2.0
 POS_ROLL_S = 1.0
 
 
-def carregar_modelo(caminho_modelo: Path, dir_modelos: Path):
+def carregar_modelo(caminho_modelo: Path | list[Path], dir_modelos: Path):
     """Instancia o openWakeWord forçando ONNX.
 
     `inference_framework="onnx"` não é preferência: o wheel do tflite-runtime
@@ -44,8 +44,11 @@ def carregar_modelo(caminho_modelo: Path, dir_modelos: Path):
     """
     from openwakeword.model import Model
 
+    caminhos = caminho_modelo if isinstance(caminho_modelo, list) else [caminho_modelo]
     return Model(
-        wakeword_models=[str(caminho_modelo)],
+        # Vários modelos no mesmo Model dividem o mel e o embedding (a parte
+        # cara): "hey Friday" ao lado do "hey Jarvis" quase não custa nada.
+        wakeword_models=[str(c) for c in caminhos],
         melspec_model_path=str(dir_modelos / "melspectrogram.onnx"),
         embedding_model_path=str(dir_modelos / "embedding_model.onnx"),
         inference_framework="onnx",
@@ -81,7 +84,11 @@ class Detector:
         *,
         amostras_por_bloco: int,
         taxa: int = 16000,
+        extras: dict[str, float] | None = None,
     ) -> None:
+        """`extras`: outros modelos {nome do arquivo: limiar}, cada um com o
+        seu limiar ("hey Friday", 25/10/2026). `ultimo_rotulo` diz qual
+        disparou."""
         self.cfg = cfg
         self.taxa = taxa
         self.amostras_por_bloco = amostras_por_bloco
@@ -98,10 +105,19 @@ class Detector:
                 f"target_directory='{dir_modelos.name}')\""
             )
 
+        caminhos = [caminho]
+        self._limiares = {cfg.modelo: cfg.limiar}
+        for nome, limiar in (extras or {}).items():
+            extra = dir_modelos / f"{nome}.onnx"
+            if extra.is_file():  # sem o arquivo, segue só com o principal
+                caminhos.append(extra)
+                self._limiares[nome] = limiar
+
         inicio = time.monotonic()
-        self._oww = carregar_modelo(caminho, dir_modelos)
+        self._oww = carregar_modelo(caminhos, dir_modelos)
         self.segundos_de_carga = time.monotonic() - inicio
-        self._rotulo = next(iter(self._oww.models.keys()))
+        self._rotulo = cfg.modelo if cfg.modelo in self._oww.models else next(iter(self._oww.models.keys()))
+        self.ultimo_rotulo = self._rotulo
 
         # Acumulador de bytes: o microfone entrega 512 amostras, o modelo quer
         # 1280. Ver o docstring do módulo.
@@ -131,7 +147,7 @@ class Detector:
 
     @property
     def descricao(self) -> str:
-        return f"{self.cfg.modelo} · onnx · limiar {self.cfg.limiar:g}"
+        return " + ".join(f"{m} (limiar {l:g})" for m, l in self._limiares.items()) + " · onnx"
 
     def reiniciar(self) -> None:
         """Zera o estado do modelo e os buffers.
@@ -173,18 +189,20 @@ class Detector:
                 self._sobra[:BYTES_POR_FRAME],
                 self._sobra[BYTES_POR_FRAME:],
             )
-            score = float(
-                self._oww.predict(np.frombuffer(frame, dtype=np.int16))[self._rotulo]
-            )
+            notas = self._oww.predict(np.frombuffer(frame, dtype=np.int16))
+            # A palavra que mais passou do próprio limiar é a que "falou".
+            rotulo = max(self._limiares, key=lambda r: float(notas.get(r, 0.0)) - self._limiares[r])
+            score = float(notas.get(rotulo, 0.0))
             self.ultimo_score = score
-            if self._avaliar(score):
+            if self._avaliar(score, self._limiares[rotulo]):
+                self.ultimo_rotulo = rotulo
                 disparou = True
 
         return disparou, self._coletar(bloco)
 
     # ----------------------------------------------------------------------
 
-    def _avaliar(self, score: float) -> bool:
+    def _avaliar(self, score: float, limiar: float | None = None) -> bool:
         """Atualiza o grupo corrente e diz se este frame é um disparo."""
         agora = time.monotonic()
 
@@ -202,7 +220,7 @@ class Detector:
         # Refratário: um "hey Jarvis" pontua alto por vários frames seguidos e
         # não pode virar vários acordares.
         if (
-            score >= self.cfg.limiar
+            score >= (self.cfg.limiar if limiar is None else limiar)
             and agora - self._ultimo_disparo >= self.cfg.refratario_s
         ):
             self._ultimo_disparo = agora

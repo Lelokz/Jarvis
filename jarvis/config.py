@@ -88,6 +88,17 @@ class WakeWord:
 
 
 @dataclass(frozen=True)
+class Friday:
+    """A segunda persona (25/10/2026): "Hey Friday" chama ela, "hey Jarvis"
+    chama ele. As frases fixas dela ficam em [persona_friday]."""
+    ligada: bool
+    modelo_wake: str
+    limiar: float
+    socket: str  # o servidor_friday.py (voz da Emilia, F5)
+    cor: str
+
+
+@dataclass(frozen=True)
 class Ciclo:
     janela_s: float
 
@@ -149,6 +160,8 @@ class Config:
     whatsapp: "Whatsapp"
     agente: Agente
     raiz: Path
+    friday: Friday | None = None
+    persona_friday: Persona | None = None
 
     @property
     def dir_vozes(self) -> Path:
@@ -198,6 +211,10 @@ def _montar(nome: str, classe: type, bruto: dict[str, Any]) -> Any:
     return classe(**bruto)
 
 
+# Seções que podem faltar (um config.toml antigo continua valendo).
+_OPCIONAIS = {"friday": Friday, "persona_friday": Persona}
+
+
 def carregar(caminho: Path | None = None) -> Config:
     caminho = caminho or (RAIZ / "config.toml")
     if not caminho.is_file():
@@ -217,4 +234,7 @@ def carregar(caminho: Path | None = None) -> Config:
         nome: _montar(nome, classe, bruto[nome])
         for nome, classe in _SECOES.items()
     }
+    for nome, classe in _OPCIONAIS.items():
+        if nome in bruto:
+            secoes[nome] = _montar(nome, classe, bruto[nome])
     return Config(raiz=caminho.parent, **secoes)

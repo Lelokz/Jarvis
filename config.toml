@@ -27,6 +27,34 @@ whats_chegou_sem_texto = "Mensagem de {nome} no WhatsApp."
 whats_varias = "{nome} mandou {n} mensagens. A última: {texto}"
 whats_oferta = "Quer responder?"
 
+[friday]
+# A segunda persona (25/10/2026): "Hey Friday" chama ela, "hey Jarvis" chama
+# ele. As duas dividem a conversa, a memória e as regras; muda o jeito, a voz
+# e a cor. Personalidade em jarvis/agente/personalidade_friday.md.
+ligada = true
+# Modelo pronto da comunidade (fwartner/home-assistant-wakewords-collection).
+# Medido: 5/5 com a voz do Léo (notas 0,82–0,87), zero alarme falso em 2,2 h
+# de anime e nunca dispara com "hey Jarvis".
+modelo_wake = "hey_friday_comunidade"
+limiar = 0.50
+# A voz da Emilia (servidor_friday.py, na venv da voz).
+socket = "jarvis-friday.sock"
+cor = "#ff6fb5"
+
+[persona_friday]
+nome = "Friday"
+saudacao = "Oi, chefinho!"
+indo_dormir = "Tá bom!"
+parei = "Parei!"
+limite_acabou = "Ai, meu limite do Claude acabou. Volta {hora}, daqui a {falta}."
+limite_acabou_sem_hora = "Ai, meu limite do Claude acabou. Ainda não sei quando volta."
+sem_internet = "Tô sem internet! Pausar, voltar e o volume ainda funcionam; o resto espera a internet voltar."
+cerebro_falhou = "Ai, não consegui falar com o Claude agora. Tenta de novo?"
+whats_chegou = "{nome} mandou: {texto}"
+whats_chegou_sem_texto = "Mensagem de {nome} no WhatsApp!"
+whats_varias = "{nome} mandou {n} mensagens! A última: {texto}"
+whats_oferta = "Quer responder?"
+
 [midia]
 # mpv toca só o áudio (sem janela); o navegador entra quando você diz
 # "no YouTube". Medido: o yt-dlp do apt resolve a busca mas falha ao extrair
