@@ -173,10 +173,6 @@ class PonteQt(QObject):
     def mudarNome(self, nome: str) -> bool:
         return self._pedir({"pedir": "ajustes", "nome": nome.strip()[:60]})
 
-    @Slot(str, result=bool)
-    def mudarCor(self, cor: str) -> bool:
-        return self._pedir({"pedir": "ajustes", "cor": cor})
-
     @Slot(bool, result=bool)
     def mudarNotificarEscola(self, ligado: bool) -> bool:
         return self._pedir({"pedir": "ajustes", "notificar_escola": bool(ligado)})

@@ -995,3 +995,8 @@ Sem ordem rígida: faz, o Léo testa o que é de voz, segue.
 
 Inspiração visual: HUD futurista com cards na tela enquanto ele fala (clima,
 agenda, e-mail). A cor do Léo é roxo.
+
+**Sai a "Cor de destaque" (26/10/2026, Léo):** com duas personas, azul (Jarvis)
+e rosa (Friday), escolher outra cor não fazia mais sentido. Saiu dos Ajustes
+da janela (beta 0.10.0) e do app (beta 0.15.5), e o campo `cor` saiu do
+`ajustes.json` e do pedido `ajustes` da ponte.

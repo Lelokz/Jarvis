@@ -56,9 +56,9 @@ Window {
 
     Tema {
         id: tema
-        // A Friday tem a cor dela (rosa, do config); o Jarvis, a dos Ajustes.
-        persona: janela.persona === "friday" && janela.corPersona !== "" ? janela.corPersona
-                 : (janela.ajustes && janela.ajustes.cor ? janela.ajustes.cor : "#4da3ff")
+        // Cada persona tem a sua cor: a Friday a dela (rosa, do config), o
+        // Jarvis o azul. (A "Cor de destaque" saiu na beta 0.10.0.)
+        persona: janela.persona === "friday" && janela.corPersona !== "" ? janela.corPersona : "#4da3ff"
     }
 
     // -- o estado da tela ---------------------------------------------------
@@ -715,7 +715,6 @@ Window {
             ajustes: janela.ajustes
             onMudarVolume: (volume) => { if (typeof ponte !== "undefined") ponte.mudarVolumeVoz(volume) }
             onMudarNotificar: (ligado) => { if (typeof ponte !== "undefined") ponte.mudarNotificarEscola(ligado) }
-            onMudarCor: (cor) => { if (typeof ponte !== "undefined") ponte.mudarCor(cor) }
             onMudarNome: (nome) => { if (typeof ponte !== "undefined") ponte.mudarNome(nome) }
             onMudarGrupo: (ligado) => { if (typeof ponte !== "undefined") ponte.mudarGrupo(ligado) }
             // Ao abrir os Ajustes, a lista vem de novo: um fone plugado agora aparece.

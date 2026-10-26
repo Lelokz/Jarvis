@@ -14,13 +14,9 @@ from typing import Any
 ARQUIVO = Path.home() / ".local/share/jarvis/ajustes.json"
 # 100 = o volume de sempre, que é o TETO: o volume já machucou o ouvido do
 # Léo uma vez (HISTORIA). Daqui só se abaixa.
-PADRAO: dict[str, Any] = {"volume_voz": 100, "notificar_escola": True, "cor": "#4da3ff", "nome": "",
+PADRAO: dict[str, Any] = {"volume_voz": 100, "notificar_escola": True, "nome": "",
                           # O Jarvis no grupo da família do WhatsApp (jarvis/grupo).
                           "grupo_jid": "", "grupo_ligado": False}
-# A cor de destaque da janela (beta 0.7.0): o átomo, os botões e as barras.
-# O azul é o do Jarvis; a lista é fechada para a janela nunca ficar ilegível.
-CORES = {"#4da3ff": "Azul", "#a78bfa": "Roxo", "#3ddc97": "Verde", "#ff9f43": "Laranja",
-         "#ff6fae": "Rosa", "#22d3ee": "Ciano"}
 
 
 def limpar_nome(nome: str) -> str:
@@ -45,8 +41,6 @@ def ler() -> dict[str, Any]:
             saida["volume_voz"] = int(min(100, max(0, volume)))
         if isinstance(dados.get("notificar_escola"), bool):
             saida["notificar_escola"] = dados["notificar_escola"]
-        if dados.get("cor") in CORES:
-            saida["cor"] = dados["cor"]
         if isinstance(dados.get("grupo_jid"), str) and (not dados["grupo_jid"] or dados["grupo_jid"].endswith("@g.us")):
             saida["grupo_jid"] = dados["grupo_jid"]
         if isinstance(dados.get("grupo_ligado"), bool):

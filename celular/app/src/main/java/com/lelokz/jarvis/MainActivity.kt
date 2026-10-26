@@ -126,22 +126,17 @@ private val Fraco = Color(0xFF7E879B)
 private val MuitoFraco = Color(0xFF4D5568)
 private val Perigo = Color(0xFFFF6B6B)
 private val Pergunta = Color(0xFFFFB454)
-// A cor de destaque (beta 0.11.0): escolhida nos Ajustes do app, como a da
-// janela do PC. "Azul" ficou como nome: é a cor do Jarvis por padrão.
-val corDestaque = mutableStateOf(Color(0xFF4DA3FF))
-// A persona ativa (beta 0.14.5): com a Friday, o destaque vira a cor dela
-// (rosa, do config do PC); com o Jarvis, a escolhida nos Ajustes.
+// A persona ativa (beta 0.14.5): cada uma tem a sua cor, a Friday a dela
+// (rosa, do config do PC) e o Jarvis o azul. (A "Cor de destaque" dos
+// Ajustes saiu na beta 0.15.5.)
 val personaAtiva = mutableStateOf("jarvis")
 val corDaFriday = mutableStateOf(Color(0xFFFF6FB5))
-private val Azul: Color get() = if (personaAtiva.value == "friday") corDaFriday.value else corDestaque.value
-val CORES_DE_DESTAQUE = listOf(
-    "Azul" to Color(0xFF4DA3FF), "Roxo" to Color(0xFFA78BFA), "Verde" to Color(0xFF3DDC97),
-    "Laranja" to Color(0xFFFF9F43), "Rosa" to Color(0xFFFF6FAE), "Ciano" to Color(0xFF22D3EE),
-)
+private val CorDoJarvis = Color(0xFF4DA3FF)
+private val Azul: Color get() = if (personaAtiva.value == "friday") corDaFriday.value else CorDoJarvis
 private val Roxo = Color(0xFF9B7BFF)
 
 /** A versão da janela (a numeração do Léo, igual à do PC) e a do app. */
-const val VERSAO_JANELA = "beta 0.15.0"
+const val VERSAO_JANELA = "beta 0.15.5"
 
 // A Inter, a fonte da janela do PC (licença OFL). Variável: o peso funciona.
 @OptIn(ExperimentalTextApi::class)
@@ -1284,22 +1279,6 @@ private fun PaginaAjustes(modelo: Jarvis) {
                         if (nome.trim() != modelo.nomeUsuario.value) modelo.mudarNome(nome)
                     }),
                     modifier = Modifier.fillMaxWidth())
-            }
-        }
-        Spacer(Modifier.height(8.dp))
-        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Lateral)
-            .border(1.dp, Traco, RoundedCornerShape(14.dp)).padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically) {
-            Text("Cor de destaque", color = TextoMedio, fontSize = 14.sp, modifier = Modifier.weight(1f))
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                for ((_, cor) in CORES_DE_DESTAQUE) {
-                    val escolhida = corDestaque.value == cor
-                    Box(Modifier.size(30.dp).clip(CircleShape)
-                        .border(2.dp, if (escolhida) Texto else Color.Transparent, CircleShape)
-                        .clickable { modelo.mudarCor(cor) }, contentAlignment = Alignment.Center) {
-                        Box(Modifier.size(18.dp).clip(CircleShape).background(cor))
-                    }
-                }
             }
         }
         Spacer(Modifier.height(14.dp))
