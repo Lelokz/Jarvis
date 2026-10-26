@@ -1,6 +1,6 @@
 {
   "hosting": {
-    "site": "nova-jarvis",
+    "site": "nova-ia",
     "public": ".",
     "ignore": ["firebase.json", ".firebaserc", "firestore.rules", "prototipo-*", "fotos-*/**", "fotos-*", "**/.*"],
     "headers": [
