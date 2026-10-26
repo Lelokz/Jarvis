@@ -65,7 +65,7 @@ Item {
         { valor: "friday", nome: "Friday", descricao: "Carinhosa e animada" },
     ]
     readonly property var opcoesModelo: [
-        { valor: "auto", nome: "Automático", descricao: "O Haiku atende e chama o Opus no pedido pesado" },
+        { valor: "auto", nome: "Automático", descricao: "O Sonnet atende e chama o Opus no pedido pesado" },
         { valor: "haiku", nome: "Haiku", descricao: "O mais rápido" },
         { valor: "sonnet", nome: "Sonnet", descricao: "Equilibrado" },
         { valor: "opus", nome: "Opus", descricao: "O mais inteligente, mais lento" },

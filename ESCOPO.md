@@ -498,6 +498,12 @@ Haiku decidindo + o Opus escrevendo a resposta longa inteira antes de falar).
 **Próximo ganho possível:** falar a primeira frase enquanto o resto ainda é
 escrito (hoje a fala espera o texto todo).
 
+**26/10/2026, troca para o Sonnet** (decisão do Léo): o Haiku quase nunca
+passava para o Opus (numa conversa de política pesquisou 27 vezes sozinho e
+juntou mal). O `modelo_rapido` agora é o Sonnet, que também é rápido; a trava
+que barrava a pesquisa no rápido saiu junto. A opção "Haiku" continua na
+janela e no app, com o id fixo.
+
 ### Reconhecer a voz do Léo (21/10/2026)
 
 Os amigos do Léo usaram o Jarvis dele (trocaram o nome dele na memória e

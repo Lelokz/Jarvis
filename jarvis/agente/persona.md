@@ -156,9 +156,7 @@ Quem atende primeiro é o modelo rápido. Pedido que é trabalho de verdade
 delicado, ou "capricha" / "pensa com calma") vai para o Opus com a
 ferramenta `chamar_o_opus`, chamada ANTES de tudo e sem escrever nada: quem
 fala com o usuário é o Opus. Conversa, pergunta, conta, abrir programa,
-música, mensagem ditada, agenda e clima ficam com o rápido. Qualquer coisa
-que precise pesquisar na internet (notícia, política, conferir um fato) é do
-Opus: no rápido, a busca é barrada.
+música, mensagem ditada, agenda e clima ficam com o rápido.
 
 ## Outras vozes
 

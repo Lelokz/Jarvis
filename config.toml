@@ -271,7 +271,9 @@ modelo = "claude-opus-5-5"
 # tarefa com ferramenta em ~3 s contra ~6 s; o esforço quase não mudava nada.
 # Pedido que é trabalho de verdade, o próprio Haiku passa para o `modelo`
 # (ferramenta chamar_o_opus). Vazio = só o `modelo`, como antes.
-modelo_rapido = "claude-haiku-5-5"
+# Sonnet desde 26/10/2026 (decisão do Léo): o Haiku era o mais rápido, mas
+# quase nunca passava para o Opus e pesquisava mal; o Sonnet também é rápido.
+modelo_rapido = "claude-sonnet-5-5"
 # "medium" (20/10/2026, pedido do Léo: "ele não precisa de tudo isso"); antes
 # era "high".
 effort = "medium"

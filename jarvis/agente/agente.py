@@ -492,7 +492,7 @@ class Agente:
         escolha = self.cerebro["modelo"]
         if escolha == "auto":
             return self.cfg.modelo_rapido or self.cfg.modelo
-        return {"haiku": self.cfg.modelo_rapido or "claude-haiku-5-5",
+        return {"haiku": "claude-haiku-5-5",
                 "sonnet": SONNET}.get(escolha, self.cfg.modelo)
 
     async def _trocar(self, retomar: str | None) -> None:
@@ -769,15 +769,6 @@ class Agente:
 
     async def _trava_da_voz(self, entrada, _id, _ctx) -> dict:
         """Barra o que só o Léo pode pedir quando a voz não é a dele."""
-        if entrada.get("tool_name") in ("WebSearch", "WebFetch") and self.cerebro["modelo"] == "auto" \
-                and not self._no_opus and not self._subir:
-            # Pesquisa é do Opus. Numa conversa de política (26/10/2026) o rápido
-            # pesquisou 27 vezes sozinho, juntou mal e dizia "não consegui
-            # confirmar" com a resposta nos resultados; nunca passou para o Opus.
-            return {"hookSpecificOutput": {
-                "hookEventName": "PreToolUse", "permissionDecision": "deny",
-                "permissionDecisionReason": "Pesquisa na internet é trabalho do Opus: chame "
-                                            "chamar_o_opus agora, sem escrever nada."}}
         comando = str((entrada.get("tool_input") or {}).get("command") or "")
         if entrada.get("tool_name") == "Bash" and re.search(r"(localhost|127\.0\.0\.1):8080/api/send", comando):
             # A ponte direto pula as travas do WhatsApp (pedido, número fora da

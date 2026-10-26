@@ -141,7 +141,7 @@ val CORES_DE_DESTAQUE = listOf(
 private val Roxo = Color(0xFF9B7BFF)
 
 /** A versão da janela (a numeração do Léo, igual à do PC) e a do app. */
-const val VERSAO_JANELA = "beta 0.14.6"
+const val VERSAO_JANELA = "beta 0.15.0"
 
 // A Inter, a fonte da janela do PC (licença OFL). Variável: o peso funciona.
 @OptIn(ExperimentalTextApi::class)
@@ -1072,7 +1072,7 @@ private fun Seletores(modelo: Jarvis) {
         Opcao("Friday", "Carinhosa e animada", personaAtiva.value == "friday") { modelo.escolherPersona("friday") }
         Grupo("Cérebro")
         for ((v, n, d) in listOf(
-            Triple("auto", "Automático", "O Haiku atende e chama o Opus no pedido pesado"),
+            Triple("auto", "Automático", "O Sonnet atende e chama o Opus no pedido pesado"),
             Triple("haiku", "Haiku", "O mais rápido"),
             Triple("sonnet", "Sonnet", "Equilibrado"),
             Triple("opus", "Opus", "O mais inteligente, mais lento"),

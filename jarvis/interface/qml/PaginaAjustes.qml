@@ -51,7 +51,7 @@ Item {
     }
 
     readonly property var nomes: ({
-        auto: "Automático (Haiku + Opus)", haiku: "Haiku", sonnet: "Sonnet", opus: "Opus",
+        auto: "Automático (Sonnet + Opus)", haiku: "Haiku", sonnet: "Sonnet", opus: "Opus",
         low: "Baixo", medium: "Médio", high: "Alto", xhigh: "Muito alto", max: "Máximo"
     })
 
@@ -512,7 +512,7 @@ Item {
                     ["Cérebro", raiz.nomes[raiz.modelo] || raiz.modelo || "—"],
                     ["Esforço", raiz.nomes[raiz.esforco] || raiz.esforco || "—"],
                     ["Conversa", raiz.conversa ? raiz.conversa.slice(0, 8) : "—"],
-                    ["Versão da janela", "beta 0.9.1"],
+                    ["Versão da janela", "beta 0.9.5"],
                 ] },
                 { titulo: "Atalhos", linhas: [
                     ["Ctrl + N", "Novo chat"],
