@@ -1,0 +1,15 @@
+rules_version = '2';
+// A lista de convidados do beta da NOVA: um documento por e-mail
+// (convites/<email>). Só o próprio convidado, logado com o Google e com o
+// e-mail confirmado, lê o dele (e o link do instalador que está lá). Ninguém
+// escreve pelo site: quem libera é o Léo, pelo console.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /convites/{email} {
+      allow read: if request.auth != null
+                  && request.auth.token.email_verified == true
+                  && request.auth.token.email == email;
+      allow write: if false;
+    }
+  }
+}

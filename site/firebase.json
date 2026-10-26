@@ -1,0 +1,13 @@
+{
+  "hosting": {
+    "site": "nova-jarvis",
+    "public": ".",
+    "ignore": ["firebase.json", ".firebaserc", "firestore.rules", "prototipo-*", "fotos-*/**", "fotos-*", "**/.*"],
+    "headers": [
+      { "source": "**", "headers": [{ "key": "X-Robots-Tag", "value": "noindex, nofollow" }] }
+    ]
+  },
+  "firestore": {
+    "rules": "firestore.rules"
+  }
+}
