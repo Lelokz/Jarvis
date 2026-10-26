@@ -1,0 +1,312 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>NOVA: tipos de átomo</title>
+<!-- Protótipo: o topo com o átomo grande (30 a 40% da tela) e 5 desenhos de
+     átomo para o Léo escolher. ?tipo=1..5 escolhe o desenho; ?persona=friday. -->
+<style>
+  @font-face { font-family: "Inter"; src: url("fontes/InterVariable.ttf") format("truetype"); font-weight: 100 900; }
+  :root {
+    --fundo: #05070b; --traco: rgba(120, 150, 200, 0.14); --texto: #e8eef7; --texto-medio: #b9c1cf;
+    --texto-fraco: #7e879b; --cor: #4da3ff; --cor-rgb: 77, 163, 255;
+    --mono: ui-monospace, "JetBrains Mono", "DejaVu Sans Mono", monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--fundo); color: var(--texto); font-family: "Inter", system-ui, sans-serif; -webkit-font-smoothing: antialiased; overflow-x: hidden; }
+  a { color: inherit; text-decoration: none; }
+  .grade-fundo {
+    position: fixed; inset: 0; pointer-events: none;
+    background-image: linear-gradient(rgba(var(--cor-rgb), .045) 1px, transparent 1px), linear-gradient(90deg, rgba(var(--cor-rgb), .045) 1px, transparent 1px);
+    background-size: 64px 64px; mask-image: radial-gradient(ellipse 80% 60% at 50% 30%, #000 30%, transparent 75%);
+  }
+  .topo { position: relative; z-index: 2; height: 66px; border-bottom: 1px solid var(--traco); display: flex; align-items: center; padding: 0 clamp(16px, 8vw, 156px); gap: 34px; }
+  .marca { font-weight: 800; letter-spacing: .14em; font-size: 15px; }
+  .menu { display: flex; gap: 28px; color: var(--texto-fraco); font-size: 14.5px; }
+  .acoes { margin-left: auto; display: flex; gap: 10px; }
+  .botao { display: inline-flex; align-items: center; justify-content: center; gap: 10px; height: 48px; padding: 0 24px; border-radius: 12px; font: 650 15px "Inter", sans-serif; border: 1px solid transparent; white-space: nowrap; }
+  .botao.cheio { background: linear-gradient(180deg, rgba(255,255,255,.18), transparent 60%), var(--cor); color: #050a12; box-shadow: 0 8px 30px rgba(var(--cor-rgb), .35); }
+  .botao.vazio { background: rgba(var(--cor-rgb), .06); border-color: rgba(var(--cor-rgb), .35); }
+  .botao.pequeno { height: 38px; padding: 0 16px; font-size: 13.5px; border-radius: 10px; }
+  .abertura { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; text-align: center; min-height: calc(100vh - 66px); padding: 0 16px 40px; }
+  /* O átomo é o protagonista: metade da altura da tela. */
+  .palco { width: min(54vh, 92vw); aspect-ratio: 1; margin-top: 1vh; }
+  .palco canvas { width: 100%; height: 100%; display: block; }
+  .verbete { display: inline-flex; gap: 12px; padding: 8px 15px; border-radius: 10px; border: 1px solid var(--traco); background: rgba(11,15,23,.86); font: 13px var(--mono); color: var(--texto-fraco); margin-top: -2vh; }
+  .verbete b { color: var(--texto); letter-spacing: .14em; }
+  .verbete em { color: var(--cor); font-style: normal; }
+  h1 { font-size: clamp(38px, 3.6vw, 70px); line-height: 1; letter-spacing: -0.045em; font-weight: 820; margin: 16px 0 12px; }
+  h1 .cor { color: var(--cor); text-shadow: 0 0 34px rgba(var(--cor-rgb), .45); }
+  .sub { font-size: 19px; color: var(--texto-medio); }
+  .sub b { color: var(--texto); }
+  .linha { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 12px; margin-top: 24px; }
+  .escolha { display: inline-flex; padding: 4px; border-radius: 12px; border: 1px solid var(--traco); background: rgba(11,15,23,.86); }
+  .escolha button { border: 0; background: none; cursor: pointer; padding: 10px 16px; border-radius: 9px; font: 700 12.5px var(--mono); letter-spacing: .16em; color: var(--texto-fraco); display: inline-flex; gap: 8px; align-items: center; }
+  .escolha button i { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+  .escolha button.ativo { color: var(--texto); background: rgba(var(--cor-rgb), .16); box-shadow: inset 0 0 0 1px rgba(var(--cor-rgb), .45); }
+  .escolha button.ativo i { color: var(--cor); }
+  .rotulo-tipo { position: fixed; left: 16px; bottom: 14px; z-index: 5; font: 600 12px var(--mono); letter-spacing: .14em; color: var(--texto-fraco); }
+  @media (max-width: 760px) { .menu { display: none; } .acoes .vazio { display: none; } .palco { width: min(46vh, 92vw); } }
+</style>
+</head>
+<body>
+<div class="grade-fundo"></div>
+<header class="topo">
+  <span class="marca">NOVA</span>
+  <nav class="menu"><a>Sistemas</a><a>Jarvis e Friday</a><a>Privacidade</a></nav>
+  <div class="acoes"><a class="botao vazio pequeno">Entrar</a><a class="botao cheio pequeno">Baixar</a></div>
+</header>
+<main class="abertura">
+  <div class="palco"><canvas id="atomo"></canvas></div>
+  <span class="verbete"><b>NOVA</b><span>/<em>nô</em>·va/</span><span><em>N</em>úcleo <em>O</em>peracional de <em>V</em>ozes <em>A</em>utônomas</span></span>
+  <h1>Fala com o seu PC. <span class="cor">Ele faz.</span></h1>
+  <p class="sub">O <b>Jarvis</b> e a <b>Friday</b> moram no seu computador. É só chamar pelo nome.</p>
+  <div class="linha">
+    <div class="escolha"><button data-p="jarvis" class="ativo"><i></i>JARVIS</button><button data-p="friday"><i></i>FRIDAY</button></div>
+    <a class="botao cheio">Baixar para Linux</a>
+    <a class="botao vazio">Ver o que faz</a>
+  </div>
+</main>
+<span class="rotulo-tipo" id="rotulo"></span>
+
+<script>
+const P = new URLSearchParams(location.search);
+const TIPO = Math.min(5, Math.max(1, Number(P.get("tipo")) || 1));
+const CORES = { jarvis: [77, 163, 255], friday: [255, 111, 181] };
+let persona = P.get("persona") === "friday" ? "friday" : "jarvis";
+const cor = [...CORES[persona]];
+const raiz = document.documentElement;
+document.getElementById("rotulo").textContent = "ÁTOMO " + TIPO;
+
+function rgba(c, a) { return `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a})`; }
+function claro(c, k) { return c.map(v => v + (255 - v) * k); }
+
+// 3D: gira em X, Y e Z, e projeta com perspectiva leve.
+function girar([x, y, z], ax, ay, az) {
+  let c = Math.cos(ax), s = Math.sin(ax); [y, z] = [y * c - z * s, y * s + z * c];
+  c = Math.cos(ay); s = Math.sin(ay); [x, z] = [x * c + z * s, -x * s + z * c];
+  c = Math.cos(az); s = Math.sin(az); [x, y] = [x * c - y * s, x * s + y * c];
+  return [x, y, z];
+}
+
+const canvas = document.getElementById("atomo"), g = canvas.getContext("2d");
+let L = 0, M = 0;
+function medir() {
+  const d = Math.min(devicePixelRatio || 1, 2), r = canvas.getBoundingClientRect();
+  L = r.width; M = L / 2; canvas.width = L * d; canvas.height = L * d; g.setTransform(d, 0, 0, d, 0, 0);
+}
+function proj(p, R) { const f = 4 * R / (4 * R + p[2]); return [M + p[0] * f, M + p[1] * f, p[2] / R, f]; }
+
+// O brilho e o núcleo, usados por quase todos.
+function halo(R, a) {
+  const h = g.createRadialGradient(M, M, 0, M, M, R * 1.25);
+  h.addColorStop(0, rgba(cor, a)); h.addColorStop(.5, rgba(cor, a * .3)); h.addColorStop(1, rgba(cor, 0));
+  g.fillStyle = h; g.fillRect(0, 0, L, L);
+}
+function nucleo(r, t) {
+  const p = 1 + Math.sin(t * 2) * .03;
+  let n = g.createRadialGradient(M, M, 0, M, M, r * 2.6 * p);
+  n.addColorStop(0, rgba(cor, .45)); n.addColorStop(1, rgba(cor, 0));
+  g.fillStyle = n; g.beginPath(); g.arc(M, M, r * 2.6 * p, 0, 7); g.fill();
+  n = g.createRadialGradient(M - r * .25, M - r * .3, 0, M, M, r * p);
+  n.addColorStop(0, "rgba(255,255,255,1)"); n.addColorStop(.35, rgba(claro(cor, .55), .95)); n.addColorStop(1, rgba(cor, 0));
+  g.fillStyle = n; g.beginPath(); g.arc(M, M, r * p, 0, 7); g.fill();
+}
+// Uma órbita em pedaços: a metade de trás antes do núcleo, a da frente depois.
+// `ponto(a)` dá o ponto 3D da órbita no ângulo a.
+function orbita(R, ponto, largura, alfaFrente, alfaTras, frente) {
+  const n = 160;
+  let ant = null;
+  g.lineCap = "butt";
+  for (let i = 0; i <= n; i++) {
+    const p = proj(ponto(i / n * Math.PI * 2), R);
+    if (ant && (p[2] <= 0) === frente) {
+      const k = 1 - (p[2] + 1) / 2;
+      g.strokeStyle = rgba(cor, alfaTras + (alfaFrente - alfaTras) * k);
+      g.lineWidth = largura; g.beginPath(); g.moveTo(ant[0], ant[1]); g.lineTo(p[0], p[1]); g.stroke();
+    }
+    ant = p;
+  }
+}
+function eletron(R, ponto3d, ang, frente, cauda = 0.9) {
+  const ponto = a => proj(ponto3d(a), R);
+  const cab = ponto(ang);
+  if ((cab[2] <= 0) !== frente) return;
+  g.lineCap = "round";
+  const n = 26;
+  for (let j = n; j > 0; j--) {
+    const p1 = ponto(ang - cauda * j / n), p2 = ponto(ang - cauda * (j - 1) / n), k = 1 - j / n;
+    g.strokeStyle = rgba(claro(cor, .3), k * k * .9); g.lineWidth = R * .02 * k + .5;
+    g.beginPath(); g.moveTo(p1[0], p1[1]); g.lineTo(p2[0], p2[1]); g.stroke();
+  }
+  const r = R * .045 * cab[3];
+  const h = g.createRadialGradient(cab[0], cab[1], 0, cab[0], cab[1], r * 2.2);
+  h.addColorStop(0, "rgba(255,255,255,1)"); h.addColorStop(.25, rgba(claro(cor, .4), .9)); h.addColorStop(1, rgba(cor, 0));
+  g.fillStyle = h; g.beginPath(); g.arc(cab[0], cab[1], r * 2.2, 0, 7); g.fill();
+}
+// As três órbitas do símbolo do átomo: elipses achatadas a 0°, 60° e 120°,
+// com um balanço leve (sem girar o conjunto, que perderia a simetria).
+function classicas(t, R) {
+  const bx = Math.sin(t * .3) * .12, by = Math.sin(t * .23) * .18;
+  return [0, 1, 2].map(i => ({
+    ponto: a => girar(girar([Math.cos(a) * R, 0, Math.sin(a) * R], .4, 0, i * Math.PI / 3), bx, by, 0),
+    vel: [1, -.8, 1.15][i], fase: i * 2.1,
+  }));
+}
+
+// ---------------------------------------------------------------------------
+// 1. Clássico: o símbolo do átomo, três órbitas finas a 60°, um elétron em cada.
+// ---------------------------------------------------------------------------
+function tipo1(t) {
+  const R = L * .45, orbs = classicas(t, R);
+  halo(R, .13);
+  g.globalCompositeOperation = "lighter";
+  for (const o of orbs) { orbita(R, o.ponto, 1.6, .7, .16, false); eletron(R, o.ponto, t * o.vel + o.fase, false); }
+  nucleo(R * .15, t);
+  for (const o of orbs) { orbita(R, o.ponto, 1.6, .7, .16, true); eletron(R, o.ponto, t * o.vel + o.fase, true); }
+  g.globalCompositeOperation = "source-over";
+}
+
+// ---------------------------------------------------------------------------
+// 2. Núcleo de partículas: prótons e nêutrons em bolinhas 3D, girando juntos.
+// ---------------------------------------------------------------------------
+const bolas = Array.from({ length: 19 }, (_, i) => {
+  if (i === 0) return [0, 0, 0, 0];
+  const k = i - 1, y = 1 - (k / 17) * 2, r = Math.sqrt(1 - y * y), a = k * 2.399963;
+  return [Math.cos(a) * r, y, Math.sin(a) * r, i % 2];
+});
+function tipo2(t) {
+  const R = L * .45, orbs = classicas(t, R);
+  halo(R, .1);
+  g.globalCompositeOperation = "lighter";
+  for (const o of orbs) { orbita(R, o.ponto, 1.3, .55, .1, false); eletron(R, o.ponto, t * o.vel + o.fase, false); }
+  g.globalCompositeOperation = "source-over";
+  const rn = R * .15, rb = R * .068;
+  const pts = bolas.map(b => [...girar([b[0] * rn, b[1] * rn, b[2] * rn], t * .5, t * .7, 0), b[3]]).sort((a, b) => b[2] - a[2]);
+  const gl = g.createRadialGradient(M, M, 0, M, M, rn * 3.2);
+  gl.addColorStop(0, rgba(cor, .35)); gl.addColorStop(1, rgba(cor, 0));
+  g.fillStyle = gl; g.beginPath(); g.arc(M, M, rn * 3.2, 0, 7); g.fill();
+  for (const p of pts) {
+    const x = M + p[0], y = M + p[1], base = p[3] ? cor : [205, 214, 232], luz = .55 - p[2] / rn * .25;
+    const s = g.createRadialGradient(x - rb * .35, y - rb * .4, 0, x, y, rb);
+    s.addColorStop(0, rgba(claro(base, .8), 1)); s.addColorStop(.45, rgba(base, 1)); s.addColorStop(1, rgba(base.map(v => v * .25), 1));
+    g.fillStyle = s; g.globalAlpha = Math.min(1, .55 + luz); g.beginPath(); g.arc(x, y, rb, 0, 7); g.fill();
+  }
+  g.globalAlpha = 1;
+  g.globalCompositeOperation = "lighter";
+  for (const o of orbs) { orbita(R, o.ponto, 1.3, .55, .1, true); eletron(R, o.ponto, t * o.vel + o.fase, true); }
+  g.globalCompositeOperation = "source-over";
+}
+
+// ---------------------------------------------------------------------------
+// 3. Rastros de luz: sem as linhas das órbitas; só os elétrons deixando um
+//    rastro longo, como numa foto de longa exposição.
+// ---------------------------------------------------------------------------
+function rastro(R, ponto3d, ang, frente) {
+  const n = 70, cauda = 2.8;
+  g.lineCap = "round";
+  for (let j = n; j > 0; j--) {
+    const a1 = ang - cauda * j / n, a2 = ang - cauda * (j - 1) / n;
+    const p1 = proj(ponto3d(a1), R), p2 = proj(ponto3d(a2), R);
+    if ((p2[2] <= 0) !== frente) continue;
+    const k = 1 - j / n;
+    g.strokeStyle = rgba(claro(cor, .25 * k), Math.pow(k, 1.6) * .85);
+    g.lineWidth = (R * .018 * k + .6) * p2[3];
+    g.beginPath(); g.moveTo(p1[0], p1[1]); g.lineTo(p2[0], p2[1]); g.stroke();
+  }
+  const cab = proj(ponto3d(ang), R);
+  if ((cab[2] <= 0) !== frente) return;
+  const r = R * .04 * cab[3];
+  const h = g.createRadialGradient(cab[0], cab[1], 0, cab[0], cab[1], r * 2.4);
+  h.addColorStop(0, "rgba(255,255,255,1)"); h.addColorStop(.25, rgba(claro(cor, .4), .9)); h.addColorStop(1, rgba(cor, 0));
+  g.fillStyle = h; g.beginPath(); g.arc(cab[0], cab[1], r * 2.4, 0, 7); g.fill();
+}
+function tipo3(t) {
+  const R = L * .45, orbs = classicas(t, R);
+  halo(R, .12);
+  g.globalCompositeOperation = "lighter";
+  for (const o of orbs) for (const d of [0, Math.PI]) rastro(R, o.ponto, t * o.vel * 1.2 + o.fase + d, false);
+  nucleo(R * .15, t);
+  for (const o of orbs) for (const d of [0, Math.PI]) rastro(R, o.ponto, t * o.vel * 1.2 + o.fase + d, true);
+  g.globalCompositeOperation = "source-over";
+}
+
+// ---------------------------------------------------------------------------
+// 4. Giroscópio: três aros sólidos, um dentro do outro, cada um girando no seu
+//    eixo, com brilho onde a luz bate.
+// ---------------------------------------------------------------------------
+function aro(R, raio, larg, rot, frente, t) {
+  const n = 240;
+  let ant = null;
+  for (let i = 0; i <= n; i++) {
+    const a = i / n * Math.PI * 2;
+    let p = [Math.cos(a) * raio, Math.sin(a) * raio, 0];
+    for (const [ax, ay] of rot) p = girar(p, ax, ay, 0);
+    const pp = proj(p, R);
+    if (ant && (pp[2] <= 0) === frente) {
+      const brilho = .25 + .75 * Math.pow(Math.max(0, Math.sin(a * 2 + t * .6) * .5 + .5), 3);
+      const k = .35 + .65 * (1 - (pp[2] + 1) / 2);
+      g.strokeStyle = rgba(claro(cor, brilho * .5), (.2 + brilho * .7) * k);
+      g.lineWidth = larg * pp[3]; g.lineCap = "butt";
+      g.beginPath(); g.moveTo(ant[0], ant[1]); g.lineTo(pp[0], pp[1]); g.stroke();
+    }
+    ant = pp;
+  }
+}
+function tipo4(t) {
+  const R = L * .44;
+  const aros = [
+    { raio: R, larg: R * .028, rot: [[0, t * .45]] },
+    { raio: R * .84, larg: R * .024, rot: [[t * .6, 0], [0, t * .45]] },
+    { raio: R * .68, larg: R * .02, rot: [[Math.PI / 2, t * .8], [t * .6, 0], [0, t * .45]] },
+  ];
+  halo(R, .11);
+  g.globalCompositeOperation = "lighter";
+  for (const a of aros) aro(R, a.raio, a.larg, a.rot, false, t);
+  nucleo(R * .17, t);
+  for (const a of aros) aro(R, a.raio, a.larg, a.rot, true, t);
+  g.globalCompositeOperation = "source-over";
+}
+
+// ---------------------------------------------------------------------------
+// 5. Esfera de órbitas: muitas órbitas finas formando uma esfera, três
+//    elétrons correndo nelas e um núcleo pequeno e forte.
+// ---------------------------------------------------------------------------
+function tipo5(t) {
+  const R = L * .45, inc = .38, giro = t * .12;
+  const orbs = Array.from({ length: 9 }, (_, i) => a => girar(girar([Math.cos(a) * R, Math.sin(a) * R, 0], 0, giro + i * Math.PI / 9, 0), inc, 0, .25));
+  const el = [[0, 1], [3, -1.2], [6, .9]];
+  halo(R, .09);
+  g.globalCompositeOperation = "lighter";
+  for (const o of orbs) orbita(R, o, .9, .38, .06, false);
+  for (const [i, k] of el) eletron(R, orbs[i], t * k + i, false, 1.3);
+  nucleo(R * .1, t);
+  for (const o of orbs) orbita(R, o, .9, .38, .06, true);
+  for (const [i, k] of el) eletron(R, orbs[i], t * k + i, true, 1.3);
+  g.globalCompositeOperation = "source-over";
+}
+
+const TIPOS = [tipo1, tipo2, tipo3, tipo4, tipo5];
+
+document.querySelectorAll(".escolha button").forEach(b => b.addEventListener("click", () => {
+  persona = b.dataset.p;
+  document.querySelectorAll(".escolha button").forEach(x => x.classList.toggle("ativo", x === b));
+}));
+if (persona === "friday") document.querySelector('[data-p="friday"]').click();
+addEventListener("resize", medir); medir();
+const inicio = performance.now(); let corCss = "";
+function laco(agora) {
+  const t = (agora - inicio) / 1000;
+  for (let i = 0; i < 3; i++) cor[i] += (CORES[persona][i] - cor[i]) * .08;
+  const rgb = cor.map(Math.round).join(",");
+  if (rgb !== corCss) { corCss = rgb; raiz.style.setProperty("--cor", `rgb(${rgb})`); raiz.style.setProperty("--cor-rgb", rgb); }
+  g.clearRect(0, 0, L, L);
+  TIPOS[TIPO - 1](t + 4);
+  requestAnimationFrame(laco);
+}
+requestAnimationFrame(laco);
+</script>
+</body>
+</html>
