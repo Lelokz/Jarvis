@@ -1,0 +1,881 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Beta fechado: fora dos buscadores. -->
+<meta name="robots" content="noindex, nofollow">
+<title>NOVA — Núcleo Operacional de Vozes Autônomas</title>
+<style>
+  @font-face {
+    font-family: "Inter";
+    src: url("fontes/InterVariable.ttf") format("truetype");
+    font-weight: 100 900;
+    font-display: swap;
+  }
+
+  /* As cores da janela (Tema.qml). --cor é a da persona ativa: o JS a
+     troca aos poucos quando você escolhe o Jarvis ou a Friday. */
+  :root {
+    --fundo: #05070b;
+    --vidro: rgba(14, 19, 28, 0.72);
+    --vidro-forte: rgba(18, 24, 35, 0.92);
+    --traco: rgba(120, 150, 200, 0.14);
+    --traco-forte: rgba(120, 150, 200, 0.26);
+    --texto: #e8eef7;
+    --texto-medio: #b9c1cf;
+    --texto-fraco: #7e879b;
+    --muito-fraco: #4d5568;
+    --escutando: #38d39f;
+    --pensando: #9b7bff;
+    --falando: #ffb454;
+    --cor: #4da3ff;
+    --cor-rgb: 77, 163, 255;
+    --mono: ui-monospace, "JetBrains Mono", "DejaVu Sans Mono", monospace;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--fundo); color: var(--texto);
+    font-family: "Inter", system-ui, sans-serif; line-height: 1.55;
+    -webkit-font-smoothing: antialiased; overflow-x: hidden;
+  }
+  a { color: inherit; text-decoration: none; }
+  .largura { max-width: 1720px; margin: 0 auto; padding: 0 clamp(20px, 3.5vw, 64px); position: relative; }
+
+  /* O céu: a rede de conexões atrás de tudo, e uma grade bem fraca. */
+  .grade-fundo {
+    position: fixed; inset: 0; z-index: 0; pointer-events: none;
+    background-image:
+      linear-gradient(rgba(var(--cor-rgb), .045) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(var(--cor-rgb), .045) 1px, transparent 1px);
+    background-size: 64px 64px;
+    mask-image: radial-gradient(ellipse 80% 60% at 50% 30%, #000 30%, transparent 75%);
+  }
+  main, header, footer { position: relative; z-index: 1; }
+
+  .mono { font-family: var(--mono); }
+  .rotulo { display: inline-flex; align-items: center; gap: 10px; font: 600 12px var(--mono); letter-spacing: .22em; color: var(--cor); }
+  .rotulo::before { content: ""; width: 26px; height: 1px; background: currentColor; box-shadow: 0 0 8px currentColor; }
+
+  /* -- topo ------------------------------------------------------------- */
+  .topo { position: sticky; top: 0; z-index: 20; background: rgba(5,7,11,.9); border-bottom: 1px solid var(--traco); }
+  .topo .largura { display: flex; align-items: center; height: 66px; gap: 34px; }
+  .marca { display: flex; align-items: center; gap: 11px; font-weight: 800; letter-spacing: .2em; font-size: 15px; }
+  .marca canvas { width: 30px; height: 30px; }
+  .menu { display: flex; gap: 28px; font-size: 14px; color: var(--texto-medio); }
+  .menu a { position: relative; padding: 4px 0; }
+  .menu a::after { content: ""; position: absolute; left: 0; right: 100%; bottom: -2px; height: 1px; background: var(--cor); box-shadow: 0 0 8px var(--cor); transition: right .3s; }
+  .menu a:hover { color: var(--texto); }
+  .menu a:hover::after { right: 0; }
+  .topo .acoes { margin-left: auto; display: flex; gap: 10px; align-items: center; }
+  @keyframes pisca { 50% { opacity: .35; } }
+
+  .botao {
+    position: relative; display: inline-flex; align-items: center; justify-content: center; gap: 10px;
+    height: 48px; padding: 0 24px; border-radius: 12px; white-space: nowrap;
+    font: 650 15px "Inter", sans-serif; border: 1px solid transparent; cursor: pointer;
+    transition: transform .15s, box-shadow .25s, background .25s;
+  }
+  .botao svg { width: 18px; height: 18px; }
+  .botao.cheio {
+    background: linear-gradient(180deg, rgba(255,255,255,.18), transparent 60%), var(--cor);
+    color: #050a12; box-shadow: 0 0 0 1px rgba(255,255,255,.12) inset, 0 8px 30px rgba(var(--cor-rgb), .35);
+  }
+  .botao.cheio:hover { transform: translateY(-2px); box-shadow: 0 0 0 1px rgba(255,255,255,.2) inset, 0 12px 44px rgba(var(--cor-rgb), .55); }
+  .botao.vazio { background: rgba(var(--cor-rgb), .06); color: var(--texto); border-color: rgba(var(--cor-rgb), .35); }
+  .botao.vazio:hover { background: rgba(var(--cor-rgb), .13); box-shadow: 0 0 24px rgba(var(--cor-rgb), .2); }
+  .botao.pequeno { height: 38px; padding: 0 16px; font-size: 13.5px; border-radius: 10px; }
+
+  h1 .inteira { white-space: nowrap; }
+  .vidro { background: rgba(11, 15, 23, 0.86); border: 1px solid var(--traco); }
+
+  /* -- abertura --------------------------------------------------------- */
+  .abertura { min-height: calc(100vh - 66px); display: flex; align-items: center; padding: 40px 0 90px; }
+  .abertura .largura { display: grid; grid-template-columns: minmax(0, .92fr) minmax(0, 1.08fr); gap: clamp(30px, 4vw, 90px); align-items: center; width: 100%; }
+  .verbete { display: inline-flex; align-items: baseline; gap: 12px; padding: 9px 16px; border-radius: 10px; font-family: var(--mono); font-size: 13px; color: var(--texto-fraco); }
+  .verbete b { color: var(--texto); font-weight: 700; letter-spacing: .14em; }
+  .verbete em { color: var(--cor); font-style: normal; }
+  h1 { font-size: clamp(40px, 3.9vw, 86px); line-height: .98; letter-spacing: -0.045em; font-weight: 820; margin: 26px 0 24px; }
+  h1 .brilho {
+    position: relative; display: inline-block; color: var(--cor);
+    text-shadow: 0 0 34px rgba(var(--cor-rgb), .45);
+  }
+  h1 .brilho::after {
+    content: attr(data-texto); position: absolute; inset: 0; color: transparent;
+    background: linear-gradient(100deg, transparent 35%, rgba(255,255,255,.95) 50%, transparent 65%);
+    background-size: 300% 100%; -webkit-background-clip: text; background-clip: text;
+    animation: varre 4.5s ease-in-out infinite; will-change: background-position;
+  }
+  @keyframes varre { from { background-position: 150% 0; } to { background-position: -150% 0; } }
+  .sub { font-size: clamp(18px, 1.15vw, 22px); color: var(--texto-medio); max-width: 33em; }
+  .sub b { color: var(--texto); font-weight: 620; }
+  .abertura .botoes { display: flex; gap: 12px; margin-top: 30px; flex-wrap: wrap; }
+  .nota { margin-top: 16px; font: 12.5px var(--mono); color: var(--texto-fraco); }
+
+  /* Escolha quem chamar: troca a cor de tudo. */
+  .escolha { display: inline-flex; padding: 4px; border-radius: 12px; margin-top: 30px; position: relative; }
+  .escolha button {
+    position: relative; z-index: 1; border: 0; background: none; color: var(--texto-fraco); cursor: pointer;
+    font: 700 13px var(--mono); letter-spacing: .16em; padding: 10px 18px; border-radius: 9px; display: flex; align-items: center; gap: 9px;
+    transition: color .3s;
+  }
+  .escolha button i { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+  .escolha button.ativo { color: var(--texto); }
+  .escolha button.ativo i { box-shadow: 0 0 10px currentColor; }
+  .escolha button[data-p="jarvis"].ativo i { color: #4da3ff; }
+  .escolha button[data-p="friday"].ativo i { color: #ff6fb5; }
+  .escolha .pilula { position: absolute; top: 4px; bottom: 4px; left: 4px; border-radius: 9px; background: rgba(var(--cor-rgb), .16); border: 1px solid rgba(var(--cor-rgb), .45); transition: left .45s cubic-bezier(.6,0,.2,1), width .45s; box-shadow: 0 0 20px rgba(var(--cor-rgb), .25); }
+
+  /* O reator: o núcleo vivo. */
+  .reator { position: relative; aspect-ratio: 1; width: 100%; max-width: min(820px, calc(100vh - 230px)); justify-self: center; }
+  .reator canvas.nucleo { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .reator svg.aneis { position: absolute; inset: 0; width: 100%; height: 100%; color: var(--cor); overflow: visible; }
+  .girando { will-change: transform; animation: gira 40s linear infinite; }
+  .girando.r { animation-direction: reverse; animation-duration: 28s; }
+  .girando.l { animation-duration: 90s; }
+  .gira { transform-origin: 50% 50%; transform-box: fill-box; animation: gira 40s linear infinite; }
+  .gira.r { animation-direction: reverse; animation-duration: 28s; }
+  .gira.l { animation-duration: 90s; }
+  @keyframes gira { to { transform: rotate(360deg); } }
+
+  /* -- seções ------------------------------------------------------------ */
+  section { padding: clamp(70px, 6vw, 120px) 0; position: relative; }
+  h2 { font-size: clamp(32px, 3.6vw, 66px); line-height: 1.04; letter-spacing: -0.04em; font-weight: 800; margin: 16px 0 16px; }
+  h2 .cor { color: var(--cor); text-shadow: 0 0 30px rgba(var(--cor-rgb), .4); }
+  .cabeca { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr); gap: clamp(30px, 5vw, 110px); align-items: end; }
+  .cabeca .intro { margin-bottom: 18px; }
+  .intro { color: var(--texto-medio); font-size: clamp(17px, 1.1vw, 20px); max-width: 44em; }
+  .aparece { opacity: 0; transform: translateY(26px); transition: opacity .8s, transform .8s cubic-bezier(.2,.7,.2,1); }
+  .aparece.visto { opacity: 1; transform: none; }
+
+  /* Sistemas: o núcleo no meio e os poderes em volta, ligados por energia. */
+  .sistemas { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: clamp(40px, 5vw, 110px); align-items: center; }
+  .lado .painel { margin-top: 28px; }
+  .mapa { position: relative; aspect-ratio: 1; width: 100%; max-width: 700px; justify-self: center; }
+  .mapa canvas { position: absolute; inset: 29%; width: 42%; height: 42%; }
+  .mapa > svg { position: absolute; inset: 0; width: 100%; height: 100%; color: var(--cor); overflow: visible; }
+  .fluxo { stroke-dasharray: 1.5 3; animation: flui .8s linear infinite; }
+  @keyframes flui { to { stroke-dashoffset: -9; } }
+  .no {
+    position: absolute; width: 84px; height: 84px; margin: -42px 0 0 -42px; border-radius: 50%;
+    display: grid; place-items: center; cursor: pointer; color: var(--texto-medio);
+    background: radial-gradient(circle, rgba(var(--cor-rgb), .14), rgba(5,7,11,.92) 70%);
+    border: 1px solid rgba(var(--cor-rgb), .35); transition: transform .3s, box-shadow .3s, color .3s;
+  }
+  .no svg { width: 31px; height: 31px; }
+  .no:hover, .no.ativo { transform: scale(1.12); color: #fff; box-shadow: 0 0 0 6px rgba(var(--cor-rgb), .08), 0 0 34px rgba(var(--cor-rgb), .6); border-color: var(--cor); }
+  .no span { position: absolute; top: calc(100% + 8px); font: 600 10.5px var(--mono); letter-spacing: .14em; color: var(--texto-fraco); white-space: nowrap; }
+  .no.ativo span { color: var(--cor); }
+  .painel { border-radius: 20px; padding: clamp(26px, 2.2vw, 42px); }
+  .painel .tag { font: 600 11px var(--mono); letter-spacing: .2em; color: var(--cor); }
+  .painel h3 { font-size: clamp(28px, 2.2vw, 40px); letter-spacing: -0.03em; margin: 10px 0 12px; }
+  .painel p { color: var(--texto-medio); font-size: clamp(16px, 1.05vw, 19px); }
+  .painel .exemplo { margin-top: 26px; padding: 18px 22px; border-radius: 14px; background: rgba(5,7,11,.7); border: 1px solid var(--traco); font-size: 16px; }
+  .painel .exemplo small { display: block; font: 600 10.5px var(--mono); letter-spacing: .16em; color: var(--texto-fraco); margin-bottom: 6px; }
+  .painel .exemplo .resp { color: var(--texto); margin-top: 8px; border-left: 2px solid var(--cor); padding-left: 12px; }
+  .painel .passos { display: flex; gap: 6px; margin-top: 22px; }
+  .painel .passos i { flex: 1; height: 3px; border-radius: 2px; background: rgba(var(--cor-rgb), .15); }
+  .painel .passos i.on { background: var(--cor); box-shadow: 0 0 8px var(--cor); }
+
+  /* Jarvis e Friday: dois hologramas. */
+  .duas { display: grid; grid-template-columns: 1fr 1fr; gap: 26px; margin-top: 56px; perspective: 1200px; }
+  .holo {
+    position: relative; border-radius: 24px; padding: clamp(28px, 2.6vw, 46px); overflow: hidden;
+    transition: transform .25s ease-out, box-shadow .3s;
+    background: linear-gradient(160deg, rgba(var(--c), .12), rgba(10,13,19,.92) 45%);
+    border: 1px solid rgba(var(--c), .3);
+  }
+  .holo:hover { box-shadow: 0 30px 80px rgba(var(--c), .18), 0 0 0 1px rgba(var(--c), .5) inset; }
+  .holo.jarvis { --c: 77, 163, 255; }
+  .holo.friday { --c: 255, 111, 181; }
+  .holo::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: repeating-linear-gradient(0deg, rgba(255,255,255,.025) 0 1px, transparent 1px 4px); }
+  .holo .topo-h { display: flex; justify-content: space-between; align-items: flex-start; }
+  .holo .chamada { font: 700 12px var(--mono); letter-spacing: .2em; color: rgb(var(--c)); }
+  .holo h3 { font-size: clamp(42px, 3.4vw, 62px); letter-spacing: -0.04em; font-weight: 820; line-height: 1; margin-top: 8px; }
+  .holo canvas { width: 190px; height: 190px; margin: -26px -20px 0 0; }
+  .holo p { color: var(--texto-medio); font-size: clamp(16px, 1.05vw, 18.5px); margin: 8px 0 24px; max-width: 32em; }
+  .holo .fala-h { padding: 18px 20px; border-radius: 14px; background: rgba(5,7,11,.75); border: 1px solid rgba(var(--c), .25); font-size: 16px; }
+  .holo .fala-h small { display: block; color: var(--texto-fraco); font: 11px var(--mono); margin-bottom: 6px; }
+
+  /* Privacidade: só um pacote de texto sai do PC. */
+  .caminho { display: grid; grid-template-columns: 1fr clamp(160px, 16vw, 300px) 1fr; align-items: stretch; margin-top: 56px; }
+  .ponte-p { align-self: center; }
+  .caixa-p { border-radius: 20px; padding: clamp(26px, 2.4vw, 42px); }
+  .caixa-p h4 { font: 700 12px var(--mono); letter-spacing: .2em; margin-bottom: 16px; }
+  .caixa-p.pc h4 { color: var(--escutando); }
+  .caixa-p.nuvem h4 { color: var(--pensando); }
+  .caixa-p ul { list-style: none; display: grid; gap: 10px; }
+  .caixa-p li { display: flex; gap: 12px; align-items: center; font-size: 16.5px; color: var(--texto-medio); }
+  .caixa-p li::before { content: ""; width: 6px; height: 6px; border-radius: 50%; flex: none; }
+  .caixa-p.pc li::before { background: var(--escutando); box-shadow: 0 0 8px var(--escutando); }
+  .caixa-p.nuvem li::before { background: var(--pensando); box-shadow: 0 0 8px var(--pensando); }
+  .ponte-p { position: relative; height: 120px; }
+  .ponte-p svg { width: 100%; height: 100%; overflow: visible; }
+  .ponte-p .pacote { font: 600 10px var(--mono); letter-spacing: .14em; fill: var(--texto-fraco); }
+
+  /* Download: os sistemas, com o de quem abriu marcado. */
+  .download { text-align: center; }
+  .download .intro { margin: 0 auto; }
+  .plataformas { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-top: 30px; text-align: left; }
+  .plat { position: relative; border-radius: 20px; padding: clamp(26px, 2.4vw, 40px); display: flex; flex-direction: column; gap: 6px; }
+  .plat.seu { border-color: rgba(var(--cor-rgb), .7); box-shadow: 0 0 0 1px rgba(var(--cor-rgb), .25) inset, 0 30px 80px rgba(var(--cor-rgb), .16); }
+  .plat.seu::before {
+    content: ""; position: absolute; inset: -1px; border-radius: 18px; padding: 1.5px; pointer-events: none;
+    background: conic-gradient(from var(--ang, 0deg), transparent 0 70%, var(--cor) 85%, transparent 100%);
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude;
+    animation: contorno 3s linear infinite;
+  }
+  @property --ang { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
+  @keyframes contorno { to { --ang: 360deg; } }
+  .plat .marcador { position: absolute; top: 18px; right: 18px; font: 700 10px var(--mono); letter-spacing: .16em; color: var(--cor); padding: 4px 9px; border-radius: 6px; border: 1px solid rgba(var(--cor-rgb), .5); background: rgba(var(--cor-rgb), .1); }
+  .plat svg.logo { width: 40px; height: 40px; color: var(--texto); margin-bottom: 12px; }
+  .plat h3 { font-size: 22px; letter-spacing: -0.02em; }
+  .plat .det { color: var(--texto-fraco); font: 12.5px var(--mono); }
+  .plat .botao { margin-top: 20px; }
+  .plat.breve { opacity: .55; }
+  .plat.breve .botao { pointer-events: none; }
+  .tranca { display: inline-flex; align-items: center; gap: 12px; margin-top: 30px; padding: 13px 20px; border-radius: 12px; color: var(--texto-medio); font-size: 14.5px; }
+  .tranca svg { width: 18px; height: 18px; color: var(--falando); }
+
+  footer { padding: 46px 0 70px; border-top: 1px solid var(--traco); color: var(--texto-fraco); font-size: 13.5px; }
+  footer .largura { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+  footer .marca { color: var(--texto); }
+  footer .dir { margin-left: auto; font-family: var(--mono); font-size: 12px; letter-spacing: .1em; }
+
+  /* -- autenticação (Google, só e-mails liberados) ----------------------- */
+  .fundo-modal { position: fixed; inset: 0; z-index: 50; display: none; place-items: center; padding: 16px; background: rgba(3,5,8,.78); backdrop-filter: blur(10px); }
+  .fundo-modal.aberto { display: grid; }
+  .modal { width: 100%; max-width: 440px; border-radius: 22px; padding: 34px; text-align: center; background: var(--vidro-forte); }
+  .modal .selo-a { position: relative; width: 150px; height: 150px; margin: -10px auto 8px; }
+  .modal .selo-a canvas { width: 100%; height: 100%; }
+  .modal .selo-a svg { position: absolute; inset: -8px; width: calc(100% + 16px); height: calc(100% + 16px); color: var(--cor); }
+  .modal .tag { font: 700 11px var(--mono); letter-spacing: .22em; color: var(--cor); }
+  .modal h3 { font-size: 24px; letter-spacing: -0.02em; margin: 8px 0 8px; }
+  .modal p { color: var(--texto-medio); font-size: 15px; }
+  .google { width: 100%; margin-top: 24px; background: #fff; color: #1f1f1f; height: 52px; }
+  .google:hover { box-shadow: 0 0 30px rgba(255,255,255,.25); }
+  .modal .miudo { margin-top: 14px; font: 11.5px var(--mono); color: var(--texto-fraco); }
+  .modal .email { display: inline-flex; align-items: center; gap: 9px; margin: 16px 0 4px; padding: 8px 14px; border-radius: 999px; background: rgba(5,7,11,.8); border: 1px solid var(--traco); font: 13px var(--mono); }
+  .modal .email i { width: 20px; height: 20px; border-radius: 50%; background: var(--pensando); }
+  .modal .linha { display: flex; gap: 10px; margin-top: 22px; }
+  .modal .linha .botao { flex: 1; }
+  .modal[data-tela="bloqueado"] { --cor: #ffb454; --cor-rgb: 255, 180, 84; }
+  .modal[data-tela="liberado"] { --cor: #38d39f; --cor-rgb: 56, 211, 159; }
+
+  /* -- celular ------------------------------------------------------------ */
+  @media (max-width: 960px) {
+    .menu { display: none; }
+    .abertura { min-height: auto; padding: 24px 0 60px; }
+    .abertura .largura, .sistemas, .duas, .cabeca { grid-template-columns: 1fr; }
+    .cabeca { gap: 0; }
+    h1 .inteira { white-space: normal; }
+    .no { width: 58px; height: 58px; margin: -29px 0 0 -29px; }
+    .no svg { width: 22px; height: 22px; }
+    .mapa { max-width: 420px; margin-bottom: 20px; }
+    .reator { max-width: 330px; margin: 0 auto; order: -1; }
+    .verbete > span:last-child { display: none; }
+    section { padding: 80px 0; }
+    .caminho { grid-template-columns: 1fr; }
+    .ponte-p { height: 70px; width: 200px; margin: 0 auto; transform: rotate(90deg); }
+    .plataformas { grid-template-columns: 1fr; }
+    .topo .acoes .vazio { display: none; }
+  }
+  @media (max-width: 480px) {
+    .largura { padding: 0 18px; }
+    .holo h3 { font-size: 38px; }
+    .holo canvas { width: 110px; height: 110px; }
+  }
+
+  /* PROTÓTIPO: Jarvis e Friday no estilo GTA (tela inteira, meio a meio). */
+  .gta { display: flex; margin-top: 56px; height: min(88vh, 860px); border-top: 1px solid var(--traco); border-bottom: 1px solid var(--traco); }
+  .metade { --c: 77, 163, 255; position: relative; flex: 1; overflow: hidden; transition: flex .7s cubic-bezier(.6,0,.2,1);
+    background: radial-gradient(ellipse 75% 60% at 50% 32%, rgba(var(--c), .16), transparent 70%), linear-gradient(180deg, rgba(var(--c), .05), transparent 60%); }
+  .metade.friday { --c: 255, 111, 181; border-left: 1px solid var(--traco); }
+  .gta:hover .metade { flex: .8; } .gta .metade:hover { flex: 1.35; }
+  .metade canvas { position: absolute; left: 50%; top: 6%; width: min(50vh, 460px); height: min(50vh, 460px); transform: translateX(-50%); }
+  .texto-m { position: absolute; left: clamp(24px, 3.4vw, 64px); right: clamp(24px, 3.4vw, 64px); top: 52%; }
+  .metade .chamada { font: 700 13px var(--mono); letter-spacing: .24em; color: rgb(var(--c)); }
+  .metade h3 { font-size: clamp(64px, 7.6vw, 150px); font-weight: 820; letter-spacing: -.05em; line-height: .9; margin-top: 6px; }
+  .metade p { max-width: 30em; color: var(--texto-medio); margin: 14px 0 18px; font-size: 17px; }
+  .metade .fala-h { max-width: 32em; padding: 16px 18px; border-radius: 14px; background: rgba(5,7,11,.72); border: 1px solid rgba(var(--c), .3); font-size: 16px; }
+  .metade .fala-h small { display: block; color: var(--texto-fraco); font: 11px var(--mono); margin-bottom: 6px; }
+  @media (max-width: 960px) { .gta { flex-direction: column; height: auto; } .metade { min-height: 620px; } .metade.friday { border-left: 0; border-top: 1px solid var(--traco); } }
+
+  /* PROTÓTIPO A: topo centralizado. */
+  .abertura .largura { grid-template-columns: 1fr; justify-items: center; text-align: center; gap: 0; }
+  .reator { order: -1; max-width: min(330px, 34vh); margin-bottom: -10px; }
+  .abertura { padding-top: 10px; }
+  .sub { margin: 0 auto; }
+  .abertura .botoes { justify-content: center; }
+  h1 { font-size: clamp(44px, 4.4vw, 88px); margin: 18px 0 18px; }
+</style>
+</head>
+<body>
+<div class="grade-fundo"></div>
+
+<header class="topo">
+  <div class="largura">
+    <a class="marca" href="#"><canvas data-nucleo="marca"></canvas>NOVA</a>
+    <nav class="menu">
+      <a href="#sistemas">Sistemas</a>
+      <a href="#personas">Jarvis e Friday</a>
+      <a href="#privacidade">Privacidade</a>
+    </nav>
+    <div class="acoes">
+      <a class="botao vazio pequeno" href="#" data-login>Entrar</a>
+      <a class="botao cheio pequeno" href="#download">Baixar</a>
+    </div>
+  </div>
+</header>
+
+<main>
+  <!-- ABERTURA ------------------------------------------------------------>
+  <section class="abertura">
+    <div class="largura">
+      <div>
+        <span class="verbete vidro"><b>NOVA</b><span>/<em>nô</em>·va/</span><span><em>N</em>úcleo <em>O</em>peracional de <em>V</em>ozes <em>A</em>utônomas</span></span>
+        <h1><span class="inteira">Fala com o seu PC.</span><br><span class="brilho" data-texto="Ele faz.">Ele faz.</span></h1>
+        <p class="sub">O <b>Jarvis</b> e a <b>Friday</b> moram no seu computador: te ouvem, entendem e resolvem. Abrem programas, cuidam do WhatsApp, lembram das coisas. É só chamar pelo nome.</p>
+        <div class="escolha vidro">
+          <span class="pilula"></span>
+          <button data-p="jarvis" class="ativo"><i></i>JARVIS</button>
+          <button data-p="friday"><i></i>FRIDAY</button>
+        </div>
+        <div class="botoes">
+          <a class="botao cheio" href="#download">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11m0 0l-4.5-4.5M12 15l4.5-4.5M5 19h14"/></svg>
+            <span class="texto-baixar">Baixar para Linux</span>
+          </a>
+          <a class="botao vazio" href="#sistemas">Ver o que faz</a>
+        </div>
+        <p class="nota">// grátis · com a sua própria conta do Claude</p>
+      </div>
+
+      <div class="reator">
+        <canvas class="nucleo" data-nucleo="heroi"></canvas>
+      </div>
+    </div>
+  </section>
+
+  <!-- SISTEMAS ------------------------------------------------------------->
+  <section id="sistemas">
+    <div class="largura">
+      <div class="sistemas">
+        <div class="mapa aparece">
+          <svg viewBox="0 0 100 100" id="ligacoes"></svg>
+          <canvas data-nucleo="mapa"></canvas>
+        </div>
+        <div class="lado"><span class="rotulo">SISTEMAS</span>
+      <h2>Tudo ligado <span class="cor">ao mesmo núcleo.</span></h2>
+      <p class="intro">Nada de comando decorado. Você pede do seu jeito; ele entende, decide e faz, e pergunta antes quando é coisa séria.</p>
+        <div class="painel vidro aparece">
+          <span class="tag" data-p-tag>01 · VOZ</span>
+          <h3 data-p-titulo>Acorda pelo nome</h3>
+          <p data-p-texto></p>
+          <div class="exemplo"><small>EXEMPLO</small><span data-p-pedido></span><div class="resp" data-p-resp></div></div>
+          <div class="passos" data-p-passos></div>
+        </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- PERSONAS ------------------------------------------------------------->
+  <section id="personas">
+    <div class="largura">
+      <div class="cabeca"><div><span class="rotulo">JARVIS E FRIDAY</span>
+      <h2>Duas personalidades.<br><span class="cor">Uma só memória.</span></h2></div><p class="intro">Os dois sabem as mesmas coisas e lembram das mesmas conversas. Muda o jeito, a voz e a cor. Troque quando quiser, falando ou num toque.</p></div>
+    </div>
+    <div class="gta">
+      <div class="metade jarvis">
+        <canvas data-nucleo="jarvis"></canvas>
+        <div class="texto-m">
+          <span class="chamada">"HEY JARVIS"</span>
+          <h3>JARVIS</h3>
+          <p>O mordomo que todo mundo queria: educado, calmo e com um humor seco na medida certa.</p>
+          <div class="fala-h"><small>você › "Jarvis, que horas são?"</small>São quatro e meia, senhor. Ainda dá tempo de fingir que vai estudar.</div>
+        </div>
+      </div>
+      <div class="metade friday">
+        <canvas data-nucleo="friday"></canvas>
+        <div class="texto-m">
+          <span class="chamada">"HEY FRIDAY"</span>
+          <h3>FRIDAY</h3>
+          <p>Carinhosa, animada na medida e com zoeira liberada. Te chama de chefinho.</p>
+          <div class="fala-h"><small>você › "Friday, achou o arquivo?"</small>Achei, chefinho! Tava escondido nos Downloads, como sempre.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- PRIVACIDADE ---------------------------------------------------------->
+  <section id="privacidade">
+    <div class="largura">
+      <div class="cabeca"><div><span class="rotulo">PRIVACIDADE</span>
+      <h2>Mora no seu PC. <span class="cor">De verdade.</span></h2></div><p class="intro">Ouvir e falar acontecem no seu computador. Do PC sai só o seu pedido, em texto, direto para a sua conta do Claude.</p></div>
+      <div class="caminho aparece">
+        <div class="caixa-p pc vidro">
+          <h4>// NO SEU PC</h4>
+          <ul><li>O microfone e o "Hey Jarvis"</li><li>A sua voz virando texto</li><li>A resposta virando voz</li><li>A memória e os seus arquivos</li></ul>
+        </div>
+        <div class="ponte-p">
+          <svg viewBox="0 0 200 120">
+            <path id="trilho" d="M0 60 L 200 60" fill="none" stroke="rgba(155,123,255,.35)" stroke-width="1" stroke-dasharray="2 5"/>
+            <circle r="4" fill="#c4b2ff"><animateMotion dur="2.4s" repeatCount="indefinite"><mpath href="#trilho"/></animateMotion></circle>
+            <circle r="3" fill="#9b7bff" opacity=".6"><animateMotion dur="2.4s" begin="1.2s" repeatCount="indefinite"><mpath href="#trilho"/></animateMotion></circle>
+            <text class="pacote" x="100" y="44" text-anchor="middle">SÓ O PEDIDO</text>
+            <text class="pacote" x="100" y="84" text-anchor="middle">EM TEXTO</text>
+          </svg>
+        </div>
+        <div class="caixa-p nuvem vidro">
+          <h4>// NA SUA CONTA DO CLAUDE</h4>
+          <ul><li>Entender o que você pediu</li><li>Decidir o que fazer</li><li>Escrever a resposta</li></ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- DOWNLOAD ------------------------------------------------------------->
+  <section id="download" class="download">
+    <div class="largura">
+      <span class="rotulo">DOWNLOAD</span>
+      <h2>Ligue a sua <span class="cor">NOVA.</span></h2>
+      <p class="intro">Um instalador pequeno: ele confere o seu PC, baixa o resto das fontes oficiais e deixa tudo pronto.</p>
+      <div class="plataformas">
+        <div class="plat vidro" data-so="linux">
+          <svg class="logo" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2c-2.2 0-3.4 1.9-3.4 4.4 0 1.4.3 2.3-.6 3.6C6.6 12 5 14.2 5 16.6c0 .9.3 1.6.7 2.1-.5.4-1.3.8-1.3 1.6 0 1.1 1.5 1.4 3 1.4 1.2 0 1.9-.5 2.5-.9.7.1 1.4.2 2.1.2s1.4-.1 2.1-.2c.6.4 1.3.9 2.5.9 1.5 0 3-.3 3-1.4 0-.8-.8-1.2-1.3-1.6.4-.5.7-1.2.7-2.1 0-2.4-1.6-4.6-3-6.6-.9-1.3-.6-2.2-.6-3.6C15.4 3.9 14.2 2 12 2zm-1.6 4.1c.5 0 .8.6.8 1.2s-.3 1.1-.8 1.1-.8-.5-.8-1.1.3-1.2.8-1.2zm3.2 0c.5 0 .8.6.8 1.2s-.3 1.1-.8 1.1-.8-.5-.8-1.1.3-1.2.8-1.2zM12 9.2c.9 0 2 .5 2 1s-1.1 1.1-2 1.1-2-.6-2-1.1 1.1-1 2-1z"/></svg>
+          <h3>Linux</h3>
+          <span class="det">ubuntu 24.04+ · x86_64</span>
+          <a class="botao cheio" href="#" data-login>Baixar instalador</a>
+        </div>
+        <div class="plat vidro breve" data-so="windows">
+          <svg class="logo" viewBox="0 0 24 24" fill="currentColor"><path d="M3 5.5l7.5-1v7H3v-6zm8.5-1.2L21 3v8.5h-9.5V4.3zM3 12.5h7.5v7L3 18.5v-6zm8.5 0H21V21l-9.5-1.3v-7.2z"/></svg>
+          <h3>Windows</h3>
+          <span class="det">10 e 11 · em teste com os beta testers</span>
+          <span class="botao vazio">Em breve</span>
+        </div>
+        <div class="plat vidro breve" data-so="android">
+          <svg class="logo" viewBox="0 0 24 24" fill="currentColor"><path d="M7.2 3.3l1.2 2A7 7 0 005 11h14a7 7 0 00-3.4-5.7l1.2-2-.6-.4-1.3 2.1a7.2 7.2 0 00-5.8 0L7.8 2.9l-.6.4zM9 8a.9.9 0 110 1.8A.9.9 0 019 8zm6 0a.9.9 0 110 1.8A.9.9 0 0115 8zM5 12h14v7a1.5 1.5 0 01-1.5 1.5H16V23h-2v-2.5h-4V23H8v-2.5H6.5A1.5 1.5 0 015 19v-7zm-2.5 0a1.5 1.5 0 011.5 1.5v4a1.5 1.5 0 01-3 0v-4A1.5 1.5 0 012.5 12zm19 0a1.5 1.5 0 011.5 1.5v4a1.5 1.5 0 01-3 0v-4a1.5 1.5 0 011.5-1.5z"/></svg>
+          <h3>Android</h3>
+          <span class="det">o app que fala com o seu PC</span>
+          <span class="botao vazio">Em breve</span>
+        </div>
+      </div>
+      <div class="tranca vidro">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 018 0v4"/></svg>
+        Beta fechado: só quem foi convidado baixa. Entre com o Google.
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="largura">
+    <span class="marca"><canvas data-nucleo="marca2" style="width:24px;height:24px"></canvas>NOVA</span>
+    <span>Núcleo Operacional de Vozes Autônomas · beta fechado</span>
+    <span class="dir">FEITO COM O CLAUDE</span>
+  </div>
+</footer>
+
+<!-- Autenticação: login do Google (Firebase Auth) + a lista de convidados (Firestore, convites/<email>). -->
+<div class="fundo-modal" id="modal">
+  <div class="modal vidro" data-tela="entrar">
+    <div class="selo-a"><canvas data-nucleo="selo1"></canvas></div>
+    <span class="tag">AUTENTICAÇÃO</span>
+    <h3>Entre para baixar</h3>
+    <p>O beta é fechado: o download é liberado só para os e-mails convidados.</p>
+    <a class="botao google" href="#" id="entrar-google">
+      <svg viewBox="0 0 24 24"><path fill="#4285F4" d="M22.6 12.3c0-.8-.1-1.5-.2-2.2H12v4.2h6a5.1 5.1 0 01-2.2 3.4v2.8h3.6c2.1-1.9 3.2-4.8 3.2-8.2z"/><path fill="#34A853" d="M12 23c3 0 5.5-1 7.3-2.7l-3.6-2.8c-1 .7-2.2 1.1-3.7 1.1-2.9 0-5.3-1.9-6.2-4.5H2.1v2.9A11 11 0 0012 23z"/><path fill="#FBBC05" d="M5.8 14.1a6.6 6.6 0 010-4.2V7H2.1a11 11 0 000 10l3.7-2.9z"/><path fill="#EA4335" d="M12 5.4c1.6 0 3.1.6 4.2 1.7l3.2-3.2A11 11 0 002.1 7l3.7 2.9C6.7 7.3 9.1 5.4 12 5.4z"/></svg>
+      Entrar com o Google
+    </a>
+    <p class="miudo" data-erro-login>// usamos só o seu e-mail, para ver se foi convidado</p>
+  </div>
+  <div class="modal vidro" data-tela="bloqueado" hidden>
+    <div class="selo-a"><canvas data-nucleo="selo2"></canvas></div>
+    <span class="tag">ACESSO NEGADO</span>
+    <h3>Esse e-mail ainda não foi liberado</h3>
+    <span class="email"><i></i><span data-email>alguem@gmail.com</span></span>
+    <p style="margin-top:10px">O beta é só para convidados por enquanto.</p>
+    <div class="linha"><a class="botao vazio" href="#" id="outro-email">Outro e-mail</a><a class="botao cheio" href="#" data-fechar>Ok</a></div>
+  </div>
+  <div class="modal vidro" data-tela="liberado" hidden>
+    <div class="selo-a"><canvas data-nucleo="selo3"></canvas></div>
+    <span class="tag">ACESSO LIBERADO</span>
+    <h3>Bem-vindo ao beta!</h3>
+    <span class="email"><i style="background:var(--escutando)"></i><span data-email>convidado@gmail.com</span></span>
+    <p style="margin-top:10px" data-texto-liberado>Abra o arquivo baixado e siga o instalador.</p>
+    <div class="linha"><a class="botao vazio" href="#" id="sair">Sair</a><a class="botao cheio" href="#" id="baixar-agora" hidden>Baixar instalador</a></div>
+  </div>
+</div>
+
+<script>
+// ---------------------------------------------------------------------------
+// Cores e persona
+// ---------------------------------------------------------------------------
+const P = new URLSearchParams(location.search);
+const CORES = { jarvis: [77, 163, 255], friday: [255, 111, 181] };
+let persona = P.get("persona") === "friday" ? "friday" : "jarvis";
+let cor = CORES[persona].slice();               // a cor de agora (vai até a da persona)
+const raiz = document.documentElement;
+
+function rgba(c, a) { return `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a})`; }
+function mistura(c, alvo, k) { for (let i = 0; i < 3; i++) c[i] += (alvo[i] - c[i]) * k; }
+
+// ---------------------------------------------------------------------------
+// O núcleo: brilho de energia, anéis em 3D com um elétron cada, poucas partículas
+// (remasterizado em 26/10/2026: sem o anel de HUD girando em volta, sem
+// faíscas e sem o plasma por dentro; o Léo achou poluído)
+// ---------------------------------------------------------------------------
+class Nucleo {
+  constructor(canvas, { escala = 1, particulas = 40, fixa = null, aneisFinos = false } = {}) {
+    this.c = canvas; this.x = canvas.getContext("2d");
+    this.escala = escala; this.fixa = fixa; this.aneisFinos = aneisFinos;
+    this.energia = 0;
+    this.aneis = [
+      { inc: 1.2, giro: 0.0, vel: 0.9, raio: 0.92, eletrons: 1 },
+      { inc: 1.15, giro: 2.1, vel: -0.7, raio: 0.80, eletrons: 1 },
+      { inc: 1.25, giro: 4.2, vel: 1.15, raio: 0.68, eletrons: 1 },
+    ];
+    this.pontos = Array.from({ length: particulas }, () => ({
+      r: 0.35 + Math.random() * 0.85, a: Math.random() * 6.283, y: (Math.random() - 0.5) * 1.1,
+      v: 0.05 + Math.random() * 0.25, t: 0.4 + Math.random() * 1.4,
+    }));
+    this.medir();
+  }
+  medir() {
+    const d = Math.min(window.devicePixelRatio || 1, 2);
+    const w = this.c.clientWidth, h = this.c.clientHeight;
+    this.c.width = Math.max(1, w * d); this.c.height = Math.max(1, h * d);
+    this.w = w; this.h = h; this.d = d;
+  }
+  // Ponto de um anel inclinado, já projetado em perspectiva.
+  anel(a, ang, t, R) {
+    let x = Math.cos(ang) * R, y = Math.sin(ang) * R, z = 0;
+    const ci = Math.cos(a.inc), si = Math.sin(a.inc);
+    [y, z] = [y * ci, y * si];                                  // inclina (eixo X)
+    const g = a.giro + t * 0.12, cg = Math.cos(g), sg = Math.sin(g);
+    [x, y] = [x * cg - y * sg, x * sg + y * cg];                // gira o plano (eixo Z)
+    if (this.inclina) {                                         // vira para o mouse
+      const [ix, iy] = this.inclina, cy_ = Math.cos(ix), sy_ = Math.sin(ix), cx_ = Math.cos(iy), sx_ = Math.sin(iy);
+      [x, z] = [x * cy_ + z * sy_, -x * sy_ + z * cy_];
+      [y, z] = [y * cx_ - z * sx_, y * sx_ + z * cx_];
+    }
+    const f = 3.2 * R / (3.2 * R + z);
+    return [x * f, y * f, z / R];
+  }
+  desenhar(t, c) {
+    const x = this.x, d = this.d, cx = this.w / 2, cy = this.h / 2;
+    const R = Math.min(this.w, this.h) * 0.36 * this.escala;
+    if (R < 1) return;  // escondido (a janelinha fechada): nada a desenhar
+    if (this.fixa) c = this.fixa;
+    if (this.alvo) {
+      this.inclina = this.inclina || [0, 0];
+      this.inclina[0] += (this.alvo[0] - this.inclina[0]) * 0.05;
+      this.inclina[1] += (this.alvo[1] - this.inclina[1]) * 0.05;
+    }
+    x.setTransform(d, 0, 0, d, 0, 0);
+    x.clearRect(0, 0, this.w, this.h);
+    x.globalCompositeOperation = "lighter";
+    const e = this.energia;
+
+    // Halo de fundo.
+    let g = x.createRadialGradient(cx, cy, 0, cx, cy, R * 1.6);
+    g.addColorStop(0, rgba(c, 0.20 + e * 0.1)); g.addColorStop(0.45, rgba(c, 0.06)); g.addColorStop(1, rgba(c, 0));
+    x.fillStyle = g; x.fillRect(0, 0, this.w, this.h);
+
+    // Partículas girando em volta (uma nuvem em 3D).
+    for (const p of this.pontos) {
+      const ang = p.a + t * p.v;
+      const px = Math.cos(ang) * p.r * R * 1.15, pz = Math.sin(ang) * p.r * R * 1.15, py = p.y * R;
+      const f = 3 * R / (3 * R + pz);
+      const brilho = (0.25 + 0.75 * (1 - (pz / R + 1.2) / 2.4)) * (0.6 + 0.4 * Math.sin(t * 2 + p.a * 5));
+      x.fillStyle = rgba(c, Math.max(0, brilho) * 0.8);
+      x.beginPath(); x.arc(cx + px * f, cy + py * f, p.t * f, 0, 6.283); x.fill();
+    }
+
+    // Os anéis e os elétrons com rastro.
+    for (const a of this.aneis) {
+      const Ra = R * a.raio;
+      x.lineWidth = this.aneisFinos ? 0.8 : 1.1;
+      for (let i = 0; i < 96; i++) {
+        const p1 = this.anel(a, i / 96 * 6.283, t, Ra), p2 = this.anel(a, (i + 1) / 96 * 6.283, t, Ra);
+        x.strokeStyle = rgba(c, 0.12 + 0.35 * (1 - (p1[2] + 1) / 2));
+        x.beginPath(); x.moveTo(cx + p1[0], cy + p1[1]); x.lineTo(cx + p2[0], cy + p2[1]); x.stroke();
+      }
+      for (let k = 0; k < a.eletrons; k++) {
+        const base = t * a.vel * (1 + e * 0.6) + k * Math.PI;
+        // O rastro: uma linha contínua que afina e some (antes, bolinhas em fila).
+        x.lineCap = "round";
+        let ant = null;
+        for (let j = 30; j >= 0; j--) {
+          const p = this.anel(a, base - j * 0.04 * Math.sign(a.vel), t, Ra);
+          if (ant) {
+            const k2 = 1 - j / 31, frente = 0.3 + 0.7 * (1 - (p[2] + 1) / 2);
+            x.strokeStyle = rgba(c, k2 * k2 * frente * 0.95);
+            x.lineWidth = k2 * 3.2 * (R / 150 + 0.35);
+            x.beginPath(); x.moveTo(cx + ant[0], cy + ant[1]); x.lineTo(cx + p[0], cy + p[1]); x.stroke();
+          }
+          ant = p;
+        }
+        const p = this.anel(a, base, t, Ra);
+        g = x.createRadialGradient(cx + p[0], cy + p[1], 0, cx + p[0], cy + p[1], R * 0.1);
+        g.addColorStop(0, "rgba(255,255,255,0.9)"); g.addColorStop(0.3, rgba(c, 0.6)); g.addColorStop(1, rgba(c, 0));
+        x.fillStyle = g; x.beginPath(); x.arc(cx + p[0], cy + p[1], R * 0.1, 0, 6.283); x.fill();
+      }
+    }
+
+    // O núcleo: brilho forte no centro.
+    const pulso = 1 + Math.sin(t * 2.4) * 0.04 + e * 0.12;
+    const Rn = R * 0.36 * pulso;
+    g = x.createRadialGradient(cx, cy, 0, cx, cy, Rn * 2.4);
+    g.addColorStop(0, rgba(c, 0.55)); g.addColorStop(0.35, rgba(c, 0.18)); g.addColorStop(1, rgba(c, 0));
+    x.fillStyle = g; x.beginPath(); x.arc(cx, cy, Rn * 2.4, 0, 6.283); x.fill();
+    g = x.createRadialGradient(cx - Rn * 0.2, cy - Rn * 0.25, 0, cx, cy, Rn);
+    g.addColorStop(0, "rgba(255,255,255,0.95)"); g.addColorStop(0.25, rgba([255, 255, 255].map((v, i) => (v + c[i]) / 2), 0.75));
+    g.addColorStop(0.7, rgba(c, 0.45)); g.addColorStop(1, rgba(c, 0));
+    x.fillStyle = g; x.beginPath(); x.arc(cx, cy, Rn, 0, 6.283); x.fill();
+    x.globalCompositeOperation = "source-over";
+  }
+}
+
+// Os núcleos da página (o grande e os pequenos).
+const opcoes = {
+  heroi: { escala: 0.9, particulas: 45 },
+  mapa: { escala: 1.15, particulas: 25 },
+  marca: { escala: 1.25, particulas: 0, aneisFinos: true },
+  marca2: { escala: 1.25, particulas: 0, aneisFinos: true },
+  jarvis: { escala: 1.05, particulas: 18, fixa: CORES.jarvis },
+  friday: { escala: 1.05, particulas: 18, fixa: CORES.friday },
+  selo1: { escala: 0.95, particulas: 15 },
+  selo2: { escala: 0.95, particulas: 15, fixa: [255, 180, 84] },
+  selo3: { escala: 0.95, particulas: 15, fixa: [56, 211, 159] },
+};
+const nucleos = [...document.querySelectorAll("canvas[data-nucleo]")]
+  .map(c => ({ el: c, n: new Nucleo(c, opcoes[c.dataset.nucleo] || {}) }));
+const heroi = (nucleos.find(n => n.el.dataset.nucleo === "heroi") || { n: {} }).n;
+
+// O núcleo grande vira de leve para onde o mouse está.
+const reatorEl = document.querySelector(".reator");
+function alvoInclina() {
+  if (mouse.x < -900 || !reatorEl) return [0, 0];
+  const r = reatorEl.getBoundingClientRect();
+  const dx = (mouse.x - (r.left + r.width / 2)) / innerWidth, dy = (mouse.y - (r.top + r.height / 2)) / innerHeight;
+  return [Math.max(-0.45, Math.min(0.45, dx * 0.9)), Math.max(-0.45, Math.min(0.45, -dy * 0.9))];
+}
+
+
+// O mouse (o núcleo grande vira de leve para ele).
+const mouse = { x: -999, y: -999 };
+addEventListener("mousemove", e => { mouse.x = e.clientX; mouse.y = e.clientY; });
+function medirTudo() { nucleos.forEach(n => n.n.medir()); }
+
+// ---------------------------------------------------------------------------
+// Troca de persona
+// ---------------------------------------------------------------------------
+const escolha = document.querySelector(".escolha"), pilula = escolha.querySelector(".pilula");
+function posicionarPilula() {
+  const b = escolha.querySelector("button.ativo");
+  pilula.style.left = b.offsetLeft + "px"; pilula.style.width = b.offsetWidth + "px";
+}
+function trocar(p) {
+  persona = p;
+  escolha.querySelectorAll("button").forEach(b => b.classList.toggle("ativo", b.dataset.p === p));
+  posicionarPilula();
+  heroi.energia = 1.4;
+}
+escolha.querySelectorAll("button").forEach(b => b.addEventListener("click", () => trocar(b.dataset.p)));
+
+// ---------------------------------------------------------------------------
+// Sistemas: os poderes ligados ao núcleo
+// ---------------------------------------------------------------------------
+const ICONES = {
+  voz: '<path d="M12 3a3 3 0 00-3 3v5a3 3 0 006 0V6a3 3 0 00-3-3zM5 11a7 7 0 0014 0M12 18v3"/>',
+  pc: '<rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M7 9l3 2-3 2M12 13h4"/>',
+  zap: '<path d="M21 12a8.5 8.5 0 01-12.6 7.4L3 21l1.6-5.2A8.5 8.5 0 1121 12z"/>',
+  mem: '<path d="M12 3a6 6 0 00-6 6c0 2.2 1.2 3.6 2.4 4.8.8.8 1.1 1.6 1.1 2.7h5c0-1.1.3-1.9 1.1-2.7C16.8 12.6 18 11.2 18 9a6 6 0 00-6-6zM10 20h4"/>',
+  hora: '<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M9 2h6"/>',
+  cel: '<rect x="7" y="2" width="10" height="20" rx="2.5"/><path d="M11 18h2"/>',
+};
+const SISTEMAS = [
+  ["voz", "VOZ", "Acorda pelo nome", '"Hey Jarvis" ou "Hey Friday", de qualquer canto do quarto. Depois é conversa normal: ele fica ouvindo até você terminar.', '"Hey Friday, tá aí?"', "Oi, chefinho! Tô aqui."],
+  ["pc", "PC", "Mexe no seu computador", "Abre programas, organiza pastas, pesquisa na internet, lê o e-mail e a agenda. O que é sério, ele pergunta antes.", '"Jarvis, abre o Spotify e põe algo pra estudar."', "Pronto, senhor. Lo-fi tocando."],
+  ["zap", "WHATSAPP", "Cuida do WhatsApp", "Avisa o que chegou, lê pra você e responde quando você mandar. Pode até ajudar no grupo da família.", '"Responde a minha mãe que eu chego às oito."', "Mandado: “Chego às oito!”"],
+  ["mem", "MEMÓRIA", "Lembra de você", "Guarda o que importa: gostos, compromissos, quem é quem. E tudo fica na aba Memórias, pra você ler e corrigir.", '"Friday, lembra que a minha prova é sexta."', "Guardado, chefinho. Sexta é dia de prova."],
+  ["hora", "TEMPO", "Avisa na hora certa", "Ele anota recados para si mesmo e te chama no horário. Sem app de lembrete, sem configurar nada.", '"Me avisa daqui a 20 minutos pra tirar o bolo."', "Combinado. Às 19h20 eu te chamo."],
+  ["cel", "CELULAR", "Vai com você", "O app conversa com o seu PC de qualquer lugar: manda áudio e foto, e a resposta volta na voz.", '"(pelo celular) Jarvis, o PC tá ligado?"', "Ligado e esperando você, senhor."],
+];
+const svgLig = document.getElementById("ligacoes"), mapa = document.querySelector(".mapa");
+let ativo = 0;
+(() => {
+  let linhas = '<circle cx="50" cy="50" r="38" fill="none" stroke="currentColor" stroke-opacity=".18" stroke-width=".3" stroke-dasharray="1 2"/>';
+  SISTEMAS.forEach((s, i) => {
+    const a = -Math.PI / 2 + i * Math.PI / 3, x = 50 + Math.cos(a) * 38, y = 50 + Math.sin(a) * 38;
+    linhas += `<line x1="50" y1="50" x2="${x}" y2="${y}" stroke="currentColor" stroke-opacity=".12" stroke-width=".3"/>
+               <line class="fluxo" x1="50" y1="50" x2="${x}" y2="${y}" stroke="currentColor" stroke-width=".7" stroke-opacity="0"/>`;
+    const no = document.createElement("div");
+    no.className = "no"; no.style.left = x + "%"; no.style.top = y + "%";
+    no.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${ICONES[s[0]]}</svg><span>${s[1]}</span>`;
+    no.addEventListener("mouseenter", () => mostrarSistema(i));
+    no.addEventListener("click", () => mostrarSistema(i));
+    mapa.appendChild(no);
+  });
+  svgLig.innerHTML = linhas;
+})();
+function mostrarSistema(i) {
+  ativo = i;
+  const s = SISTEMAS[i];
+  document.querySelector("[data-p-tag]").textContent = `0${i + 1} · ${s[1]}`;
+  document.querySelector("[data-p-titulo]").textContent = s[2];
+  document.querySelector("[data-p-texto]").textContent = s[3];
+  document.querySelector("[data-p-pedido]").textContent = s[4];
+  document.querySelector("[data-p-resp]").textContent = s[5];
+  document.querySelector("[data-p-passos]").innerHTML = SISTEMAS.map((_, k) => `<i class="${k === i ? "on" : ""}"></i>`).join("");
+  mapa.querySelectorAll(".no").forEach((n, k) => n.classList.toggle("ativo", k === i));
+  svgLig.querySelectorAll(".fluxo").forEach((l, k) => l.setAttribute("stroke-opacity", k === i ? ".95" : "0"));
+}
+mostrarSistema(Number(P.get("sistema") || 0));
+let trocaAuto = P.get("sistema") ? null : setInterval(() => mostrarSistema((ativo + 1) % 6), 4200);
+mapa.addEventListener("mouseenter", () => clearInterval(trocaAuto));
+
+// ---------------------------------------------------------------------------
+// Download: destaca o sistema de quem abriu
+// ---------------------------------------------------------------------------
+function sistema() {
+  const ua = navigator.userAgent;
+  if (/android/i.test(ua)) return "android";
+  if (/windows/i.test(ua)) return "windows";
+  return "linux";
+}
+const meu = P.get("so") || sistema();
+const NOMES_SO = { linux: "Linux x86_64", windows: "Windows", android: "Android" };
+document.querySelector(".texto-baixar").textContent = meu === "linux" ? "Baixar para Linux" : "Ver downloads";
+document.querySelectorAll(".plat").forEach(c => {
+  const e = c.dataset.so === meu;
+  c.classList.toggle("seu", e);
+  if (e) c.insertAdjacentHTML("afterbegin", '<span class="marcador">SEU SISTEMA</span>');
+});
+// ---------------------------------------------------------------------------
+// Detalhes: aparecer ao rolar, inclinar os hologramas, autenticação
+// ---------------------------------------------------------------------------
+const obs = new IntersectionObserver(es => es.forEach(e => e.isIntersecting && e.target.classList.add("visto")), { threshold: 0.12 });
+document.querySelectorAll(".aparece").forEach(e => obs.observe(e));
+if (P.get("tudo")) document.querySelectorAll(".aparece").forEach(e => e.classList.add("visto"));
+document.querySelectorAll("[data-inclina]").forEach(el => {
+  el.addEventListener("mousemove", e => {
+    const r = el.getBoundingClientRect(), px = (e.clientX - r.left) / r.width - 0.5, py = (e.clientY - r.top) / r.height - 0.5;
+    el.style.transform = `rotateY(${px * 8}deg) rotateX(${-py * 8}deg)`;
+  });
+  el.addEventListener("mouseleave", () => el.style.transform = "");
+});
+const modal = document.getElementById("modal");
+function abrir(tela) {
+  modal.querySelectorAll(".modal").forEach(m => m.hidden = m.dataset.tela !== tela);
+  modal.classList.add("aberto");
+  requestAnimationFrame(() => nucleos.forEach(n => n.n.medir()));
+}
+// O login de verdade (o módulo do Firebase, no fim) troca por pedirDownload.
+document.querySelectorAll("[data-login]").forEach(b => b.addEventListener("click", e => { e.preventDefault(); (window.pedirDownload || (() => abrir("entrar")))(); }));
+modal.addEventListener("click", e => { if (e.target === modal || e.target.dataset.fechar !== undefined) modal.classList.remove("aberto"); });
+
+// ---------------------------------------------------------------------------
+// O laço
+// ---------------------------------------------------------------------------
+addEventListener("resize", () => { medirTudo(); posicionarPilula(); });
+medirTudo();
+if (persona === "friday") trocar("friday"); else posicionarPilula();
+if (P.get("tela")) abrir(P.get("tela"));
+const inicio = performance.now();
+let corNoCss = "";
+function laco(agora) {
+  const t = (agora - inicio) / 1000;
+  mistura(cor, CORES[persona], 0.07);
+  const rgb = cor.map(v => Math.round(v)).join(",");
+  if (rgb !== corNoCss) {
+    corNoCss = rgb;
+    raiz.style.setProperty("--cor", `rgb(${rgb})`);
+    raiz.style.setProperty("--cor-rgb", rgb);
+  }
+  heroi.alvo = alvoInclina();
+  heroi.energia *= 0.96;
+  for (const n of nucleos) {
+    const r = n.el.getBoundingClientRect();
+    if (r.bottom > 0 && r.top < innerHeight && r.width) n.n.desenhar(t, cor);
+  }
+  requestAnimationFrame(laco);
+}
+requestAnimationFrame(laco);
+</script>
+
+<script type="module">
+// ---------------------------------------------------------------------------
+// O beta fechado: login do Google e a lista de convidados.
+// A página é aberta; o instalador, não. Quem está em convites/<e-mail> (o Léo
+// libera pelo console do Firebase) lê o próprio convite, com o link do
+// instalador; os outros nem conseguem ler (firestore.rules).
+// ---------------------------------------------------------------------------
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
+import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+
+const app = initializeApp({
+  apiKey: "AIzaSyBuSTi3hvFw2Kl5Dm9cBQrllTmXAZxTJgw",
+  authDomain: "teste1-cc3c8.firebaseapp.com",
+  projectId: "teste1-cc3c8",
+  appId: "1:1065992445412:web:32a652b3ca1de1e80d7bf1",
+});
+const auth = getAuth(app);
+const banco = getFirestore(app);
+const google = new GoogleAuthProvider();
+google.setCustomParameters({ prompt: "select_account" });
+let usuario = null;
+onAuthStateChanged(auth, u => {
+  usuario = u;
+  const entrar = document.querySelector(".topo [data-login]");
+  if (entrar) entrar.textContent = u ? (u.displayName || u.email).split(" ")[0] : "Entrar";
+});
+
+async function conferir(u) {
+  document.querySelectorAll("[data-email]").forEach(e => e.textContent = u.email);
+  let convite = null;
+  try {
+    const d = await getDoc(doc(banco, "convites", u.email.toLowerCase()));
+    convite = d.exists() ? d.data() : null;
+  } catch (e) {
+    convite = null;  // sem permissão = não convidado
+  }
+  if (!convite) { abrir("bloqueado"); return; }
+  const baixar = document.getElementById("baixar-agora");
+  const texto = document.querySelector("[data-texto-liberado]");
+  if (convite.link) {
+    baixar.href = convite.link; baixar.hidden = false;
+    texto.textContent = "Baixe o instalador, abra e siga os passos.";
+  } else {
+    baixar.hidden = true;
+    texto.textContent = "Você está na lista! O instalador sai em breve, e aqui mesmo vai aparecer o botão de baixar.";
+  }
+  abrir("liberado");
+}
+
+window.pedirDownload = () => usuario ? conferir(usuario) : abrir("entrar");
+
+async function entrarComGoogle(e) {
+  e.preventDefault();
+  const aviso = document.querySelector("[data-erro-login]");
+  try {
+    const r = await signInWithPopup(auth, google);
+    await conferir(r.user);
+  } catch (erro) {
+    if (erro.code !== "auth/popup-closed-by-user" && erro.code !== "auth/cancelled-popup-request")
+      aviso.textContent = "// não deu para entrar agora: " + (erro.code || "erro");
+  }
+}
+document.getElementById("entrar-google").addEventListener("click", entrarComGoogle);
+document.getElementById("outro-email").addEventListener("click", async e => { await signOut(auth); entrarComGoogle(e); });
+document.getElementById("sair").addEventListener("click", async e => {
+  e.preventDefault(); await signOut(auth); document.getElementById("modal").classList.remove("aberto");
+});
+</script>
+</body>
+</html>
