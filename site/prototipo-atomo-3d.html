@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>NOVA: átomo 3D</title>
+<!-- Protótipo: o átomo em 3D de verdade (three.js), com brilho (bloom), núcleo
+     de plasma e rastros que seguem o sentido de cada elétron. ?persona=friday -->
+<style>
+  @font-face { font-family: "Inter"; src: url("fontes/InterVariable.ttf") format("truetype"); font-weight: 100 900; }
+  :root {
+    --fundo: #05070b; --traco: rgba(120, 150, 200, 0.14); --texto: #e8eef7; --texto-medio: #b9c1cf;
+    --texto-fraco: #7e879b; --cor: #4da3ff; --cor-rgb: 77, 163, 255;
+    --mono: ui-monospace, "JetBrains Mono", "DejaVu Sans Mono", monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--fundo); color: var(--texto); font-family: "Inter", system-ui, sans-serif; -webkit-font-smoothing: antialiased; overflow-x: hidden; }
+  a { color: inherit; text-decoration: none; }
+  .topo { position: relative; z-index: 3; height: 66px; border-bottom: 1px solid var(--traco); display: flex; align-items: center; padding: 0 clamp(16px, 8vw, 156px); gap: 34px; background: rgba(5,7,11,.6); }
+  .marca { font-weight: 800; letter-spacing: .14em; font-size: 15px; }
+  .menu { display: flex; gap: 28px; color: var(--texto-fraco); font-size: 14.5px; }
+  .acoes { margin-left: auto; display: flex; gap: 10px; }
+  .botao { display: inline-flex; align-items: center; justify-content: center; gap: 10px; height: 48px; padding: 0 24px; border-radius: 12px; font: 650 15px "Inter", sans-serif; border: 1px solid transparent; white-space: nowrap; }
+  .botao.cheio { background: linear-gradient(180deg, rgba(255,255,255,.18), transparent 60%), var(--cor); color: #050a12; box-shadow: 0 8px 30px rgba(var(--cor-rgb), .35); }
+  .botao.vazio { background: rgba(var(--cor-rgb), .06); border-color: rgba(var(--cor-rgb), .35); }
+  .botao.pequeno { height: 38px; padding: 0 16px; font-size: 13.5px; border-radius: 10px; }
+  /* O átomo ocupa o topo inteiro (o brilho se espalha sem borda); o texto fica embaixo. */
+  .abertura { position: relative; height: calc(100vh - 66px); min-height: 640px; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; text-align: center; padding: 0 16px 6vh; overflow: hidden; }
+  #cena { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  .texto { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; }
+  .verbete { display: inline-flex; gap: 12px; padding: 8px 15px; border-radius: 10px; border: 1px solid var(--traco); background: rgba(11,15,23,.7); font: 13px var(--mono); color: var(--texto-fraco); }
+  .verbete b { color: var(--texto); letter-spacing: .14em; }
+  .verbete em { color: var(--cor); font-style: normal; }
+  h1 { font-size: clamp(38px, 3.6vw, 70px); line-height: 1; letter-spacing: -0.045em; font-weight: 820; margin: 16px 0 12px; }
+  h1 .cor { color: var(--cor); text-shadow: 0 0 34px rgba(var(--cor-rgb), .45); }
+  .sub { font-size: 19px; color: var(--texto-medio); }
+  .sub b { color: var(--texto); }
+  .linha { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 12px; margin-top: 24px; }
+  .escolha { display: inline-flex; padding: 4px; border-radius: 12px; border: 1px solid var(--traco); background: rgba(11,15,23,.7); }
+  .escolha button { border: 0; background: none; cursor: pointer; padding: 10px 16px; border-radius: 9px; font: 700 12.5px var(--mono); letter-spacing: .16em; color: var(--texto-fraco); display: inline-flex; gap: 8px; align-items: center; }
+  .escolha button i { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+  .escolha button.ativo { color: var(--texto); background: rgba(var(--cor-rgb), .16); box-shadow: inset 0 0 0 1px rgba(var(--cor-rgb), .45); }
+  .escolha button.ativo i { color: var(--cor); }
+  @media (max-width: 760px) { .menu { display: none; } .acoes .vazio { display: none; } .verbete > span:last-child { display: none; } }
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<header class="topo">
+  <span class="marca">NOVA</span>
+  <nav class="menu"><a>Sistemas</a><a>Jarvis e Friday</a><a>Privacidade</a></nav>
+  <div class="acoes"><a class="botao vazio pequeno">Entrar</a><a class="botao cheio pequeno">Baixar</a></div>
+</header>
+<main class="abertura">
+  <canvas id="cena"></canvas>
+  <div class="texto">
+    <span class="verbete"><b>NOVA</b><span>/<em>nô</em>·va/</span><span><em>N</em>úcleo <em>O</em>peracional de <em>V</em>ozes <em>A</em>utônomas</span></span>
+    <h1>Fala com o seu PC. <span class="cor">Ele faz.</span></h1>
+    <p class="sub">O <b>Jarvis</b> e a <b>Friday</b> moram no seu computador. É só chamar pelo nome.</p>
+    <div class="linha">
+      <div class="escolha"><button data-p="jarvis" class="ativo"><i></i>JARVIS</button><button data-p="friday"><i></i>FRIDAY</button></div>
+      <a class="botao cheio">Baixar para Linux</a>
+      <a class="botao vazio">Ver o que faz</a>
+    </div>
+  </div>
+</main>
+
+<script type="module">
+import * as THREE from "three";
+import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
+import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
+import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
+import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
+
+const P = new URLSearchParams(location.search);
+const CORES = { jarvis: new THREE.Color(0x4da3ff), friday: new THREE.Color(0xff6fb5) };
+let persona = P.get("persona") === "friday" ? "friday" : "jarvis";
+const cor = CORES[persona].clone();
+const parado = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+const canvas = document.getElementById("cena");
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
+renderer.toneMapping = THREE.NoToneMapping;  // com ACES o fundo ficava mais escuro que a página
+const cena = new THREE.Scene();
+// O fundo pela cena (e não setClearColor): com o bloom no meio, a cor de
+// limpeza era convertida para sRGB duas vezes e o fundo saía cinza-azulado.
+cena.background = new THREE.Color(0x05070b);
+const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 100);
+camera.position.set(0, 0, 10);
+
+const atomo = new THREE.Group();
+cena.add(atomo);
+const R = 1.45;  // raio das órbitas
+
+// --- O núcleo: uma esfera de plasma (ruído animado) com a borda acesa ----------
+const ruido = `
+  vec3 m289(vec3 x){return x-floor(x*(1./289.))*289.;} vec4 m289(vec4 x){return x-floor(x*(1./289.))*289.;}
+  vec4 perm(vec4 x){return m289(((x*34.)+1.)*x);} vec4 tis(vec4 r){return 1.79284291400159-.85373472095314*r;}
+  float snoise(vec3 v){const vec2 C=vec2(1./6.,1./3.);const vec4 D=vec4(0.,.5,1.,2.);
+    vec3 i=floor(v+dot(v,C.yyy));vec3 x0=v-i+dot(i,C.xxx);vec3 g=step(x0.yzx,x0.xyz);vec3 l=1.-g;
+    vec3 i1=min(g.xyz,l.zxy);vec3 i2=max(g.xyz,l.zxy);vec3 x1=x0-i1+C.xxx;vec3 x2=x0-i2+C.yyy;vec3 x3=x0-D.yyy;
+    i=m289(i);vec4 p=perm(perm(perm(i.z+vec4(0.,i1.z,i2.z,1.))+i.y+vec4(0.,i1.y,i2.y,1.))+i.x+vec4(0.,i1.x,i2.x,1.));
+    float n_=.142857142857;vec3 ns=n_*D.wyz-D.xzx;vec4 j=p-49.*floor(p*ns.z*ns.z);vec4 x_=floor(j*ns.z);vec4 y_=floor(j-7.*x_);
+    vec4 x=x_*ns.x+ns.yyyy;vec4 y=y_*ns.x+ns.yyyy;vec4 h=1.-abs(x)-abs(y);vec4 b0=vec4(x.xy,y.xy);vec4 b1=vec4(x.zw,y.zw);
+    vec4 s0=floor(b0)*2.+1.;vec4 s1=floor(b1)*2.+1.;vec4 sh=-step(h,vec4(0.));vec4 a0=b0.xzyw+s0.xzyw*sh.xxyy;vec4 a1=b1.xzyw+s1.xzyw*sh.zzww;
+    vec3 p0=vec3(a0.xy,h.x);vec3 p1=vec3(a0.zw,h.y);vec3 p2=vec3(a1.xy,h.z);vec3 p3=vec3(a1.zw,h.w);
+    vec4 norm=tis(vec4(dot(p0,p0),dot(p1,p1),dot(p2,p2),dot(p3,p3)));p0*=norm.x;p1*=norm.y;p2*=norm.z;p3*=norm.w;
+    vec4 m=max(.6-vec4(dot(x0,x0),dot(x1,x1),dot(x2,x2),dot(x3,x3)),0.);m=m*m;
+    return 42.*dot(m*m,vec4(dot(p0,x0),dot(p1,x1),dot(p2,x2),dot(p3,x3)));}`;
+const nucleoMat = new THREE.ShaderMaterial({
+  uniforms: { uTempo: { value: 0 }, uCor: { value: cor } },
+  vertexShader: `varying vec3 vN; varying vec3 vP; varying vec3 vV;
+    void main(){ vN=normalize(normalMatrix*normal); vP=position; vec4 mv=modelViewMatrix*vec4(position,1.); vV=normalize(-mv.xyz); gl_Position=projectionMatrix*mv; }`,
+  fragmentShader: ruido + `uniform float uTempo; uniform vec3 uCor; varying vec3 vN; varying vec3 vP; varying vec3 vV;
+    void main(){
+      float n = snoise(vP*4.2 + vec3(0., uTempo*.35, uTempo*.2))*.5 + snoise(vP*9. - vec3(uTempo*.5))*.25;
+      float frente = max(dot(vN, vV), 0.);
+      float borda = pow(1. - frente, 2.2);
+      vec3 base = uCor * (0.12 + 0.55*smoothstep(-.35,.7,n));
+      vec3 miolo = mix(uCor, vec3(1.), .5) * pow(frente, 5.) * .3;
+      gl_FragColor = vec4(base + miolo + uCor*borda*.95, 1.);
+    }`,
+});
+const nucleo = new THREE.Mesh(new THREE.SphereGeometry(0.36, 96, 96), nucleoMat);
+atomo.add(nucleo);
+// O halo macio em volta do núcleo (um sprite com gradiente).
+function textura(r0, a0) {
+  const c = document.createElement("canvas"); c.width = c.height = 256;
+  const g = c.getContext("2d"), gr = g.createRadialGradient(128, 128, 0, 128, 128, 128);
+  gr.addColorStop(0, `rgba(255,255,255,${a0})`); gr.addColorStop(r0, "rgba(255,255,255,.18)"); gr.addColorStop(1, "rgba(255,255,255,0)");
+  g.fillStyle = gr; g.fillRect(0, 0, 256, 256);
+  const tx = new THREE.CanvasTexture(c); tx.colorSpace = THREE.SRGBColorSpace;  // sem isso, o fim do degradê virava um quadrado cinza
+  return tx;
+}
+const haloMat = new THREE.SpriteMaterial({ map: textura(.22, .5), color: cor, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: .32 });
+const halo = new THREE.Sprite(haloMat); halo.scale.set(2.1, 2.1, 1); atomo.add(halo);
+
+// --- As órbitas: o símbolo do átomo (três elipses a 0°, 60° e 120°) -----------
+// Cada órbita: um aro fino de luz, um elétron e o rastro dele, que fica sempre
+// ATRÁS do elétron (para quem gira ao contrário, o rastro vai do outro lado).
+class Arco extends THREE.Curve {
+  constructor(r, abertura) { super(); this.r = r; this.abertura = abertura; }
+  getPoint(t, alvo = new THREE.Vector3()) { const a = -this.abertura * (1 - t); return alvo.set(Math.cos(a) * this.r, Math.sin(a) * this.r, 0); }
+}
+const rastroMat = () => new THREE.ShaderMaterial({
+  uniforms: { uCor: { value: cor } }, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+  vertexShader: `varying float vU; void main(){ vU=uv.x; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }`,
+  fragmentShader: `uniform vec3 uCor; varying float vU; void main(){ float k=pow(vU,2.6); gl_FragColor=vec4(mix(uCor,vec3(1.),k*.35)*k*1.3, k); }`,
+});
+const orbitas = [0, 1, 2].map(i => {
+  const fora = new THREE.Group(); fora.rotation.z = i * Math.PI / 3; atomo.add(fora);
+  const plano = new THREE.Group(); plano.rotation.x = 1.22; fora.add(plano);
+  const aroMat = new THREE.MeshBasicMaterial({ color: cor, transparent: true, opacity: .6, blending: THREE.AdditiveBlending, depthWrite: false });
+  plano.add(new THREE.Mesh(new THREE.TorusGeometry(R, .0045, 8, 360), aroMat));
+  const sentido = i === 1 ? -1 : 1;
+  const rastro = new THREE.Mesh(new THREE.TubeGeometry(new Arco(R, 1.5), 120, .008, 8, false), rastroMat());
+  if (sentido < 0) rastro.scale.y = -1;   // espelha: o rastro fica do lado de onde ele veio
+  plano.add(rastro);
+  const eletronMat = new THREE.MeshBasicMaterial({ color: cor.clone().lerp(new THREE.Color(1, 1, 1), .45) });
+  const eletron = new THREE.Mesh(new THREE.SphereGeometry(.03, 24, 24), eletronMat);
+  plano.add(eletron);
+  return { aroMat, eletronMat, rastro, eletron, sentido, vel: [0.9, 0.75, 1.05][i], fase: i * 2.1 };
+});
+
+// --- Poeira: poucos pontinhos bem fracos em volta, para dar profundidade -------
+const poeiraGeo = new THREE.BufferGeometry(), N = 260, pos = new Float32Array(N * 3);
+for (let i = 0; i < N; i++) {
+  const u = Math.random() * 2 - 1, a = Math.random() * 6.283, r = 1.7 + Math.pow(Math.random(), 1.6) * 1.9, q = Math.sqrt(1 - u * u);
+  pos.set([Math.cos(a) * q * r, u * r * .7, Math.sin(a) * q * r], i * 3);
+}
+poeiraGeo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+const poeiraMat = new THREE.PointsMaterial({ color: cor, size: .016, transparent: true, opacity: .35, blending: THREE.AdditiveBlending, depthWrite: false });
+const poeira = new THREE.Points(poeiraGeo, poeiraMat); cena.add(poeira);
+
+// --- Brilho (bloom) ---------------------------------------------------------
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(cena, camera));
+// Raio curto demais deixa o brilho quadrado (o desfoque corta nas camadas pequenas).
+const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), .85, .5, .3);
+composer.addPass(bloom);
+composer.addPass(new OutputPass());
+
+// --- Tamanho: o átomo no alto, ocupando ~metade da altura da tela -------------
+function medir() {
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  renderer.setSize(w, h, false); composer.setSize(w, h); bloom.setSize(w, h);
+  camera.aspect = w / h;
+  // Altura visível no plano do átomo; o átomo (diâmetro ~2R+folga) ocupa ~58% dela.
+  const alturaQuer = (2 * R + .5) / .58, largQuer = (2 * R + .7) / .92;
+  const altura = Math.max(alturaQuer, largQuer / camera.aspect);
+  camera.position.z = altura / 2 / Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+  camera.updateProjectionMatrix();
+  atomo.position.y = altura * .19;     // o centro do átomo a ~31% do alto
+  poeira.position.y = atomo.position.y;
+}
+addEventListener("resize", medir); medir();
+
+// --- Mouse: o átomo vira de leve para ele ----------------------------------------
+const alvo = { x: 0, y: 0 }, inclina = { x: 0, y: 0 };
+addEventListener("mousemove", e => { alvo.x = (e.clientX / innerWidth - .5); alvo.y = (e.clientY / innerHeight - .5); });
+
+document.querySelectorAll(".escolha button").forEach(b => b.addEventListener("click", () => {
+  persona = b.dataset.p;
+  document.querySelectorAll(".escolha button").forEach(x => x.classList.toggle("ativo", x === b));
+}));
+if (persona === "friday") document.querySelector('[data-p="friday"]').click();
+
+const raiz = document.documentElement, relogio = new THREE.Clock(), BRANCO = new THREE.Color(1, 1, 1);
+let t = 3, corCss = "";
+function passo(dt) {
+  if (!parado) t += dt;
+  cor.lerp(CORES[persona], 1 - Math.exp(-dt * 5));
+  haloMat.color.copy(cor); poeiraMat.color.copy(cor);
+  for (const o of orbitas) { o.aroMat.color.copy(cor); o.eletronMat.color.copy(cor).lerp(BRANCO, .45); }
+  const hex = cor.getHex(), rgb = [hex >> 16, (hex >> 8) & 255, hex & 255].join(",");  // getHex já volta em sRGB
+  if (rgb !== corCss) { corCss = rgb; raiz.style.setProperty("--cor", `rgb(${rgb})`); raiz.style.setProperty("--cor-rgb", rgb); }
+  nucleoMat.uniforms.uTempo.value = t;
+  nucleo.scale.setScalar(1 + Math.sin(t * 1.8) * .025);
+  for (const o of orbitas) {
+    const a = o.fase + t * o.vel * o.sentido;
+    o.eletron.position.set(Math.cos(a) * R, Math.sin(a) * R, 0);
+    // A escala (o espelho) vem antes da rotação: com o espelho, o arco já
+    // aponta para os ângulos maiores, de onde o elétron que volta veio.
+    o.rastro.rotation.z = a;
+  }
+  inclina.x += (alvo.x - inclina.x) * .04; inclina.y += (alvo.y - inclina.y) * .04;
+  atomo.rotation.y = Math.sin(t * .22) * .35 + inclina.x * .5;
+  atomo.rotation.x = Math.sin(t * .17) * .12 + inclina.y * .35;
+  poeira.rotation.y = t * .02;
+  composer.render();
+}
+function laco() { passo(Math.min(relogio.getDelta(), .1)); requestAnimationFrame(laco); }
+// ?gravar=1: quem grava o vídeo avança quadro a quadro (window.quadro), sem depender da velocidade do PC.
+if (P.get("gravar")) { window.quadro = passo; window.alvo = alvo; window.orbitas = orbitas; } else laco();
+</script>
+</body>
+</html>
