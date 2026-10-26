@@ -1,0 +1,526 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Instalador da NOVA (protótipo)</title>
+<style>
+  @font-face { font-family: "Inter"; src: url("fontes/InterVariable.ttf") format("truetype"); font-weight: 100 900; }
+  :root {
+    --fundo: #05070b; --lateral: #080b11; --vidro: rgba(14, 19, 28, .86); --traco: rgba(120,150,200,.14); --traco-forte: rgba(120,150,200,.28);
+    --texto: #e8eef7; --medio: #b9c1cf; --fraco: #7e879b; --muito-fraco: #4d5568;
+    --ok: #38d39f; --aviso: #ffb454; --cor: #4da3ff; --cor-rgb: 77, 163, 255;
+    --mono: ui-monospace, "JetBrains Mono", "DejaVu Sans Mono", monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 1040px; height: 680px; overflow: hidden; background: transparent; }
+  body { font-family: "Inter", sans-serif; color: var(--texto); -webkit-font-smoothing: antialiased; }
+
+  /* A janela do instalador: sem moldura do sistema, cantos arredondados. */
+  .janela { position: absolute; inset: 0; border-radius: 16px; overflow: hidden; background: var(--fundo); border: 1px solid var(--traco-forte); display: grid; grid-template-columns: 250px 1fr; }
+  .janela::before { content: ""; position: absolute; inset: 0; pointer-events: none;
+    background-image: linear-gradient(rgba(var(--cor-rgb), .04) 1px, transparent 1px), linear-gradient(90deg, rgba(var(--cor-rgb), .04) 1px, transparent 1px);
+    background-size: 44px 44px; mask-image: radial-gradient(ellipse 70% 70% at 70% 40%, #000 20%, transparent 75%); }
+  .barra { position: absolute; top: 0; right: 0; left: 250px; height: 40px; display: flex; justify-content: flex-end; align-items: center; gap: 4px; padding: 0 10px; z-index: 3; }
+  .barra i { width: 30px; height: 26px; border-radius: 7px; display: grid; place-items: center; color: var(--fraco); font-style: normal; font-size: 14px; }
+
+  /* Os passos, na lateral. */
+  .lado { background: var(--lateral); border-right: 1px solid var(--traco); padding: 26px 22px; display: flex; flex-direction: column; position: relative; z-index: 2; }
+  .marca { display: flex; align-items: center; gap: 10px; font-weight: 800; letter-spacing: .2em; font-size: 14px; }
+  .marca canvas { width: 30px; height: 30px; }
+  .marca small { display: block; font: 600 9.5px var(--mono); letter-spacing: .16em; color: var(--fraco); margin-top: 2px; }
+  .passos { list-style: none; margin-top: 38px; display: grid; gap: 4px; position: relative; }
+  .passos::before { content: ""; position: absolute; left: 13px; top: 14px; bottom: 14px; width: 1px; background: var(--traco-forte); }
+  .passos li { display: flex; align-items: center; gap: 13px; padding: 8px 0; font-size: 14px; color: var(--fraco); position: relative; }
+  .passos li b { width: 27px; height: 27px; border-radius: 50%; display: grid; place-items: center; font: 700 11px var(--mono); background: var(--lateral); border: 1px solid var(--traco-forte); color: var(--fraco); flex: none; }
+  .passos li.feito { color: var(--medio); }
+  .passos li.feito b { background: rgba(var(--cor-rgb), .15); border-color: rgba(var(--cor-rgb), .5); color: var(--cor); }
+  .passos li.agora { color: var(--texto); font-weight: 600; }
+  .passos li.agora b { background: var(--cor); border-color: var(--cor); color: #050a12; box-shadow: 0 0 16px rgba(var(--cor-rgb), .6); }
+  .lado .rodape { margin-top: auto; font: 11px var(--mono); color: var(--muito-fraco); line-height: 1.6; }
+
+  /* O conteúdo de cada passo. */
+  .conteudo { position: relative; z-index: 1; padding: 54px 48px 30px; display: flex; flex-direction: column; }
+  .rotulo { font: 600 11px var(--mono); letter-spacing: .22em; color: var(--cor); display: flex; align-items: center; gap: 10px; }
+  .rotulo::before { content: ""; width: 22px; height: 1px; background: currentColor; }
+  h1 { font-size: 34px; letter-spacing: -0.035em; font-weight: 800; line-height: 1.08; margin: 12px 0 10px; }
+  h1 .cor { color: var(--cor); }
+  .sub { color: var(--medio); font-size: 15.5px; max-width: 36em; line-height: 1.55; }
+  .acoes { margin-top: auto; display: flex; gap: 10px; justify-content: flex-end; align-items: center; padding-top: 18px; }
+  .acoes .esq { margin-right: auto; font: 12px var(--mono); color: var(--fraco); }
+  .botao { display: inline-flex; align-items: center; justify-content: center; gap: 9px; height: 44px; padding: 0 22px; border-radius: 11px; font: 650 14.5px "Inter", sans-serif; border: 1px solid transparent; white-space: nowrap; }
+  .botao.cheio { background: linear-gradient(180deg, rgba(255,255,255,.18), transparent 60%), var(--cor); color: #050a12; box-shadow: 0 8px 26px rgba(var(--cor-rgb), .35); }
+  .botao.vazio { background: rgba(var(--cor-rgb), .06); color: var(--texto); border-color: rgba(var(--cor-rgb), .35); }
+  .botao.fantasma { color: var(--fraco); }
+  .vidro { background: var(--vidro); border: 1px solid var(--traco); border-radius: 14px; }
+  .mono { font-family: var(--mono); }
+
+  /* 1. Boas-vindas */
+  .boas { display: grid; grid-template-columns: 1fr 330px; gap: 10px; align-items: center; flex: 1; }
+  .boas canvas { width: 330px; height: 330px; }
+  .lista-curta { list-style: none; margin-top: 22px; display: grid; gap: 10px; }
+  .lista-curta li { display: flex; gap: 11px; align-items: center; font-size: 14.5px; color: var(--medio); }
+  .lista-curta li i { width: 22px; height: 22px; border-radius: 7px; display: grid; place-items: center; font-style: normal; font: 700 11px var(--mono); color: var(--cor); background: rgba(var(--cor-rgb), .12); }
+
+  /* 2. Seu PC */
+  .checagem { margin-top: 22px; padding: 6px 20px; }
+  .item { display: grid; grid-template-columns: 26px 150px 1fr auto; gap: 12px; align-items: center; padding: 12px 0; border-bottom: 1px dashed var(--traco); font-size: 14px; }
+  .item:last-child { border: 0; }
+  .item .ic { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 800; }
+  .item .ic.ok { background: rgba(56,211,159,.15); color: var(--ok); }
+  .item .ic.aviso { background: rgba(255,180,84,.15); color: var(--aviso); }
+  .item .nome { color: var(--fraco); font: 600 11.5px var(--mono); letter-spacing: .1em; }
+  .item .valor { color: var(--texto); }
+  .item .nota { font: 11.5px var(--mono); color: var(--fraco); text-align: right; }
+  .item .nota.ok { color: var(--ok); }
+  .destaque { margin-top: 14px; padding: 14px 18px; display: flex; gap: 12px; align-items: center; font-size: 14px; color: var(--medio); border-color: rgba(56,211,159,.35); background: rgba(56,211,159,.06); }
+  .destaque b { color: var(--texto); }
+
+  /* 3. Escolhas */
+  .grade2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 20px; }
+  .campo { padding: 16px 18px; }
+  .campo label { display: block; font: 600 10.5px var(--mono); letter-spacing: .14em; color: var(--fraco); margin-bottom: 9px; }
+  .entrada { display: flex; align-items: center; gap: 8px; height: 42px; padding: 0 14px; border-radius: 10px; background: rgba(5,7,11,.8); border: 1px solid var(--traco-forte); font-size: 14.5px; }
+  .entrada.foco { border-color: var(--cor); box-shadow: 0 0 0 3px rgba(var(--cor-rgb), .15); }
+  .entrada .cursor { width: 1.5px; height: 18px; background: var(--cor); }
+  .persona { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .persona div { padding: 10px 12px; border-radius: 10px; border: 1px solid var(--traco-forte); display: flex; align-items: center; gap: 10px; font-size: 14px; }
+  .persona div canvas { width: 30px; height: 30px; }
+  .persona div.sim { border-color: var(--cor); background: rgba(var(--cor-rgb), .1); box-shadow: 0 0 0 3px rgba(var(--cor-rgb), .12); }
+  .vozes { display: grid; gap: 8px; }
+  .opcao { display: flex; gap: 11px; align-items: flex-start; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--traco-forte); font-size: 13.5px; }
+  .opcao .bola { width: 16px; height: 16px; border-radius: 50%; border: 1.5px solid var(--fraco); flex: none; margin-top: 2px; }
+  .opcao.sim { border-color: var(--cor); background: rgba(var(--cor-rgb), .08); }
+  .opcao.sim .bola { border: 5px solid var(--cor); }
+  .opcao small { display: block; color: var(--fraco); font-size: 12px; margin-top: 2px; }
+  .opcao .tag { white-space: nowrap; margin-left: auto; font: 700 9.5px var(--mono); letter-spacing: .12em; color: var(--ok); border: 1px solid rgba(56,211,159,.4); padding: 2px 6px; border-radius: 5px; height: fit-content; }
+  .pasta { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
+  .disco { margin-top: 10px; }
+  .disco .barra-d { height: 6px; border-radius: 3px; background: rgba(120,150,200,.15); overflow: hidden; display: flex; }
+  .disco .barra-d i { display: block; height: 100%; }
+  .disco .legenda { display: flex; justify-content: space-between; font: 11px var(--mono); color: var(--fraco); margin-top: 6px; }
+  .marcas { display: flex; gap: 18px; margin-top: 12px; font-size: 13px; color: var(--medio); }
+  .marcas span { display: flex; align-items: center; gap: 8px; }
+  .marcas span i { width: 16px; height: 16px; border-radius: 5px; background: var(--cor); display: grid; place-items: center; color: #050a12; font-size: 11px; font-style: normal; font-weight: 900; }
+
+  /* 4. Instalando */
+  .instalando { display: grid; grid-template-columns: 280px 1fr; gap: 30px; align-items: center; margin-top: 0; flex: 1; padding-bottom: 40px; }
+  .anel { position: relative; width: 280px; height: 280px; }
+  .anel canvas { position: absolute; inset: 30px; width: 220px; height: 220px; }
+  .anel svg { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); }
+  .anel .pct { position: absolute; left: 0; right: 0; bottom: -58px; text-align: center; font: 700 26px var(--mono); }
+  .anel .pct small { display: block; font: 600 10.5px var(--mono); letter-spacing: .14em; color: var(--fraco); }
+  .pecas { display: grid; gap: 7px; }
+  .peca { display: grid; grid-template-columns: 22px 1fr auto; gap: 12px; align-items: center; padding: 11px 14px; border-radius: 11px; border: 1px solid var(--traco); background: rgba(14,19,28,.6); font-size: 13.5px; }
+  .peca .st { width: 18px; height: 18px; border-radius: 50%; border: 1.5px solid var(--muito-fraco); }
+  .peca.ok .st { background: var(--cor); border-color: var(--cor); box-shadow: 0 0 8px var(--cor); }
+  .peca.agora { border-color: rgba(var(--cor-rgb), .45); background: rgba(var(--cor-rgb), .07); }
+  .peca.agora .st { border-color: var(--cor); border-top-color: transparent; }
+  .peca .tam { font: 11.5px var(--mono); color: var(--fraco); }
+  .peca.espera { color: var(--fraco); }
+  .peca .prog { grid-column: 2 / 4; height: 3px; border-radius: 2px; background: rgba(var(--cor-rgb), .15); overflow: hidden; }
+  .peca .prog i { display: block; height: 100%; background: var(--cor); box-shadow: 0 0 8px var(--cor); }
+
+  /* 5. Conta do Claude */
+  .claude { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 24px; }
+  .claude .vidro { padding: 22px; }
+  .claude h3 { font-size: 17px; margin-bottom: 8px; }
+  .claude p { color: var(--medio); font-size: 14px; line-height: 1.55; }
+  .espera-login { display: flex; align-items: center; gap: 12px; margin-top: 18px; font: 13px var(--mono); color: var(--cor); }
+  .espera-login i { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--cor); border-top-color: transparent; }
+  .codigo { margin-top: 14px; padding: 12px 14px; border-radius: 10px; background: rgba(5,7,11,.8); border: 1px dashed var(--traco-forte); font: 13px var(--mono); color: var(--fraco); }
+
+  /* 6. Microfone */
+  .mic { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 20px; align-items: start; }
+  .mic .vidro { padding: 20px; }
+  .onda { height: 120px; display: flex; align-items: center; gap: 4px; margin: 16px 0; }
+  .onda i { flex: 1; border-radius: 2px; background: var(--cor); box-shadow: 0 0 6px rgba(var(--cor-rgb), .6); }
+  .frase { font-size: 30px; font-weight: 800; letter-spacing: -0.03em; text-align: center; margin-top: 8px; }
+  .frase em { font-style: normal; color: var(--cor); }
+  .resultado { display: flex; gap: 10px; align-items: center; justify-content: center; margin-top: 10px; font: 13px var(--mono); color: var(--ok); }
+  .seletor { display: flex; justify-content: space-between; align-items: center; height: 42px; padding: 0 14px; border-radius: 10px; background: rgba(5,7,11,.8); border: 1px solid var(--traco-forte); font-size: 14px; }
+  .nivel { height: 8px; border-radius: 4px; background: rgba(120,150,200,.12); margin-top: 12px; overflow: hidden; }
+  .nivel i { display: block; height: 100%; width: 62%; background: linear-gradient(90deg, var(--ok), var(--cor)); }
+  .testes { display: grid; gap: 9px; margin-top: 16px; font-size: 13.5px; }
+  .testes div { display: flex; justify-content: space-between; color: var(--medio); }
+  .testes b { font: 600 12px var(--mono); color: var(--ok); }
+
+  /* 7. Pronto */
+  .pronto { display: grid; grid-template-columns: 300px 1fr; gap: 24px; align-items: center; flex: 1; }
+  .pronto canvas { width: 300px; height: 300px; }
+  .dicas { display: grid; gap: 10px; margin-top: 18px; }
+  .dica { display: flex; gap: 12px; align-items: center; padding: 12px 14px; border-radius: 11px; border: 1px solid var(--traco); background: rgba(14,19,28,.6); font-size: 14px; color: var(--medio); }
+  .dica b { color: var(--texto); font-weight: 600; }
+  .dica i { width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center; font-style: normal; background: rgba(var(--cor-rgb), .12); color: var(--cor); font: 700 12px var(--mono); flex: none; }
+
+  .tela { display: none; flex-direction: column; flex: 1; }
+  .tela.ativa { display: flex; }
+</style>
+</head>
+<body>
+<div class="janela">
+  <aside class="lado">
+    <div class="marca"><canvas data-n="marca"></canvas><div>NOVA<small>INSTALADOR · BETA 0.1</small></div></div>
+    <ol class="passos" id="passos">
+      <li><b>1</b>Boas-vindas</li>
+      <li><b>2</b>Seu PC</li>
+      <li><b>3</b>Escolhas</li>
+      <li><b>4</b>Instalação</li>
+      <li><b>5</b>Conta do Claude</li>
+      <li><b>6</b>Microfone</li>
+      <li><b>7</b>Pronto</li>
+    </ol>
+    <div class="rodape">// beta fechado<br>// só convidados</div>
+  </aside>
+  <div class="barra"><i>—</i><i>✕</i></div>
+
+  <main class="conteudo">
+    <!-- 1 -->
+    <section class="tela" data-t="1">
+      <div class="boas">
+        <div>
+          <span class="rotulo">BEM-VINDO</span>
+          <h1>Vamos ligar a<br>sua <span class="cor">NOVA.</span></h1>
+          <p class="sub">Em uns 15 minutos o Jarvis e a Friday estão morando no seu PC. O instalador faz o trabalho pesado:</p>
+          <ul class="lista-curta">
+            <li><i>01</i>Confere se o seu PC aguenta tudo</li>
+            <li><i>02</i>Baixa só o que falta, das fontes oficiais</li>
+            <li><i>03</i>Liga na sua conta do Claude</li>
+            <li><i>04</i>Testa o microfone com você</li>
+          </ul>
+        </div>
+        <canvas data-n="grande"></canvas>
+      </div>
+      <div class="acoes"><span class="esq">// núcleo operacional de vozes autônomas</span><span class="botao cheio">Começar →</span></div>
+    </section>
+
+    <!-- 2 -->
+    <section class="tela" data-t="2">
+      <span class="rotulo">PASSO 2 · SEU PC</span>
+      <h1>Seu PC <span class="cor">aguenta tudo.</span></h1>
+      <p class="sub">Conferi as peças que a NOVA usa. Nada foi instalado ainda.</p>
+      <div class="checagem vidro">
+        <div class="item"><span class="ic ok">✓</span><span class="nome">SISTEMA</span><span class="valor">Windows 11 · 64 bits</span><span class="nota ok">ok</span></div>
+        <div class="item"><span class="ic ok">✓</span><span class="nome">PLACA DE VÍDEO</span><span class="valor">NVIDIA GeForce RTX 3060 · 12 GB</span><span class="nota ok">vozes dubladas</span></div>
+        <div class="item"><span class="ic ok">✓</span><span class="nome">MEMÓRIA</span><span class="valor">16 GB</span><span class="nota ok">ok</span></div>
+        <div class="item"><span class="ic ok">✓</span><span class="nome">MICROFONE</span><span class="valor">Microfone USB (padrão)</span><span class="nota ok">ok</span></div>
+        <div class="item"><span class="ic ok">✓</span><span class="nome">INTERNET</span><span class="valor">Conectado</span><span class="nota ok">ok</span></div>
+      </div>
+      <div class="destaque vidro">⚡ <span>Com essa placa, o Jarvis e a Friday falam com as <b>vozes dubladas</b>. Sem placa NVIDIA, a NOVA usa vozes leves, que rodam em qualquer PC.</span></div>
+      <div class="acoes"><span class="botao fantasma">← Voltar</span><span class="botao cheio">Continuar →</span></div>
+    </section>
+
+    <!-- 3 -->
+    <section class="tela" data-t="3">
+      <span class="rotulo">PASSO 3 · ESCOLHAS</span>
+      <h1>Do <span class="cor">seu jeito.</span></h1>
+      <div class="grade2">
+        <div class="campo vidro">
+          <label>COMO ELES TE CHAMAM</label>
+          <div class="entrada foco">Chris<span class="cursor"></span></div>
+          <label style="margin-top:16px">QUEM ATENDE PRIMEIRO</label>
+          <div class="persona">
+            <div class="sim"><canvas data-n="jarvis"></canvas>Jarvis</div>
+            <div><canvas data-n="friday"></canvas>Friday</div>
+          </div>
+        </div>
+        <div class="campo vidro">
+          <label>VOZES</label>
+          <div class="vozes">
+            <div class="opcao sim"><span class="bola"></span><div>Dubladas<small>As vozes do Jarvis e da Friday · 4,1 GB</small></div><span class="tag">SEU PC AGUENTA</span></div>
+            <div class="opcao"><span class="bola"></span><div>Leves<small>Rodam em qualquer PC · 350 MB</small></div></div>
+          </div>
+        </div>
+        <div class="campo vidro" style="grid-column: 1 / -1">
+          <label>ONDE INSTALAR</label>
+          <div class="pasta"><div class="entrada mono" style="font-size:13.5px">D:\Programas\NOVA</div><span class="botao vazio">Procurar…</span></div>
+          <div class="disco">
+            <div class="barra-d"><i style="width:46%;background:rgba(120,150,200,.35)"></i><i style="width:7%;background:var(--cor);box-shadow:0 0 8px var(--cor)"></i></div>
+            <div class="legenda"><span>Disco D: · 312 GB livres</span><span style="color:var(--cor)">a NOVA usa ~ 12 GB</span></div>
+          </div>
+          <div class="marcas"><span><i>✓</i>Ligar junto com o PC</span><span><i>✓</i>Atalho na área de trabalho</span><span><i>✓</i>Ícone perto do relógio</span></div>
+        </div>
+      </div>
+      <div class="acoes"><span class="botao fantasma">← Voltar</span><span class="botao cheio">Instalar →</span></div>
+    </section>
+
+    <!-- 4 -->
+    <section class="tela" data-t="4">
+      <span class="rotulo">PASSO 4 · INSTALAÇÃO</span>
+      <h1>Montando o <span class="cor">núcleo.</span></h1>
+      <p class="sub">Pode deixar rodando. Se a internet cair, ele continua de onde parou.</p>
+      <div class="instalando">
+        <div class="anel">
+          <svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="47" fill="none" stroke="rgba(120,150,200,.15)" stroke-width="1.6"/><circle cx="50" cy="50" r="47" fill="none" stroke="var(--cor)" stroke-width="1.6" stroke-linecap="round" stroke-dasharray="186 296"/></svg>
+          <canvas data-n="carga"></canvas>
+          <div class="pct">63%<small>~ 6 MIN</small></div>
+        </div>
+        <div class="pecas">
+          <div class="peca ok"><span class="st"></span>Programa e bibliotecas<span class="tam">1,9 GB</span></div>
+          <div class="peca ok"><span class="st"></span>Ouvido (Whisper)<span class="tam">1,6 GB</span></div>
+          <div class="peca ok"><span class="st"></span>Palavras "Hey Jarvis" e "Hey Friday"<span class="tam">12 MB</span></div>
+          <div class="peca agora"><span class="st"></span>Voz do Jarvis<span class="tam">1,2 GB · 64%</span><span class="prog"><i style="width:64%"></i></span></div>
+          <div class="peca espera"><span class="st"></span>Voz da Friday<span class="tam">2,9 GB</span></div>
+          <div class="peca espera"><span class="st"></span>Claude Code<span class="tam">220 MB</span></div>
+        </div>
+      </div>
+      <div class="acoes"><span class="esq">// baixando de huggingface.co a 18 MB/s</span><span class="botao vazio">Pausar</span></div>
+    </section>
+
+    <!-- 5 -->
+    <section class="tela" data-t="5">
+      <span class="rotulo">PASSO 5 · CONTA DO CLAUDE</span>
+      <h1>O cérebro é <span class="cor">o seu Claude.</span></h1>
+      <p class="sub">O Jarvis e a Friday pensam com o Claude, na sua própria conta. Nada passa por servidor nosso.</p>
+      <div class="claude">
+        <div class="vidro">
+          <h3>Entrar no Claude</h3>
+          <p>Abre o navegador, você entra com a sua conta do Claude e volta pra cá. Precisa do plano <b>Pro</b> ou <b>Max</b>.</p>
+          <div style="margin-top:18px"><span class="botao cheio">Abrir o login do Claude</span></div>
+          <div class="espera-login"><i></i>esperando você entrar no navegador…</div>
+        </div>
+        <div class="vidro">
+          <h3>Não abriu?</h3>
+          <p>Abra este endereço em qualquer navegador e digite o código:</p>
+          <div class="codigo">claude.ai/oauth · código <b style="color:var(--texto)">K7Q-2M9X</b></div>
+          <p style="margin-top:14px;font-size:13px;color:var(--fraco)">Não tem conta? Dá pra criar no mesmo lugar.</p>
+        </div>
+      </div>
+      <div class="acoes"><span class="botao fantasma">← Voltar</span><span class="botao cheio" style="opacity:.45">Continuar →</span></div>
+    </section>
+
+    <!-- 6 -->
+    <section class="tela" data-t="6">
+      <span class="rotulo">PASSO 6 · MICROFONE</span>
+      <h1>Agora <span class="cor">fala com ele.</span></h1>
+      <div class="mic">
+        <div class="vidro">
+          <div class="frase">Diga "<em>Hey Jarvis</em>"</div>
+          <div class="onda" id="onda"></div>
+          <div class="resultado">✓ ouvi! nota 0,86 — pode ser de longe também</div>
+        </div>
+        <div class="vidro">
+          <label style="font:600 10.5px var(--mono);letter-spacing:.14em;color:var(--fraco)">MICROFONE</label>
+          <div class="seletor" style="margin-top:9px"><span>Microfone USB (padrão)</span><span style="color:var(--fraco)">▾</span></div>
+          <div class="nivel"><i></i></div>
+          <div class="testes">
+            <div>Volume<b>bom ✓</b></div>
+            <div>Ruído do ambiente<b>baixo ✓</b></div>
+            <div>"Hey Jarvis"<b>ouvido 3 de 3 ✓</b></div>
+            <div>"Hey Friday"<b style="color:var(--fraco)">falta testar</b></div>
+          </div>
+        </div>
+      </div>
+      <div class="acoes"><span class="botao fantasma">Pular</span><span class="botao cheio">Continuar →</span></div>
+    </section>
+
+    <!-- 7 -->
+    <section class="tela" data-t="7">
+      <div class="pronto">
+        <canvas data-n="final"></canvas>
+        <div>
+          <span class="rotulo" style="color:var(--ok)">TUDO PRONTO</span>
+          <h1>A NOVA está <span class="cor">ligada.</span></h1>
+          <div class="dicas">
+            <div class="dica"><i>🎙</i><span>Diga <b>"Hey Jarvis"</b> ou <b>"Hey Friday"</b> de qualquer canto do quarto.</span></div>
+            <div class="dica"><i>◎</i><span>A janela fica no <b>ícone perto do relógio</b>.</span></div>
+            <div class="dica"><i>📱</i><span>Quer no celular? Pede: <b>"Jarvis, me ajuda a ligar o app."</b></span></div>
+          </div>
+        </div>
+      </div>
+      <div class="acoes"><span class="botao vazio">Concluir</span><span class="botao cheio">Abrir a NOVA</span></div>
+    </section>
+  </main>
+</div>
+
+<script>
+const P = new URLSearchParams(location.search);
+const tela = Number(P.get("tela") || 1);
+document.querySelector(`.tela[data-t="${tela}"]`).classList.add("ativa");
+document.querySelectorAll("#passos li").forEach((li, i) => li.classList.add(i + 1 < tela ? "feito" : i + 1 === tela ? "agora" : "x"));
+// A onda do microfone (tela 6).
+document.getElementById("onda").innerHTML = Array.from({ length: 44 }, (_, i) => {
+  const m = 1 - Math.abs(i - 22) / 22, h = 8 + m * 100 * (0.45 + 0.55 * Math.abs(Math.sin(i * 1.7) * Math.cos(i * 0.6)));
+  return `<i style="height:${h}px;opacity:${0.35 + m * 0.65}"></i>`;
+}).join("");
+function rgba(c, a) { return `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a})`; }
+class Nucleo {
+  constructor(canvas, { escala = 1, particulas = 120, faiscas = true, fixa = null, aneisFinos = false, hud = false } = {}) {
+    this.c = canvas; this.x = canvas.getContext("2d");
+    this.escala = escala; this.faiscas = faiscas; this.fixa = fixa; this.aneisFinos = aneisFinos; this.hud = hud;
+    this.energia = 0;
+    this.aneis = [
+      { inc: 1.2, giro: 0.0, vel: 0.9, raio: 0.92, eletrons: 2 },
+      { inc: 1.15, giro: 2.1, vel: -0.7, raio: 0.80, eletrons: 2 },
+      { inc: 1.25, giro: 4.2, vel: 1.15, raio: 0.68, eletrons: 1 },
+    ];
+    this.pontos = Array.from({ length: particulas }, () => ({
+      r: 0.35 + Math.random() * 0.85, a: Math.random() * 6.283, y: (Math.random() - 0.5) * 1.1,
+      v: 0.05 + Math.random() * 0.25, t: 0.4 + Math.random() * 1.4,
+    }));
+    this.arcos = []; this.proxArco = 0;
+    this.medir();
+  }
+  medir() {
+    const d = Math.min(window.devicePixelRatio || 1, 2);
+    const w = this.c.clientWidth, h = this.c.clientHeight;
+    this.c.width = Math.max(1, w * d); this.c.height = Math.max(1, h * d);
+    this.w = w; this.h = h; this.d = d;
+  }
+  // Ponto de um anel inclinado, já projetado em perspectiva.
+  anel(a, ang, t, R) {
+    let x = Math.cos(ang) * R, y = Math.sin(ang) * R, z = 0;
+    const ci = Math.cos(a.inc), si = Math.sin(a.inc);
+    [y, z] = [y * ci, y * si];                                  // inclina (eixo X)
+    const g = a.giro + t * 0.12, cg = Math.cos(g), sg = Math.sin(g);
+    [x, y] = [x * cg - y * sg, x * sg + y * cg];                // gira o plano (eixo Z)
+    if (this.inclina) {                                         // vira para o mouse
+      const [ix, iy] = this.inclina, cy_ = Math.cos(ix), sy_ = Math.sin(ix), cx_ = Math.cos(iy), sx_ = Math.sin(iy);
+      [x, z] = [x * cy_ + z * sy_, -x * sy_ + z * cy_];
+      [y, z] = [y * cx_ - z * sx_, y * sx_ + z * cx_];
+    }
+    const f = 3.2 * R / (3.2 * R + z);
+    return [x * f, y * f, z / R];
+  }
+  // Os anéis de HUD em volta (o tracejado, o segmentado, o arco claro e a
+  // régua), no mesmo desenho do núcleo: nada de camada girando por fora.
+  desenharHud(t, c) {
+    const x = this.x, u = this.w / 100;
+    x.save(); x.translate(this.w / 2, this.h / 2); x.lineCap = "round";
+    const anel = (r, larg, alfa, traco, giro) => {
+      x.save(); x.rotate(giro); x.setLineDash(traco.map(v => v * u));
+      x.lineWidth = larg * u; x.strokeStyle = rgba(c, alfa);
+      x.beginPath(); x.arc(0, 0, r * u, 0, 6.283); x.stroke(); x.restore();
+    };
+    anel(48.5, 0.25, 0.25, [0.4, 1.6], t * 6.283 / 90);
+    anel(46, 0.5, 0.55, [14, 4, 2, 4, 30, 8, 4, 6], -t * 6.283 / 28);
+    anel(43.2, 2.4, 0.12, [40, 231], t * 6.283 / 40);
+    anel(43.2, 0.9, 0.9, [40, 231], t * 6.283 / 40);
+    x.setLineDash([]);
+    for (let i = 0; i < 120; i++) {
+      const a = i / 120 * 6.283, forte = i % 10 === 0, r2 = forte ? 38.2 : 39.3;
+      x.strokeStyle = rgba(c, forte ? 0.75 : 0.32); x.lineWidth = 0.25 * u;
+      x.beginPath(); x.moveTo(Math.cos(a) * 40.2 * u, Math.sin(a) * 40.2 * u); x.lineTo(Math.cos(a) * r2 * u, Math.sin(a) * r2 * u); x.stroke();
+    }
+    x.restore();
+  }
+  desenhar(t, c) {
+    const x = this.x, d = this.d, cx = this.w / 2, cy = this.h / 2;
+    const R = Math.min(this.w, this.h) * 0.36 * this.escala;
+    if (R < 1) return;  // escondido (a janelinha fechada): nada a desenhar
+    if (this.fixa) c = this.fixa;
+    if (this.alvo) {
+      this.inclina = this.inclina || [0, 0];
+      this.inclina[0] += (this.alvo[0] - this.inclina[0]) * 0.05;
+      this.inclina[1] += (this.alvo[1] - this.inclina[1]) * 0.05;
+    }
+    x.setTransform(d, 0, 0, d, 0, 0);
+    x.clearRect(0, 0, this.w, this.h);
+    if (this.hud) this.desenharHud(t, c);
+    x.globalCompositeOperation = "lighter";
+    const e = this.energia;
+
+    // Halo de fundo.
+    let g = x.createRadialGradient(cx, cy, 0, cx, cy, R * 1.6);
+    g.addColorStop(0, rgba(c, 0.20 + e * 0.1)); g.addColorStop(0.45, rgba(c, 0.06)); g.addColorStop(1, rgba(c, 0));
+    x.fillStyle = g; x.fillRect(0, 0, this.w, this.h);
+
+    // Partículas girando em volta (uma nuvem em 3D).
+    for (const p of this.pontos) {
+      const ang = p.a + t * p.v;
+      const px = Math.cos(ang) * p.r * R * 1.15, pz = Math.sin(ang) * p.r * R * 1.15, py = p.y * R;
+      const f = 3 * R / (3 * R + pz);
+      const brilho = (0.25 + 0.75 * (1 - (pz / R + 1.2) / 2.4)) * (0.6 + 0.4 * Math.sin(t * 2 + p.a * 5));
+      x.fillStyle = rgba(c, Math.max(0, brilho) * 0.8);
+      x.beginPath(); x.arc(cx + px * f, cy + py * f, p.t * f, 0, 6.283); x.fill();
+    }
+
+    // Os anéis e os elétrons com rastro.
+    for (const a of this.aneis) {
+      const Ra = R * a.raio;
+      x.lineWidth = this.aneisFinos ? 0.8 : 1.1;
+      for (let i = 0; i < 96; i++) {
+        const p1 = this.anel(a, i / 96 * 6.283, t, Ra), p2 = this.anel(a, (i + 1) / 96 * 6.283, t, Ra);
+        x.strokeStyle = rgba(c, 0.12 + 0.35 * (1 - (p1[2] + 1) / 2));
+        x.beginPath(); x.moveTo(cx + p1[0], cy + p1[1]); x.lineTo(cx + p2[0], cy + p2[1]); x.stroke();
+      }
+      for (let k = 0; k < a.eletrons; k++) {
+        const base = t * a.vel * (1 + e * 0.6) + k * Math.PI;
+        // O rastro: uma linha contínua que afina e some (antes, bolinhas em fila).
+        x.lineCap = "round";
+        let ant = null;
+        for (let j = 30; j >= 0; j--) {
+          const p = this.anel(a, base - j * 0.04 * Math.sign(a.vel), t, Ra);
+          if (ant) {
+            const k2 = 1 - j / 31, frente = 0.3 + 0.7 * (1 - (p[2] + 1) / 2);
+            x.strokeStyle = rgba(c, k2 * k2 * frente * 0.95);
+            x.lineWidth = k2 * 3.2 * (R / 150 + 0.35);
+            x.beginPath(); x.moveTo(cx + ant[0], cy + ant[1]); x.lineTo(cx + p[0], cy + p[1]); x.stroke();
+          }
+          ant = p;
+        }
+        const p = this.anel(a, base, t, Ra);
+        g = x.createRadialGradient(cx + p[0], cy + p[1], 0, cx + p[0], cy + p[1], R * 0.1);
+        g.addColorStop(0, "rgba(255,255,255,0.9)"); g.addColorStop(0.3, rgba(c, 0.6)); g.addColorStop(1, rgba(c, 0));
+        x.fillStyle = g; x.beginPath(); x.arc(cx + p[0], cy + p[1], R * 0.1, 0, 6.283); x.fill();
+      }
+    }
+
+    // Faíscas: arcos de energia que piscam em volta do núcleo.
+    if (this.faiscas) {
+      if (t > this.proxArco) {
+        this.proxArco = t + 0.06 + Math.random() * 0.12;
+        this.arcos.push({ a: Math.random() * 6.283, l: 0.25 + Math.random() * 0.6, r: 0.4 + Math.random() * 0.3, vida: 1,
+                          tremor: Array.from({ length: 11 }, (_, i) => i === 0 || i === 10 ? 0 : (Math.random() - 0.5) * 0.09) });
+        if (this.arcos.length > 9) this.arcos.shift();
+      }
+      for (const arco of this.arcos) {
+        arco.vida -= 0.05;
+        if (arco.vida <= 0) continue;
+        x.beginPath();
+        for (let i = 0; i <= 10; i++) {
+          const ang = arco.a + arco.l * i / 10;
+          const rr = R * arco.r * (1 + arco.tremor[i] * (1.4 - arco.vida));
+          const px = cx + Math.cos(ang) * rr, py = cy + Math.sin(ang) * rr * 0.92;
+          i ? x.lineTo(px, py) : x.moveTo(px, py);
+        }
+        x.lineWidth = 3; x.strokeStyle = rgba(c, arco.vida * 0.12); x.stroke();
+        x.lineWidth = 0.9; x.strokeStyle = rgba(c, arco.vida * 0.7); x.stroke();
+      }
+    }
+
+    // O núcleo: brilho forte no centro, com plasma girando por dentro.
+    const pulso = 1 + Math.sin(t * 2.4) * 0.04 + e * 0.12;
+    const Rn = R * 0.36 * pulso;
+    g = x.createRadialGradient(cx, cy, 0, cx, cy, Rn * 2.4);
+    g.addColorStop(0, rgba(c, 0.55)); g.addColorStop(0.35, rgba(c, 0.18)); g.addColorStop(1, rgba(c, 0));
+    x.fillStyle = g; x.beginPath(); x.arc(cx, cy, Rn * 2.4, 0, 6.283); x.fill();
+    for (let i = 0; i < 5; i++) {
+      const ang = t * (0.7 + i * 0.23) + i * 1.3, rr = Rn * 0.45;
+      const bx = cx + Math.cos(ang) * rr, by = cy + Math.sin(ang * 1.3) * rr;
+      g = x.createRadialGradient(bx, by, 0, bx, by, Rn * 0.7);
+      g.addColorStop(0, rgba(c, 0.35)); g.addColorStop(1, rgba(c, 0));
+      x.fillStyle = g; x.beginPath(); x.arc(bx, by, Rn * 0.7, 0, 6.283); x.fill();
+    }
+    g = x.createRadialGradient(cx - Rn * 0.2, cy - Rn * 0.25, 0, cx, cy, Rn);
+    g.addColorStop(0, "rgba(255,255,255,0.95)"); g.addColorStop(0.25, rgba([255, 255, 255].map((v, i) => (v + c[i]) / 2), 0.75));
+    g.addColorStop(0.7, rgba(c, 0.45)); g.addColorStop(1, rgba(c, 0));
+    x.fillStyle = g; x.beginPath(); x.arc(cx, cy, Rn, 0, 6.283); x.fill();
+    x.globalCompositeOperation = "source-over";
+  }
+}
+
+
+const AZUL = [77, 163, 255], ROSA = [255, 111, 181], VERDE = [56, 211, 159];
+const opc = {
+  marca: { escala: 1.25, particulas: 0, faiscas: false, aneisFinos: true },
+  grande: { escala: 1, particulas: 140 }, carga: { escala: 1, particulas: 90 },
+  jarvis: { escala: 1.2, particulas: 0, faiscas: false, aneisFinos: true, fixa: AZUL },
+  friday: { escala: 1.2, particulas: 0, faiscas: false, aneisFinos: true, fixa: ROSA },
+  final: { escala: 1, particulas: 160 },
+};
+const ns = [...document.querySelectorAll("canvas[data-n]")].filter(c => c.offsetParent).map(c => new Nucleo(c, opc[c.dataset.n] || {}));
+const ini = performance.now();
+(function laco(t) { const s = (t - ini) / 1000; ns.forEach(n => n.desenhar(s, AZUL)); requestAnimationFrame(laco); })(ini);
+</script>
+</body>
+</html>
