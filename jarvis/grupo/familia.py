@@ -341,9 +341,9 @@ class GrupoFamilia(threading.Thread):
             async for _ in query(prompt=pedido, options=opcoes):
                 pass
             if not mandadas:
-                # 26/10/2026: ele leu a memória, respondeu só em texto ("Mandei o
-                # lembrete da Karyn") e nada chegou no grupo; o recado, já fora da
-                # lista, se perdeu calado. Texto solto não vai para o WhatsApp.
+                # Texto solto não vai para o WhatsApp: se ele só escrever (sem o
+                # `responder`), o recado, já fora da lista, se perderia calado.
+                # (O do CIEE, 26/10/2026, saiu certo às 8h00; isto é só a garantia.)
                 async for _ in query(prompt=pedido + "\n\nATENÇÃO: numa tentativa anterior você respondeu "
                                      "só com texto e NADA chegou no grupo. Só o que passa pela ferramenta "
                                      "`responder` chega. Mande agora o recado com `responder`.", options=opcoes):
