@@ -283,9 +283,12 @@ class GrupoFamilia(threading.Thread):
         def _t(texto: str) -> dict:
             return {"content": [{"type": "text", "text": texto}]}
 
+        mandadas: list[str] = []
+
         @tool("responder", "Manda uma mensagem no grupo (o \"🤖 Jarvis:\" entra sozinho).", {"texto": str})
         async def responder(args):
-            self._mandar(jid, str(args.get("texto") or ""))
+            mandadas.append(str(args.get("texto") or ""))
+            self._mandar(jid, mandadas[-1])
             return _t("Mandado no grupo.")
 
         @tool("nao_era_comigo", "A mensagem só falava SOBRE o Jarvis: avisa o dono, sem responder no grupo.",
@@ -337,6 +340,16 @@ class GrupoFamilia(threading.Thread):
                       "\n".join(f"- {r}" for r in recados_da_hora))
             async for _ in query(prompt=pedido, options=opcoes):
                 pass
+            if not mandadas:
+                # 26/10/2026: ele leu a memória, respondeu só em texto ("Mandei o
+                # lembrete da Karyn") e nada chegou no grupo; o recado, já fora da
+                # lista, se perdeu calado. Texto solto não vai para o WhatsApp.
+                async for _ in query(prompt=pedido + "\n\nATENÇÃO: numa tentativa anterior você respondeu "
+                                     "só com texto e NADA chegou no grupo. Só o que passa pela ferramenta "
+                                     "`responder` chega. Mande agora o recado com `responder`.", options=opcoes):
+                    pass
+            if not mandadas:
+                self._notificar("Não consegui entregar no grupo o recado: " + "; ".join(recados_da_hora))
             return
         pedido = (f"Agora: {agora:%A, %d/%m/%Y %H:%M} (fuso UTC{agora:%z}).\n\n"
                   "As últimas mensagens do grupo, para contexto:\n" + conversa +
