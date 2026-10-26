@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>NOVA: o que significa</title>
+<style>
+  @font-face { font-family: "Inter"; src: url("fontes/InterVariable.ttf") format("truetype"); font-weight: 100 900; }
+  :root { --fundo:#05070b; --sup:rgba(16,22,32,.85); --traco:#1c2533; --texto:#e8eef7; --medio:#b9c1cf; --fraco:#7e879b; --j:#4da3ff; --f:#ff6fb5; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: radial-gradient(1200px 700px at 80% -10%, rgba(77,163,255,.14), transparent 60%),
+                     radial-gradient(900px 600px at -10% 110%, rgba(255,111,181,.10), transparent 60%), var(--fundo);
+         color: var(--texto); font-family: "Inter", sans-serif; padding: 60px 52px; width: 1080px; }
+  .verbete { border: 1px solid var(--traco); border-radius: 22px; padding: 34px 38px; background: var(--sup); margin-bottom: 36px; position: relative; overflow: hidden; }
+  .verbete::before { content: ""; position: absolute; inset: 0; background: repeating-linear-gradient(0deg, rgba(255,255,255,.018) 0 1px, transparent 1px 4px); }
+  .palavra { font-size: 96px; font-weight: 850; letter-spacing: .12em; line-height: 1;
+             background: linear-gradient(90deg, var(--j), #b9a2ff 55%, var(--f)); -webkit-background-clip: text; color: transparent; }
+  .fonetica { font-family: ui-monospace, "DejaVu Sans Mono", monospace; font-size: 26px; color: var(--medio); margin-top: 14px; }
+  .fonetica b { color: var(--texto); }
+  .classe { font-size: 18px; color: var(--fraco); font-style: italic; margin-top: 8px; }
+  h2 { font-size: 30px; letter-spacing: -0.02em; margin-bottom: 8px; }
+  .sub { color: var(--medio); font-size: 19px; margin-bottom: 26px; }
+  .op { display: grid; grid-template-columns: 58px 1fr; gap: 22px; padding: 24px 28px; margin-bottom: 14px; border-radius: 18px;
+        background: var(--sup); border: 1px solid var(--traco); }
+  .n { width: 58px; height: 58px; border-radius: 50%; display: grid; place-items: center; font-size: 24px; font-weight: 800;
+       border: 1px solid rgba(77,163,255,.5); color: var(--j); box-shadow: 0 0 24px rgba(77,163,255,.25) inset; }
+  .op:nth-child(even) .n { border-color: rgba(255,111,181,.5); color: var(--f); box-shadow: 0 0 24px rgba(255,111,181,.25) inset; }
+  .sigla { font-size: 30px; font-weight: 650; letter-spacing: -0.01em; line-height: 1.25; }
+  .sigla b { font-weight: 900; color: var(--j); }
+  .op:nth-child(even) .sigla b { color: var(--f); }
+  .porque { color: var(--fraco); font-size: 18px; margin-top: 6px; }
+</style>
+</head>
+<body>
+  <div class="verbete">
+    <div class="palavra">NOVA</div>
+    <div class="fonetica">/ <b>nô</b>·va /</div>
+    <div class="classe">substantivo feminino · as duas inteligências, Jarvis e Friday, no mesmo núcleo</div>
+  </div>
+  <h2>O que significa a sigla</h2>
+  <p class="sub">Menos genérico: todas falam das duas vozes, do núcleo ou da conexão.</p>
+  <div class="op"><div class="n">1</div><div>
+    <div class="sigla"><b>N</b>úcleo de <b>Ó</b>rbita das <b>V</b>ozes <b>A</b>utônomas</div>
+    <div class="porque">O átomo: as duas vozes girando em volta do mesmo núcleo.</div></div></div>
+  <div class="op"><div class="n">2</div><div>
+    <div class="sigla"><b>N</b>ova <b>O</b>rdem das <b>V</b>ozes <b>A</b>rtificiais</div>
+    <div class="porque">O mais "filme": futurista, quase um manifesto.</div></div></div>
+  <div class="op"><div class="n">3</div><div>
+    <div class="sigla"><b>N</b>exo entre <b>O</b>uvir, <b>V</b>oz e <b>A</b>ção</div>
+    <div class="porque">A conexão: ouve você, responde com voz e faz.</div></div></div>
+  <div class="op"><div class="n">4</div><div>
+    <div class="sigla"><b>N</b>úcleo <b>O</b>peracional de <b>V</b>ozes <b>A</b>liadas</div>
+    <div class="porque">"Vozes aliadas": o Jarvis e a Friday trabalhando juntos por você.</div></div></div>
+  <div class="op"><div class="n">5</div><div>
+    <div class="sigla"><b>N</b>ossa <b>O</b>utra <b>V</b>oz <b>A</b>miga</div>
+    <div class="porque">A mais carinhosa, com a cara da Friday.</div></div></div>
+</body>
+</html>
