@@ -184,11 +184,11 @@ const argolaMat = (fase, sentido) => new THREE.ShaderMaterial({
       gl_FragColor = vec4(c * vao, 1.);
     }`,
 });
-// Cada argola gira em volta do núcleo (o suporte dela roda no eixo vertical,
-// cada uma num ritmo) e leva uma bolinha; o pulso da faixa é o rastro dela.
+// Cada argola gira em torno do próprio eixo comprido (como uma moeda girando
+// em pé: a que está na vertical gira para os lados), cada uma num ritmo, e
+// leva uma bolinha; o pulso da faixa é o rastro dela.
 const argolas = [0, 1, 2].map(i => {
-  const suporte = new THREE.Group(); atomo.add(suporte);
-  const fora = new THREE.Group(); fora.rotation.z = i * Math.PI / 3; suporte.add(fora);
+  const fora = new THREE.Group(); fora.rotation.z = i * Math.PI / 3; atomo.add(fora);
   const plano = new THREE.Group(); plano.rotation.x = 1.2; fora.add(plano);
   const sentido = i === 1 ? -1 : 1;
   const mat = argolaMat(i * .37, sentido);
@@ -199,8 +199,8 @@ const argolas = [0, 1, 2].map(i => {
   const eletronMat = new THREE.MeshBasicMaterial({ color: cor.clone().lerp(new THREE.Color(1, 1, 1), .5) });
   const eletron = new THREE.Mesh(new THREE.SphereGeometry(.05, 24, 24), eletronMat);
   plano.add(eletron);
-  return { suporte, mat, eletron, eletronMat, sentido, vel: [.16, .13, .19][i], fase: i * .3,
-           giro: [.32, -.26, .38][i], giroFase: i * 2.1 };
+  return { plano, mat, eletron, eletronMat, sentido, vel: [.16, .13, .19][i], fase: i * .3,
+           giro: [.5, -.42, .6][i], giroFase: 1.2 + i * .7 };
 });
 
 // --- Poeira: poucos pontinhos bem fracos em volta, para dar profundidade -------
@@ -262,7 +262,7 @@ function passo(dt) {
     // O mesmo ponto da faixa (o cilindro deitado): u -> (R sen, -R cos, 0).
     g.eletron.position.set(Math.sin(u * 6.2831853) * R, -Math.cos(u * 6.2831853) * R, 0);
     g.eletronMat.color.copy(cor).lerp(BRANCO, .5);
-    g.suporte.rotation.y = g.giroFase + t * g.giro;
+    g.plano.rotation.x = g.giroFase + t * g.giro;   // o eixo X do plano é o eixo comprido da argola
   }
   inclina.x += (alvo.x - inclina.x) * .04; inclina.y += (alvo.y - inclina.y) * .04;
   atomo.rotation.y = Math.sin(t * .22) * .35 + inclina.x * .5;
