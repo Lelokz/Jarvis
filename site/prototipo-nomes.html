@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nomes do conjunto</title>
+<style>
+  @font-face { font-family: "Inter"; src: url("fontes/InterVariable.ttf") format("truetype"); font-weight: 100 900; }
+  :root { --fundo:#0a0c10; --sup:#131821; --traco:#1f2734; --forte:#2a3446; --texto:#e6ebf2; --medio:#b9c1cf; --fraco:#7e879b; --j:#4da3ff; --f:#ff6fb5; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--fundo); color: var(--texto); font-family: "Inter", sans-serif; padding: 56px 48px; width: 1080px; }
+  h1 { font-size: 46px; letter-spacing: -0.03em; font-weight: 800; }
+  .sub { color: var(--medio); font-size: 21px; margin: 10px 0 40px; }
+  .op { display: grid; grid-template-columns: 110px 1fr; gap: 28px; align-items: center; padding: 30px 32px; margin-bottom: 18px;
+        background: var(--sup); border: 1px solid var(--traco); border-radius: 22px; position: relative; overflow: hidden; }
+  .op::after { content: ""; position: absolute; right: -120px; top: -120px; width: 320px; height: 320px;
+               background: radial-gradient(closest-side, rgba(77,163,255,.13), transparent 70%); }
+  .op:nth-child(even)::after { background: radial-gradient(closest-side, rgba(255,111,181,.13), transparent 70%); }
+  .op svg { width: 110px; height: 110px; }
+  .num { position: absolute; top: 18px; right: 24px; color: var(--fraco); font-weight: 700; font-size: 18px; }
+  .nome { font-size: 64px; font-weight: 820; letter-spacing: 0.06em; line-height: 1; }
+  .sigla { font-size: 23px; color: var(--medio); margin-top: 12px; }
+  .sigla b { color: var(--j); font-weight: 800; }
+  .op:nth-child(even) .sigla b { color: var(--f); }
+  .porque { font-size: 18px; color: var(--fraco); margin-top: 8px; }
+</style>
+</head>
+<body>
+  <svg width="0" height="0" style="position:absolute"><defs>
+    <symbol id="atomo" viewBox="-50 -50 100 100">
+      <circle r="30" fill="currentColor" fill-opacity="0.08"/><circle r="17" fill="currentColor" fill-opacity="0.55"/>
+      <ellipse rx="46" ry="15" fill="none" stroke="currentColor" stroke-width="3.5"/>
+      <ellipse rx="39" ry="22" transform="rotate(62)" fill="none" stroke="currentColor" stroke-width="3.5"/>
+      <ellipse rx="32" ry="12" transform="rotate(121)" fill="none" stroke="currentColor" stroke-width="3.5"/>
+    </symbol></defs></svg>
+
+  <h1>O nome do conjunto</h1>
+  <p class="sub">Cada um é uma sigla. Jarvis e Friday continuam sendo as duas personas.</p>
+
+  <div class="ops">
+    <div class="op"><span class="num">1</span><svg style="color:var(--j)"><use href="#atomo"/></svg><div>
+      <div class="nome">NOVA</div>
+      <div class="sigla"><b>N</b>úcleo <b>O</b>peracional de <b>V</b>oz e <b>A</b>ssistência</div>
+      <div class="porque">Estrela nova. Curto, e soa bem em português e em inglês.</div></div></div>
+    <div class="op"><span class="num">2</span><svg style="color:var(--f)"><use href="#atomo"/></svg><div>
+      <div class="nome">ELO</div>
+      <div class="sigla"><b>E</b>scuta, <b>L</b>embra e <b>O</b>pera</div>
+      <div class="porque">O elo entre você e as duas IAs. As três coisas que ele faz.</div></div></div>
+    <div class="op"><span class="num">3</span><svg style="color:var(--j)"><use href="#atomo"/></svg><div>
+      <div class="nome">ORBE</div>
+      <div class="sigla"><b>O</b>rganiza, <b>R</b>esponde, <b>B</b>usca e <b>E</b>xecuta</div>
+      <div class="porque">Combina com o átomo da janela: os anéis em órbita.</div></div></div>
+    <div class="op"><span class="num">4</span><svg style="color:var(--f)"><use href="#atomo"/></svg><div>
+      <div class="nome">IRIS</div>
+      <div class="sigla"><b>I</b>nteligência <b>R</b>esidente, <b>I</b>nterativa e <b>S</b>onora</div>
+      <div class="porque">Íris, a mensageira dos deuses. "Residente" porque mora no seu PC.</div></div></div>
+    <div class="op"><span class="num">5</span><svg style="color:var(--j)"><use href="#atomo"/></svg><div>
+      <div class="nome">ECO</div>
+      <div class="sigla"><b>E</b>scuta, <b>C</b>onversa e <b>O</b>rganiza</div>
+      <div class="porque">A sua voz que volta como resposta.</div></div></div>
+  </div>
+</body>
+</html>

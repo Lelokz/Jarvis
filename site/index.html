@@ -1,0 +1,611 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Beta fechado: fora dos buscadores. -->
+<meta name="robots" content="noindex, nofollow">
+<title>NOVA — Jarvis e Friday</title>
+<style>
+  @font-face {
+    font-family: "Inter";
+    src: url("fontes/InterVariable.ttf") format("truetype");
+    font-weight: 100 900;
+    font-display: swap;
+  }
+
+  /* As cores da janela (jarvis/interface/qml/Tema.qml). */
+  :root {
+    --fundo: #0a0c10;
+    --lateral: #0d1016;
+    --superficie: #131821;
+    --superficie2: #181e29;
+    --realce: #1f2738;
+    --traco: #1f2734;
+    --traco-forte: #2a3446;
+    --texto: #e6ebf2;
+    --texto-medio: #b9c1cf;
+    --texto-fraco: #7e879b;
+    --muito-fraco: #4d5568;
+    --jarvis: #4da3ff;
+    --friday: #ff6fb5;
+    --ouvindo: #4da3ff;
+    --escutando: #38d39f;
+    --pensando: #9b7bff;
+    --falando: #ffb454;
+    --perigo: #ff6b6b;
+    --raio: 14px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--fundo);
+    color: var(--texto);
+    font-family: "Inter", system-ui, sans-serif;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+  a { color: inherit; text-decoration: none; }
+  .largura { max-width: 1160px; margin: 0 auto; padding: 0 24px; }
+
+  /* -- topo ------------------------------------------------------------- */
+  .topo {
+    position: sticky; top: 0; z-index: 10;
+    background: rgba(10, 12, 16, 0.78);
+    backdrop-filter: blur(14px);
+    border-bottom: 1px solid var(--traco);
+  }
+  .topo .largura { display: flex; align-items: center; height: 64px; gap: 32px; }
+  .marca { display: flex; align-items: center; gap: 10px; font-weight: 750; letter-spacing: 0.08em; }
+  .marca svg { width: 28px; height: 28px; }
+  .menu { display: flex; gap: 26px; font-size: 14.5px; color: var(--texto-medio); }
+  .menu a:hover { color: var(--texto); }
+  .topo .acoes { margin-left: auto; display: flex; gap: 10px; }
+
+  .botao {
+    display: inline-flex; align-items: center; gap: 10px;
+    height: 46px; padding: 0 22px; border-radius: 999px;
+    font: 600 15px "Inter", sans-serif; border: 1px solid transparent; cursor: pointer;
+    transition: transform .14s, background .14s, border-color .14s;
+    white-space: nowrap;
+  }
+  .botao:hover { transform: translateY(-1px); }
+  .botao svg { width: 18px; height: 18px; }
+  .botao.cheio { background: var(--jarvis); color: #06101d; }
+  .botao.vazio { background: transparent; color: var(--texto); border-color: var(--traco-forte); }
+  .botao.vazio:hover { background: var(--superficie); }
+  .botao.pequeno { height: 38px; padding: 0 16px; font-size: 14px; }
+
+  /* -- abertura --------------------------------------------------------- */
+  .abertura { position: relative; padding: 88px 0 110px; overflow: hidden; }
+  .abertura::before {
+    content: ""; position: absolute; inset: -20% -10% auto auto; width: 900px; height: 900px;
+    background: radial-gradient(closest-side, rgba(77,163,255,.16), transparent 70%);
+    pointer-events: none;
+  }
+  .abertura::after {
+    content: ""; position: absolute; inset: 30% auto auto -15%; width: 700px; height: 700px;
+    background: radial-gradient(closest-side, rgba(255,111,181,.10), transparent 70%);
+    pointer-events: none;
+  }
+  .abertura .largura { position: relative; display: grid; grid-template-columns: 1.05fr 0.95fr; gap: 48px; align-items: center; }
+  .selo {
+    display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px;
+    border: 1px solid var(--traco-forte); background: var(--superficie);
+    font-size: 12.5px; font-weight: 600; letter-spacing: .08em; color: var(--texto-medio);
+  }
+  .selo i { width: 7px; height: 7px; border-radius: 50%; background: var(--escutando); box-shadow: 0 0 10px var(--escutando); }
+  h1 {
+    font-size: clamp(40px, 5vw, 66px); line-height: 1.02; letter-spacing: -0.035em;
+    font-weight: 800; margin: 22px 0 22px;
+  }
+  h1 .j { color: var(--jarvis); }
+  h1 .f { color: var(--friday); }
+  .sub { font-size: 19px; color: var(--texto-medio); max-width: 34em; }
+  .sub b { color: var(--texto); font-weight: 600; }
+  .abertura .botoes { display: flex; gap: 12px; margin-top: 34px; flex-wrap: wrap; }
+  .nota { margin-top: 16px; font-size: 13.5px; color: var(--texto-fraco); }
+
+  /* O átomo, como na janela, com os anéis girando. */
+  .palco { position: relative; aspect-ratio: 1; max-width: 520px; width: 100%; justify-self: center; }
+  .atomo { position: absolute; inset: 8%; }
+  .atomo svg { width: 100%; height: 100%; overflow: visible; }
+  .anel { transform-origin: 0 0; animation: gira 18s linear infinite; }
+  .anel.b { animation-duration: 26s; animation-direction: reverse; }
+  .anel.c { animation-duration: 34s; }
+  @keyframes gira { to { transform: rotate(360deg); } }
+  .nucleo { animation: pulsa 3.2s ease-in-out infinite; transform-origin: 0 0; }
+  @keyframes pulsa { 50% { transform: scale(1.06); } }
+
+  .balao {
+    position: absolute; max-width: 270px; padding: 12px 15px; border-radius: 14px;
+    background: rgba(19, 24, 33, .92); border: 1px solid var(--traco-forte);
+    font-size: 14px; color: var(--texto); box-shadow: 0 18px 40px rgba(0,0,0,.45);
+    backdrop-filter: blur(6px);
+  }
+  .balao small { display: block; font-size: 11px; font-weight: 700; letter-spacing: .08em; margin-bottom: 3px; color: var(--texto-fraco); }
+  .balao.voce { top: 6%; left: -6%; }
+  .balao.ela { bottom: 8%; right: -4%; border-color: rgba(255,111,181,.45); }
+  .balao.ela small { color: var(--friday); }
+  .estado {
+    position: absolute; left: 50%; bottom: -2%; transform: translateX(-50%);
+    display: flex; align-items: center; gap: 8px; padding: 7px 14px; border-radius: 999px;
+    background: var(--superficie); border: 1px solid var(--traco-forte);
+    font-size: 12px; font-weight: 700; letter-spacing: .12em; color: var(--friday);
+  }
+  .estado i { width: 7px; height: 7px; border-radius: 50%; background: var(--friday); box-shadow: 0 0 10px var(--friday); }
+
+  /* -- seções ------------------------------------------------------------ */
+  section { padding: 96px 0; }
+  .faixa { background: var(--lateral); border-top: 1px solid var(--traco); border-bottom: 1px solid var(--traco); }
+  .rotulo { font-size: 13px; font-weight: 700; letter-spacing: .14em; color: var(--jarvis); }
+  h2 { font-size: clamp(30px, 4vw, 46px); line-height: 1.1; letter-spacing: -0.03em; font-weight: 780; margin: 12px 0 14px; }
+  .intro { color: var(--texto-medio); font-size: 18px; max-width: 40em; }
+
+  .grade { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 48px; }
+  .cartao {
+    background: var(--superficie); border: 1px solid var(--traco); border-radius: var(--raio);
+    padding: 26px; transition: border-color .2s, transform .2s;
+  }
+  .cartao:hover { border-color: var(--traco-forte); transform: translateY(-2px); }
+  .cartao .icone {
+    width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center;
+    background: rgba(77,163,255,.12); color: var(--jarvis); margin-bottom: 18px;
+  }
+  .cartao .icone svg { width: 22px; height: 22px; }
+  .cartao h3 { font-size: 18px; font-weight: 680; margin-bottom: 6px; letter-spacing: -0.01em; }
+  .cartao p { color: var(--texto-fraco); font-size: 15px; }
+  .cartao .icone.verde { background: rgba(56,211,159,.12); color: var(--escutando); }
+  .cartao .icone.roxo { background: rgba(155,123,255,.13); color: var(--pensando); }
+  .cartao .icone.laranja { background: rgba(255,180,84,.12); color: var(--falando); }
+  .cartao .icone.rosa { background: rgba(255,111,181,.12); color: var(--friday); }
+
+  /* Jarvis e Friday */
+  .duas { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; margin-top: 48px; }
+  .persona {
+    position: relative; overflow: hidden; border-radius: 20px; padding: 34px;
+    background: var(--superficie); border: 1px solid var(--traco);
+  }
+  .persona::before {
+    content: ""; position: absolute; inset: auto -30% -55% auto; width: 420px; height: 420px;
+    background: radial-gradient(closest-side, var(--cor-brilho), transparent 70%);
+  }
+  .persona.jarvis { --cor: var(--jarvis); --cor-brilho: rgba(77,163,255,.20); }
+  .persona.friday { --cor: var(--friday); --cor-brilho: rgba(255,111,181,.20); }
+  .persona .cabeca { display: flex; align-items: center; gap: 16px; position: relative; }
+  .persona .cabeca svg { width: 64px; height: 64px; }
+  .persona h3 { font-size: 30px; letter-spacing: -0.02em; font-weight: 780; }
+  .persona .chamada { font-size: 13px; font-weight: 700; letter-spacing: .1em; color: var(--cor); }
+  .persona p { position: relative; color: var(--texto-medio); margin: 18px 0 20px; font-size: 16px; }
+  .persona .fala {
+    position: relative; padding: 14px 16px; border-radius: 12px; background: var(--fundo);
+    border: 1px solid var(--traco); border-left: 3px solid var(--cor); font-size: 15px;
+  }
+  .persona .fala small { display: block; color: var(--texto-fraco); font-size: 12px; margin-bottom: 4px; }
+  .tracos { position: relative; display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+  .tracos span {
+    font-size: 12.5px; padding: 5px 11px; border-radius: 999px; color: var(--texto-medio);
+    border: 1px solid var(--traco-forte); background: rgba(10,12,16,.5);
+  }
+  .junto { margin-top: 22px; text-align: center; color: var(--texto-fraco); font-size: 15px; }
+
+  /* Como funciona */
+  .passos { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 48px; counter-reset: passo; }
+  .passo { padding: 26px; border-radius: var(--raio); border: 1px dashed var(--traco-forte); }
+  .passo::before {
+    counter-increment: passo; content: counter(passo);
+    display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%;
+    background: var(--realce); color: var(--jarvis); font-weight: 750; margin-bottom: 16px;
+  }
+  .passo h3 { font-size: 17px; margin-bottom: 4px; }
+  .passo p { color: var(--texto-fraco); font-size: 15px; }
+
+  /* Privacidade */
+  .privacidade { display: grid; grid-template-columns: 1fr 1fr; gap: 56px; align-items: center; }
+  .lista { list-style: none; margin-top: 26px; display: grid; gap: 14px; }
+  .lista li { display: flex; gap: 12px; color: var(--texto-medio); }
+  .lista li svg { flex: none; width: 20px; height: 20px; color: var(--escutando); margin-top: 3px; }
+  .lista b { color: var(--texto); font-weight: 600; }
+  .mapa { background: var(--superficie); border: 1px solid var(--traco); border-radius: 20px; padding: 28px; }
+  .mapa .caixa { border: 1px solid var(--traco-forte); border-radius: 14px; padding: 18px; }
+  .mapa .caixa + .seta { text-align: center; color: var(--muito-fraco); font-size: 13px; padding: 10px 0; }
+  .mapa h4 { font-size: 12px; letter-spacing: .12em; color: var(--texto-fraco); margin-bottom: 10px; }
+  .mapa .itens { display: flex; flex-wrap: wrap; gap: 8px; }
+  .mapa .itens span { font-size: 13.5px; padding: 6px 11px; border-radius: 8px; background: var(--fundo); border: 1px solid var(--traco); }
+  .mapa .pc { border-color: rgba(56,211,159,.4); }
+  .mapa .pc h4 { color: var(--escutando); }
+
+  /* Download */
+  .download { text-align: center; }
+  .download .intro { margin: 0 auto; }
+  .sistemas { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 48px; text-align: left; }
+  .sistema {
+    position: relative; border-radius: 18px; padding: 28px; background: var(--superficie);
+    border: 1px solid var(--traco); display: flex; flex-direction: column; gap: 6px;
+  }
+  .sistema.seu { border-color: var(--jarvis); box-shadow: 0 0 0 4px rgba(77,163,255,.10), 0 24px 60px rgba(77,163,255,.10); }
+  .sistema .marcador {
+    position: absolute; top: -12px; left: 24px; padding: 3px 10px; border-radius: 999px;
+    background: var(--jarvis); color: #06101d; font-size: 11.5px; font-weight: 750; letter-spacing: .06em;
+  }
+  .sistema svg.logo { width: 38px; height: 38px; color: var(--texto); margin-bottom: 10px; }
+  .sistema h3 { font-size: 21px; letter-spacing: -0.01em; }
+  .sistema .det { color: var(--texto-fraco); font-size: 14px; }
+  .sistema .botao { margin-top: 18px; justify-content: center; }
+  .sistema.breve { opacity: .62; }
+  .sistema.breve .botao { pointer-events: none; }
+  .tranca {
+    display: inline-flex; align-items: center; gap: 10px; margin-top: 30px; padding: 12px 18px;
+    border-radius: 12px; background: var(--superficie); border: 1px solid var(--traco);
+    color: var(--texto-medio); font-size: 14.5px;
+  }
+  .tranca svg { width: 18px; height: 18px; color: var(--falando); }
+  .requisitos { margin-top: 26px; display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
+  .requisitos span { font-size: 13.5px; color: var(--texto-fraco); padding: 6px 12px; border-radius: 8px; border: 1px solid var(--traco); }
+
+  /* Perguntas */
+  .perguntas { max-width: 780px; margin: 40px auto 0; display: grid; gap: 12px; }
+  details { background: var(--superficie); border: 1px solid var(--traco); border-radius: 12px; padding: 18px 22px; }
+  summary { cursor: pointer; font-weight: 620; list-style: none; display: flex; justify-content: space-between; }
+  summary::after { content: "+"; color: var(--texto-fraco); font-weight: 400; font-size: 20px; line-height: 1; }
+  details[open] summary::after { content: "–"; }
+  details p { color: var(--texto-medio); margin-top: 10px; font-size: 15px; }
+
+  footer { padding: 40px 0 60px; border-top: 1px solid var(--traco); color: var(--texto-fraco); font-size: 14px; }
+  footer .largura { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+  footer .marca { color: var(--texto); }
+  footer .dir { margin-left: auto; }
+
+  /* -- o login para baixar (Google, só e-mails liberados) --------------- */
+  .fundo-modal {
+    position: fixed; inset: 0; z-index: 50; display: none; place-items: center; padding: 16px;
+    background: rgba(5,7,10,.72); backdrop-filter: blur(8px);
+  }
+  .fundo-modal.aberto { display: grid; }
+  .modal {
+    width: 100%; max-width: 420px; border-radius: 20px; padding: 32px; text-align: center;
+    background: var(--superficie); border: 1px solid var(--traco-forte); box-shadow: 0 30px 80px rgba(0,0,0,.6);
+  }
+  .modal svg.atomo-p { width: 56px; height: 56px; margin-bottom: 14px; }
+  .modal h3 { font-size: 22px; letter-spacing: -0.02em; margin-bottom: 8px; }
+  .modal p { color: var(--texto-medio); font-size: 15px; }
+  .google {
+    width: 100%; justify-content: center; margin-top: 24px; background: #fff; color: #1f1f1f;
+    border-radius: 12px; height: 50px;
+  }
+  .modal .miudo { margin-top: 16px; font-size: 12.5px; color: var(--texto-fraco); }
+  .modal .email {
+    display: inline-flex; align-items: center; gap: 8px; margin: 18px 0 4px; padding: 8px 14px;
+    border-radius: 999px; background: var(--fundo); border: 1px solid var(--traco); font-size: 14px;
+  }
+  .modal .email img, .modal .email i { width: 22px; height: 22px; border-radius: 50%; background: var(--pensando); display: inline-block; }
+  .modal .aviso { color: var(--perigo); }
+  .modal .linha { display: flex; gap: 10px; margin-top: 22px; }
+  .modal .linha .botao { flex: 1; justify-content: center; }
+
+  /* -- celular ------------------------------------------------------------ */
+  @media (max-width: 900px) {
+    .menu { display: none; }
+    .abertura { padding: 48px 0 70px; }
+    .abertura .largura, .privacidade, .duas { grid-template-columns: 1fr; }
+    .palco { max-width: 380px; margin-top: 10px; }
+    .grade, .passos, .sistemas { grid-template-columns: 1fr; }
+    .balao.voce { left: 0; top: 0; }
+    .balao.ela { right: 0; }
+    section { padding: 72px 0; }
+    .topo .acoes .vazio { display: none; }
+  }
+  @media (max-width: 480px) {
+    .largura { padding: 0 16px; }
+    .balao { max-width: 220px; font-size: 13px; }
+    .persona { padding: 26px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- O átomo da janela (AtomoFixo.qml), para usar em vários lugares. -->
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <symbol id="atomo" viewBox="-50 -50 100 100">
+      <circle r="30" fill="currentColor" fill-opacity="0.08"/>
+      <circle r="17" fill="currentColor" fill-opacity="0.55"/>
+      <ellipse rx="46" ry="15" fill="none" stroke="currentColor" stroke-width="4.5"/>
+      <ellipse rx="39" ry="22" transform="rotate(62)" fill="none" stroke="currentColor" stroke-width="4.5"/>
+      <ellipse rx="32" ry="12" transform="rotate(121)" fill="none" stroke="currentColor" stroke-width="4.5"/>
+    </symbol>
+  </defs>
+</svg>
+
+<header class="topo">
+  <div class="largura">
+    <a class="marca" href="#"><svg style="color:var(--jarvis)"><use href="#atomo"/></svg><span class="nome">NOVA</span></a>
+    <nav class="menu">
+      <a href="#recursos">Recursos</a>
+      <a href="#personas">Jarvis e Friday</a>
+      <a href="#privacidade">Privacidade</a>
+      <a href="#perguntas">Perguntas</a>
+    </nav>
+    <div class="acoes">
+      <a class="botao vazio pequeno" href="#" data-login>Entrar</a>
+      <a class="botao cheio pequeno" href="#download">Baixar</a>
+    </div>
+  </div>
+</header>
+
+<main>
+  <section class="abertura">
+    <div class="largura">
+      <div>
+        <span class="selo"><i></i>BETA FECHADO</span>
+        <h1>Fala com o seu PC.<br><span class="j">Ele</span> <span class="f">faz.</span></h1>
+        <p class="sub">A <b class="nome">NOVA</b> junta duas inteligências, o <b>Jarvis</b> e a <b>Friday</b>, que te ouvem,
+          entendem e resolvem as coisas no seu computador. É só chamar pelo nome.</p>
+        <div class="botoes">
+          <a class="botao cheio" href="#download" data-baixar>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11m0 0l-4.5-4.5M12 15l4.5-4.5M5 19h14"/></svg>
+            <span class="texto-baixar">Baixar para Linux</span>
+          </a>
+          <a class="botao vazio" href="#recursos"><span>Conheça a <span class="nome">NOVA</span></span></a>
+        </div>
+        <p class="nota">Grátis. Você usa com a sua própria conta do Claude.</p>
+      </div>
+
+      <div class="palco">
+        <div class="atomo">
+          <svg viewBox="-50 -50 100 100" style="color:var(--friday)">
+            <circle r="34" fill="currentColor" fill-opacity="0.07"/>
+            <g class="nucleo"><circle r="17" fill="currentColor" fill-opacity="0.55"/></g>
+            <g class="anel"><ellipse rx="46" ry="15" fill="none" stroke="currentColor" stroke-width="1.6"/></g>
+            <g class="anel b"><ellipse rx="39" ry="22" transform="rotate(62)" fill="none" stroke="currentColor" stroke-width="1.6"/></g>
+            <g class="anel c"><ellipse rx="32" ry="12" transform="rotate(121)" fill="none" stroke="currentColor" stroke-width="1.6"/></g>
+          </svg>
+        </div>
+        <div class="balao voce"><small>VOCÊ</small>Hey Friday, me lembra de estudar às sete?</div>
+        <div class="balao ela"><small>FRIDAY</small>Anotado, chefinho! Às 19h eu te chamo.</div>
+        <div class="estado"><i></i>FALANDO</div>
+      </div>
+    </div>
+  </section>
+
+  <section id="recursos" class="faixa">
+    <div class="largura">
+      <span class="rotulo">RECURSOS</span>
+      <h2>Um assistente que faz de verdade.</h2>
+      <p class="intro">Nada de comando decorado. Você pede do seu jeito, e ele entende, decide e resolve, perguntando antes quando é coisa séria.</p>
+      <div class="grade">
+        <div class="cartao">
+          <div class="icone"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0014 0M12 18v3"/></svg></div>
+          <h3>Acorda pela voz</h3>
+          <p>"Hey Jarvis" ou "Hey Friday", sem tocar em nada. Depois é conversa normal.</p>
+        </div>
+        <div class="cartao">
+          <div class="icone roxo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M7 9l3 2-3 2M12 13h4"/></svg></div>
+          <h3>Mexe no seu PC</h3>
+          <p>Abre programas, organiza arquivos, pesquisa na internet, lê o seu e-mail e a agenda.</p>
+        </div>
+        <div class="cartao">
+          <div class="icone verde"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8.5 8.5 0 01-12.6 7.4L3 21l1.6-5.2A8.5 8.5 0 1121 12z"/></svg></div>
+          <h3>WhatsApp junto</h3>
+          <p>Avisa o que chegou e responde por você quando você mandar. Pode até cuidar do grupo da família.</p>
+        </div>
+        <div class="cartao">
+          <div class="icone laranja"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 00-6 6c0 2.2 1.2 3.6 2.4 4.8.8.8 1.1 1.6 1.1 2.7h5c0-1.1.3-1.9 1.1-2.7C16.8 12.6 18 11.2 18 9a6 6 0 00-6-6zM10 20h4"/></svg></div>
+          <h3>Memória que você vê</h3>
+          <p>Ele lembra do que importa pra você, e tudo fica na aba Memórias: dá pra ler e corrigir.</p>
+        </div>
+        <div class="cartao">
+          <div class="icone rosa"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M9 2h6"/></svg></div>
+          <h3>Lembra na hora certa</h3>
+          <p>"Me avisa daqui a 20 minutos." Ele anota e chama você na hora, sem app de lembrete.</p>
+        </div>
+        <div class="cartao">
+          <div class="icone"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="2" width="10" height="20" rx="2.5"/><path d="M11 18h2"/></svg></div>
+          <h3>No celular também</h3>
+          <p>O app fala com o seu PC de qualquer lugar: manda áudio, foto, e a resposta vem na voz.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="personas">
+    <div class="largura">
+      <span class="rotulo">JARVIS E FRIDAY</span>
+      <h2>Duas personalidades. Escolha quem chamar.</h2>
+      <p class="intro">Os dois sabem as mesmas coisas e dividem a mesma memória. O que muda é o jeito de falar com você.</p>
+      <div class="duas">
+        <div class="persona jarvis">
+          <div class="cabeca">
+            <svg style="color:var(--jarvis)"><use href="#atomo"/></svg>
+            <div><span class="chamada">"HEY JARVIS"</span><h3>Jarvis</h3></div>
+          </div>
+          <p>O mordomo que todo mundo queria: educado, calmo e com um humor seco na medida certa. Resolve sem enrolar.</p>
+          <div class="fala"><small>Você: "Jarvis, que horas são?"</small>São quatro e meia, senhor. Ainda dá tempo de fingir que vai estudar.</div>
+          <div class="tracos"><span>Elegante</span><span>Calmo</span><span>Humor seco</span></div>
+        </div>
+        <div class="persona friday">
+          <div class="cabeca">
+            <svg style="color:var(--friday)"><use href="#atomo"/></svg>
+            <div><span class="chamada">"HEY FRIDAY"</span><h3>Friday</h3></div>
+          </div>
+          <p>Carinhosa, animada na medida e com zoeira liberada. Te chama de chefinho, comemora quando dá certo e fica séria quando precisa.</p>
+          <div class="fala"><small>Você: "Friday, achou o arquivo?"</small>Achei, chefinho! Tava escondido nos Downloads, como sempre.</div>
+          <div class="tracos"><span>Carinhosa</span><span>Animada</span><span>"Chefinho"</span></div>
+        </div>
+      </div>
+      <p class="junto">Cada um com a sua voz e a sua cor. Troque quando quiser, falando ou num toque.</p>
+    </div>
+  </section>
+
+  <section class="faixa">
+    <div class="largura">
+      <span class="rotulo">COMO FUNCIONA</span>
+      <h2>Três passos e pronto.</h2>
+      <div class="passos">
+        <div class="passo"><h3>Baixe o instalador</h3><p>Ele confere o seu PC e baixa só o que precisa, das fontes oficiais.</p></div>
+        <div class="passo"><h3>Entre com o seu Claude</h3><p>A inteligência é o Claude, na sua própria conta. Nada passa por servidor nosso.</p></div>
+        <div class="passo"><h3>Diga "Hey Jarvis"</h3><p>Ou "Hey Friday". O instalador testa o microfone com você antes de terminar.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="privacidade">
+    <div class="largura privacidade">
+      <div>
+        <span class="rotulo">PRIVACIDADE</span>
+        <h2>Mora no seu PC.</h2>
+        <p class="intro">Ouvir e falar acontece no seu computador. Só o seu pedido, em texto, vai para o Claude.</p>
+        <ul class="lista">
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span><b>Só acorda pelo nome.</b> Antes do "Hey Jarvis", nada do que o microfone ouve sai do PC.</span></li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span><b>A sua voz não vai pra nuvem.</b> Ela vira texto aqui mesmo, e a resposta vira voz aqui também.</span></li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span><b>Pede antes do que é sério.</b> Apagar, mandar mensagem ou gastar: ele pergunta primeiro.</span></li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span><b>Sem servidor no meio.</b> É você, o seu PC e a sua conta do Claude.</span></li>
+        </ul>
+      </div>
+      <div class="mapa">
+        <div class="caixa pc">
+          <h4>NO SEU PC</h4>
+          <div class="itens"><span>Microfone</span><span>"Hey Jarvis"</span><span>Voz → texto</span><span>Texto → voz</span><span>Memória</span><span>Seus arquivos</span></div>
+        </div>
+        <div class="seta">↓ só o pedido, em texto ↓</div>
+        <div class="caixa">
+          <h4>NA SUA CONTA DO CLAUDE</h4>
+          <div class="itens"><span>Entender</span><span>Decidir</span><span>Responder</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="download" class="faixa download">
+    <div class="largura">
+      <span class="rotulo">DOWNLOAD</span>
+      <h2>Baixe a <span class="nome">NOVA</span>.</h2>
+      <p class="intro">Um instalador pequeno: ele baixa o resto sozinho e deixa tudo pronto.</p>
+      <div class="sistemas">
+        <div class="sistema" data-so="linux">
+          <span class="marcador">O SEU SISTEMA</span>
+          <svg class="logo" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2c-2.2 0-3.4 1.9-3.4 4.4 0 1.4.3 2.3-.6 3.6C6.6 12 5 14.2 5 16.6c0 .9.3 1.6.7 2.1-.5.4-1.3.8-1.3 1.6 0 1.1 1.5 1.4 3 1.4 1.2 0 1.9-.5 2.5-.9.7.1 1.4.2 2.1.2s1.4-.1 2.1-.2c.6.4 1.3.9 2.5.9 1.5 0 3-.3 3-1.4 0-.8-.8-1.2-1.3-1.6.4-.5.7-1.2.7-2.1 0-2.4-1.6-4.6-3-6.6-.9-1.3-.6-2.2-.6-3.6C15.4 3.9 14.2 2 12 2zm-1.6 4.1c.5 0 .8.6.8 1.2s-.3 1.1-.8 1.1-.8-.5-.8-1.1.3-1.2.8-1.2zm3.2 0c.5 0 .8.6.8 1.2s-.3 1.1-.8 1.1-.8-.5-.8-1.1.3-1.2.8-1.2zM12 9.2c.9 0 2 .5 2 1s-1.1 1.1-2 1.1-2-.6-2-1.1 1.1-1 2-1z"/></svg>
+          <h3>Linux</h3>
+          <span class="det">Ubuntu 24.04 ou mais novo · 64 bits</span>
+          <a class="botao cheio" href="#" data-login>Baixar instalador</a>
+        </div>
+        <div class="sistema breve" data-so="windows">
+          <svg class="logo" viewBox="0 0 24 24" fill="currentColor"><path d="M3 5.5l7.5-1v7H3v-6zm8.5-1.2L21 3v8.5h-9.5V4.3zM3 12.5h7.5v7L3 18.5v-6zm8.5 0H21V21l-9.5-1.3v-7.2z"/></svg>
+          <h3>Windows</h3>
+          <span class="det">Windows 10 e 11 · em teste com os beta testers</span>
+          <span class="botao vazio">Em breve</span>
+        </div>
+        <div class="sistema breve" data-so="android">
+          <svg class="logo" viewBox="0 0 24 24" fill="currentColor"><path d="M7.2 3.3l1.2 2A7 7 0 005 11h14a7 7 0 00-3.4-5.7l1.2-2-.6-.4-1.3 2.1a7.2 7.2 0 00-5.8 0L7.8 2.9l-.6.4zM9 8a.9.9 0 110 1.8A.9.9 0 019 8zm6 0a.9.9 0 110 1.8A.9.9 0 0115 8zM5 12h14v7a1.5 1.5 0 01-1.5 1.5H16V23h-2v-2.5h-4V23H8v-2.5H6.5A1.5 1.5 0 015 19v-7zm-2.5 0a1.5 1.5 0 011.5 1.5v4a1.5 1.5 0 01-3 0v-4A1.5 1.5 0 012.5 12zm19 0a1.5 1.5 0 011.5 1.5v4a1.5 1.5 0 01-3 0v-4a1.5 1.5 0 011.5-1.5z"/></svg>
+          <h3>Android</h3>
+          <span class="det">O app que conversa com o seu PC</span>
+          <span class="botao vazio">Em breve</span>
+        </div>
+      </div>
+      <div class="tranca">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 018 0v4"/></svg>
+        Beta fechado: o download é só para quem foi convidado. Entre com o Google para baixar.
+      </div>
+      <div class="requisitos">
+        <span>Placa de vídeo NVIDIA</span><span>16 GB de RAM</span><span>Microfone</span><span>Conta do Claude (Pro ou Max)</span>
+      </div>
+    </div>
+  </section>
+
+  <section id="perguntas">
+    <div class="largura">
+      <div style="text-align:center">
+        <span class="rotulo">PERGUNTAS</span>
+        <h2>Ficou alguma dúvida?</h2>
+      </div>
+      <div class="perguntas">
+        <details open><summary>É de graça?</summary><p>A <span class="nome">NOVA</span> é. A inteligência é o Claude, então você precisa de uma assinatura do Claude (Pro ou Max), na sua conta.</p></details>
+        <details><summary>Precisa de internet?</summary><p>Para pensar, sim: o Claude roda na nuvem. Ouvir, acordar e falar funcionam no seu PC.</p></details>
+        <details><summary>Funciona no Windows?</summary><p>Está em teste com os beta testers e chega logo. Por enquanto, só Linux.</p></details>
+        <details><summary>Por que não consigo baixar?</summary><p>Ainda é um beta fechado: só os e-mails convidados baixam. Se você recebeu o convite, entre com esse e-mail do Google.</p></details>
+        <details><summary>Ele fica me ouvindo o tempo todo?</summary><p>O microfone só espera o nome ("Hey Jarvis" ou "Hey Friday"), e isso é decidido no seu PC. Nada é gravado nem enviado antes disso.</p></details>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="largura">
+    <span class="marca"><svg style="color:var(--jarvis);width:22px;height:22px"><use href="#atomo"/></svg><span class="nome">NOVA</span></span>
+    <span>Projeto independente · beta fechado</span>
+    <span class="dir">Feito com o Claude</span>
+  </div>
+</footer>
+
+<!-- Login para baixar. No site de verdade: Firebase Auth (Google) + lista de e-mails liberados. -->
+<div class="fundo-modal" id="modal">
+  <div class="modal" data-tela="entrar">
+    <svg class="atomo-p" style="color:var(--jarvis)"><use href="#atomo"/></svg>
+    <h3>Entre para baixar</h3>
+    <p>O beta é fechado: o download é liberado só para os e-mails convidados.</p>
+    <a class="botao google" href="#">
+      <svg viewBox="0 0 24 24"><path fill="#4285F4" d="M22.6 12.3c0-.8-.1-1.5-.2-2.2H12v4.2h6a5.1 5.1 0 01-2.2 3.4v2.8h3.6c2.1-1.9 3.2-4.8 3.2-8.2z"/><path fill="#34A853" d="M12 23c3 0 5.5-1 7.3-2.7l-3.6-2.8c-1 .7-2.2 1.1-3.7 1.1-2.9 0-5.3-1.9-6.2-4.5H2.1v2.9A11 11 0 0012 23z"/><path fill="#FBBC05" d="M5.8 14.1a6.6 6.6 0 010-4.2V7H2.1a11 11 0 000 10l3.7-2.9z"/><path fill="#EA4335" d="M12 5.4c1.6 0 3.1.6 4.2 1.7l3.2-3.2A11 11 0 002.1 7l3.7 2.9C6.7 7.3 9.1 5.4 12 5.4z"/></svg>
+      Entrar com o Google
+    </a>
+    <p class="miudo">Usamos só o seu e-mail, para ver se ele foi convidado.</p>
+  </div>
+  <div class="modal" data-tela="bloqueado" hidden>
+    <svg class="atomo-p" style="color:var(--falando)"><use href="#atomo"/></svg>
+    <h3>Esse e-mail ainda não foi liberado</h3>
+    <span class="email"><i></i>alguem@gmail.com</span>
+    <p class="aviso" style="margin-top:12px">O beta é só para convidados por enquanto.</p>
+    <div class="linha">
+      <a class="botao vazio" href="#">Usar outro e-mail</a>
+      <a class="botao cheio" href="#" data-fechar>Ok</a>
+    </div>
+  </div>
+  <div class="modal" data-tela="liberado" hidden>
+    <svg class="atomo-p" style="color:var(--escutando)"><use href="#atomo"/></svg>
+    <h3>Liberado! Baixando…</h3>
+    <span class="email"><i style="background:var(--escutando)"></i>convidado@gmail.com</span>
+    <p style="margin-top:12px">Abra o arquivo baixado e siga o instalador. Se o download não começar, <a href="#" style="color:var(--jarvis)">clique aqui</a>.</p>
+  </div>
+</div>
+
+<script>
+  // O nome do conjunto ainda não foi escolhido: ?nome=... troca em todo lugar.
+  const parametros = new URLSearchParams(location.search);
+  const nome = parametros.get("nome");
+  if (nome) {
+    document.title = `${nome} — Jarvis e Friday`;
+    document.querySelectorAll(".nome").forEach(e => e.textContent = nome);
+  }
+
+  // Reconhece o aparelho e destaca o download certo.
+  function sistema() {
+    const ua = navigator.userAgent;
+    if (/android/i.test(ua)) return "android";
+    if (/windows/i.test(ua)) return "windows";
+    if (/linux|x11/i.test(ua)) return "linux";
+    return "linux";
+  }
+  const meu = parametros.get("so") || sistema();
+  const rotulos = { linux: "Baixar para Linux", windows: "Ver downloads", android: "Ver downloads" };
+  document.querySelectorAll(".sistema").forEach(c => {
+    const e = c.dataset.so === meu;
+    c.classList.toggle("seu", e);
+    const m = c.querySelector(".marcador");
+    if (e && !m) c.insertAdjacentHTML("afterbegin", '<span class="marcador">O SEU SISTEMA</span>');
+    if (!e && m) m.remove();
+  });
+  document.querySelector(".texto-baixar").textContent = rotulos[meu];
+
+  // O login (protótipo: as três telas; ?tela=entrar|bloqueado|liberado abre direto).
+  const modal = document.getElementById("modal");
+  function abrir(tela) {
+    modal.querySelectorAll(".modal").forEach(m => m.hidden = m.dataset.tela !== tela);
+    modal.classList.add("aberto");
+  }
+  document.querySelectorAll("[data-login]").forEach(b => b.addEventListener("click", e => { e.preventDefault(); abrir("entrar"); }));
+  modal.addEventListener("click", e => { if (e.target === modal || e.target.dataset.fechar !== undefined) modal.classList.remove("aberto"); });
+  if (parametros.get("tela")) abrir(parametros.get("tela"));
+</script>
+</body>
+</html>
