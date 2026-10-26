@@ -184,8 +184,11 @@ const argolaMat = (fase, sentido) => new THREE.ShaderMaterial({
       gl_FragColor = vec4(c * vao, 1.);
     }`,
 });
+// Cada argola gira em volta do núcleo (o suporte dela roda no eixo vertical,
+// cada uma num ritmo) e leva uma bolinha; o pulso da faixa é o rastro dela.
 const argolas = [0, 1, 2].map(i => {
-  const fora = new THREE.Group(); fora.rotation.z = i * Math.PI / 3; atomo.add(fora);
+  const suporte = new THREE.Group(); atomo.add(suporte);
+  const fora = new THREE.Group(); fora.rotation.z = i * Math.PI / 3; suporte.add(fora);
   const plano = new THREE.Group(); plano.rotation.x = 1.2; fora.add(plano);
   const sentido = i === 1 ? -1 : 1;
   const mat = argolaMat(i * .37, sentido);
@@ -193,7 +196,11 @@ const argolas = [0, 1, 2].map(i => {
   // continua larga, em vez de sumir numa linha.
   const aro = new THREE.CylinderGeometry(R, R, .085, 512, 1, true); aro.rotateX(Math.PI / 2);
   plano.add(new THREE.Mesh(aro, mat));
-  return { mat, sentido, vel: [.11, .09, .13][i], fase: i * .3 };
+  const eletronMat = new THREE.MeshBasicMaterial({ color: cor.clone().lerp(new THREE.Color(1, 1, 1), .5) });
+  const eletron = new THREE.Mesh(new THREE.SphereGeometry(.05, 24, 24), eletronMat);
+  plano.add(eletron);
+  return { suporte, mat, eletron, eletronMat, sentido, vel: [.16, .13, .19][i], fase: i * .3,
+           giro: [.32, -.26, .38][i], giroFase: i * 2.1 };
 });
 
 // --- Poeira: poucos pontinhos bem fracos em volta, para dar profundidade -------
@@ -249,7 +256,14 @@ function passo(dt) {
   if (rgb !== corCss) { corCss = rgb; raiz.style.setProperty("--cor", `rgb(${rgb})`); raiz.style.setProperty("--cor-rgb", rgb); }
   nucleoMat.uniforms.uTempo.value = t; paineisMat.uniforms.uTempo.value = t;
   nucleo.rotation.y = t * .12; nucleo.rotation.x = t * .05;
-  for (const g of argolas) g.mat.uniforms.uPulso.value = g.fase + t * g.vel * g.sentido;
+  for (const g of argolas) {
+    const u = g.fase + t * g.vel * g.sentido;          // onde a bolinha está (voltas)
+    g.mat.uniforms.uPulso.value = u;
+    // O mesmo ponto da faixa (o cilindro deitado): u -> (R sen, -R cos, 0).
+    g.eletron.position.set(Math.sin(u * 6.2831853) * R, -Math.cos(u * 6.2831853) * R, 0);
+    g.eletronMat.color.copy(cor).lerp(BRANCO, .5);
+    g.suporte.rotation.y = g.giroFase + t * g.giro;
+  }
   inclina.x += (alvo.x - inclina.x) * .04; inclina.y += (alvo.y - inclina.y) * .04;
   atomo.rotation.y = Math.sin(t * .22) * .35 + inclina.x * .5;
   atomo.rotation.x = Math.sin(t * .17) * .12 + inclina.y * .35;
@@ -258,7 +272,7 @@ function passo(dt) {
 }
 function laco() { passo(Math.min(relogio.getDelta(), .1)); requestAnimationFrame(laco); }
 // ?gravar=1: quem grava o vídeo avança quadro a quadro (window.quadro), sem depender da velocidade do PC.
-if (P.get("gravar")) { window.quadro = passo; window.alvo = alvo; } else laco();
+if (P.get("gravar")) { window.quadro = passo; window.alvo = alvo; window.argolas = argolas; } else laco();
 </script>
 </body>
 </html>
