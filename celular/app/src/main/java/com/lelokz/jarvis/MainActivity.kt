@@ -141,7 +141,7 @@ val CORES_DE_DESTAQUE = listOf(
 private val Roxo = Color(0xFF9B7BFF)
 
 /** A versão da janela (a numeração do Léo, igual à do PC) e a do app. */
-const val VERSAO_JANELA = "beta 0.14.5"
+const val VERSAO_JANELA = "beta 0.14.6"
 
 // A Inter, a fonte da janela do PC (licença OFL). Variável: o peso funciona.
 @OptIn(ExperimentalTextApi::class)

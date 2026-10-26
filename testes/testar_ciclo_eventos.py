@@ -788,6 +788,55 @@ def rodar_fluxo(tmp: Path) -> None:
     checa("a frase seguinte nem é gerada, e ele diz que parou",
           "Dois." not in voz.falas and voz.falas[-1:] == [ciclo.persona_cfg.parei], voz.falas)
 
+    print("-- F9. o botão Parar no meio da fala: cala na hora e interrompe o Claude --")
+    g = Gravador()
+    _, ciclo, _, _, agente, _ = montar(tmp, g)
+    voz = VozQueAnota()
+    voz.trava.clear()
+    ciclo.voz, ciclo.portao, ciclo.guarda_s = voz, PortaoContado(), 0.0
+    interrompeu = []
+    agente.interromper = lambda: interrompeu.append(True)
+    agente.ocupado = True
+    apertou = threading.Event()
+    ciclo.pediu_parar = lambda: apertou.is_set() and not apertou.clear()
+    for x in [Saida("parcial", "Um. Dois. Três. ", titulo="1"), Saida("frase", "Um.", titulo="1", ate=3),
+              Saida("frase", "Dois.", titulo="1", ate=8), Saida("frase", "Três.", titulo="1", ate=14),
+              Saida("frase", titulo="1")]:
+        agente.saidas.put(x)
+    ciclo.atender_agente()
+    threading.Timer(0.15, apertou.set).start()
+    threading.Timer(0.3, voz.trava.set).start()
+    ciclo._esperar_locutor()
+    checa("a voz para na hora: as frases seguintes nem são geradas",
+          "Três." not in voz.falas and ciclo._locutor is None, voz.falas)
+    checa("e o Claude é interrompido", interrompeu == [True], interrompeu)
+    agente.ocupado = False
+    agente.saidas.put(Saida("fim", interrompido=True))
+    ciclo.atender_agente()
+    checa("o 'Parei.' aparece, mas não é falado (quem apertou quer silêncio)",
+          ciclo.persona_cfg.parei not in voz.falas
+          and any(e["ev"] == "jarvis_disse" and e["texto"] == ciclo.persona_cfg.parei for e in g.eventos),
+          voz.falas)
+
+    print("-- F10. Parar com a voz indo para o celular --")
+    g = Gravador()
+    _, ciclo, _, _, agente, _ = montar(tmp, g)
+
+    class VozDeVariosTrechos(tts.Voz):
+        nome = "varios"
+
+        def sintetizar(self, texto):
+            for _ in range(5):
+                yield tts.Trecho(pcm=b"\x01\x00" * 400, taxa=24000, canais=1)
+
+    ciclo.voz, ciclo._corpo = VozDeVariosTrechos(), 7
+    vezes = iter([False, False, True])
+    ciclo.pediu_parar = lambda: next(vezes, False)
+    ciclo._falar("Uma resposta comprida que ele vai falar no celular.")
+    pedacos = [e for e in g.eventos if e["ev"] == "voz" and e.get("pcm")]
+    checa("só o que saiu antes do Parar foi para o celular, e a voz fecha",
+          len(pedacos) == 2 and [e for e in g.eventos if e["ev"] == "voz"][-1].get("fim") is True, len(pedacos))
+
 
 def main() -> int:
     tmp = Path(tempfile.mkdtemp(prefix="jarvis-ciclo-"))

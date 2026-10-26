@@ -118,6 +118,9 @@ class Servidor:
         self._clientes: dict[int, _Cliente] = {}
         self._trava = threading.Lock()
         self._pedidos: queue.SimpleQueue[Pedido] = queue.SimpleQueue()
+        # O botão Parar vale NA HORA: o laço de áudio pode estar preso falando
+        # e só leria a fila depois. Ele confere isto enquanto fala.
+        self._botao_parar = threading.Event()
 
         self._seletor = selectors.DefaultSelector()
         self._escuta: socket.socket | None = None
@@ -213,6 +216,13 @@ class Servidor:
     @property
     def n_clientes(self) -> int:
         return len(self._clientes)
+
+    def consumir_parar(self) -> bool:
+        """Alguém apertou Parar desde a última vez? (e já desmarca)"""
+        if self._botao_parar.is_set():
+            self._botao_parar.clear()
+            return True
+        return False
 
     def app_desde(self) -> float | None:
         """Desde quando o app do celular (corpo com a janela) está conectado,
@@ -497,6 +507,8 @@ class Servidor:
                 return
             self._direto(cliente, {"ev": "conversas", "lista": lista})
         elif tipo in ("nova", "continuar", "cerebro", "parar", "som", "ajustes"):
+            if tipo == "parar":
+                self._botao_parar.set()
             # "som" também vai para a thread de áudio: trocar o microfone é lá.
             valor = dados.get("id", "") if tipo == "continuar" else \
                 json.dumps(dados) if tipo in ("cerebro", "som", "ajustes") else ""

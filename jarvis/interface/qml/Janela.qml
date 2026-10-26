@@ -651,7 +651,9 @@ Window {
                 esforco: janela.esforco
                 persona: janela.persona
                 menusParaCima: !janela.boasVindas
-                trabalhando: janela.vendo === "" && janela.conectado && janela.estado === "pensando"
+                // Pensando OU falando: o Parar cala a voz no meio da frase (26/10/2026).
+                trabalhando: janela.vendo === "" && janela.conectado
+                             && (janela.estado === "pensando" || janela.estado === "falando")
                 onParar: if (typeof ponte !== "undefined") ponte.parar()
                 onEnviar: function (texto) { janela.enviar(texto, []) }
                 onEnviarComAnexos: function (texto, arquivos) { janela.enviar(texto, arquivos) }

@@ -197,6 +197,7 @@ def falar(
     *,
     dispositivo: int | None = None,
     ao_comecar=None,
+    parar=None,
 ) -> TemposDaFala:
     """Sintetiza e toca, medindo síntese e reprodução separadamente.
 
@@ -219,8 +220,12 @@ def falar(
     stream: sd.RawOutputStream | None = None
     inicio_reproducao = 0.0
 
+    parou = False
     try:
         while True:
+            if parar is not None and parar():  # o botão Parar: corta no meio
+                parou = True
+                break
             marca = time.monotonic()
             try:
                 trecho = next(gerador)
@@ -249,7 +254,15 @@ def falar(
             if volume < 1:
                 import numpy as np
                 pcm = (np.frombuffer(pcm, dtype=np.int16) * volume).astype(np.int16).tobytes()
-            stream.write(pcm)
+            # Em fatias de 0,1 s: o Parar corta no meio da frase.
+            passo = int(trecho.taxa * 0.1) * 2 * trecho.canais
+            for i in range(0, len(pcm), passo):
+                if parar is not None and parar():
+                    parou = True
+                    break
+                stream.write(pcm[i:i + passo])
+            if parou:
+                break
             amostras += len(trecho.pcm) // (2 * trecho.canais)
 
         if stream is None:  # texto vazio ou sem áudio
@@ -263,8 +276,10 @@ def falar(
         # falando — o que realimentaria o VAD.
         duracao_audio_s = amostras / taxa
         restante = duracao_audio_s - (time.monotonic() - inicio_reproducao)
-        if restante > 0:
-            time.sleep(restante)
+        while restante > 0 and not parou:
+            time.sleep(min(restante, 0.1))
+            parou = parar is not None and parar()
+            restante = duracao_audio_s - (time.monotonic() - inicio_reproducao)
 
         return TemposDaFala(
             primeiro_audio_s=primeiro_audio_s,
@@ -274,7 +289,7 @@ def falar(
         )
     finally:
         if stream is not None:
-            stream.stop()
+            stream.abort() if parou else stream.stop()
             stream.close()
 
 

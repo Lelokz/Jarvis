@@ -112,7 +112,9 @@ blocos_para_iniciar = 2
 # Quanto silêncio encerra o segmento. ESTE É O MAIOR PEDAÇO DA LATÊNCIA
 # PERCEBIDA — é o primeiro botão a girar se a resposta parecer lenta.
 # Baixar demais faz ele cortar você no meio de uma pausa natural.
-silencio_final_ms = 700
+# 26/10/2026: era 700 e cortava o Léo no meio da frase (27 de 83 falas do dia
+# vieram em pedaços). 1300 = ~0,6 s a mais de espera, sem cortar ele.
+silencio_final_ms = 1300
 
 # Áudio guardado ANTES do VAD disparar. O detector só reage depois que a fala
 # já começou; sem isto a primeira sílaba some e o Whisper recebe "estando o

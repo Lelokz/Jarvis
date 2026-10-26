@@ -512,7 +512,14 @@ class Jarvis(private val app: Application) {
         conexao?.enviar(JSONObject().put("pedir", "cerebro").put("esforco", e))
     }
 
-    fun parar() { conexao?.enviar(JSONObject().put("pedir", "parar")) }
+    // O Parar cala aqui na hora (o que já chegou e está na fila) e manda o PC
+    // parar; o que ainda vier no caminho, nos próximos instantes, não toca.
+    private var calarVozAte = 0.0
+    fun parar() {
+        voz.parar()
+        calarVozAte = agora() + 1.5
+        conexao?.enviar(JSONObject().put("pedir", "parar"))
+    }
 
     fun pedirMemoria() { pedirMemorias() }
 
@@ -552,9 +559,10 @@ class Jarvis(private val app: Application) {
         conexao?.enviar(JSONObject().put("pedir", "cerebro").put("persona", p))
     }
 
-    /** Ele está trabalhando no pedido (o enviar vira Parar). */
+    /** Ele está trabalhando no pedido ou falando (o enviar vira Parar). */
     val trabalhando: Boolean
-        get() = conectado.value && vendo.value.isEmpty() && estado.value == "pensando"
+        get() = conectado.value && vendo.value.isEmpty() &&
+            (estado.value == "pensando" || estado.value == "falando")
 
     private var segurandoAtomo = false
 
@@ -752,7 +760,7 @@ class Jarvis(private val app: Application) {
             }
             "voz" -> {
                 val pcm = ev.optString("pcm")
-                if (pcm.isNotEmpty() && !mudo.value) voz.tocar(ev.optInt("taxa", 24000), Base64.decode(pcm, Base64.DEFAULT))
+                if (pcm.isNotEmpty() && !mudo.value && agora() >= calarVozAte) voz.tocar(ev.optInt("taxa", 24000), Base64.decode(pcm, Base64.DEFAULT))
             }
             "anexo_ok", "anexo_erro" -> {
                 val local = esperandoOk.removeFirstOrNull() ?: return

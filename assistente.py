@@ -289,6 +289,10 @@ class Ciclo:
         # Do pedido atual: quando chegou a 1ª frase e quando ela soou.
         self._primeira_frase: float | None = None
         self._primeiro_som: float | None = None
+        # O botão Parar (janela e app), conferido NO MEIO da fala: a ponte o
+        # marca na hora em que chega (o laço pode estar preso falando).
+        self.pediu_parar = lambda: False
+        self._parou_no_botao = False
         # Manda um erro só para quem pediu (a ponte põe aqui; ex.: "nova" no
         # meio de uma tarefa).
         self.avisar_cliente = lambda _id, _motivo: None
@@ -450,7 +454,7 @@ class Ciclo:
 
         try:
             return tts.falar(self.voz, texto, dispositivo=self.dispositivo_saida,
-                             ao_comecar=ao_comecar)
+                             ao_comecar=ao_comecar, parar=self._checar_parar)
         finally:
             time.sleep(self.guarda_s)
             self.portao.abrir_portao()
@@ -473,6 +477,8 @@ class Ciclo:
         duracao = 0.0
         try:
             for trecho in self.voz.sintetizar(texto):
+                if self._checar_parar():
+                    break
                 if primeiro is None:
                     primeiro = time.monotonic() - inicio
                     self._mudar_estado("falando")
@@ -587,8 +593,31 @@ class Ciclo:
             return
         self._locutor.fechar()
         while self._locutor is not None:
+            self._checar_parar()
             self.atender_locutor()
             time.sleep(0.01)
+
+    def _checar_parar(self) -> bool:
+        """Apertaram Parar? Então para tudo agora (chamado no meio da fala)."""
+        if self.pediu_parar():
+            self._parar_tudo()
+            return True
+        return False
+
+    def _parar_tudo(self) -> None:
+        """O botão Parar: cala a voz na hora (a frase tocando e as que vinham
+        depois) e interrompe o Claude, que para de pensar e de escrever. Antes
+        ele só parava depois de terminar de falar (o Léo, 26/10/2026)."""
+        self.registrador.registrar_estado("interrompeu", texto="(botão Parar)")
+        self._parou_no_botao = True
+        if self._locutor is not None:
+            self._locutor.cancelar()
+        if self._pergunta is not None:
+            saida, _ = self._pergunta
+            self._pergunta = None
+            self.agente.responder(saida, None)
+        if self.agente.ocupado:
+            self.agente.interromper()
 
     # -- laço --------------------------------------------------------------
 
@@ -749,6 +778,7 @@ class Ciclo:
                                           contexto=contexto or None)
         self._pedido = (time.monotonic(), segmento, transcricao)
         self._primeira_frase = self._primeiro_som = None
+        self._parou_no_botao = False
         self.agente.pedir(texto, origem, contexto, voz)
 
     def _primeira_da_manha(self) -> bool:
@@ -891,7 +921,14 @@ class Ciclo:
             return
         self._acordar_se_dormindo()
         falta = fala_texto if s.resto is None or s.interrompido else s.resto
-        fala = self._falar(falta, mostrar=fala_texto)
+        if s.interrompido and self._parou_no_botao:
+            # Quem apertou Parar quer silêncio: o "Parei." só aparece.
+            self.emissor.emitir("jarvis_disse", texto=fala_texto, acao=None, perguntando=False)
+            fala = tts.TemposDaFala(primeiro_audio_s=0.0, sintese_total_s=0.0,
+                                    reproducao_s=0.0, duracao_audio_s=0.0)
+        else:
+            fala = self._falar(falta, mostrar=fala_texto)
+        self._parou_no_botao = False
         if primeiro_som is not None and primeira_frase is not None and pedido:
             # Fala em fluxo: o Claude até a 1ª frase; a voz, dela até soar.
             nucleo_s, tts_s = primeira_frase - pedido[0], primeiro_som - primeira_frase
@@ -1090,14 +1127,10 @@ class Ciclo:
                                                     "\"para\") pra trocar de conversa.")
             return
         if pedido.tipo == "parar":
-            # O botão Parar da janela: o mesmo que dizer "para".
-            if self._pergunta is not None:
-                saida, _ = self._pergunta
-                self._pergunta = None
-                self.agente.responder(saida, None)
-            if self.agente.ocupado:
-                self.registrador.registrar_estado("interrompeu", texto="(botão Parar)")
-                self.agente.interromper()
+            # O botão Parar da janela e do app: cala e interrompe na hora.
+            self.pediu_parar()  # já tratado aqui: desmarca
+            if self._locutor is not None or self._pergunta is not None or self.agente.ocupado:
+                self._parar_tudo()
             return
         if pedido.tipo == "som":
             try:
@@ -1541,6 +1574,7 @@ def conversar(cfg: config.Config) -> int:
             )
             if ponte is not None:
                 ciclo.avisar_cliente = ponte.avisar
+                ciclo.pediu_parar = ponte.consumir_parar
             ciclo.som_ativo = usar_som
             ciclo.emitir_cerebro()
             ciclo.emitir_som()
