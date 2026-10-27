@@ -6,6 +6,7 @@
 <!-- Beta fechado: fora dos buscadores. -->
 <meta name="robots" content="noindex, nofollow">
 <title>NOVA — Núcleo Operacional de Vozes Autônomas</title>
+<link rel="icon" type="image/png" href="img/logo-azul.png">
 <style>
   @font-face {
     font-family: "Inter";
@@ -44,15 +45,6 @@
   a { color: inherit; text-decoration: none; }
   .largura { max-width: 1720px; margin: 0 auto; padding: 0 clamp(20px, 3.5vw, 64px); position: relative; }
 
-  /* O céu: a rede de conexões atrás de tudo, e uma grade bem fraca. */
-  .grade-fundo {
-    position: fixed; inset: 0; z-index: 0; pointer-events: none;
-    background-image:
-      linear-gradient(rgba(var(--cor-rgb), .045) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(var(--cor-rgb), .045) 1px, transparent 1px);
-    background-size: 64px 64px;
-    mask-image: radial-gradient(ellipse 80% 60% at 50% 30%, #000 30%, transparent 75%);
-  }
   main, header, footer { position: relative; z-index: 1; }
 
   .mono { font-family: var(--mono); }
@@ -63,7 +55,7 @@
   .topo { position: sticky; top: 0; z-index: 20; background: rgba(5,7,11,.9); border-bottom: 1px solid var(--traco); }
   .topo .largura { display: flex; align-items: center; height: 66px; gap: 34px; }
   .marca { display: flex; align-items: center; gap: 11px; font-weight: 800; letter-spacing: .2em; font-size: 15px; }
-  .marca canvas { width: 30px; height: 30px; }
+  .marca img { width: 30px; height: 30px; }
   .menu { display: flex; gap: 28px; font-size: 14px; color: var(--texto-medio); }
   .menu a { position: relative; padding: 4px 0; }
   .menu a::after { content: ""; position: absolute; left: 0; right: 100%; bottom: -2px; height: 1px; background: var(--cor); box-shadow: 0 0 8px var(--cor); transition: right .3s; }
@@ -97,7 +89,7 @@
      e fica centrado no "palco": o espaço que sobra acima do texto. */
   .abertura { position: relative; height: calc(100vh - 66px); min-height: 660px; display: flex; flex-direction: column; padding: 0 0 6vh; overflow: hidden; }
   .atomo3d { position: absolute; inset: 0; width: 100%; height: 100%; display: none; -webkit-mask-image: linear-gradient(#000 72%, transparent 98%); mask-image: linear-gradient(#000 72%, transparent 98%); }
-  .abertura.com-3d .atomo3d { display: block; }
+  .com-3d .atomo3d { display: block; }
   .palco { position: relative; flex: 1; min-height: 280px; display: grid; place-items: center; }
   .abertura .largura { display: flex; flex-direction: column; align-items: center; text-align: center; width: 100%; }
   .verbete { display: inline-flex; align-items: baseline; gap: 12px; padding: 9px 16px; border-radius: 10px; font-family: var(--mono); font-size: 13px; color: var(--texto-fraco); }
@@ -115,7 +107,7 @@
     animation: varre 4.5s ease-in-out infinite; will-change: background-position;
   }
   @keyframes varre { from { background-position: 150% 0; } to { background-position: -150% 0; } }
-  .sub { font-size: clamp(18px, 1.15vw, 22px); color: var(--texto-medio); max-width: 40em; margin: 0 auto; }
+  .sub { font-size: clamp(18px, 1.15vw, 22px); color: var(--texto-medio); max-width: 40em; margin: 0 auto; text-wrap: balance; }
   .sub b { color: var(--texto); font-weight: 620; }
   .abertura .botoes { display: flex; gap: 12px; margin-top: 24px; flex-wrap: wrap; justify-content: center; align-items: center; }
   .abertura .botoes .escolha { margin-top: 0; }
@@ -135,18 +127,25 @@
   .escolha button[data-p="friday"].ativo i { color: #ff6fb5; }
   .escolha .pilula { position: absolute; top: 4px; bottom: 4px; left: 4px; border-radius: 9px; background: rgba(var(--cor-rgb), .16); border: 1px solid rgba(var(--cor-rgb), .45); transition: left .45s cubic-bezier(.6,0,.2,1), width .45s; box-shadow: 0 0 20px rgba(var(--cor-rgb), .25); }
 
-  /* O reator: o núcleo desenhado, a reserva para quando o 3D não abre. */
-  .reator { position: absolute; top: 4%; left: 50%; height: 92%; aspect-ratio: 1; max-width: 92vw; transform: translateX(-50%); display: none; }
-  .abertura.sem-3d:not(.com-3d) .reator { display: block; }
-  .reator canvas.nucleo { position: absolute; inset: 0; width: 100%; height: 100%; }
+  /* A reserva: a foto do mesmo átomo, para quando o 3D não abre (some com o 3D ligado). */
+  .reserva { position: absolute; top: 2%; left: 50%; height: 96%; aspect-ratio: 1; max-width: 92vw; object-fit: contain; transform: translateX(-50%); }
+  .com-3d .reserva { display: none; }
+
+  /* Os átomos menores (rodinha, cards, login): o mesmo 3D, em fundo preto que o
+     "screen" apaga, com o brilho sumindo em roda antes da borda (sem quadrado). */
+  .atomo { position: relative; }
+  .atomo img, .atomo canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .atomo canvas { display: none; mix-blend-mode: screen; -webkit-mask-image: radial-gradient(closest-side, #000 72%, transparent 100%); mask-image: radial-gradient(closest-side, #000 72%, transparent 100%); }
+  .com-3d .atomo canvas { display: block; }
+  .com-3d .atomo img { display: none; }
 
   /* -- seções ------------------------------------------------------------ */
-  section { padding: clamp(70px, 6vw, 120px) 0; position: relative; }
+  section { padding: clamp(56px, 4.6vw, 96px) 0; position: relative; }
   h2 { font-size: clamp(32px, 3.6vw, 66px); line-height: 1.04; letter-spacing: -0.04em; font-weight: 800; margin: 16px 0 16px; }
   h2 .cor { color: var(--cor); text-shadow: 0 0 30px rgba(var(--cor-rgb), .4); }
   .cabeca { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr); gap: clamp(30px, 5vw, 110px); align-items: end; }
   .cabeca .intro { margin-bottom: 18px; }
-  .intro { color: var(--texto-medio); font-size: clamp(17px, 1.1vw, 20px); max-width: 44em; }
+  .intro { color: var(--texto-medio); font-size: clamp(17px, 1.1vw, 20px); max-width: 44em; text-wrap: balance; }
   .aparece { opacity: 0; transform: translateY(26px); transition: opacity .8s, transform .8s cubic-bezier(.2,.7,.2,1); }
   .aparece.visto { opacity: 1; transform: none; }
 
@@ -154,7 +153,7 @@
   .sistemas { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: clamp(40px, 5vw, 110px); align-items: center; }
   .lado .painel { margin-top: 28px; }
   .mapa { position: relative; aspect-ratio: 1; width: 100%; max-width: 700px; justify-self: center; }
-  .mapa canvas { position: absolute; inset: 29%; width: 42%; height: 42%; }
+  .mapa .atomo { position: absolute; inset: 27%; }
   .mapa > svg { position: absolute; inset: 0; width: 100%; height: 100%; color: var(--cor); overflow: visible; }
   .fluxo { stroke-dasharray: 1.5 3; animation: flui .8s linear infinite; }
   @keyframes flui { to { stroke-dashoffset: -9; } }
@@ -168,6 +167,7 @@
   .no:hover, .no.ativo { transform: scale(1.12); color: #fff; box-shadow: 0 0 0 6px rgba(var(--cor-rgb), .08), 0 0 34px rgba(var(--cor-rgb), .6); border-color: var(--cor); }
   .no span { position: absolute; top: calc(100% + 8px); font: 600 10.5px var(--mono); letter-spacing: .14em; color: var(--texto-fraco); white-space: nowrap; }
   .no.ativo span { color: var(--cor); }
+  .no.cima span { top: auto; bottom: calc(100% + 8px); }
   .painel { border-radius: 20px; padding: clamp(26px, 2.2vw, 42px); }
   .painel .tag { font: 600 11px var(--mono); letter-spacing: .2em; color: var(--cor); }
   .painel h3 { font-size: clamp(28px, 2.2vw, 40px); letter-spacing: -0.03em; margin: 10px 0 12px; }
@@ -191,13 +191,14 @@
   .holo.jarvis { --c: 77, 163, 255; }
   .holo.friday { --c: 255, 111, 181; }
   .holo::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: repeating-linear-gradient(0deg, rgba(255,255,255,.025) 0 1px, transparent 1px 4px); }
-  .holo .topo-h { display: flex; justify-content: space-between; align-items: flex-start; }
+  .holo .topo-h { padding-right: 160px; }
   .holo .chamada { font: 700 12px var(--mono); letter-spacing: .2em; color: rgb(var(--c)); }
   .holo h3 { font-size: clamp(42px, 3.4vw, 62px); letter-spacing: -0.04em; font-weight: 820; line-height: 1; margin-top: 8px; }
-  .holo canvas { width: 190px; height: 190px; margin: -26px -20px 0 0; }
-  .holo p { color: var(--texto-medio); font-size: clamp(16px, 1.05vw, 18.5px); margin: 8px 0 24px; max-width: 32em; }
+  .holo .atomo { position: absolute; top: 6px; right: 6px; width: 200px; height: 200px; }
+  .holo p { color: var(--texto-medio); font-size: clamp(16px, 1.05vw, 18.5px); margin: 18px 0 24px; max-width: min(32em, calc(100% - 150px)); position: relative; }
   .holo .fala-h { padding: 18px 20px; border-radius: 14px; background: rgba(5,7,11,.75); border: 1px solid rgba(var(--c), .25); font-size: 16px; }
-  .holo .fala-h small { display: block; color: var(--texto-fraco); font: 11px var(--mono); margin-bottom: 6px; }
+  .holo .fala-h { position: relative; }
+  .holo .fala-h small { display: block; color: var(--texto-fraco); font-size: 14px; margin-bottom: 6px; }
 
   /* Privacidade: só um pacote de texto sai do PC. */
   .caminho { display: grid; grid-template-columns: 1fr clamp(160px, 16vw, 300px) 1fr; align-items: stretch; margin-top: 56px; }
@@ -211,9 +212,12 @@
   .caixa-p li::before { content: ""; width: 6px; height: 6px; border-radius: 50%; flex: none; }
   .caixa-p.pc li::before { background: var(--escutando); box-shadow: 0 0 8px var(--escutando); }
   .caixa-p.nuvem li::before { background: var(--pensando); box-shadow: 0 0 8px var(--pensando); }
-  .ponte-p { position: relative; height: 120px; }
-  .ponte-p svg { width: 100%; height: 100%; overflow: visible; }
-  .ponte-p .pacote { font: 600 10px var(--mono); letter-spacing: .14em; fill: var(--texto-fraco); }
+  .ponte-p { position: relative; height: 120px; display: grid; place-items: center; }
+  .ponte-p .trilho { position: absolute; left: 0; right: 0; top: 50%; height: 2px; margin-top: -1px; background: repeating-linear-gradient(90deg, rgba(155,123,255,.5) 0 5px, transparent 5px 11px); }
+  .ponte-p .trilho i { position: absolute; top: -4px; left: 0; width: 10px; height: 10px; border-radius: 50%; background: #c4b2ff; box-shadow: 0 0 14px #9b7bff; animation: corre 2.4s linear infinite; }
+  .ponte-p .trilho i + i { animation-delay: 1.2s; }
+  @keyframes corre { from { left: 0; } to { left: calc(100% - 10px); } }
+  .ponte-p .pacote { position: relative; padding: 9px 16px; border-radius: 999px; background: rgba(11,15,23,.96); border: 1px solid rgba(155,123,255,.45); font: 600 12.5px var(--mono); letter-spacing: .1em; text-transform: uppercase; color: #c4b2ff; white-space: nowrap; }
 
   /* Download: os sistemas, com o de quem abriu marcado. */
   .download { text-align: center; }
@@ -242,15 +246,17 @@
   footer { padding: 46px 0 70px; border-top: 1px solid var(--traco); color: var(--texto-fraco); font-size: 13.5px; }
   footer .largura { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
   footer .marca { color: var(--texto); }
-  footer .dir { margin-left: auto; font-family: var(--mono); font-size: 12px; letter-spacing: .1em; }
+  footer .marca img { width: 26px; height: 26px; }
+  footer .links { display: flex; gap: 24px; flex-wrap: wrap; margin-left: 20px; }
+  footer .links a:hover { color: var(--texto); }
+  footer .dir { margin-left: auto; font-family: var(--mono); font-size: 12px; letter-spacing: .06em; }
 
   /* -- autenticação (Google, só e-mails liberados) ----------------------- */
   .fundo-modal { position: fixed; inset: 0; z-index: 50; display: none; place-items: center; padding: 16px; background: rgba(3,5,8,.78); backdrop-filter: blur(10px); }
   .fundo-modal.aberto { display: grid; }
   .modal { width: 100%; max-width: 440px; border-radius: 22px; padding: 34px; text-align: center; background: var(--vidro-forte); }
   .modal .selo-a { position: relative; width: 150px; height: 150px; margin: -10px auto 8px; }
-  .modal .selo-a canvas { width: 100%; height: 100%; }
-  .modal .selo-a svg { position: absolute; inset: -8px; width: calc(100% + 16px); height: calc(100% + 16px); color: var(--cor); }
+    .modal .selo-a svg { position: absolute; inset: -8px; width: calc(100% + 16px); height: calc(100% + 16px); color: var(--cor); }
   .modal .tag { font: 700 11px var(--mono); letter-spacing: .22em; color: var(--cor); }
   .modal h3 { font-size: 24px; letter-spacing: -0.02em; margin: 8px 0 8px; }
   .modal p { color: var(--texto-medio); font-size: 15px; }
@@ -278,14 +284,23 @@
     .verbete > span:last-child { display: none; }
     section { padding: 80px 0; }
     .caminho { grid-template-columns: 1fr; }
-    .ponte-p { height: 70px; width: 200px; margin: 0 auto; transform: rotate(90deg); }
+    .ponte-p { height: 96px; }
+    .ponte-p .trilho { left: 50%; right: auto; top: 0; bottom: 0; width: 2px; height: auto; margin: 0 0 0 -1px; background: repeating-linear-gradient(180deg, rgba(155,123,255,.5) 0 5px, transparent 5px 11px); }
+    .ponte-p .trilho i { left: -4px; top: 0; animation-name: desce; }
+    @keyframes desce { from { top: 0; } to { top: calc(100% - 10px); } }
+    .duas { margin-top: 28px; }
+    .cabeca .intro { margin-bottom: 0; }
+    footer .links { margin-left: 0; width: 100%; }
+    footer .dir { margin-left: 0; }
     .plataformas { grid-template-columns: 1fr; }
     .topo .acoes .vazio { display: none; }
   }
   @media (max-width: 480px) {
     .largura { padding: 0 18px; }
     .holo h3 { font-size: 38px; }
-    .holo canvas { width: 110px; height: 110px; }
+    .holo .atomo { width: 120px; height: 120px; }
+    .holo .topo-h { padding-right: 90px; }
+    .holo p { max-width: none; }
   }
 </style>
 <!-- O three.js, para o átomo 3D do topo. -->
@@ -297,11 +312,9 @@
 </script>
 </head>
 <body>
-<div class="grade-fundo"></div>
-
 <header class="topo">
   <div class="largura">
-    <a class="marca" href="#"><canvas data-nucleo="marca"></canvas>NOVA</a>
+    <a class="marca" href="#"><img src="img/logo-azul.png" data-persona="logo" alt="">NOVA</a>
     <nav class="menu">
       <a href="#sistemas">Sistemas</a>
       <a href="#personas">Jarvis e Friday</a>
@@ -319,9 +332,7 @@
   <section class="abertura">
     <canvas class="atomo3d" aria-hidden="true"></canvas>
     <div class="palco">
-      <div class="reator">
-        <canvas class="nucleo" data-nucleo="heroi"></canvas>
-      </div>
+      <img class="reserva" src="img/atomo-azul.png" data-persona="atomo" alt="">
     </div>
     <div class="largura">
       <span class="verbete vidro"><b>NOVA</b><span>/<em>nô</em>·va/</span><span><em>N</em>úcleo <em>O</em>peracional de <em>V</em>ozes <em>A</em>utônomas</span></span>
@@ -349,7 +360,7 @@
       <div class="sistemas">
         <div class="mapa aparece">
           <svg viewBox="0 0 100 100" id="ligacoes"></svg>
-          <canvas data-nucleo="mapa"></canvas>
+          <div class="atomo" data-cor="persona"><img src="img/atomo-azul.png" data-persona="atomo" alt=""><canvas></canvas></div>
         </div>
         <div class="lado"><span class="rotulo">SISTEMAS</span>
       <h2>Tudo ligado <span class="cor">ao mesmo núcleo.</span></h2>
@@ -373,12 +384,12 @@
       <h2>Duas personalidades.<br><span class="cor">Uma só memória.</span></h2></div><p class="intro">Os dois sabem as mesmas coisas e lembram das mesmas conversas. Muda o jeito, a voz e a cor. Troque quando quiser, falando ou num toque.</p></div>
       <div class="duas">
         <div class="holo jarvis aparece" data-inclina>
-          <div class="topo-h"><div><span class="chamada">"HEY JARVIS"</span><h3>Jarvis</h3></div><canvas data-nucleo="jarvis"></canvas></div>
+          <div class="topo-h"><div><span class="chamada">"HEY JARVIS"</span><h3>Jarvis</h3></div></div><div class="atomo" data-cor="jarvis"><img src="img/atomo-azul.png" alt=""><canvas></canvas></div>
           <p>O mordomo que todo mundo queria: educado, calmo e com um humor seco na medida certa. Resolve sem enrolar.</p>
           <div class="fala-h"><small>você › "Jarvis, que horas são?"</small>São quatro e meia, senhor. Ainda dá tempo de fingir que vai estudar.</div>
         </div>
         <div class="holo friday aparece" data-inclina>
-          <div class="topo-h"><div><span class="chamada">"HEY FRIDAY"</span><h3>Friday</h3></div><canvas data-nucleo="friday"></canvas></div>
+          <div class="topo-h"><div><span class="chamada">"HEY FRIDAY"</span><h3>Friday</h3></div></div><div class="atomo" data-cor="friday"><img src="img/atomo-rosa.png" alt=""><canvas></canvas></div>
           <p>Carinhosa, animada na medida e com zoeira liberada. Te chama de chefinho, comemora quando dá certo e fica séria quando precisa.</p>
           <div class="fala-h"><small>você › "Friday, achou o arquivo?"</small>Achei, chefinho! Tava escondido nos Downloads, como sempre.</div>
         </div>
@@ -397,13 +408,8 @@
           <ul><li>O microfone e o "Hey Jarvis"</li><li>A sua voz virando texto</li><li>A resposta virando voz</li><li>A memória e os seus arquivos</li></ul>
         </div>
         <div class="ponte-p">
-          <svg viewBox="0 0 200 120">
-            <path id="trilho" d="M0 60 L 200 60" fill="none" stroke="rgba(155,123,255,.35)" stroke-width="1" stroke-dasharray="2 5"/>
-            <circle r="4" fill="#c4b2ff"><animateMotion dur="2.4s" repeatCount="indefinite"><mpath href="#trilho"/></animateMotion></circle>
-            <circle r="3" fill="#9b7bff" opacity=".6"><animateMotion dur="2.4s" begin="1.2s" repeatCount="indefinite"><mpath href="#trilho"/></animateMotion></circle>
-            <text class="pacote" x="100" y="44" text-anchor="middle">SÓ O PEDIDO</text>
-            <text class="pacote" x="100" y="84" text-anchor="middle">EM TEXTO</text>
-          </svg>
+          <span class="trilho"><i></i><i></i></span>
+          <span class="pacote">Só o pedido, em texto</span>
         </div>
         <div class="caixa-p nuvem vidro">
           <h4>// NA SUA CONTA DO CLAUDE</h4>
@@ -429,7 +435,7 @@
         <div class="plat vidro breve" data-so="windows">
           <svg class="logo" viewBox="0 0 24 24" fill="currentColor"><path d="M3 5.5l7.5-1v7H3v-6zm8.5-1.2L21 3v8.5h-9.5V4.3zM3 12.5h7.5v7L3 18.5v-6zm8.5 0H21V21l-9.5-1.3v-7.2z"/></svg>
           <h3>Windows</h3>
-          <span class="det">10 e 11 · em teste com os beta testers</span>
+          <span class="det">10 e 11</span>
           <span class="botao vazio">Em breve</span>
         </div>
         <div class="plat vidro breve" data-so="android">
@@ -449,16 +455,21 @@
 
 <footer>
   <div class="largura">
-    <span class="marca"><canvas data-nucleo="marca2" style="width:24px;height:24px"></canvas>NOVA</span>
-    <span>Núcleo Operacional de Vozes Autônomas · beta fechado</span>
-    <span class="dir">FEITO COM O CLAUDE</span>
+    <span class="marca"><img src="img/logo-azul.png" data-persona="logo" alt="">NOVA</span>
+    <nav class="links">
+      <a href="#sistemas">Sistemas</a>
+      <a href="#personas">Jarvis e Friday</a>
+      <a href="#privacidade">Privacidade</a>
+      <a href="#download">Download</a>
+    </nav>
+    <span class="dir">Núcleo Operacional de Vozes Autônomas · beta fechado · feito com o Claude</span>
   </div>
 </footer>
 
 <!-- Autenticação: login do Google (Firebase Auth) + a lista de convidados (Firestore, convites/<email>). -->
 <div class="fundo-modal" id="modal">
   <div class="modal vidro" data-tela="entrar">
-    <div class="selo-a"><canvas data-nucleo="selo1"></canvas></div>
+    <div class="selo-a atomo" data-cor="persona"><img src="img/atomo-azul.png" data-persona="atomo" alt=""><canvas></canvas></div>
     <span class="tag">AUTENTICAÇÃO</span>
     <h3>Entre para baixar</h3>
     <p>O beta é fechado: o download é liberado só para os e-mails convidados.</p>
@@ -469,7 +480,7 @@
     <p class="miudo" data-erro-login>// usamos só o seu e-mail, para ver se foi convidado</p>
   </div>
   <div class="modal vidro" data-tela="bloqueado" hidden>
-    <div class="selo-a"><canvas data-nucleo="selo2"></canvas></div>
+    <div class="selo-a atomo" data-cor="laranja"><img src="img/atomo-laranja.png" alt=""><canvas></canvas></div>
     <span class="tag">ACESSO NEGADO</span>
     <h3>Esse e-mail ainda não foi liberado</h3>
     <span class="email"><i></i><span data-email>alguem@gmail.com</span></span>
@@ -477,7 +488,7 @@
     <div class="linha"><a class="botao vazio" href="#" id="outro-email">Outro e-mail</a><a class="botao cheio" href="#" data-fechar>Ok</a></div>
   </div>
   <div class="modal vidro" data-tela="liberado" hidden>
-    <div class="selo-a"><canvas data-nucleo="selo3"></canvas></div>
+    <div class="selo-a atomo" data-cor="verde"><img src="img/atomo-verde.png" alt=""><canvas></canvas></div>
     <span class="tag">ACESSO LIBERADO</span>
     <h3>Bem-vindo ao beta!</h3>
     <span class="email"><i style="background:var(--escutando)"></i><span data-email>convidado@gmail.com</span></span>
@@ -496,162 +507,11 @@ let persona = P.get("persona") === "friday" ? "friday" : "jarvis";
 let cor = CORES[persona].slice();               // a cor de agora (vai até a da persona)
 const raiz = document.documentElement;
 
-function rgba(c, a) { return `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a})`; }
 function mistura(c, alvo, k) { for (let i = 0; i < 3; i++) c[i] += (alvo[i] - c[i]) * k; }
 
-// ---------------------------------------------------------------------------
-// O núcleo: brilho de energia, anéis em 3D com um elétron cada, poucas partículas
-// (remasterizado em 26/10/2026: sem o anel de HUD girando em volta, sem
-// faíscas e sem o plasma por dentro; o Léo achou poluído)
-// ---------------------------------------------------------------------------
-class Nucleo {
-  constructor(canvas, { escala = 1, particulas = 40, fixa = null, aneisFinos = false } = {}) {
-    this.c = canvas; this.x = canvas.getContext("2d");
-    this.escala = escala; this.fixa = fixa; this.aneisFinos = aneisFinos;
-    this.energia = 0;
-    this.aneis = [
-      { inc: 1.2, giro: 0.0, vel: 0.9, raio: 0.92, eletrons: 1 },
-      { inc: 1.15, giro: 2.1, vel: -0.7, raio: 0.80, eletrons: 1 },
-      { inc: 1.25, giro: 4.2, vel: 1.15, raio: 0.68, eletrons: 1 },
-    ];
-    this.pontos = Array.from({ length: particulas }, () => ({
-      r: 0.35 + Math.random() * 0.85, a: Math.random() * 6.283, y: (Math.random() - 0.5) * 1.1,
-      v: 0.05 + Math.random() * 0.25, t: 0.4 + Math.random() * 1.4,
-    }));
-    this.medir();
-  }
-  medir() {
-    const d = Math.min(window.devicePixelRatio || 1, 2);
-    const w = this.c.clientWidth, h = this.c.clientHeight;
-    this.c.width = Math.max(1, w * d); this.c.height = Math.max(1, h * d);
-    this.w = w; this.h = h; this.d = d;
-  }
-  // Ponto de um anel inclinado, já projetado em perspectiva.
-  anel(a, ang, t, R) {
-    let x = Math.cos(ang) * R, y = Math.sin(ang) * R, z = 0;
-    const ci = Math.cos(a.inc), si = Math.sin(a.inc);
-    [y, z] = [y * ci, y * si];                                  // inclina (eixo X)
-    const g = a.giro + t * 0.12, cg = Math.cos(g), sg = Math.sin(g);
-    [x, y] = [x * cg - y * sg, x * sg + y * cg];                // gira o plano (eixo Z)
-    if (this.inclina) {                                         // vira para o mouse
-      const [ix, iy] = this.inclina, cy_ = Math.cos(ix), sy_ = Math.sin(ix), cx_ = Math.cos(iy), sx_ = Math.sin(iy);
-      [x, z] = [x * cy_ + z * sy_, -x * sy_ + z * cy_];
-      [y, z] = [y * cx_ - z * sx_, y * sx_ + z * cx_];
-    }
-    const f = 3.2 * R / (3.2 * R + z);
-    return [x * f, y * f, z / R];
-  }
-  desenhar(t, c) {
-    const x = this.x, d = this.d, cx = this.w / 2, cy = this.h / 2;
-    const R = Math.min(this.w, this.h) * 0.36 * this.escala;
-    if (R < 1) return;  // escondido (a janelinha fechada): nada a desenhar
-    if (this.fixa) c = this.fixa;
-    if (this.alvo) {
-      this.inclina = this.inclina || [0, 0];
-      this.inclina[0] += (this.alvo[0] - this.inclina[0]) * 0.05;
-      this.inclina[1] += (this.alvo[1] - this.inclina[1]) * 0.05;
-    }
-    x.setTransform(d, 0, 0, d, 0, 0);
-    x.clearRect(0, 0, this.w, this.h);
-    x.globalCompositeOperation = "lighter";
-    const e = this.energia;
-
-    // Halo de fundo.
-    let g = x.createRadialGradient(cx, cy, 0, cx, cy, R * 1.6);
-    g.addColorStop(0, rgba(c, 0.20 + e * 0.1)); g.addColorStop(0.45, rgba(c, 0.06)); g.addColorStop(1, rgba(c, 0));
-    x.fillStyle = g; x.fillRect(0, 0, this.w, this.h);
-
-    // Partículas girando em volta (uma nuvem em 3D).
-    for (const p of this.pontos) {
-      const ang = p.a + t * p.v;
-      const px = Math.cos(ang) * p.r * R * 1.15, pz = Math.sin(ang) * p.r * R * 1.15, py = p.y * R;
-      const f = 3 * R / (3 * R + pz);
-      const brilho = (0.25 + 0.75 * (1 - (pz / R + 1.2) / 2.4)) * (0.6 + 0.4 * Math.sin(t * 2 + p.a * 5));
-      x.fillStyle = rgba(c, Math.max(0, brilho) * 0.8);
-      x.beginPath(); x.arc(cx + px * f, cy + py * f, p.t * f, 0, 6.283); x.fill();
-    }
-
-    // Os anéis e os elétrons com rastro.
-    for (const a of this.aneis) {
-      const Ra = R * a.raio;
-      x.lineWidth = this.aneisFinos ? 0.8 : 1.1;
-      for (let i = 0; i < 96; i++) {
-        const p1 = this.anel(a, i / 96 * 6.283, t, Ra), p2 = this.anel(a, (i + 1) / 96 * 6.283, t, Ra);
-        x.strokeStyle = rgba(c, 0.12 + 0.35 * (1 - (p1[2] + 1) / 2));
-        x.beginPath(); x.moveTo(cx + p1[0], cy + p1[1]); x.lineTo(cx + p2[0], cy + p2[1]); x.stroke();
-      }
-      for (let k = 0; k < a.eletrons; k++) {
-        const base = t * a.vel * (1 + e * 0.6) + k * Math.PI;
-        // O rastro: uma linha contínua que afina e some (antes, bolinhas em fila).
-        x.lineCap = "round";
-        let ant = null;
-        for (let j = 30; j >= 0; j--) {
-          const p = this.anel(a, base - j * 0.04 * Math.sign(a.vel), t, Ra);
-          if (ant) {
-            const k2 = 1 - j / 31, frente = 0.3 + 0.7 * (1 - (p[2] + 1) / 2);
-            x.strokeStyle = rgba(c, k2 * k2 * frente * 0.95);
-            x.lineWidth = k2 * 3.2 * (R / 150 + 0.35);
-            x.beginPath(); x.moveTo(cx + ant[0], cy + ant[1]); x.lineTo(cx + p[0], cy + p[1]); x.stroke();
-          }
-          ant = p;
-        }
-        const p = this.anel(a, base, t, Ra);
-        g = x.createRadialGradient(cx + p[0], cy + p[1], 0, cx + p[0], cy + p[1], R * 0.1);
-        g.addColorStop(0, "rgba(255,255,255,0.9)"); g.addColorStop(0.3, rgba(c, 0.6)); g.addColorStop(1, rgba(c, 0));
-        x.fillStyle = g; x.beginPath(); x.arc(cx + p[0], cy + p[1], R * 0.1, 0, 6.283); x.fill();
-      }
-    }
-
-    // O núcleo: brilho forte no centro.
-    const pulso = 1 + Math.sin(t * 2.4) * 0.04 + e * 0.12;
-    const Rn = R * 0.36 * pulso;
-    g = x.createRadialGradient(cx, cy, 0, cx, cy, Rn * 2.4);
-    g.addColorStop(0, rgba(c, 0.55)); g.addColorStop(0.35, rgba(c, 0.18)); g.addColorStop(1, rgba(c, 0));
-    x.fillStyle = g; x.beginPath(); x.arc(cx, cy, Rn * 2.4, 0, 6.283); x.fill();
-    g = x.createRadialGradient(cx - Rn * 0.2, cy - Rn * 0.25, 0, cx, cy, Rn);
-    g.addColorStop(0, "rgba(255,255,255,0.95)"); g.addColorStop(0.25, rgba([255, 255, 255].map((v, i) => (v + c[i]) / 2), 0.75));
-    g.addColorStop(0.7, rgba(c, 0.45)); g.addColorStop(1, rgba(c, 0));
-    x.fillStyle = g; x.beginPath(); x.arc(cx, cy, Rn, 0, 6.283); x.fill();
-    x.globalCompositeOperation = "source-over";
-  }
-}
-
-// Os núcleos da página (o grande e os pequenos).
-const opcoes = {
-  heroi: { escala: 0.9, particulas: 45 },
-  mapa: { escala: 1.15, particulas: 25 },
-  marca: { escala: 1.25, particulas: 0, aneisFinos: true },
-  marca2: { escala: 1.25, particulas: 0, aneisFinos: true },
-  jarvis: { escala: 1.05, particulas: 18, fixa: CORES.jarvis },
-  friday: { escala: 1.05, particulas: 18, fixa: CORES.friday },
-  selo1: { escala: 0.95, particulas: 15 },
-  selo2: { escala: 0.95, particulas: 15, fixa: [255, 180, 84] },
-  selo3: { escala: 0.95, particulas: 15, fixa: [56, 211, 159] },
-};
-const nucleos = [...document.querySelectorAll("canvas[data-nucleo]")]
-  .map(c => ({ el: c, n: new Nucleo(c, opcoes[c.dataset.nucleo] || {}) }));
-const heroi = nucleos.find(n => n.el.dataset.nucleo === "heroi").n;
-
-// O topo usa o átomo 3D (o módulo lá embaixo). Se ele não abrir em 3 s (PC
-// sem 3D, ou sem internet para baixar o three.js), aparece este, desenhado.
-const abertura = document.querySelector(".abertura");
-setTimeout(() => abertura.classList.contains("com-3d") || abertura.classList.add("sem-3d"), 3000);
-
-// O núcleo grande vira de leve para onde o mouse está.
-const reatorEl = document.querySelector(".reator");
-new ResizeObserver(() => heroi.medir()).observe(reatorEl);   // ele começa escondido
-function alvoInclina() {
-  if (mouse.x < -900) return [0, 0];
-  const r = reatorEl.getBoundingClientRect();
-  const dx = (mouse.x - (r.left + r.width / 2)) / innerWidth, dy = (mouse.y - (r.top + r.height / 2)) / innerHeight;
-  return [Math.max(-0.45, Math.min(0.45, dx * 0.9)), Math.max(-0.45, Math.min(0.45, -dy * 0.9))];
-}
-
-
-// O mouse (o núcleo grande vira de leve para ele).
+// O mouse (o átomo do topo vira de leve para ele).
 const mouse = { x: -999, y: -999 };
 addEventListener("mousemove", e => { mouse.x = e.clientX; mouse.y = e.clientY; });
-function medirTudo() { nucleos.forEach(n => n.n.medir()); }
 
 // ---------------------------------------------------------------------------
 // Troca de persona
@@ -665,7 +525,8 @@ function trocar(p) {
   persona = p;
   escolha.querySelectorAll("button").forEach(b => b.classList.toggle("ativo", b.dataset.p === p));
   posicionarPilula();
-  heroi.energia = 1.4;
+  // As fotos do átomo (logo, e a reserva sem 3D) vão junto com a cor.
+  document.querySelectorAll("img[data-persona]").forEach(i => { i.src = `img/${i.dataset.persona}-${p === "friday" ? "rosa" : "azul"}.png`; });
 }
 escolha.querySelectorAll("button").forEach(b => b.addEventListener("click", () => trocar(b.dataset.p)));
 
@@ -694,10 +555,13 @@ let ativo = 0;
   let linhas = '<circle cx="50" cy="50" r="38" fill="none" stroke="currentColor" stroke-opacity=".18" stroke-width=".3" stroke-dasharray="1 2"/>';
   SISTEMAS.forEach((s, i) => {
     const a = -Math.PI / 2 + i * Math.PI / 3, x = 50 + Math.cos(a) * 38, y = 50 + Math.sin(a) * 38;
-    linhas += `<line x1="50" y1="50" x2="${x}" y2="${y}" stroke="currentColor" stroke-opacity=".12" stroke-width=".3"/>
-               <line class="fluxo" x1="50" y1="50" x2="${x}" y2="${y}" stroke="currentColor" stroke-width=".7" stroke-opacity="0"/>`;
+    // A linha vai da borda do átomo até a bolinha do sistema. O nome do "VOZ"
+    // (o de cima) fica em cima dela: embaixo, a linha passava riscando.
+    const x1 = 50 + Math.cos(a) * 19, y1 = 50 + Math.sin(a) * 19, x2 = 50 + Math.cos(a) * 32, y2 = 50 + Math.sin(a) * 32;
+    linhas += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="currentColor" stroke-opacity=".12" stroke-width=".3"/>
+               <line class="fluxo" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="currentColor" stroke-width=".7" stroke-opacity="0"/>`;
     const no = document.createElement("div");
-    no.className = "no"; no.style.left = x + "%"; no.style.top = y + "%";
+    no.className = i === 0 ? "no cima" : "no"; no.style.left = x + "%"; no.style.top = y + "%";
     no.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${ICONES[s[0]]}</svg><span>${s[1]}</span>`;
     no.addEventListener("mouseenter", () => mostrarSistema(i));
     no.addEventListener("click", () => mostrarSistema(i));
@@ -755,7 +619,6 @@ const modal = document.getElementById("modal");
 function abrir(tela) {
   modal.querySelectorAll(".modal").forEach(m => m.hidden = m.dataset.tela !== tela);
   modal.classList.add("aberto");
-  requestAnimationFrame(() => nucleos.forEach(n => n.n.medir()));
 }
 // O login de verdade (o módulo do Firebase, no fim) troca por pedirDownload.
 document.querySelectorAll("[data-login]").forEach(b => b.addEventListener("click", e => { e.preventDefault(); (window.pedirDownload || (() => abrir("entrar")))(); }));
@@ -764,26 +627,17 @@ modal.addEventListener("click", e => { if (e.target === modal || e.target.datase
 // ---------------------------------------------------------------------------
 // O laço
 // ---------------------------------------------------------------------------
-addEventListener("resize", () => { medirTudo(); posicionarPilula(); });
-medirTudo();
+addEventListener("resize", posicionarPilula);
 if (persona === "friday") trocar("friday"); else posicionarPilula();
 if (P.get("tela")) abrir(P.get("tela"));
-const inicio = performance.now();
 let corNoCss = "";
-function laco(agora) {
-  const t = (agora - inicio) / 1000;
+function laco() {
   mistura(cor, CORES[persona], 0.07);
   const rgb = cor.map(v => Math.round(v)).join(",");
   if (rgb !== corNoCss) {
     corNoCss = rgb;
     raiz.style.setProperty("--cor", `rgb(${rgb})`);
     raiz.style.setProperty("--cor-rgb", rgb);
-  }
-  heroi.alvo = alvoInclina();
-  heroi.energia *= 0.96;
-  for (const n of nucleos) {
-    const r = n.el.getBoundingClientRect();
-    if (r.bottom > 0 && r.top < innerHeight && r.width) n.n.desenhar(t, cor);
   }
   requestAnimationFrame(laco);
 }
@@ -792,261 +646,45 @@ requestAnimationFrame(laco);
 
 <script type="module">
 // ---------------------------------------------------------------------------
-// O átomo 3D do topo (aprovado pelo Léo em 27/10/2026; protótipo em
-// prototipo-atomo-3d-v2.html): núcleo grande com malha geodésica, três
-// argolas de formatos diferentes girando como moeda e oito bolinhas com rastro.
+// Os átomos 3D (site/atomo3d.js): o grande do topo e os menores da rodinha,
+// dos cards e do login. Cada um só desenha enquanto aparece na tela. Sem 3D
+// no PC, ficam as fotos do mesmo átomo (img/atomo-*.png).
 // A cor vem de `cor`, a do script de cima (que já vai até a da persona).
 // ---------------------------------------------------------------------------
-import * as THREE from "three";
-import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
-import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
-import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
-import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
+import { criarAtomo } from "./atomo3d.js";
 
-const canvas = abertura.querySelector(".atomo3d"), palco = abertura.querySelector(".palco");
+const abertura = document.querySelector(".abertura");
 const parado = matchMedia("(prefers-reduced-motion: reduce)").matches;
-let renderer;
+const FIXAS = { jarvis: CORES.jarvis, friday: CORES.friday, laranja: [255, 180, 84], verde: [56, 211, 159] };
+const atomos = [];
+function novo(canvas, opcoes) {
+  const a = criarAtomo(canvas, { parado, ...opcoes });
+  new IntersectionObserver(es => { a.visivel = es[0].isIntersecting; }).observe(canvas.parentElement);
+  atomos.push(a);
+}
+raiz.classList.add("com-3d");   // antes de criar: com a classe, os canvas aparecem e têm tamanho
 try {
-  renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+  novo(abertura.querySelector(".atomo3d"), {
+    cor: () => cor, palco: abertura.querySelector(".palco"), poeira: true,
+    inclinacao: () => mouse.x < -900 ? { x: 0, y: 0 } : { x: mouse.x / innerWidth - .5, y: mouse.y / innerHeight - .5 },
+  });
 } catch (erro) {
-  abertura.classList.add("sem-3d");   // sem 3D neste PC: fica o desenhado
+  raiz.classList.remove("com-3d");   // sem 3D neste PC: ficam as fotos
   throw erro;
 }
-abertura.classList.add("com-3d");
-renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
-renderer.toneMapping = THREE.NoToneMapping;  // com ACES o fundo ficava mais escuro que a página
-const tom = new THREE.Color().setRGB(cor[0] / 255, cor[1] / 255, cor[2] / 255, THREE.SRGBColorSpace);
-const cena = new THREE.Scene();
-// O fundo pela cena (e não setClearColor): com o bloom no meio, a cor de
-// limpeza era convertida para sRGB duas vezes e o fundo saía cinza-azulado.
-cena.background = new THREE.Color(0x05070b);
-const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 100);
-camera.position.set(0, 0, 10);
-
-const atomo = new THREE.Group();
-cena.add(atomo);
-const RN = 0.62;       // raio do núcleo (grande)
-const DIAMETRO = 4;    // o átomo inteiro, com a folga do brilho
-
-// --- O núcleo: uma esfera de plasma (ruído animado) com a borda acesa ----------
-const ruido = `
-  vec3 m289(vec3 x){return x-floor(x*(1./289.))*289.;} vec4 m289(vec4 x){return x-floor(x*(1./289.))*289.;}
-  vec4 perm(vec4 x){return m289(((x*34.)+1.)*x);} vec4 tis(vec4 r){return 1.79284291400159-.85373472095314*r;}
-  float snoise(vec3 v){const vec2 C=vec2(1./6.,1./3.);const vec4 D=vec4(0.,.5,1.,2.);
-    vec3 i=floor(v+dot(v,C.yyy));vec3 x0=v-i+dot(i,C.xxx);vec3 g=step(x0.yzx,x0.xyz);vec3 l=1.-g;
-    vec3 i1=min(g.xyz,l.zxy);vec3 i2=max(g.xyz,l.zxy);vec3 x1=x0-i1+C.xxx;vec3 x2=x0-i2+C.yyy;vec3 x3=x0-D.yyy;
-    i=m289(i);vec4 p=perm(perm(perm(i.z+vec4(0.,i1.z,i2.z,1.))+i.y+vec4(0.,i1.y,i2.y,1.))+i.x+vec4(0.,i1.x,i2.x,1.));
-    float n_=.142857142857;vec3 ns=n_*D.wyz-D.xzx;vec4 j=p-49.*floor(p*ns.z*ns.z);vec4 x_=floor(j*ns.z);vec4 y_=floor(j-7.*x_);
-    vec4 x=x_*ns.x+ns.yyyy;vec4 y=y_*ns.x+ns.yyyy;vec4 h=1.-abs(x)-abs(y);vec4 b0=vec4(x.xy,y.xy);vec4 b1=vec4(x.zw,y.zw);
-    vec4 s0=floor(b0)*2.+1.;vec4 s1=floor(b1)*2.+1.;vec4 sh=-step(h,vec4(0.));vec4 a0=b0.xzyw+s0.xzyw*sh.xxyy;vec4 a1=b1.xzyw+s1.xzyw*sh.zzww;
-    vec3 p0=vec3(a0.xy,h.x);vec3 p1=vec3(a0.zw,h.y);vec3 p2=vec3(a1.xy,h.z);vec3 p3=vec3(a1.zw,h.w);
-    vec4 norm=tis(vec4(dot(p0,p0),dot(p1,p1),dot(p2,p2),dot(p3,p3)));p0*=norm.x;p1*=norm.y;p2*=norm.z;p3*=norm.w;
-    vec4 m=max(.6-vec4(dot(x0,x0),dot(x1,x1),dot(x2,x2),dot(x3,x3)),0.);m=m*m;
-    return 42.*dot(m*m,vec4(dot(p0,x0),dot(p1,x1),dot(p2,x2),dot(p3,x3)));}`;
-const nucleoMat = new THREE.ShaderMaterial({
-  uniforms: { uTempo: { value: 0 }, uCor: { value: tom } },
-  vertexShader: `varying vec3 vN; varying vec3 vP; varying vec3 vV;
-    void main(){ vN=normalize(normalMatrix*normal); vP=position; vec4 mv=modelViewMatrix*vec4(position,1.); vV=normalize(-mv.xyz); gl_Position=projectionMatrix*mv; }`,
-  fragmentShader: ruido + `uniform float uTempo; uniform vec3 uCor; varying vec3 vN; varying vec3 vP; varying vec3 vV;
-    void main(){
-      float n = snoise(vP*4.2 + vec3(0., uTempo*.35, uTempo*.2))*.5 + snoise(vP*9. - vec3(uTempo*.5))*.25;
-      float frente = max(dot(vN, vV), 0.);
-      float borda = pow(1. - frente, 2.2);
-      vec3 base = uCor * (0.05 + 0.32*smoothstep(-.35,.7,n));
-      vec3 miolo = mix(uCor, vec3(1.), .4) * pow(frente, 6.) * .22;
-      gl_FragColor = vec4(base + miolo + uCor*borda*.7, 1.);
-    }`,
-});
-const nucleo = new THREE.Group(); atomo.add(nucleo);
-nucleo.add(new THREE.Mesh(new THREE.SphereGeometry(RN * .97, 96, 96), nucleoMat));
-// A casca geodésica: os triângulos de um icosaedro subdividido, em linhas de
-// luz, com um ponto aceso em cada vértice e alguns painéis que acendem devagar.
-const geo = new THREE.IcosahedronGeometry(RN, 2);
-const linhasMat = new THREE.LineBasicMaterial({ color: tom, transparent: true, opacity: .55, blending: THREE.AdditiveBlending, depthWrite: false });
-nucleo.add(new THREE.LineSegments(new THREE.EdgesGeometry(geo, 1), linhasMat));
-const nosMat = new THREE.PointsMaterial({ color: tom, size: .022, transparent: true, opacity: .9, blending: THREE.AdditiveBlending, depthWrite: false });
-nucleo.add(new THREE.Points(geo, nosMat));
-const paineis = geo.clone();  // não indexada: cada triângulo tem os seus 3 vértices
-const nFaces = paineis.attributes.position.count / 3, sorteio = new Float32Array(nFaces * 3);
-for (let f = 0; f < nFaces; f++) { const s = Math.random(); sorteio.set([s, s, s], f * 3); }
-paineis.setAttribute("sorteio", new THREE.BufferAttribute(sorteio, 1));
-const paineisMat = new THREE.ShaderMaterial({
-  uniforms: { uTempo: { value: 0 }, uCor: { value: tom } }, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
-  vertexShader: `attribute float sorteio; varying float vS; void main(){ vS=sorteio; gl_Position=projectionMatrix*modelViewMatrix*vec4(position*1.002,1.); }`,
-  fragmentShader: `uniform float uTempo; uniform vec3 uCor; varying float vS;
-    void main(){ float on = smoothstep(.82, 1., sin(uTempo*.6 + vS*40.)*.5+.5); gl_FragColor = vec4(uCor*(.03 + on*.35), 1.); }`,
-});
-nucleo.add(new THREE.Mesh(paineis, paineisMat));
-
-// O halo macio em volta do núcleo (um sprite com gradiente).
-function textura(r0, a0) {
-  const c = document.createElement("canvas"); c.width = c.height = 256;
-  const g = c.getContext("2d"), gr = g.createRadialGradient(128, 128, 0, 128, 128, 128);
-  gr.addColorStop(0, `rgba(255,255,255,${a0})`); gr.addColorStop(r0, "rgba(255,255,255,.18)"); gr.addColorStop(1, "rgba(255,255,255,0)");
-  g.fillStyle = gr; g.fillRect(0, 0, 256, 256);
-  const tx = new THREE.CanvasTexture(c); tx.colorSpace = THREE.SRGBColorSpace;  // sem isso, o fim do degradê virava um quadrado cinza
-  return tx;
-}
-const haloMat = new THREE.SpriteMaterial({ map: textura(.22, .5), color: tom, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: .32 });
-const halo = new THREE.Sprite(haloMat); halo.scale.set(3.4, 3.4, 1); atomo.add(halo);
-
-// --- As argolas: três a 0°, 60° e 120°, cada uma com um formato:
-//   0. a externa: faixa larga, bordas acesas, marcações e 3 partes com vãos;
-//   1. a interna: fio duplo fino e tracejado;
-//   2. a do meio: elipse alongada, com pontos de luz ao longo dela.
-const argolaMat = (fase, estilo) => new THREE.ShaderMaterial({
-  uniforms: { uCor: { value: tom }, uFase: { value: fase }, uEstilo: { value: estilo } },
-  transparent: true, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending,
-  vertexShader: `varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }`,
-  fragmentShader: `uniform vec3 uCor; uniform float uFase, uEstilo; varying vec2 vUv;
-    float linha(float w, float onde, float larg){ return exp(-pow((w - onde) / larg, 2.)); }
-    void main(){
-      float w = vUv.y;   // através da faixa (0 a 1)
-      float a = vUv.x;   // em volta da argola (0 a 1)
-      float luz, mostra;
-      if (uEstilo < .5) {
-        float s = fract(a * 3. + uFase);
-        mostra = smoothstep(.0, .01, s) * (1. - smoothstep(.95, .96, s));
-        float risco = (1. - smoothstep(.0, .14, fract(a * 180.))) * step(.3, w) * step(w, .7);
-        luz = linha(w, .06, .04) + linha(w, .94, .04) + .08 + risco * .5;
-      } else if (uEstilo < 1.5) {
-        mostra = step(fract(a * 48. + uFase), .62);
-        luz = (linha(w, .25, .06) + linha(w, .75, .06)) * 1.1;
-      } else {
-        float s = fract(a * 6. + uFase);
-        mostra = smoothstep(.0, .008, s) * (1. - smoothstep(.975, .983, s));
-        float conta = exp(-pow((fract(a * 18. + uFase) - .5) / .018, 2.)) * linha(w, .5, .3);
-        luz = linha(w, .1, .05) + linha(w, .9, .05) + .05 + conta * 1.6;
-      }
-      gl_FragColor = vec4(uCor * luz * mostra, 1.);
-    }`,
-});
-// O rastro de cada bolinha: um tubo de luz que segue a argola ATRÁS dela,
-// afinando e apagando até a ponta. É montado com a bolinha em u = 0 e depois
-// só gira junto (girar em Z anda pela argola: u -> (R sen, -R cos, 0)).
-class Rastro extends THREE.Curve {
-  constructor(r, comprimento, sentido) { super(); this.r = r; this.comprimento = comprimento; this.sentido = sentido; }
-  getPoint(t, alvo = new THREE.Vector3()) {
-    const u = -this.sentido * this.comprimento * (1 - t) * 6.2831853;   // t = 1 é a bolinha
-    return alvo.set(Math.sin(u) * this.r, -Math.cos(u) * this.r, 0);
-  }
-}
-const rastroMat = grossura => new THREE.ShaderMaterial({
-  uniforms: { uCor: { value: tom }, uGrossura: { value: grossura } }, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
-  vertexShader: `uniform float uGrossura; varying float vU;
-    void main(){ vU = uv.x;
-      vec3 p = position - normal * uGrossura * (1. - mix(.12, 1., vU));   // afina até a ponta
-      gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.); }`,
-  fragmentShader: `uniform vec3 uCor; varying float vU;
-    void main(){ float k = pow(vU, 1.8); gl_FragColor = vec4(mix(uCor, vec3(1.), k * .45) * k * 1.9, k); }`,
-});
-// Cada argola gira em torno do próprio eixo comprido (como uma moeda girando
-// em pé: a que está na vertical gira para os lados), cada uma num ritmo, e
-// leva as suas bolinhas, espalhadas por igual, cada uma com o rastro.
-const FORMATOS = [
-  { raio: 1.62, largura: .12, elipse: [1, 1],      bola: .05,  bolinhas: 3 },
-  { raio: 1.3,  largura: .05, elipse: [1, 1],      bola: .038, bolinhas: 2 },
-  { raio: 1.45, largura: .08, elipse: [1.16, .84], bola: .044, bolinhas: 3 },
-];
-const argolas = [0, 1, 2].map(i => {
-  const F = FORMATOS[i];
-  const fora = new THREE.Group(); fora.rotation.z = i * Math.PI / 3; atomo.add(fora);
-  const plano = new THREE.Group(); plano.rotation.x = 1.2; fora.add(plano);
-  const forma = new THREE.Group(); forma.scale.set(F.elipse[0], F.elipse[1], 1); plano.add(forma);
-  const sentido = i === 1 ? -1 : 1;
-  // A faixa "em pé" (um aro, como um cilindro curtinho): vista de lado ela
-  // continua larga, em vez de sumir numa linha.
-  const aro = new THREE.CylinderGeometry(F.raio, F.raio, F.largura, 512, 1, true); aro.rotateX(Math.PI / 2);
-  forma.add(new THREE.Mesh(aro, argolaMat(i * .37, i)));
-  const eletronMat = new THREE.MeshBasicMaterial({ color: tom.clone().lerp(new THREE.Color(1, 1, 1), .5) });
-  const bolaGeo = new THREE.SphereGeometry(F.bola, 24, 24);
-  const rastroGeo = new THREE.TubeGeometry(new Rastro(F.raio, .55 / F.bolinhas, sentido), 160, F.bola * .45, 8, false);
-  const rMat = rastroMat(F.bola * .45);
-  const bolinhas = [];
-  for (let j = 0; j < F.bolinhas; j++) {
-    const eletron = new THREE.Mesh(bolaGeo, eletronMat);
-    eletron.scale.set(1 / F.elipse[0], 1 / F.elipse[1], 1);   // a bolinha continua redonda na elipse
-    const rastro = new THREE.Mesh(rastroGeo, rMat);
-    forma.add(rastro, eletron);
-    bolinhas.push({ eletron, rastro, desloc: j / F.bolinhas });
-  }
-  return { plano, bolinhas, eletronMat, sentido, raio: F.raio, vel: [.13, .17, .15][i], fase: i * .3,
-           giro: [.5, -.42, .6][i], giroFase: 1.2 + i * .7 };
+document.querySelectorAll(".atomo canvas").forEach(c => {
+  const fixa = FIXAS[c.parentElement.dataset.cor];
+  novo(c, { cor: fixa ? () => fixa : () => cor, fundo: 0x000000, brilho: .45 });
 });
 
-// --- Poeira: poucos pontinhos bem fracos em volta, para dar profundidade -------
-const poeiraGeo = new THREE.BufferGeometry(), N = 260, pos = new Float32Array(N * 3);
-for (let i = 0; i < N; i++) {
-  const u = Math.random() * 2 - 1, a = Math.random() * 6.283, r = 1.7 + Math.pow(Math.random(), 1.6) * 1.9, q = Math.sqrt(1 - u * u);
-  pos.set([Math.cos(a) * q * r, u * r * .7, Math.sin(a) * q * r], i * 3);
-}
-poeiraGeo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
-const poeiraMat = new THREE.PointsMaterial({ color: tom, size: .016, transparent: true, opacity: .35, blending: THREE.AdditiveBlending, depthWrite: false });
-const poeira = new THREE.Points(poeiraGeo, poeiraMat); cena.add(poeira);
-
-// --- Brilho (bloom) ---------------------------------------------------------
-const composer = new EffectComposer(renderer);
-composer.addPass(new RenderPass(cena, camera));
-// Raio curto demais deixa o brilho quadrado (o desfoque corta nas camadas pequenas).
-composer.addPass(new UnrealBloomPass(new THREE.Vector2(1, 1), .85, .5, .3));
-composer.addPass(new OutputPass());
-
-// --- Tamanho: o átomo centrado no palco (o espaço acima do texto), ocupando quase tudo dele
-function medir() {
-  const w = canvas.clientWidth, h = canvas.clientHeight;
-  if (!w || !h) return;
-  renderer.setSize(w, h, false); composer.setSize(w, h);
-  camera.aspect = w / h;
-  const p = palco.getBoundingClientRect(), c = canvas.getBoundingClientRect();
-  const tamanho = Math.max(160, Math.min(p.height * .96, w * .9));
-  const altura = DIAMETRO * h / tamanho;   // a altura visível no plano do átomo
-  camera.position.z = altura / 2 / Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
-  camera.updateProjectionMatrix();
-  atomo.position.y = (.5 - (p.top - c.top + p.height / 2) / h) * altura;
-  poeira.position.y = atomo.position.y;
-}
-const observa = new ResizeObserver(medir);
-observa.observe(palco); observa.observe(canvas);
-addEventListener("resize", medir);
-medir();
-
-// Fora da tela (rolou para baixo), o átomo para de desenhar.
-let visivel = true;
-new IntersectionObserver(es => { visivel = es[0].isIntersecting; }).observe(abertura);
-
-const relogio = new THREE.Clock(), BRANCO = new THREE.Color(1, 1, 1), inclina = { x: 0, y: 0 };
-let t = 3;
-function passo(dt) {
-  if (!parado) t += dt;
-  tom.setRGB(cor[0] / 255, cor[1] / 255, cor[2] / 255, THREE.SRGBColorSpace);
-  haloMat.color.copy(tom); poeiraMat.color.copy(tom); linhasMat.color.copy(tom); nosMat.color.copy(tom);
-  nucleoMat.uniforms.uTempo.value = t; paineisMat.uniforms.uTempo.value = t;
-  nucleo.rotation.y = t * .12; nucleo.rotation.x = t * .05;
-  for (const g of argolas) {
-    for (const b of g.bolinhas) {
-      const u = g.fase + t * g.vel * g.sentido + b.desloc;   // onde a bolinha está (voltas)
-      // O mesmo ponto da faixa (o cilindro deitado): u -> (R sen, -R cos, 0).
-      b.eletron.position.set(Math.sin(u * 6.2831853) * g.raio, -Math.cos(u * 6.2831853) * g.raio, 0);
-      b.rastro.rotation.z = u * 6.2831853;
-    }
-    g.eletronMat.color.copy(tom).lerp(BRANCO, .5);
-    g.plano.rotation.x = g.giroFase + t * g.giro;   // o eixo X do plano é o eixo comprido da argola
-  }
-  // O átomo vira de leve para o mouse (o `mouse` do script de cima).
-  const alvoX = mouse.x < -900 ? 0 : mouse.x / innerWidth - .5, alvoY = mouse.y < -900 ? 0 : mouse.y / innerHeight - .5;
-  inclina.x += (alvoX - inclina.x) * .04; inclina.y += (alvoY - inclina.y) * .04;
-  atomo.rotation.y = Math.sin(t * .22) * .35 + inclina.x * .5;
-  atomo.rotation.x = Math.sin(t * .17) * .12 + inclina.y * .35;
-  poeira.rotation.y = t * .02;
-  composer.render();
-}
-function laco3d() {
-  const dt = Math.min(relogio.getDelta(), .1);
-  if (visivel) passo(dt);
+function passo(dt) { for (const a of atomos) if (a.visivel) a.passo(dt); }
+let antes = performance.now();
+function laco3d(agora) {
+  passo(Math.min((agora - antes) / 1000, .1)); antes = agora;
   requestAnimationFrame(laco3d);
 }
 // ?gravar=1: quem grava o vídeo avança quadro a quadro (window.quadro), sem depender da velocidade do PC.
-if (P.get("gravar")) { window.quadro = passo; passo(0); } else laco3d();
+if (P.get("gravar")) { window.quadro = passo; window.atomos = atomos; for (const a of atomos) a.passo(0); } else requestAnimationFrame(laco3d);
 </script>
 
 <script type="module">

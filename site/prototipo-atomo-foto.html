@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="robots" content="noindex, nofollow">
+<title>NOVA: foto do átomo</title>
+<!-- Foto parada do átomo, em fundo preto, para gerar as imagens (logo, ícones,
+     reserva sem 3D): ../arte/atomo_png.py abre esta página e tira a foto.
+     ?cor=4da3ff&lado=512&t=5&traco=1 (traco 2 nos ícones pequenos) -->
+<style> html, body { margin: 0; background: #000; } canvas { display: block; } </style>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script type="module">
+import { criarAtomo } from "./atomo3d.js";
+const P = new URLSearchParams(location.search), lado = Number(P.get("lado") || 512);
+const hex = parseInt(P.get("cor") || "4da3ff", 16), rgb = [hex >> 16, (hex >> 8) & 255, hex & 255];
+const canvas = document.getElementById("c");
+canvas.style.width = canvas.style.height = lado + "px";
+const a = criarAtomo(canvas, { cor: () => rgb, fundo: 0x000000, traco: Number(P.get("traco") || 1) });
+a.passo(Number(P.get("t") || 5) - 3);
+document.body.dataset.pronto = "1";
+</script>
+</body>
+</html>
