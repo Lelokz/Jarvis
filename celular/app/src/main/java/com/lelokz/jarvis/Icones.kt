@@ -4,6 +4,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -71,22 +72,14 @@ fun Ic(v: ImageVector, cor: Color, tamanho: Dp = 20.dp, modifier: Modifier = Mod
     Icon(v, contentDescription = null, tint = cor, modifier = modifier.size(tamanho))
 
 /**
- * O átomo parado (o avatar das respostas, o estado na gaveta): os três anéis
- * da esfera e o núcleo, como o `AtomoFixo.qml` do PC.
+ * O átomo parado (o avatar das respostas, o estado na gaveta): o átomo da NOVA
+ * (comum/Atomo.kt) num quadro só, com o traço grosso dos tamanhos pequenos,
+ * como o `AtomoFixo.qml` do PC.
  */
 @Composable
 fun AtomoFixo(cor: Color, tamanho: Dp, modifier: Modifier = Modifier) {
+    val desenho = remember { DesenhoDoAtomo() }
     Canvas(modifier.size(tamanho)) {
-        val l = size.minDimension
-        val c = Offset(size.width / 2, size.height / 2)
-        drawCircle(cor.copy(alpha = 0.08f), l * 0.30f, c)
-        drawCircle(cor.copy(alpha = 0.55f), l * 0.17f, c)
-        val traco = Stroke(width = maxOf(1.2f, l / 22f), cap = StrokeCap.Round)
-        for ((rx, ry, angulo) in listOf(Triple(0.46f, 0.15f, 0f), Triple(0.39f, 0.22f, 62f), Triple(0.32f, 0.12f, 121f))) {
-            rotate(angulo, c) {
-                drawOval(cor, topLeft = Offset(c.x - l * rx, c.y - l * ry),
-                    size = androidx.compose.ui.geometry.Size(2 * l * rx, 2 * l * ry), style = traco)
-            }
-        }
+        with(desenho) { desenhar(5.2f, cor, Color(0xFF0A0C10), 1f, 3f, 1f) }
     }
 }
