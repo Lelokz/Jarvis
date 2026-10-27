@@ -188,6 +188,7 @@ def main(argv: list[str] | None = None) -> int:
     engine = QQmlApplicationEngine()
     engine.addImportPath(str(QML))
     engine.rootContext().setContextProperty("ponte", ponte)
+    engine.addImageProvider("atomo", atomo_icone.ProvedorDoAtomo())
     # Ligando com o PC, a janela não abre na cara: fica o ícone na bandeja.
     # Sem bandeja ela abre assim mesmo, senão não haveria porta de entrada.
     engine.rootContext().setContextProperty(

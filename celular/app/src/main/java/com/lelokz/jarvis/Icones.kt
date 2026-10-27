@@ -4,9 +4,10 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
@@ -72,14 +73,13 @@ fun Ic(v: ImageVector, cor: Color, tamanho: Dp = 20.dp, modifier: Modifier = Mod
     Icon(v, contentDescription = null, tint = cor, modifier = modifier.size(tamanho))
 
 /**
- * O átomo parado (o avatar das respostas, o estado na gaveta): o átomo da NOVA
- * (comum/Atomo.kt) num quadro só, com o traço grosso dos tamanhos pequenos,
- * como o `AtomoFixo.qml` do PC.
+ * O átomo parado (o avatar das respostas, o estado na gaveta): o desenho dos
+ * ícones (IconeAtomo.kt), o mesmo da bandeja do PC e do ícone do app. A camada
+ * própria é para os cortes em volta das argolas apagarem só o átomo.
  */
 @Composable
 fun AtomoFixo(cor: Color, tamanho: Dp, modifier: Modifier = Modifier) {
-    val desenho = remember { DesenhoDoAtomo() }
-    Canvas(modifier.size(tamanho)) {
-        with(desenho) { desenhar(5.2f, cor, Color(0xFF0A0C10), 1f, 3f, 1f) }
+    Canvas(modifier.size(tamanho).graphicsLayer(compositingStrategy = CompositingStrategy.Offscreen)) {
+        with(IconeAtomo) { desenhar(cor) }
     }
 }

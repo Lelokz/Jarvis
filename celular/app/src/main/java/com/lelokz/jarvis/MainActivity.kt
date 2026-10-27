@@ -136,7 +136,7 @@ private val Azul: Color get() = if (personaAtiva.value == "friday") corDaFriday.
 private val Roxo = Color(0xFF9B7BFF)
 
 /** A versão da janela (a numeração do Léo, igual à do PC) e a do app. */
-const val VERSAO_JANELA = "beta 0.16.0"
+const val VERSAO_JANELA = "beta 0.16.5"
 
 // A Inter, a fonte da janela do PC (licença OFL). Variável: o peso funciona.
 @OptIn(ExperimentalTextApi::class)

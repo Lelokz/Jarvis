@@ -11,7 +11,11 @@ pequeno, numa pose escolhida:
 - uma bolinha por argola, na ponta da frente, com o rastro afinando atrás;
 - o núcleo com a casca geodésica (só nos grandes) e a borda acesa.
 
-    .venv/bin/python arte/icone_atomo.py SAIDA.png --cor 4da3ff --lado 256
+    .venv/bin/python -m jarvis.interface.icone_atomo SAIDA.png --cor 4da3ff --lado 256
+
+Quem usa: a bandeja e a barra de tarefas (atomo_icone.py), o átomo parado da
+janela (AtomoFixo.qml, pelo ProvedorDoAtomo), os PNGs do site e do celular
+(arte/icones.py, celular/gerar_icone.py). O app desenha o mesmo, em Kotlin (Icones.kt).
 """
 
 from __future__ import annotations
