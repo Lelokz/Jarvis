@@ -6,7 +6,7 @@
 <title>NOVA: foto do átomo</title>
 <!-- Foto parada do átomo, em fundo preto, para gerar as imagens (logo, ícones,
      reserva sem 3D): ../arte/atomo_png.py abre esta página e tira a foto.
-     ?cor=4da3ff&lado=512&t=5&traco=1 (traco 2 nos ícones pequenos) -->
+     ?cor=4da3ff&lado=512&t=5&traco=1&brilho=1 (nos ícones pequenos: traco 3, brilho 0.3) -->
 <style> html, body { margin: 0; background: #000; } canvas { display: block; } </style>
 <script type="importmap">
 { "imports": {
@@ -23,7 +23,7 @@ const P = new URLSearchParams(location.search), lado = Number(P.get("lado") || 5
 const hex = parseInt(P.get("cor") || "4da3ff", 16), rgb = [hex >> 16, (hex >> 8) & 255, hex & 255];
 const canvas = document.getElementById("c");
 canvas.style.width = canvas.style.height = lado + "px";
-const a = criarAtomo(canvas, { cor: () => rgb, fundo: 0x000000, traco: Number(P.get("traco") || 1) });
+const a = criarAtomo(canvas, { cor: () => rgb, fundo: 0x000000, traco: Number(P.get("traco") || 1), brilho: Number(P.get("brilho") || 1) });
 a.passo(Number(P.get("t") || 5) - 3);
 document.body.dataset.pronto = "1";
 </script>

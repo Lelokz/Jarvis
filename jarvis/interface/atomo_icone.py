@@ -1,56 +1,37 @@
 """O átomo em ícone: a bandeja, a janela na barra de tarefas e o atalho do menu.
 
-O mesmo desenho do `AtomoFixo.qml` (o avatar das respostas): três anéis com o
-raio e a inclinação da esfera, e o núcleo. Pedido do Léo (22/10/2026): o
-ícone antigo era uma elipse e uma bolinha; agora é igual ao da conversa, na
-cor do estado.
-
-**Os anéis são inclinados, e isso não é enfeite.** Um anel horizontal com um
-círculo dentro vira um OLHO, símbolo de vigilância (aprendido no 1º ícone).
+O átomo definitivo (27/10/2026, o mesmo do site e da janela), na cor do estado.
+A foto dele vem pronta e em branco (`atomo-icone.png`, feita pelo
+arte/atomo_png.py com o traço grosso dos ícones); aqui ela é só pintada: a
+transparência fica, e a cor vai da cor do estado (onde a luz é fraca) ao
+branco (onde ela é forte: as bolinhas e a borda do núcleo), como no 3D.
 """
 
 from __future__ import annotations
 
-from PySide6.QtCore import QPointF, Qt
-from PySide6.QtGui import QColor, QIcon, QPainter, QPen, QPixmap, QRadialGradient
+from pathlib import Path
 
-# (raio x, raio y, inclinação) em fração do lado — os do AtomoFixo.qml.
-ANEIS = ((0.46, 0.15, 0), (0.39, 0.22, 62), (0.32, 0.12, 121))
+import numpy as np
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QColor, QIcon, QImage, QPixmap
+
+FOTO = Path(__file__).with_name("atomo-icone.png")
+_foto: QImage | None = None
 
 
 def desenhar(cor: QColor, lado: int = 64, aceso: bool = True) -> QPixmap:
-    pix = QPixmap(lado, lado)
-    pix.fill(Qt.transparent)
-    p = QPainter(pix)
-    p.setRenderHint(QPainter.Antialiasing)
-    p.translate(lado / 2, lado / 2)
-    forca = 1.0 if aceso else 0.5
-
-    # O brilho do núcleo.
-    brilho = QRadialGradient(QPointF(0, 0), lado * 0.30)
-    brilho.setColorAt(0.0, QColor(cor.red(), cor.green(), cor.blue(), int(150 * forca)))
-    brilho.setColorAt(1.0, QColor(cor.red(), cor.green(), cor.blue(), 0))
-    p.setPen(Qt.NoPen)
-    p.setBrush(brilho)
-    p.drawEllipse(QPointF(0, 0), lado * 0.30, lado * 0.30)
-
-    # Os anéis. Ícone pequeno pede traço mais grosso, senão some no painel.
-    caneta = QPen(QColor(cor.red(), cor.green(), cor.blue(), int(255 * forca)))
-    caneta.setWidthF(max(1.2, lado * 0.055))
-    p.setPen(caneta)
-    p.setBrush(Qt.NoBrush)
-    for rx, ry, angulo in ANEIS:
-        p.save()
-        p.rotate(angulo)
-        p.drawEllipse(QPointF(0, 0), lado * rx, lado * ry)
-        p.restore()
-
-    # O núcleo.
-    p.setPen(Qt.NoPen)
-    p.setBrush(QColor(cor.red(), cor.green(), cor.blue(), int(255 * forca)))
-    p.drawEllipse(QPointF(0, 0), lado * 0.11, lado * 0.11)
-    p.end()
-    return pix
+    global _foto
+    if _foto is None:
+        _foto = QImage(str(FOTO)).convertToFormat(QImage.Format_RGBA8888)
+    img = _foto.scaled(lado, lado, Qt.KeepAspectRatio, Qt.SmoothTransformation).convertToFormat(QImage.Format_RGBA8888)
+    w, h = img.width(), img.height()
+    px = np.frombuffer(img.constBits(), np.uint8).reshape(h, img.bytesPerLine())[:, : w * 4].reshape(h, w, 4).astype(np.float32)
+    alfa = px[..., 3:] / 255
+    branco = np.clip((alfa - 0.85) / 0.15, 0, 1) ** 2 * 0.45
+    rgb = np.array([cor.red(), cor.green(), cor.blue()], np.float32) * (1 - branco) + 255 * branco
+    saida = np.dstack([rgb, px[..., 3:] * (1.35 if aceso else 0.6)]).clip(0, 255).astype(np.uint8)
+    saida = np.ascontiguousarray(saida)
+    return QPixmap.fromImage(QImage(saida.data, w, h, w * 4, QImage.Format_RGBA8888).copy())
 
 
 def icone(cor: QColor, aceso: bool = True) -> QIcon:

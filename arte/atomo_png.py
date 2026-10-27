@@ -5,7 +5,7 @@ num navegador sem tela, tira a foto em fundo preto e transforma o preto em
 transparência: o átomo é só luz somada, então a transparência de cada pixel é
 o canal mais forte dele, e a cor é a do pixel dividida por ela.
 
-    .venv/bin/python arte/atomo_png.py SAIDA.png --cor 4da3ff --lado 512 [--t 5] [--traco 2]
+    .venv/bin/python arte/atomo_png.py SAIDA.png --cor 4da3ff --lado 512 [--t 5] [--traco 3 --brilho 0.3]
 
 Precisa do Playwright com o chromium (o mesmo das fotos do site).
 """
@@ -37,13 +37,13 @@ def servir() -> http.server.HTTPServer:
     return s
 
 
-def foto(cor: str, lado: int, t: float, traco: float = 1) -> np.ndarray:
+def foto(cor: str, lado: int, t: float, traco: float = 1, brilho: float = 1) -> np.ndarray:
     srv = servir()
     exe = sorted(Path.home().glob(".cache/ms-playwright/chromium_headless_shell-*/*/chrome-headless-shell"))
     with sync_playwright() as p:
         b = p.chromium.launch(headless=True, executable_path=str(exe[-1]) if exe else None, args=ARGS)
         pg = b.new_page(viewport={"width": lado, "height": lado})
-        pg.goto(f"http://127.0.0.1:{srv.server_port}/prototipo-atomo-foto.html?cor={cor}&lado={lado}&t={t}&traco={traco}")
+        pg.goto(f"http://127.0.0.1:{srv.server_port}/prototipo-atomo-foto.html?cor={cor}&lado={lado}&t={t}&traco={traco}&brilho={brilho}")
         pg.wait_for_selector("body[data-pronto]", state="attached", timeout=60000)
         png = pg.locator("canvas").screenshot()
         b.close()
@@ -71,9 +71,10 @@ def main() -> None:
     a.add_argument("--cor", default="4da3ff")
     a.add_argument("--lado", type=int, default=512)
     a.add_argument("--t", type=float, default=5)
-    a.add_argument("--traco", type=float, default=1, help="engrossa o traço (2 nos ícones pequenos)")
+    a.add_argument("--traco", type=float, default=1, help="engrossa o traço (3 nos ícones pequenos)")
+    a.add_argument("--brilho", type=float, default=1, help="força do brilho em volta (0.3 nos ícones pequenos)")
     o = a.parse_args()
-    rgba = np.ascontiguousarray(transparente(foto(o.cor, o.lado, o.t, o.traco)))
+    rgba = np.ascontiguousarray(transparente(foto(o.cor, o.lado, o.t, o.traco, o.brilho)))
     h, w = rgba.shape[:2]
     QImage(rgba.data, w, h, w * 4, QImage.Format_RGBA8888).save(o.saida)
     print(o.saida)
