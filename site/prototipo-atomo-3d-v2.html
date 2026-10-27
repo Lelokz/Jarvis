@@ -6,7 +6,8 @@
 <meta name="robots" content="noindex, nofollow">
 <title>NOVA: átomo 3D v2</title>
 <!-- Protótipo v2: núcleo grande com malha geodésica de luz e argolas em faixa
-     (bordas acesas, partes vazadas, marcações e um pulso correndo). ?persona=friday -->
+     (bordas acesas, partes vazadas, marcações), várias bolinhas por argola e o
+     rastro de luz de cada uma. ?persona=friday -->
 <style>
   @font-face { font-family: "Inter"; src: url("fontes/InterVariable.ttf") format("truetype"); font-weight: 100 900; }
   :root {
@@ -166,12 +167,11 @@ const halo = new THREE.Sprite(haloMat); halo.scale.set(3.4, 3.4, 1); atomo.add(h
 //   0. a externa: faixa larga, bordas acesas, marcações e 3 partes com vãos;
 //   1. a interna: fio duplo fino e tracejado;
 //   2. a do meio: elipse alongada, com pontos de luz ao longo dela.
-// Em todas, um pulso de luz corre atrás da bolinha (o rastro dela).
-const argolaMat = (fase, sentido, estilo) => new THREE.ShaderMaterial({
-  uniforms: { uCor: { value: cor }, uPulso: { value: 0 }, uFase: { value: fase }, uSentido: { value: sentido }, uEstilo: { value: estilo } },
+const argolaMat = (fase, estilo) => new THREE.ShaderMaterial({
+  uniforms: { uCor: { value: cor }, uFase: { value: fase }, uEstilo: { value: estilo } },
   transparent: true, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending,
   vertexShader: `varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }`,
-  fragmentShader: `uniform vec3 uCor; uniform float uPulso, uFase, uSentido, uEstilo; varying vec2 vUv;
+  fragmentShader: `uniform vec3 uCor; uniform float uFase, uEstilo; varying vec2 vUv;
     float linha(float w, float onde, float larg){ return exp(-pow((w - onde) / larg, 2.)); }
     void main(){
       float w = vUv.y;   // através da faixa (0 a 1)
@@ -191,19 +191,35 @@ const argolaMat = (fase, sentido, estilo) => new THREE.ShaderMaterial({
         float conta = exp(-pow((fract(a * 18. + uFase) - .5) / .018, 2.)) * linha(w, .5, .3);
         luz = linha(w, .1, .05) + linha(w, .9, .05) + .05 + conta * 1.6;
       }
-      float d = fract((uPulso - a) * uSentido);
-      float pulso = exp(-d * 9.) * (1. - smoothstep(.0, .004, 1. - d));
-      vec3 c = uCor * luz + mix(uCor, vec3(1.), .45) * pulso * 1.5;
-      gl_FragColor = vec4(c * mostra, 1.);
+      gl_FragColor = vec4(uCor * luz * mostra, 1.);
     }`,
+});
+// O rastro de cada bolinha: um tubo de luz que segue a argola ATRÁS dela,
+// afinando e apagando até a ponta. É montado com a bolinha em u = 0 e depois
+// só gira junto (girar em Z anda pela argola: u -> (R sen, -R cos, 0)).
+class Rastro extends THREE.Curve {
+  constructor(r, comprimento, sentido) { super(); this.r = r; this.comprimento = comprimento; this.sentido = sentido; }
+  getPoint(t, alvo = new THREE.Vector3()) {
+    const u = -this.sentido * this.comprimento * (1 - t) * 6.2831853;   // t = 1 é a bolinha
+    return alvo.set(Math.sin(u) * this.r, -Math.cos(u) * this.r, 0);
+  }
+}
+const rastroMat = grossura => new THREE.ShaderMaterial({
+  uniforms: { uCor: { value: cor }, uGrossura: { value: grossura } }, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+  vertexShader: `uniform float uGrossura; varying float vU;
+    void main(){ vU = uv.x;
+      vec3 p = position - normal * uGrossura * (1. - mix(.12, 1., vU));   // afina até a ponta
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.); }`,
+  fragmentShader: `uniform vec3 uCor; varying float vU;
+    void main(){ float k = pow(vU, 1.8); gl_FragColor = vec4(mix(uCor, vec3(1.), k * .45) * k * 1.9, k); }`,
 });
 // Cada argola gira em torno do próprio eixo comprido (como uma moeda girando
 // em pé: a que está na vertical gira para os lados), cada uma num ritmo, e
-// leva uma bolinha.
+// leva as suas bolinhas, espalhadas por igual, cada uma com o rastro.
 const FORMATOS = [
-  { raio: 1.62, largura: .12, elipse: [1, 1],      bola: .05 },
-  { raio: 1.3,  largura: .05, elipse: [1, 1],      bola: .038 },
-  { raio: 1.45, largura: .08, elipse: [1.16, .84], bola: .044 },
+  { raio: 1.62, largura: .12, elipse: [1, 1],      bola: .05,  bolinhas: 3 },
+  { raio: 1.3,  largura: .05, elipse: [1, 1],      bola: .038, bolinhas: 2 },
+  { raio: 1.45, largura: .08, elipse: [1.16, .84], bola: .044, bolinhas: 3 },
 ];
 const argolas = [0, 1, 2].map(i => {
   const F = FORMATOS[i];
@@ -211,16 +227,24 @@ const argolas = [0, 1, 2].map(i => {
   const plano = new THREE.Group(); plano.rotation.x = 1.2; fora.add(plano);
   const forma = new THREE.Group(); forma.scale.set(F.elipse[0], F.elipse[1], 1); plano.add(forma);
   const sentido = i === 1 ? -1 : 1;
-  const mat = argolaMat(i * .37, sentido, i);
+  const mat = argolaMat(i * .37, i);
   // A faixa "em pé" (um aro, como um cilindro curtinho): vista de lado ela
   // continua larga, em vez de sumir numa linha.
   const aro = new THREE.CylinderGeometry(F.raio, F.raio, F.largura, 512, 1, true); aro.rotateX(Math.PI / 2);
   forma.add(new THREE.Mesh(aro, mat));
   const eletronMat = new THREE.MeshBasicMaterial({ color: cor.clone().lerp(new THREE.Color(1, 1, 1), .5) });
-  const eletron = new THREE.Mesh(new THREE.SphereGeometry(F.bola, 24, 24), eletronMat);
-  eletron.scale.set(1 / F.elipse[0], 1 / F.elipse[1], 1);   // a bolinha continua redonda na elipse
-  forma.add(eletron);
-  return { plano, mat, eletron, eletronMat, sentido, raio: F.raio, vel: [.13, .17, .15][i], fase: i * .3,
+  const bolaGeo = new THREE.SphereGeometry(F.bola, 24, 24);
+  const rastroGeo = new THREE.TubeGeometry(new Rastro(F.raio, .55 / F.bolinhas, sentido), 160, F.bola * .45, 8, false);
+  const rMat = rastroMat(F.bola * .45);
+  const bolinhas = [];
+  for (let j = 0; j < F.bolinhas; j++) {
+    const eletron = new THREE.Mesh(bolaGeo, eletronMat);
+    eletron.scale.set(1 / F.elipse[0], 1 / F.elipse[1], 1);   // a bolinha continua redonda na elipse
+    const rastro = new THREE.Mesh(rastroGeo, rMat);
+    forma.add(rastro, eletron);
+    bolinhas.push({ eletron, rastro, desloc: j / F.bolinhas });
+  }
+  return { plano, bolinhas, eletronMat, sentido, raio: F.raio, vel: [.13, .17, .15][i], fase: i * .3,
            giro: [.5, -.42, .6][i], giroFase: 1.2 + i * .7 };
 });
 
@@ -278,10 +302,12 @@ function passo(dt) {
   nucleoMat.uniforms.uTempo.value = t; paineisMat.uniforms.uTempo.value = t;
   nucleo.rotation.y = t * .12; nucleo.rotation.x = t * .05;
   for (const g of argolas) {
-    const u = g.fase + t * g.vel * g.sentido;          // onde a bolinha está (voltas)
-    g.mat.uniforms.uPulso.value = u;
-    // O mesmo ponto da faixa (o cilindro deitado): u -> (R sen, -R cos, 0).
-    g.eletron.position.set(Math.sin(u * 6.2831853) * g.raio, -Math.cos(u * 6.2831853) * g.raio, 0);
+    for (const b of g.bolinhas) {
+      const u = g.fase + t * g.vel * g.sentido + b.desloc;   // onde a bolinha está (voltas)
+      // O mesmo ponto da faixa (o cilindro deitado): u -> (R sen, -R cos, 0).
+      b.eletron.position.set(Math.sin(u * 6.2831853) * g.raio, -Math.cos(u * 6.2831853) * g.raio, 0);
+      b.rastro.rotation.z = u * 6.2831853;
+    }
     g.eletronMat.color.copy(cor).lerp(BRANCO, .5);
     g.plano.rotation.x = g.giroFase + t * g.giro;   // o eixo X do plano é o eixo comprido da argola
   }
