@@ -92,13 +92,18 @@
   .vidro { background: rgba(11, 15, 23, 0.86); border: 1px solid var(--traco); }
 
   /* -- abertura --------------------------------------------------------- */
-  .abertura { min-height: calc(100vh - 66px); display: flex; align-items: center; padding: 10px 0 90px; }
-  /* Tudo no eixo do meio, o átomo em cima do título (versão A, escolhida pelo Léo em 26/10/2026). */
-  .abertura .largura { display: grid; grid-template-columns: 1fr; justify-items: center; text-align: center; width: 100%; }
+  /* Tudo no eixo do meio, o átomo em cima do título (versão A, escolhida pelo Léo em 26/10/2026).
+     O átomo 3D (27/10/2026) é desenhado no topo inteiro, para o brilho se espalhar sem borda,
+     e fica centrado no "palco": o espaço que sobra acima do texto. */
+  .abertura { position: relative; height: calc(100vh - 66px); min-height: 660px; display: flex; flex-direction: column; padding: 0 0 6vh; overflow: hidden; }
+  .atomo3d { position: absolute; inset: 0; width: 100%; height: 100%; display: none; -webkit-mask-image: linear-gradient(#000 72%, transparent 98%); mask-image: linear-gradient(#000 72%, transparent 98%); }
+  .abertura.com-3d .atomo3d { display: block; }
+  .palco { position: relative; flex: 1; min-height: 280px; display: grid; place-items: center; }
+  .abertura .largura { display: flex; flex-direction: column; align-items: center; text-align: center; width: 100%; }
   .verbete { display: inline-flex; align-items: baseline; gap: 12px; padding: 9px 16px; border-radius: 10px; font-family: var(--mono); font-size: 13px; color: var(--texto-fraco); }
   .verbete b { color: var(--texto); font-weight: 700; letter-spacing: .14em; }
   .verbete em { color: var(--cor); font-style: normal; }
-  h1 { font-size: clamp(44px, 4.4vw, 88px); line-height: .98; letter-spacing: -0.045em; font-weight: 820; margin: 18px 0; }
+  h1 { font-size: clamp(38px, 3.6vw, 70px); line-height: 1; letter-spacing: -0.045em; font-weight: 820; margin: 16px 0 12px; }
   h1 .brilho {
     position: relative; display: inline-block; color: var(--cor);
     text-shadow: 0 0 34px rgba(var(--cor-rgb), .45);
@@ -110,9 +115,10 @@
     animation: varre 4.5s ease-in-out infinite; will-change: background-position;
   }
   @keyframes varre { from { background-position: 150% 0; } to { background-position: -150% 0; } }
-  .sub { font-size: clamp(18px, 1.15vw, 22px); color: var(--texto-medio); max-width: 33em; margin: 0 auto; }
+  .sub { font-size: clamp(18px, 1.15vw, 22px); color: var(--texto-medio); max-width: 40em; margin: 0 auto; }
   .sub b { color: var(--texto); font-weight: 620; }
-  .abertura .botoes { display: flex; gap: 12px; margin-top: 30px; flex-wrap: wrap; justify-content: center; }
+  .abertura .botoes { display: flex; gap: 12px; margin-top: 24px; flex-wrap: wrap; justify-content: center; align-items: center; }
+  .abertura .botoes .escolha { margin-top: 0; }
   .nota { margin-top: 16px; font: 12.5px var(--mono); color: var(--texto-fraco); }
 
   /* Escolha quem chamar: troca a cor de tudo. */
@@ -129,17 +135,10 @@
   .escolha button[data-p="friday"].ativo i { color: #ff6fb5; }
   .escolha .pilula { position: absolute; top: 4px; bottom: 4px; left: 4px; border-radius: 9px; background: rgba(var(--cor-rgb), .16); border: 1px solid rgba(var(--cor-rgb), .45); transition: left .45s cubic-bezier(.6,0,.2,1), width .45s; box-shadow: 0 0 20px rgba(var(--cor-rgb), .25); }
 
-  /* O reator: o núcleo vivo. */
-  .reator { position: relative; aspect-ratio: 1; width: 100%; max-width: min(330px, 34vh); justify-self: center; order: -1; margin-bottom: -10px; }
+  /* O reator: o núcleo desenhado, a reserva para quando o 3D não abre. */
+  .reator { position: absolute; top: 4%; left: 50%; height: 92%; aspect-ratio: 1; max-width: 92vw; transform: translateX(-50%); display: none; }
+  .abertura.sem-3d:not(.com-3d) .reator { display: block; }
   .reator canvas.nucleo { position: absolute; inset: 0; width: 100%; height: 100%; }
-  .reator svg.aneis { position: absolute; inset: 0; width: 100%; height: 100%; color: var(--cor); overflow: visible; }
-  .girando { will-change: transform; animation: gira 40s linear infinite; }
-  .girando.r { animation-direction: reverse; animation-duration: 28s; }
-  .girando.l { animation-duration: 90s; }
-  .gira { transform-origin: 50% 50%; transform-box: fill-box; animation: gira 40s linear infinite; }
-  .gira.r { animation-direction: reverse; animation-duration: 28s; }
-  .gira.l { animation-duration: 90s; }
-  @keyframes gira { to { transform: rotate(360deg); } }
 
   /* -- seções ------------------------------------------------------------ */
   section { padding: clamp(70px, 6vw, 120px) 0; position: relative; }
@@ -268,14 +267,14 @@
   /* -- celular ------------------------------------------------------------ */
   @media (max-width: 960px) {
     .menu { display: none; }
-    .abertura { min-height: auto; padding: 24px 0 60px; }
-    .abertura .largura, .sistemas, .duas, .cabeca { grid-template-columns: 1fr; }
+    .abertura { height: auto; min-height: calc(100svh - 66px); padding: 0 0 48px; }
+    .palco { flex: 1 0 min(86vw, 46vh); }
+    .sistemas, .duas, .cabeca { grid-template-columns: 1fr; }
     .cabeca { gap: 0; }
     h1 .inteira { white-space: normal; }
     .no { width: 58px; height: 58px; margin: -29px 0 0 -29px; }
     .no svg { width: 22px; height: 22px; }
     .mapa { max-width: 420px; margin-bottom: 20px; }
-    .reator { max-width: 330px; margin: 0 auto; order: -1; }
     .verbete > span:last-child { display: none; }
     section { padding: 80px 0; }
     .caminho { grid-template-columns: 1fr; }
@@ -289,6 +288,13 @@
     .holo canvas { width: 110px; height: 110px; }
   }
 </style>
+<!-- O three.js, para o átomo 3D do topo. -->
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
 </head>
 <body>
 <div class="grade-fundo"></div>
@@ -311,29 +317,29 @@
 <main>
   <!-- ABERTURA ------------------------------------------------------------>
   <section class="abertura">
+    <canvas class="atomo3d" aria-hidden="true"></canvas>
+    <div class="palco">
+      <div class="reator">
+        <canvas class="nucleo" data-nucleo="heroi"></canvas>
+      </div>
+    </div>
     <div class="largura">
-      <div>
-        <span class="verbete vidro"><b>NOVA</b><span>/<em>nô</em>·va/</span><span><em>N</em>úcleo <em>O</em>peracional de <em>V</em>ozes <em>A</em>utônomas</span></span>
-        <h1><span class="inteira">Fala com o seu PC.</span><br><span class="brilho" data-texto="Ele faz.">Ele faz.</span></h1>
-        <p class="sub">O <b>Jarvis</b> e a <b>Friday</b> moram no seu computador: te ouvem, entendem e resolvem. Abrem programas, cuidam do WhatsApp, lembram das coisas. É só chamar pelo nome.</p>
+      <span class="verbete vidro"><b>NOVA</b><span>/<em>nô</em>·va/</span><span><em>N</em>úcleo <em>O</em>peracional de <em>V</em>ozes <em>A</em>utônomas</span></span>
+      <h1><span class="inteira">Fala com o seu PC.</span> <span class="brilho" data-texto="Ele faz.">Ele faz.</span></h1>
+      <p class="sub">O <b>Jarvis</b> e a <b>Friday</b> moram no seu computador. É só chamar pelo nome.</p>
+      <div class="botoes">
         <div class="escolha vidro">
           <span class="pilula"></span>
           <button data-p="jarvis" class="ativo"><i></i>JARVIS</button>
           <button data-p="friday"><i></i>FRIDAY</button>
         </div>
-        <div class="botoes">
-          <a class="botao cheio" href="#download">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11m0 0l-4.5-4.5M12 15l4.5-4.5M5 19h14"/></svg>
-            <span class="texto-baixar">Baixar para Linux</span>
-          </a>
-          <a class="botao vazio" href="#sistemas">Ver o que faz</a>
-        </div>
-        <p class="nota">// grátis · com a sua própria conta do Claude</p>
+        <a class="botao cheio" href="#download">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11m0 0l-4.5-4.5M12 15l4.5-4.5M5 19h14"/></svg>
+          <span class="texto-baixar">Baixar para Linux</span>
+        </a>
+        <a class="botao vazio" href="#sistemas">Ver o que faz</a>
       </div>
-
-      <div class="reator">
-        <canvas class="nucleo" data-nucleo="heroi"></canvas>
-      </div>
+      <p class="nota">// grátis · com a sua própria conta do Claude</p>
     </div>
   </section>
 
@@ -626,8 +632,14 @@ const nucleos = [...document.querySelectorAll("canvas[data-nucleo]")]
   .map(c => ({ el: c, n: new Nucleo(c, opcoes[c.dataset.nucleo] || {}) }));
 const heroi = nucleos.find(n => n.el.dataset.nucleo === "heroi").n;
 
+// O topo usa o átomo 3D (o módulo lá embaixo). Se ele não abrir em 3 s (PC
+// sem 3D, ou sem internet para baixar o three.js), aparece este, desenhado.
+const abertura = document.querySelector(".abertura");
+setTimeout(() => abertura.classList.contains("com-3d") || abertura.classList.add("sem-3d"), 3000);
+
 // O núcleo grande vira de leve para onde o mouse está.
 const reatorEl = document.querySelector(".reator");
+new ResizeObserver(() => heroi.medir()).observe(reatorEl);   // ele começa escondido
 function alvoInclina() {
   if (mouse.x < -900) return [0, 0];
   const r = reatorEl.getBoundingClientRect();
@@ -776,6 +788,265 @@ function laco(agora) {
   requestAnimationFrame(laco);
 }
 requestAnimationFrame(laco);
+</script>
+
+<script type="module">
+// ---------------------------------------------------------------------------
+// O átomo 3D do topo (aprovado pelo Léo em 27/10/2026; protótipo em
+// prototipo-atomo-3d-v2.html): núcleo grande com malha geodésica, três
+// argolas de formatos diferentes girando como moeda e oito bolinhas com rastro.
+// A cor vem de `cor`, a do script de cima (que já vai até a da persona).
+// ---------------------------------------------------------------------------
+import * as THREE from "three";
+import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
+import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
+import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
+import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
+
+const canvas = abertura.querySelector(".atomo3d"), palco = abertura.querySelector(".palco");
+const parado = matchMedia("(prefers-reduced-motion: reduce)").matches;
+let renderer;
+try {
+  renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+} catch (erro) {
+  abertura.classList.add("sem-3d");   // sem 3D neste PC: fica o desenhado
+  throw erro;
+}
+abertura.classList.add("com-3d");
+renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
+renderer.toneMapping = THREE.NoToneMapping;  // com ACES o fundo ficava mais escuro que a página
+const tom = new THREE.Color().setRGB(cor[0] / 255, cor[1] / 255, cor[2] / 255, THREE.SRGBColorSpace);
+const cena = new THREE.Scene();
+// O fundo pela cena (e não setClearColor): com o bloom no meio, a cor de
+// limpeza era convertida para sRGB duas vezes e o fundo saía cinza-azulado.
+cena.background = new THREE.Color(0x05070b);
+const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 100);
+camera.position.set(0, 0, 10);
+
+const atomo = new THREE.Group();
+cena.add(atomo);
+const RN = 0.62;       // raio do núcleo (grande)
+const DIAMETRO = 4;    // o átomo inteiro, com a folga do brilho
+
+// --- O núcleo: uma esfera de plasma (ruído animado) com a borda acesa ----------
+const ruido = `
+  vec3 m289(vec3 x){return x-floor(x*(1./289.))*289.;} vec4 m289(vec4 x){return x-floor(x*(1./289.))*289.;}
+  vec4 perm(vec4 x){return m289(((x*34.)+1.)*x);} vec4 tis(vec4 r){return 1.79284291400159-.85373472095314*r;}
+  float snoise(vec3 v){const vec2 C=vec2(1./6.,1./3.);const vec4 D=vec4(0.,.5,1.,2.);
+    vec3 i=floor(v+dot(v,C.yyy));vec3 x0=v-i+dot(i,C.xxx);vec3 g=step(x0.yzx,x0.xyz);vec3 l=1.-g;
+    vec3 i1=min(g.xyz,l.zxy);vec3 i2=max(g.xyz,l.zxy);vec3 x1=x0-i1+C.xxx;vec3 x2=x0-i2+C.yyy;vec3 x3=x0-D.yyy;
+    i=m289(i);vec4 p=perm(perm(perm(i.z+vec4(0.,i1.z,i2.z,1.))+i.y+vec4(0.,i1.y,i2.y,1.))+i.x+vec4(0.,i1.x,i2.x,1.));
+    float n_=.142857142857;vec3 ns=n_*D.wyz-D.xzx;vec4 j=p-49.*floor(p*ns.z*ns.z);vec4 x_=floor(j*ns.z);vec4 y_=floor(j-7.*x_);
+    vec4 x=x_*ns.x+ns.yyyy;vec4 y=y_*ns.x+ns.yyyy;vec4 h=1.-abs(x)-abs(y);vec4 b0=vec4(x.xy,y.xy);vec4 b1=vec4(x.zw,y.zw);
+    vec4 s0=floor(b0)*2.+1.;vec4 s1=floor(b1)*2.+1.;vec4 sh=-step(h,vec4(0.));vec4 a0=b0.xzyw+s0.xzyw*sh.xxyy;vec4 a1=b1.xzyw+s1.xzyw*sh.zzww;
+    vec3 p0=vec3(a0.xy,h.x);vec3 p1=vec3(a0.zw,h.y);vec3 p2=vec3(a1.xy,h.z);vec3 p3=vec3(a1.zw,h.w);
+    vec4 norm=tis(vec4(dot(p0,p0),dot(p1,p1),dot(p2,p2),dot(p3,p3)));p0*=norm.x;p1*=norm.y;p2*=norm.z;p3*=norm.w;
+    vec4 m=max(.6-vec4(dot(x0,x0),dot(x1,x1),dot(x2,x2),dot(x3,x3)),0.);m=m*m;
+    return 42.*dot(m*m,vec4(dot(p0,x0),dot(p1,x1),dot(p2,x2),dot(p3,x3)));}`;
+const nucleoMat = new THREE.ShaderMaterial({
+  uniforms: { uTempo: { value: 0 }, uCor: { value: tom } },
+  vertexShader: `varying vec3 vN; varying vec3 vP; varying vec3 vV;
+    void main(){ vN=normalize(normalMatrix*normal); vP=position; vec4 mv=modelViewMatrix*vec4(position,1.); vV=normalize(-mv.xyz); gl_Position=projectionMatrix*mv; }`,
+  fragmentShader: ruido + `uniform float uTempo; uniform vec3 uCor; varying vec3 vN; varying vec3 vP; varying vec3 vV;
+    void main(){
+      float n = snoise(vP*4.2 + vec3(0., uTempo*.35, uTempo*.2))*.5 + snoise(vP*9. - vec3(uTempo*.5))*.25;
+      float frente = max(dot(vN, vV), 0.);
+      float borda = pow(1. - frente, 2.2);
+      vec3 base = uCor * (0.05 + 0.32*smoothstep(-.35,.7,n));
+      vec3 miolo = mix(uCor, vec3(1.), .4) * pow(frente, 6.) * .22;
+      gl_FragColor = vec4(base + miolo + uCor*borda*.7, 1.);
+    }`,
+});
+const nucleo = new THREE.Group(); atomo.add(nucleo);
+nucleo.add(new THREE.Mesh(new THREE.SphereGeometry(RN * .97, 96, 96), nucleoMat));
+// A casca geodésica: os triângulos de um icosaedro subdividido, em linhas de
+// luz, com um ponto aceso em cada vértice e alguns painéis que acendem devagar.
+const geo = new THREE.IcosahedronGeometry(RN, 2);
+const linhasMat = new THREE.LineBasicMaterial({ color: tom, transparent: true, opacity: .55, blending: THREE.AdditiveBlending, depthWrite: false });
+nucleo.add(new THREE.LineSegments(new THREE.EdgesGeometry(geo, 1), linhasMat));
+const nosMat = new THREE.PointsMaterial({ color: tom, size: .022, transparent: true, opacity: .9, blending: THREE.AdditiveBlending, depthWrite: false });
+nucleo.add(new THREE.Points(geo, nosMat));
+const paineis = geo.clone();  // não indexada: cada triângulo tem os seus 3 vértices
+const nFaces = paineis.attributes.position.count / 3, sorteio = new Float32Array(nFaces * 3);
+for (let f = 0; f < nFaces; f++) { const s = Math.random(); sorteio.set([s, s, s], f * 3); }
+paineis.setAttribute("sorteio", new THREE.BufferAttribute(sorteio, 1));
+const paineisMat = new THREE.ShaderMaterial({
+  uniforms: { uTempo: { value: 0 }, uCor: { value: tom } }, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+  vertexShader: `attribute float sorteio; varying float vS; void main(){ vS=sorteio; gl_Position=projectionMatrix*modelViewMatrix*vec4(position*1.002,1.); }`,
+  fragmentShader: `uniform float uTempo; uniform vec3 uCor; varying float vS;
+    void main(){ float on = smoothstep(.82, 1., sin(uTempo*.6 + vS*40.)*.5+.5); gl_FragColor = vec4(uCor*(.03 + on*.35), 1.); }`,
+});
+nucleo.add(new THREE.Mesh(paineis, paineisMat));
+
+// O halo macio em volta do núcleo (um sprite com gradiente).
+function textura(r0, a0) {
+  const c = document.createElement("canvas"); c.width = c.height = 256;
+  const g = c.getContext("2d"), gr = g.createRadialGradient(128, 128, 0, 128, 128, 128);
+  gr.addColorStop(0, `rgba(255,255,255,${a0})`); gr.addColorStop(r0, "rgba(255,255,255,.18)"); gr.addColorStop(1, "rgba(255,255,255,0)");
+  g.fillStyle = gr; g.fillRect(0, 0, 256, 256);
+  const tx = new THREE.CanvasTexture(c); tx.colorSpace = THREE.SRGBColorSpace;  // sem isso, o fim do degradê virava um quadrado cinza
+  return tx;
+}
+const haloMat = new THREE.SpriteMaterial({ map: textura(.22, .5), color: tom, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: .32 });
+const halo = new THREE.Sprite(haloMat); halo.scale.set(3.4, 3.4, 1); atomo.add(halo);
+
+// --- As argolas: três a 0°, 60° e 120°, cada uma com um formato:
+//   0. a externa: faixa larga, bordas acesas, marcações e 3 partes com vãos;
+//   1. a interna: fio duplo fino e tracejado;
+//   2. a do meio: elipse alongada, com pontos de luz ao longo dela.
+const argolaMat = (fase, estilo) => new THREE.ShaderMaterial({
+  uniforms: { uCor: { value: tom }, uFase: { value: fase }, uEstilo: { value: estilo } },
+  transparent: true, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending,
+  vertexShader: `varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }`,
+  fragmentShader: `uniform vec3 uCor; uniform float uFase, uEstilo; varying vec2 vUv;
+    float linha(float w, float onde, float larg){ return exp(-pow((w - onde) / larg, 2.)); }
+    void main(){
+      float w = vUv.y;   // através da faixa (0 a 1)
+      float a = vUv.x;   // em volta da argola (0 a 1)
+      float luz, mostra;
+      if (uEstilo < .5) {
+        float s = fract(a * 3. + uFase);
+        mostra = smoothstep(.0, .01, s) * (1. - smoothstep(.95, .96, s));
+        float risco = (1. - smoothstep(.0, .14, fract(a * 180.))) * step(.3, w) * step(w, .7);
+        luz = linha(w, .06, .04) + linha(w, .94, .04) + .08 + risco * .5;
+      } else if (uEstilo < 1.5) {
+        mostra = step(fract(a * 48. + uFase), .62);
+        luz = (linha(w, .25, .06) + linha(w, .75, .06)) * 1.1;
+      } else {
+        float s = fract(a * 6. + uFase);
+        mostra = smoothstep(.0, .008, s) * (1. - smoothstep(.975, .983, s));
+        float conta = exp(-pow((fract(a * 18. + uFase) - .5) / .018, 2.)) * linha(w, .5, .3);
+        luz = linha(w, .1, .05) + linha(w, .9, .05) + .05 + conta * 1.6;
+      }
+      gl_FragColor = vec4(uCor * luz * mostra, 1.);
+    }`,
+});
+// O rastro de cada bolinha: um tubo de luz que segue a argola ATRÁS dela,
+// afinando e apagando até a ponta. É montado com a bolinha em u = 0 e depois
+// só gira junto (girar em Z anda pela argola: u -> (R sen, -R cos, 0)).
+class Rastro extends THREE.Curve {
+  constructor(r, comprimento, sentido) { super(); this.r = r; this.comprimento = comprimento; this.sentido = sentido; }
+  getPoint(t, alvo = new THREE.Vector3()) {
+    const u = -this.sentido * this.comprimento * (1 - t) * 6.2831853;   // t = 1 é a bolinha
+    return alvo.set(Math.sin(u) * this.r, -Math.cos(u) * this.r, 0);
+  }
+}
+const rastroMat = grossura => new THREE.ShaderMaterial({
+  uniforms: { uCor: { value: tom }, uGrossura: { value: grossura } }, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+  vertexShader: `uniform float uGrossura; varying float vU;
+    void main(){ vU = uv.x;
+      vec3 p = position - normal * uGrossura * (1. - mix(.12, 1., vU));   // afina até a ponta
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.); }`,
+  fragmentShader: `uniform vec3 uCor; varying float vU;
+    void main(){ float k = pow(vU, 1.8); gl_FragColor = vec4(mix(uCor, vec3(1.), k * .45) * k * 1.9, k); }`,
+});
+// Cada argola gira em torno do próprio eixo comprido (como uma moeda girando
+// em pé: a que está na vertical gira para os lados), cada uma num ritmo, e
+// leva as suas bolinhas, espalhadas por igual, cada uma com o rastro.
+const FORMATOS = [
+  { raio: 1.62, largura: .12, elipse: [1, 1],      bola: .05,  bolinhas: 3 },
+  { raio: 1.3,  largura: .05, elipse: [1, 1],      bola: .038, bolinhas: 2 },
+  { raio: 1.45, largura: .08, elipse: [1.16, .84], bola: .044, bolinhas: 3 },
+];
+const argolas = [0, 1, 2].map(i => {
+  const F = FORMATOS[i];
+  const fora = new THREE.Group(); fora.rotation.z = i * Math.PI / 3; atomo.add(fora);
+  const plano = new THREE.Group(); plano.rotation.x = 1.2; fora.add(plano);
+  const forma = new THREE.Group(); forma.scale.set(F.elipse[0], F.elipse[1], 1); plano.add(forma);
+  const sentido = i === 1 ? -1 : 1;
+  // A faixa "em pé" (um aro, como um cilindro curtinho): vista de lado ela
+  // continua larga, em vez de sumir numa linha.
+  const aro = new THREE.CylinderGeometry(F.raio, F.raio, F.largura, 512, 1, true); aro.rotateX(Math.PI / 2);
+  forma.add(new THREE.Mesh(aro, argolaMat(i * .37, i)));
+  const eletronMat = new THREE.MeshBasicMaterial({ color: tom.clone().lerp(new THREE.Color(1, 1, 1), .5) });
+  const bolaGeo = new THREE.SphereGeometry(F.bola, 24, 24);
+  const rastroGeo = new THREE.TubeGeometry(new Rastro(F.raio, .55 / F.bolinhas, sentido), 160, F.bola * .45, 8, false);
+  const rMat = rastroMat(F.bola * .45);
+  const bolinhas = [];
+  for (let j = 0; j < F.bolinhas; j++) {
+    const eletron = new THREE.Mesh(bolaGeo, eletronMat);
+    eletron.scale.set(1 / F.elipse[0], 1 / F.elipse[1], 1);   // a bolinha continua redonda na elipse
+    const rastro = new THREE.Mesh(rastroGeo, rMat);
+    forma.add(rastro, eletron);
+    bolinhas.push({ eletron, rastro, desloc: j / F.bolinhas });
+  }
+  return { plano, bolinhas, eletronMat, sentido, raio: F.raio, vel: [.13, .17, .15][i], fase: i * .3,
+           giro: [.5, -.42, .6][i], giroFase: 1.2 + i * .7 };
+});
+
+// --- Poeira: poucos pontinhos bem fracos em volta, para dar profundidade -------
+const poeiraGeo = new THREE.BufferGeometry(), N = 260, pos = new Float32Array(N * 3);
+for (let i = 0; i < N; i++) {
+  const u = Math.random() * 2 - 1, a = Math.random() * 6.283, r = 1.7 + Math.pow(Math.random(), 1.6) * 1.9, q = Math.sqrt(1 - u * u);
+  pos.set([Math.cos(a) * q * r, u * r * .7, Math.sin(a) * q * r], i * 3);
+}
+poeiraGeo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+const poeiraMat = new THREE.PointsMaterial({ color: tom, size: .016, transparent: true, opacity: .35, blending: THREE.AdditiveBlending, depthWrite: false });
+const poeira = new THREE.Points(poeiraGeo, poeiraMat); cena.add(poeira);
+
+// --- Brilho (bloom) ---------------------------------------------------------
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(cena, camera));
+// Raio curto demais deixa o brilho quadrado (o desfoque corta nas camadas pequenas).
+composer.addPass(new UnrealBloomPass(new THREE.Vector2(1, 1), .85, .5, .3));
+composer.addPass(new OutputPass());
+
+// --- Tamanho: o átomo centrado no palco (o espaço acima do texto), ocupando quase tudo dele
+function medir() {
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  if (!w || !h) return;
+  renderer.setSize(w, h, false); composer.setSize(w, h);
+  camera.aspect = w / h;
+  const p = palco.getBoundingClientRect(), c = canvas.getBoundingClientRect();
+  const tamanho = Math.max(160, Math.min(p.height * .96, w * .9));
+  const altura = DIAMETRO * h / tamanho;   // a altura visível no plano do átomo
+  camera.position.z = altura / 2 / Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+  camera.updateProjectionMatrix();
+  atomo.position.y = (.5 - (p.top - c.top + p.height / 2) / h) * altura;
+  poeira.position.y = atomo.position.y;
+}
+const observa = new ResizeObserver(medir);
+observa.observe(palco); observa.observe(canvas);
+addEventListener("resize", medir);
+medir();
+
+// Fora da tela (rolou para baixo), o átomo para de desenhar.
+let visivel = true;
+new IntersectionObserver(es => { visivel = es[0].isIntersecting; }).observe(abertura);
+
+const relogio = new THREE.Clock(), BRANCO = new THREE.Color(1, 1, 1), inclina = { x: 0, y: 0 };
+let t = 3;
+function passo(dt) {
+  if (!parado) t += dt;
+  tom.setRGB(cor[0] / 255, cor[1] / 255, cor[2] / 255, THREE.SRGBColorSpace);
+  haloMat.color.copy(tom); poeiraMat.color.copy(tom); linhasMat.color.copy(tom); nosMat.color.copy(tom);
+  nucleoMat.uniforms.uTempo.value = t; paineisMat.uniforms.uTempo.value = t;
+  nucleo.rotation.y = t * .12; nucleo.rotation.x = t * .05;
+  for (const g of argolas) {
+    for (const b of g.bolinhas) {
+      const u = g.fase + t * g.vel * g.sentido + b.desloc;   // onde a bolinha está (voltas)
+      // O mesmo ponto da faixa (o cilindro deitado): u -> (R sen, -R cos, 0).
+      b.eletron.position.set(Math.sin(u * 6.2831853) * g.raio, -Math.cos(u * 6.2831853) * g.raio, 0);
+      b.rastro.rotation.z = u * 6.2831853;
+    }
+    g.eletronMat.color.copy(tom).lerp(BRANCO, .5);
+    g.plano.rotation.x = g.giroFase + t * g.giro;   // o eixo X do plano é o eixo comprido da argola
+  }
+  // O átomo vira de leve para o mouse (o `mouse` do script de cima).
+  const alvoX = mouse.x < -900 ? 0 : mouse.x / innerWidth - .5, alvoY = mouse.y < -900 ? 0 : mouse.y / innerHeight - .5;
+  inclina.x += (alvoX - inclina.x) * .04; inclina.y += (alvoY - inclina.y) * .04;
+  atomo.rotation.y = Math.sin(t * .22) * .35 + inclina.x * .5;
+  atomo.rotation.x = Math.sin(t * .17) * .12 + inclina.y * .35;
+  poeira.rotation.y = t * .02;
+  composer.render();
+}
+function laco3d() {
+  const dt = Math.min(relogio.getDelta(), .1);
+  if (visivel) passo(dt);
+  requestAnimationFrame(laco3d);
+}
+// ?gravar=1: quem grava o vídeo avança quadro a quadro (window.quadro), sem depender da velocidade do PC.
+if (P.get("gravar")) { window.quadro = passo; passo(0); } else laco3d();
 </script>
 
 <script type="module">
