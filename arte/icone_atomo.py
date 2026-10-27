@@ -28,7 +28,7 @@ NUCLEO = 0.25           # raio do núcleo (o átomo inteiro tem raio 1)
 # raio maior, largura do traço (em fração do lado) e onde fica a bolinha
 ARGOLAS = [
     dict(raio=0.96, larg=0.034, bola=0.16),
-    dict(raio=0.80, larg=0.022, bola=0.20),
+    dict(raio=0.80, larg=0.022, bola=0.86, sentido=-1),   # do outro lado, girando ao contrário (como no 3D)
     dict(raio=0.88, larg=0.026, bola=0.13, alonga=1.08),
 ]
 
@@ -156,7 +156,8 @@ def desenhar(lado: int, cor: QColor | str = "#4da3ff", branco: bool = False) -> 
         comp = 1.3
         r = px(0.038 if lado >= 40 else 0.034)
         for j in range(n):
-            a, b = t - comp * (1 - j / n), t - comp * (1 - (j + 1) / n)
+            s = A.get("sentido", 1)
+            a, b = t - s * comp * (1 - j / n), t - s * comp * (1 - (j + 1) / n)
             f = (j + 1) / n
             seg = QPainterPath(ponto(i, None, a))
             seg.lineTo(ponto(i, None, b))
