@@ -20,9 +20,11 @@ import java.util.concurrent.Executors
  * O Jarvis no relógio: o canal até o celular (que repassa ao PC), o ouvido,
  * a voz e o que a tela mostra. UM por processo (`App`).
  *
- * O jeito de usar: o botão abre o app e ele já está ouvindo; fala, ele
- * responde na tela e em voz, e fica mais 7 s ouvindo (como no PC) para a
- * conversa seguir sem apertar nada.
+ * O jeito de usar (o Léo, 27/10/2026): o app abre dormindo (o átomo cinza).
+ * Um toque no átomo e ele ouve; fala, ele responde na tela e em voz, e fica
+ * mais 4 s ouvindo para a conversa seguir sem tocar. Sem conversa, volta a
+ * dormir, com o app aberto (a tela apaga sozinha). Tocar enquanto ouve manda
+ * na hora; tocar enquanto pensa ou fala para tudo e volta a ouvir.
  */
 class Relogio(private val app: Application) {
     val estado = mutableStateOf("dormindo")     // o do PC: pensando, falando...
@@ -35,6 +37,9 @@ class Relogio(private val app: Application) {
     val voceDisse = mutableStateOf("")
     val resposta = mutableStateOf("")
     val atividade = mutableStateOf("")
+    // Quem responde: a MESMA do PC e do app (o PC manda no "cerebro").
+    val persona = mutableStateOf("jarvis")
+    val corPersona = mutableStateOf("")         // "#rrggbb" da Friday (o Léo escolhe no PC)
 
     private val principal = Handler(Looper.getMainLooper())
     private val canais = Wearable.getChannelClient(app)
@@ -54,11 +59,10 @@ class Relogio(private val app: Application) {
     private var visivel = false
     // A conversa que começou no relógio: depois da voz, abre a janela de 4 s.
     private var conversando = false
-    private var ouvirQuandoLigar = false
-    // Disse "dorme aí": deixa ele falar o "Tá bom." e fecha o app.
+    // Disse "dorme aí": deixa ele falar o "Tá bom." e volta a dormir.
     private var indoDormir = false
-    /** A tela se fecha (volta para o mostrador). */
-    var aoDormir: (() -> Unit)? = null
+    // Mandou parar: o resto da voz que ainda vinha do PC não toca.
+    private var descartarVoz = false
 
     companion object {
         const val DESISTE_MS = 6000L   // abriu e não falou nada
@@ -66,14 +70,14 @@ class Relogio(private val app: Application) {
         const val FECHA_MS = 30000L    // tela fora e nada acontecendo: solta o celular
     }
 
-    /** O que o átomo mostra. */
+    /** O que o átomo mostra ("dormindo": ligado, esperando o toque). */
     val estadoVisivel: String
         get() = when {
             !ligado.value -> "sem_conexao"
             ouvindo.value -> "escutando"
             tocando.value -> "falando"
-            esperando.value || estado.value == "pensando" || estado.value == "falando" -> "pensando"
-            else -> "pronto"
+            esperando.value -> "pensando"
+            else -> "dormindo"
         }
 
     /** Tem algo acontecendo (a tela não pode apagar no meio). */
@@ -167,10 +171,9 @@ class Relogio(private val app: Application) {
 
     // -- ouvir e falar --------------------------------------------------------
 
-    /** O app abriu pelo botão (ou o toque no átomo parado): começa a ouvir. */
-    fun ouvir() {
-        if (!ligado.value) { ouvirQuandoLigar = true; return }
-        if (ouvindo.value) return
+    /** O toque no átomo dormindo: começa a ouvir. */
+    private fun ouvir() {
+        if (!ligado.value || ouvindo.value) return
         voz.parar()
         vibrar()
         conversando = true
@@ -199,6 +202,7 @@ class Relogio(private val app: Application) {
         ouvindo.value = false
         nivel.floatValue = 0f
         if (fim == "silêncio" || fim == "tempo máximo" || fim == "toque") {
+            descartarVoz = false   // a voz que vier agora é a resposta desta fala
             esperando.value = true
             resposta.value = ""
             atividade.value = ""
@@ -218,17 +222,39 @@ class Relogio(private val app: Application) {
         nivel.floatValue = 0f
     }
 
+    /** O toque no nome: Jarvis ⇄ Friday. Troca no PC e no app também. */
+    fun trocarPersona() {
+        if (!ligado.value) return
+        val nova = if (persona.value == "friday") "jarvis" else "friday"
+        persona.value = nova
+        mandar(Tubo.TEXTO, JSONObject().put("pedir", "cerebro").put("persona", nova).toString().toByteArray())
+    }
+
     /** O toque no átomo: depende do que ele está fazendo. */
     fun tocou() {
         when {
             !ligado.value -> abrir()
-            ouvindo.value -> mandar(Tubo.FALA_FIM, "toque".toByteArray())
-            tocando.value -> { voz.parar(); conversando = false }
+            ouvindo.value -> mandar(Tubo.FALA_FIM, "toque".toByteArray())   // manda na hora
+            tocando.value || esperando.value -> parar()
             else -> ouvir()
         }
     }
 
+    /** Pensando ou falando: para tudo (aqui e no PC) e volta a ouvir. */
+    private fun parar() {
+        descartarVoz = true
+        voz.parar()
+        mandar(Tubo.TEXTO, JSONObject().put("pedir", "parar").toString().toByteArray())
+        esperando.value = false
+        indoDormir = false
+        principal.removeCallbacks(dormirAgora)
+        vibrar()
+        conversando = true
+        escutar(DESISTE_MS)
+    }
+
     private fun chegouVoz(taxa: Int, pcm: ByteArray) {
+        if (descartarVoz) return
         // A voz dele chegando com o microfone aberto esperando: fecha o
         // microfone (o relógio não pode se ouvir). Se o Léo já estava falando,
         // deixa terminar.
@@ -257,7 +283,8 @@ class Relogio(private val app: Application) {
         if (!indoDormir) return
         indoDormir = false
         esperando.value = false
-        aoDormir?.invoke()
+        conversando = false
+        cancelarEscuta()
     }
 
     private fun vibrar() {
@@ -272,18 +299,21 @@ class Relogio(private val app: Application) {
             "_ponte" -> {
                 ligado.value = ev.optBoolean("conectado")
                 motivo.value = ev.optString("motivo")
-                if (ligado.value && ouvirQuandoLigar) { ouvirQuandoLigar = false; ouvir() }
             }
             "_escuta" -> {
                 if (ev.optBoolean("falou")) falouNaEscuta = true
                 if (ev.has("fim") && ouvindo.value) escutaAcabou(ev.optString("fim"))
             }
             "estado" -> estado.value = ev.optString("estado")
+            "cerebro" -> if (ev.has("persona")) {
+                persona.value = ev.optString("persona", "jarvis")
+                corPersona.value = ev.optString("cor_persona")
+            }
             "voce_disse" -> {
                 voceDisse.value = ev.optString("texto")
                 if (eComandoDeDormir(voceDisse.value)) {
                     // O PC dorme sozinho (assistente.py); aqui é parar de ouvir
-                    // e fechar depois do "Tá bom.". Sem voz em 4 s, fecha igual.
+                    // e dormir depois do "Tá bom.". Sem voz em 4 s, dorme igual.
                     conversando = false
                     indoDormir = true
                     cancelarEscuta()

@@ -1,7 +1,6 @@
 package com.lelokz.jarvis
 
 import android.Manifest
-import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.view.WindowManager
@@ -26,6 +25,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
@@ -38,36 +40,40 @@ private val Fundo = Color(0xFF0A0C10)
 private val Texto = Color(0xFFE6EBF2)
 private val Fraco = Color(0xFF7E879B)
 
+private val Cinza = Color(0xFF39435A)
+private val Dormindo = Color(0xFF6B7488)
+private val CorDoJarvis = Color(0xFF4DA3FF)
+private val CorDaFriday = Color(0xFFFF6FB5)
+
 private fun corDoEstado(estado: String) = when (estado) {
-    "pronto" -> Color(0xFF4DA3FF)
+    "dormindo" -> Dormindo
     "escutando" -> Color(0xFF38D39F)
     "pensando" -> Color(0xFF9B7BFF)
     "falando" -> Color(0xFFFFB454)
-    else -> Color(0xFF39435A)
+    else -> Cinza
+}
+
+/** A cor de quem responde: o azul do Jarvis, ou a cor da Friday que veio do PC. */
+private fun corDaPersona(r: Relogio): Color {
+    if (r.persona.value != "friday") return CorDoJarvis
+    return runCatching { Color(android.graphics.Color.parseColor(r.corPersona.value)) }.getOrDefault(CorDaFriday)
 }
 
 /**
- * A tela do relógio: o átomo no meio, uma linha curta em cima (o que ele está
- * fazendo) e, embaixo, o que você disse e a resposta (rola com o dedo).
- * Abrir o app (o botão duplo) já começa a ouvir.
+ * A tela do relógio: em cima, quem responde (JARVIS ou FRIDAY, toque troca);
+ * o átomo no meio (toque: ouve, manda, para); embaixo, o que ele está fazendo
+ * e a conversa. O app abre dormindo: não ouve sem o toque.
  */
 class MainActivity : ComponentActivity() {
     private val relogio get() = (application as App).relogio
 
     private val pedirMicrofone = registerForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
-        if (ok) relogio.ouvir()
+        if (ok) relogio.tocou()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        relogio.aoDormir = { finish() } // "dorme aí": volta para o mostrador
-        setContent { Tela(relogio, ::falar, ::telaAcesa) }
-        if (savedInstanceState == null) falar()
-    }
-
-    override fun onNewIntent(intent: Intent) {
-        super.onNewIntent(intent)
-        falar() // o botão apertado de novo com o app já aberto
+        setContent { Tela(relogio, ::tocou, ::telaAcesa) }
     }
 
     override fun onStart() {
@@ -75,20 +81,16 @@ class MainActivity : ComponentActivity() {
         relogio.aparecer()
     }
 
-    override fun onDestroy() {
-        relogio.aoDormir = null
-        super.onDestroy()
-    }
-
     override fun onStop() {
         relogio.sumir()
         super.onStop()
     }
 
-    private fun falar() {
+    /** O toque no átomo. Na 1ª vez, pede o microfone antes. */
+    private fun tocou() {
         val temPermissao = ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) ==
             PackageManager.PERMISSION_GRANTED
-        if (temPermissao) relogio.ouvir() else pedirMicrofone.launch(Manifest.permission.RECORD_AUDIO)
+        if (temPermissao) relogio.tocou() else pedirMicrofone.launch(Manifest.permission.RECORD_AUDIO)
     }
 
     /** Ouvindo, pensando ou falando: a tela não apaga no meio. */
@@ -99,18 +101,21 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-private fun Tela(r: Relogio, falar: () -> Unit, telaAcesa: (Boolean) -> Unit) {
+private fun Tela(r: Relogio, tocar: () -> Unit, telaAcesa: (Boolean) -> Unit) {
     val estado = r.estadoVisivel
     val vivo = r.ligado.value
     val ocupado = r.ocupado
     LaunchedEffect(ocupado) { telaAcesa(ocupado) }
+    val cor = corDaPersona(r)
 
+    // O que ele está fazendo, embaixo do átomo.
     val linha = when {
-        !vivo -> r.motivo.value
+        !vivo -> r.motivo.value.ifBlank { "procurando o celular…" }
         r.ouvindo.value -> "ouvindo…"
+        r.tocando.value -> "falando…"
         r.atividade.value.isNotBlank() -> r.atividade.value
         estado == "pensando" -> "pensando…"
-        else -> "JARVIS"
+        else -> "toca pra falar"
     }
 
     Column(
@@ -118,41 +123,18 @@ private fun Tela(r: Relogio, falar: () -> Unit, telaAcesa: (Boolean) -> Unit) {
             .fillMaxSize()
             .background(Fundo)
             .verticalScroll(rememberScrollState())
-            .padding(start = 24.dp, end = 24.dp, top = 22.dp, bottom = 40.dp),
+            .padding(start = 24.dp, end = 24.dp, top = 16.dp, bottom = 40.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Top,
     ) {
+        NomeDaPersona(r, cor, vivo)
+        Spacer(Modifier.height(2.dp))
+        AtomoDoRelogio(r, estado, vivo, tocar)
         BasicText(
             linha,
-            style = TextStyle(color = Fraco, fontSize = 12.sp, textAlign = TextAlign.Center,
-                letterSpacing = if (linha == "JARVIS") 3.sp else 0.sp),
+            style = TextStyle(color = Fraco, fontSize = 12.sp, textAlign = TextAlign.Center),
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
-        )
-        Spacer(Modifier.height(4.dp))
-        Atomo(
-            cor = corDoEstado(estado),
-            escala = when (estado) {
-                "sem_conexao" -> 0.80f; "escutando" -> 1.14f; "falando" -> 1.06f
-                "pensando" -> 1.02f; else -> 0.92f
-            },
-            velocidade = when (estado) {
-                "sem_conexao" -> 0f; "pensando" -> 2.2f; "falando" -> 1.25f
-                "escutando" -> 1.15f; else -> 0.6f
-            },
-            brilho = when (estado) { "sem_conexao" -> 0.28f; "pensando" -> 1.2f; "pronto" -> 0.8f; else -> 1f },
-            turbulencia = when (estado) {
-                "pensando" -> 1f; "escutando" -> 0.35f; "falando" -> 0.25f; else -> 0f
-            },
-            nivel = r.nivel.floatValue,
-            parado = !vivo,
-            pulsando = estado == "pronto",
-            fundo = Fundo,
-            modifier = Modifier
-                .size(112.dp)
-                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
-                    if (!r.ouvindo.value && !r.tocando.value && vivo) falar() else r.tocou()
-                },
         )
         if (r.voceDisse.value.isNotBlank()) {
             Spacer(Modifier.height(6.dp))
@@ -165,4 +147,48 @@ private fun Tela(r: Relogio, falar: () -> Unit, telaAcesa: (Boolean) -> Unit) {
                 style = TextStyle(color = Texto, fontSize = 14.sp, textAlign = TextAlign.Center))
         }
     }
+}
+
+/** JARVIS ou FRIDAY, na cor dela. É um botão: o toque troca (aqui, no PC e no app). */
+@Composable
+private fun NomeDaPersona(r: Relogio, cor: Color, vivo: Boolean) {
+    val nome = if (r.persona.value == "friday") "FRIDAY" else "JARVIS"
+    BasicText(
+        nome,
+        style = TextStyle(color = if (vivo) cor else Fraco, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
+            letterSpacing = 3.sp, textAlign = TextAlign.Center),
+        modifier = Modifier
+            .clip(RoundedCornerShape(50))
+            .background((if (vivo) cor else Fraco).copy(alpha = 0.14f))
+            .clickable(enabled = vivo) { r.trocarPersona() }
+            .padding(horizontal = 14.dp, vertical = 5.dp),
+    )
+}
+
+/**
+ * O átomo: sem conexão, cinza e parado; ligado e dormindo, cinza girando
+ * devagar; ouvindo, pensando e falando, nas cores de sempre.
+ */
+@Composable
+private fun AtomoDoRelogio(r: Relogio, estado: String, vivo: Boolean, tocar: () -> Unit) {
+    Atomo(
+        cor = corDoEstado(estado),
+        escala = when (estado) {
+            "sem_conexao" -> 0.80f; "escutando" -> 1.14f; "falando" -> 1.06f
+            "pensando" -> 1.02f; else -> 0.88f
+        },
+        velocidade = when (estado) {
+            "sem_conexao" -> 0f; "pensando" -> 2.2f; "falando" -> 1.25f
+            "escutando" -> 1.15f; else -> 0.3f
+        },
+        brilho = when (estado) { "sem_conexao" -> 0.28f; "dormindo" -> 0.5f; "pensando" -> 1.2f; else -> 1f },
+        turbulencia = 0f,
+        nivel = r.nivel.floatValue,
+        parado = !vivo,
+        pulsando = estado == "dormindo",
+        fundo = Fundo,
+        modifier = Modifier
+            .size(112.dp)
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { tocar() },
+    )
 }
