@@ -336,6 +336,9 @@ class Ciclo:
         self._visivel: str | None = None
         self._blocos_acordado = 0
         self._mudar_estado("dormindo")
+        # Quem atende quando a NOVA liga (a escolha do instalador; o padrão é o Jarvis).
+        if ajustes.ler()["persona_inicial"] == "friday":
+            self.trocar_persona("friday")
 
     # -- transições --------------------------------------------------------
 

@@ -17,7 +17,9 @@ PADRAO: dict[str, Any] = {"volume_voz": 100, "nome": "",
                           # O Jarvis no grupo da família do WhatsApp (jarvis/grupo).
                           "grupo_jid": "", "grupo_ligado": False,
                           # Onde o instalador pôs as vozes dubladas (jarvis/vozes.py).
-                          "pasta_vozes": ""}
+                          "pasta_vozes": "",
+                          # Quem atende quando a NOVA liga (o instalador pergunta).
+                          "persona_inicial": "jarvis"}
 
 
 def limpar_nome(nome: str) -> str:
@@ -46,6 +48,8 @@ def ler() -> dict[str, Any]:
             saida["grupo_ligado"] = dados["grupo_ligado"]
         if isinstance(dados.get("pasta_vozes"), str):
             saida["pasta_vozes"] = dados["pasta_vozes"][:1000]
+        if dados.get("persona_inicial") in ("jarvis", "friday"):
+            saida["persona_inicial"] = dados["persona_inicial"]
         if isinstance(dados.get("nome"), str):
             saida["nome"] = limpar_nome(dados["nome"])
     return saida

@@ -23,6 +23,6 @@ rm -rf "$PASTA/codigo" && mkdir -p "$PASTA/codigo"
 curl -LsSf "$CODIGO" | tar -xz -C "$PASTA/codigo" --strip-components=1
 
 cd "$PASTA/codigo/instalador"
-export NOVA_VOZES_DRIVE="$VOZES_DRIVE" UV_CACHE_DIR="$PASTA/uv-cache" UV_PYTHON_INSTALL_DIR="$PASTA/python"
-exec "$PASTA/uv/uv" run --no-project --python 3.12 --with pyside6-essentials==6.11.2 \
+export NOVA_VOZES_DRIVE="$VOZES_DRIVE" NOVA_UV="$PASTA/uv/uv" UV_CACHE_DIR="$PASTA/uv-cache" UV_PYTHON_INSTALL_DIR="$PASTA/python"
+exec "$PASTA/uv/uv" run --no-project --python 3.12 --with pyside6-essentials==6.11.2 --with numpy==2.5.2 \
   python -m nova_instalador

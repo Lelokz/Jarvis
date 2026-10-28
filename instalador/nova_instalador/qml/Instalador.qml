@@ -47,14 +47,20 @@ Window {
     property bool atalho: true
     property bool bandeja: true
 
+    // A tela 4: o que o motor da instalação (passos.py) manda.
+    property var prog: null
     Connections {
         target: instalador
+        function onProgresso(dados) { janela.prog = dados }
         function onChecou(dados) {
             janela.pc = dados;
             janela.vozes = dados.dubladas ? "dubladas" : "leves";
         }
     }
-    onTelaChanged: if (tela === 2 && !pc) instalador.checar()
+    onTelaChanged: {
+        if (tela === 2 && !pc) instalador.checar();
+        if (tela === 4 && !(prog && prog.fim)) instalador.instalar();
+    }
 
     // Arrastar a janela pelo fundo (não há barra do sistema).
     MouseArea {
@@ -73,7 +79,7 @@ Window {
         Row {
             x: 22; y: 26
             spacing: 10
-            Image { source: "img/atomo.png"; width: 32; height: 32; sourceSize.width: 64; smooth: true; mipmap: true }
+            AtomoFixo { tamanho: 32; cor: cor.azul }
             Column {
                 anchors.verticalCenter: parent.verticalCenter
                 Text { text: "NOVA"; color: tema.texto; font.family: tema.familia; font.pixelSize: 14; font.weight: Font.ExtraBold; font.letterSpacing: 2.8 }
@@ -167,7 +173,7 @@ Window {
             x: 46; y: 54
             width: area.width - 92
             height: area.height - 54 - 96
-            sourceComponent: [tela1, tela2, tela3, emConstrucao, emConstrucao, emConstrucao, emConstrucao, emConstrucao][janela.tela - 1]
+            sourceComponent: [tela1, tela2, tela3, tela4, emConstrucao, emConstrucao, emConstrucao, emConstrucao][janela.tela - 1]
         }
 
         // Os botões de baixo.
@@ -184,7 +190,8 @@ Window {
             Botao {
                 texto: janela.tela === 1 ? "Começar →" : janela.tela === 3 ? "Instalar →" : "Continuar →"
                 ativo: janela.tela !== 2 || (!!janela.pc && janela.pc.pode)
-                visible: janela.tela < 4
+                // Na instalação, só quando ela terminar.
+                visible: janela.tela < 4 || (janela.tela === 4 && !!janela.prog && !!janela.prog.fim) || janela.tela > 4
                 onClicado: {
                     if (janela.tela === 3)
                         instalador.guardarEscolhas({ nome: janela.nome, persona: janela.persona, vozes: janela.vozes,
@@ -528,6 +535,96 @@ Window {
                     var p = instalador.caminhoDe(selectedFolder.toString());
                     // Uma pasta própria dentro da escolhida, para não espalhar arquivos.
                     janela.pasta = p.endsWith("/NOVA") ? p : p + "/NOVA";
+                }
+            }
+        }
+    }
+
+    Component {
+        id: tela4
+        Column {
+            spacing: 18
+            readonly property var p: janela.prog || ({ passos: [], fracao: 0, texto: "Começando…" })
+            Cabeca {
+                rotulo: "PASSO 4 · INSTALAÇÃO"
+                titulo: p.fim ? "Núcleo" : "Montando o"
+                destaque: p.fim ? "montado." : "núcleo."
+                sub: p.erro ? "Parou num passo. O que já foi feito fica: tentar de novo continua daqui."
+                     : "Pode deixar rodando. Se a internet cair, ele continua de onde parou."
+            }
+            Row {
+                width: parent.width
+                spacing: 16
+                Text {
+                    text: Math.round(p.fracao * 100) + "%"
+                    color: tema.texto; font.family: tema.familia; font.pixelSize: 34; font.weight: Font.ExtraBold
+                    anchors.verticalCenter: parent.verticalCenter
+                }
+                Rectangle {
+                    width: parent.width - 110; height: 8; radius: 4; color: cor.vidro
+                    anchors.verticalCenter: parent.verticalCenter
+                    Rectangle {
+                        width: parent.width * Math.max(0.02, p.fracao); height: parent.height; radius: 4
+                        color: p.erro ? cor.aviso : cor.azul
+                        Behavior on width { NumberAnimation { duration: 300 } }
+                    }
+                }
+            }
+            Caixa {
+                folga: 6
+                Repeater {
+                    model: p.passos
+                    Item {
+                        required property var modelData
+                        required property int index
+                        width: parent.width; height: 38
+                        Rectangle { visible: index > 0; x: 14; width: parent.width - 28; height: 1; color: cor.traco }
+                        Rectangle {
+                            x: 14; anchors.verticalCenter: parent.verticalCenter
+                            width: 20; height: 20; radius: 10
+                            color: modelData.estado === "feito" ? Qt.rgba(56 / 255, 211 / 255, 159 / 255, 0.14)
+                                 : modelData.estado === "agora" ? Qt.rgba(77 / 255, 163 / 255, 1, 0.16)
+                                 : modelData.estado === "erro" ? Qt.rgba(1, 180 / 255, 84 / 255, 0.16) : "transparent"
+                            border.width: modelData.estado === "esperando" ? 1 : 0
+                            border.color: cor.tracoForte
+                            Text {
+                                anchors.centerIn: parent
+                                text: modelData.estado === "feito" ? "✓" : modelData.estado === "erro" ? "!" : ""
+                                color: modelData.estado === "feito" ? cor.ok : cor.aviso; font.pixelSize: 11; font.weight: Font.Bold
+                            }
+                            BusyIndicator { anchors.centerIn: parent; width: 18; height: 18; running: modelData.estado === "agora"; visible: running }
+                        }
+                        Text {
+                            x: 48; anchors.verticalCenter: parent.verticalCenter
+                            text: modelData.nome
+                            color: modelData.estado === "esperando" ? tema.textoFraco : tema.texto
+                            font.family: tema.familia; font.pixelSize: 14
+                        }
+                        Text {
+                            anchors.right: parent.right; anchors.rightMargin: 16; anchors.verticalCenter: parent.verticalCenter
+                            text: modelData.tamanho; color: tema.textoFraco; font.family: cor.mono; font.pixelSize: 11
+                        }
+                    }
+                }
+            }
+            Text {
+                width: parent.width; elide: Text.ElideRight
+                text: "// " + p.texto
+                color: tema.muitoFraco; font.family: cor.mono; font.pixelSize: 11
+            }
+            Rectangle {
+                visible: !!p.erro
+                width: parent.width; height: colErro.implicitHeight + 28; radius: 12
+                color: Qt.rgba(1, 180 / 255, 84 / 255, 0.06)
+                border.width: 1; border.color: Qt.rgba(1, 180 / 255, 84 / 255, 0.35)
+                Column {
+                    id: colErro
+                    x: 16; y: 14; width: parent.width - 32; spacing: 10
+                    Text {
+                        width: parent.width; wrapMode: Text.WrapAnywhere; maximumLineCount: 4; elide: Text.ElideRight
+                        text: p.erro || ""; color: tema.textoMedio; font.family: cor.mono; font.pixelSize: 11
+                    }
+                    Botao { texto: "Tentar de novo"; height: 36; onClicado: instalador.instalar() }
                 }
             }
         }
