@@ -11,15 +11,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicText
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
@@ -34,11 +29,20 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.wrapContentWidth
+import androidx.wear.compose.foundation.lazy.AutoCenteringParams
+import androidx.wear.compose.foundation.lazy.ScalingLazyColumn
+import androidx.wear.compose.foundation.lazy.rememberScalingLazyListState
 import androidx.core.content.ContextCompat
 
 private val Fundo = Color(0xFF0A0C10)
 private val Texto = Color(0xFFE6EBF2)
 private val Fraco = Color(0xFF7E879B)
+private val TextoDaVoce = Color(0xFFB4BCCB)
+private val BolhaDaVoce = Color(0xFF1A1F29)
 
 private val Cinza = Color(0xFF39435A)
 private val Dormindo = Color(0xFF6B7488)
@@ -118,34 +122,50 @@ private fun Tela(r: Relogio, tocar: () -> Unit, telaAcesa: (Boolean) -> Unit) {
         else -> "toca pra falar"
     }
 
-    Column(
-        Modifier
-            .fillMaxSize()
-            .background(Fundo)
-            .verticalScroll(rememberScrollState())
-            .padding(start = 24.dp, end = 24.dp, top = 16.dp, bottom = 40.dp),
+    // A lista curva da tela redonda: o átomo começa no meio; a conversa vem
+    // embaixo, a troca mais nova primeiro. Começou a ouvir: volta para o átomo.
+    val lista = rememberScalingLazyListState(initialCenterItemIndex = 1)
+    LaunchedEffect(r.ouvindo.value) { if (r.ouvindo.value) lista.animateScrollToItem(1) }
+
+    ScalingLazyColumn(
+        modifier = Modifier.fillMaxSize().background(Fundo),
+        state = lista,
+        autoCentering = AutoCenteringParams(itemIndex = 1),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Top,
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+        contentPadding = PaddingValues(horizontal = 14.dp),
     ) {
-        NomeDaPersona(r, cor, vivo)
-        Spacer(Modifier.height(2.dp))
-        AtomoDoRelogio(r, estado, vivo, tocar)
+        item { NomeDaPersona(r, cor, vivo) }
+        item { AtomoDoRelogio(r, estado, vivo, tocar) }
+        item {
+            BasicText(
+                linha,
+                style = TextStyle(color = Fraco, fontSize = 12.sp, textAlign = TextAlign.Center),
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        r.conversa.forEach { troca ->
+            if (troca.voce.isNotBlank()) item { Bolha(troca.voce, voce = true, cor) }
+            if (troca.resposta.isNotBlank()) item { Bolha(troca.resposta, voce = false, cor) }
+        }
+    }
+}
+
+/** Uma fala da conversa: a tua à direita e apagada; a dele à esquerda, na cor de quem responde. */
+@Composable
+private fun Bolha(texto: String, voce: Boolean, cor: Color) {
+    Box(Modifier.fillMaxWidth(), contentAlignment = if (voce) Alignment.CenterEnd else Alignment.CenterStart) {
         BasicText(
-            linha,
-            style = TextStyle(color = Fraco, fontSize = 12.sp, textAlign = TextAlign.Center),
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
+            texto,
+            style = TextStyle(color = if (voce) TextoDaVoce else Texto, fontSize = if (voce) 12.sp else 13.sp),
+            modifier = Modifier
+                .fillMaxWidth(0.88f)
+                .wrapContentWidth(if (voce) Alignment.End else Alignment.Start)
+                .clip(RoundedCornerShape(14.dp))
+                .background(if (voce) BolhaDaVoce else cor.copy(alpha = 0.13f))
+                .padding(horizontal = 10.dp, vertical = 7.dp),
         )
-        if (r.voceDisse.value.isNotBlank()) {
-            Spacer(Modifier.height(6.dp))
-            BasicText(r.voceDisse.value,
-                style = TextStyle(color = Fraco, fontSize = 12.sp, textAlign = TextAlign.Center))
-        }
-        if (r.resposta.value.isNotBlank()) {
-            Spacer(Modifier.height(6.dp))
-            BasicText(r.resposta.value,
-                style = TextStyle(color = Texto, fontSize = 14.sp, textAlign = TextAlign.Center))
-        }
     }
 }
 

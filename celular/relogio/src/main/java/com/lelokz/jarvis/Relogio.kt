@@ -6,7 +6,10 @@ import android.os.Looper
 import android.os.VibrationEffect
 import android.os.Vibrator
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import com.google.android.gms.tasks.Tasks
 import com.google.android.gms.wearable.ChannelClient
 import com.google.android.gms.wearable.Wearable
@@ -34,8 +37,8 @@ class Relogio(private val app: Application) {
     val tocando = mutableStateOf(false)
     val esperando = mutableStateOf(false)       // mandou a fala, a resposta não veio
     val nivel = mutableFloatStateOf(0f)
-    val voceDisse = mutableStateOf("")
-    val resposta = mutableStateOf("")
+    // A conversa desde que o app abriu, a mais nova primeiro (fica logo embaixo do átomo).
+    val conversa = mutableStateListOf<Troca>()
     val atividade = mutableStateOf("")
     // Quem responde: a MESMA do PC e do app (o PC manda no "cerebro").
     val persona = mutableStateOf("jarvis")
@@ -58,13 +61,26 @@ class Relogio(private val app: Application) {
     private var abrindo = false
     private var visivel = false
     // A conversa que começou no relógio: depois da voz, abre a janela de 4 s.
-    private var conversando = false
+    private var conversando by mutableStateOf(false)   // estado: o átomo depende dele
     // Disse "dorme aí": deixa ele falar o "Tá bom." e volta a dormir.
     private var indoDormir = false
     // Mandou parar: o resto da voz que ainda vinha do PC não toca.
     private var descartarVoz = false
 
+    /** Uma ida e volta: o que você disse e o que ele respondeu. */
+    data class Troca(val voce: String, val resposta: String)
+
+    /** A resposta da troca de agora (`juntar`: soma ao que já tinha, como o "mostrar"). */
+    private fun responder(texto: String, juntar: Boolean = false) {
+        if (texto.isBlank()) return
+        val agora = conversa.firstOrNull()
+        if (agora == null) { conversa.add(0, Troca("", texto)); return }
+        val nova = if (juntar && agora.resposta.isNotBlank()) agora.resposta + "\n\n" + texto else texto
+        conversa[0] = agora.copy(resposta = nova)
+    }
+
     companion object {
+        const val TROCAS = 20          // a conversa guardada na tela
         const val DESISTE_MS = 6000L   // abriu e não falou nada
         const val JANELA_MS = 4000L    // depois da resposta (7 s era demais, o Léo)
         const val FECHA_MS = 30000L    // tela fora e nada acontecendo: solta o celular
@@ -76,7 +92,8 @@ class Relogio(private val app: Application) {
             !ligado.value -> "sem_conexao"
             ouvindo.value -> "escutando"
             tocando.value -> "falando"
-            esperando.value -> "pensando"
+            // Entre o texto chegar e a voz começar, o "pensando"/"falando" do PC cobre.
+            esperando.value || (conversando && estado.value in setOf("pensando", "falando")) -> "pensando"
             else -> "dormindo"
         }
 
@@ -204,7 +221,6 @@ class Relogio(private val app: Application) {
         if (fim == "silêncio" || fim == "tempo máximo" || fim == "toque") {
             descartarVoz = false   // a voz que vier agora é a resposta desta fala
             esperando.value = true
-            resposta.value = ""
             atividade.value = ""
             fimDaFala = System.currentTimeMillis()
         } else if (!esperando.value && !tocando.value) {
@@ -310,8 +326,10 @@ class Relogio(private val app: Application) {
                 corPersona.value = ev.optString("cor_persona")
             }
             "voce_disse" -> {
-                voceDisse.value = ev.optString("texto")
-                if (eComandoDeDormir(voceDisse.value)) {
+                val disse = ev.optString("texto")
+                conversa.add(0, Troca(disse, ""))
+                while (conversa.size > TROCAS) conversa.removeAt(conversa.lastIndex)
+                if (eComandoDeDormir(disse)) {
                     // O PC dorme sozinho (assistente.py); aqui é parar de ouvir
                     // e dormir depois do "Tá bom.". Sem voz em 4 s, dorme igual.
                     conversando = false
@@ -319,27 +337,25 @@ class Relogio(private val app: Application) {
                     cancelarEscuta()
                     principal.postDelayed(dormirAgora, 4000)
                 }
-                resposta.value = ""
                 atividade.value = ""
             }
             "jarvis_disse" -> {
                 // Aviso de WhatsApp é só no PC (decisão do Léo).
                 if (ev.optString("acao").startsWith("whatsapp:")) return
-                resposta.value = ev.optString("texto")
+                responder(ev.optString("texto"))
                 atividade.value = ""
                 esperando.value = false // a voz vem logo atrás; o "falando" do PC cobre
             }
             "mostrar" -> {
-                val titulo = ev.optString("titulo")
-                val texto = ev.optString("texto")
-                resposta.value = listOf(resposta.value, titulo, texto).filter { it.isNotBlank() }.joinToString("\n\n")
+                responder(listOf(ev.optString("titulo"), ev.optString("texto")).filter { it.isNotBlank() }
+                    .joinToString("\n\n"), juntar = true)
             }
             "atividade" -> atividade.value = ev.optString("texto")
             "aviso" -> when (ev.optString("situacao")) {
-                "limite" -> { resposta.value = "O limite do Claude acabou por agora."; esperando.value = false }
-                "offline" -> { resposta.value = "O PC está sem internet."; esperando.value = false }
+                "limite" -> { responder("O limite do Claude acabou por agora."); esperando.value = false }
+                "offline" -> { responder("O PC está sem internet."); esperando.value = false }
             }
-            "erro" -> { resposta.value = ev.optString("motivo"); esperando.value = false }
+            "erro" -> { responder(ev.optString("motivo")); esperando.value = false }
         }
     }
 }
