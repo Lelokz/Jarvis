@@ -85,8 +85,10 @@ Testado com `testes/testar_pc_novo.py` (pasta de usuário vazia, sem microfone):
      pessoal e nos discos, ~1 s); sem achar, voz reserva e Ajustes → Voz e som
      mostra "Procurar pasta" (janela; o app mostra o estado). O jarvis.sh pergunta
      a pasta com `python -m jarvis.vozes --shell`.
-   - Falta: o script que monta o pacote, o Léo subir no Drive, e o download no
-     instalador (conferindo o convite).
+   - ~~O script que monta o pacote~~ Feito: `instalador/empacotar_vozes.py` →
+     HD/Arquivo/NOVA - Pacote de vozes/nova-vozes-1.zip (1,45 GB, sha256
+     d64bafe1df9dfb29404c122e48ca823d89ed1267224b90118a683aa9dbcba5bd).
+   - Falta: o Léo subir no Drive, e o download no instalador (conferindo o convite).
 4. Instalador Linux (agora 8 telas: a 7ª é "Conexões", o mesmo passo a passo dos
    Ajustes, tudo opcional), com a escolha da pasta.
 5. Teste limpo (usuário novo, sem nada deste PC).
