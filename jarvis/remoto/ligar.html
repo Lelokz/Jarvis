@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ligar o app NOVA</title>
+<!-- O QR do Celular em Ajustes → Conexões abre esta página (com a chave depois
+     do #, que não vai para o servidor). O botão abre o app já ligado a este
+     PC: nova://ligar?link=<o link com a chave>. -->
+<style>
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #0a0c10; color: #e6ebf2;
+         font: 16px system-ui, sans-serif; text-align: center; }
+  main { padding: 28px; max-width: 360px; }
+  h1 { font-size: 22px; margin: 0 0 10px; }
+  p { color: #7e879b; line-height: 1.5; margin: 0 0 22px; }
+  a { display: block; padding: 14px; border-radius: 12px; text-decoration: none; font-weight: 600; margin-top: 10px; }
+  .forte { background: #4da3ff; color: #06101c; }
+  .fraco { border: 1px solid #2a3446; color: #b9c1cf; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Ligar o app NOVA</h1>
+  <p>Toca em abrir: o app liga neste PC sozinho, sem colar nada.</p>
+  <a class="forte" id="abrir">Abrir no app NOVA</a>
+  <a class="fraco" href="/jarvis.apk">Ainda não tenho o app: baixar</a>
+</main>
+<script>
+  const link = location.origin + "/" + location.hash;
+  document.getElementById("abrir").href = "nova://ligar?link=" + encodeURIComponent(link);
+</script>
+</body>
+</html>

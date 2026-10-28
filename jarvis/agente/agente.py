@@ -258,6 +258,8 @@ class Agente:
         self.cfg = cfg
         self.nome = nome
         self.persona_cfg = persona_cfg
+        # Os conectores da conta do Claude: (quando perguntou, nomes).
+        self._conectores: tuple[float, list[str]] = (-1e9, [])
         # Quem foi chamada por último: "jarvis" ou "friday" (o ciclo troca no
         # "hey Friday" e a janela/app no seletor). Vai no cabeçalho do pedido.
         self.persona = "jarvis"
@@ -409,6 +411,24 @@ class Agente:
         # Reabrir a MESMA conversa (caiu, ou mudou o esforço) não é troca.
         if self.sessao != antes or not retomar:
             self.saidas.put(Saida("sessao", self.sessao, janela="continuada" if retomar else "nova"))
+
+    def conectores(self) -> list[str]:
+        """Os conectores da conta do Claude ligados agora (claude.ai →
+        Conectores: Gmail, Agenda...), para Ajustes → Conexões. Nunca espera:
+        devolve o que já sabe e, passado 1 min, pergunta de novo ao Claude
+        (a resposta vale no próximo evento "ajustes")."""
+        agora = time.monotonic()
+        cliente = self._cliente
+        if cliente is not None and agora - self._conectores[0] >= 60:
+            self._conectores = (agora, self._conectores[1])
+
+            async def perguntar() -> None:
+                r = await cliente.get_mcp_status()
+                self._conectores = (agora, sorted(
+                    s["name"].removeprefix("claude.ai ") for s in r.get("mcpServers", [])
+                    if s.get("name", "").startswith("claude.ai ") and s.get("status") == "connected"))
+            asyncio.run_coroutine_threadsafe(perguntar(), self._loop)
+        return self._conectores[1]
 
     async def _desconectar(self) -> None:
         cliente, self._cliente = self._cliente, None

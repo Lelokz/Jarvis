@@ -34,6 +34,38 @@ Item {
     signal mudarGrupo(bool ligado)
 
     property string aba: "geral"
+    onAbaChanged: fecharPasso()
+
+    // O passo a passo aberto (o id da conexão, "" = a lista) e a última
+    // resposta do PC para ele (o evento "conexao", jarvis/conectar.py).
+    property string passo: ""
+    property var conexao: ({})
+    signal pedirConexao(string id, string acao, string valor)
+    readonly property var cp: conexao && conexao.id === passo ? conexao : ({})
+    readonly property string estadoPasso: cp.estado === "conectado" ? "conectado" : estadoDe(passo).estado
+    function abrirPasso(id) {
+        fecharPasso();
+        passo = id;
+        conexao = ({});
+        rolagem.contentY = 0;
+        // O WhatsApp sobe a ponte e mostra o QR; o Fora de casa liga o acesso
+        // sozinho quando o celular aparece. Os outros só olham.
+        if (id !== "relogio" && id !== "atalhos")
+            pedirConexao(id, id === "whatsapp" && estadoDe(id).estado !== "conectado" || id === "fora" ? "conectar" : "estado", "");
+    }
+    function fecharPasso() {
+        if (passo === "whatsapp" && cp.estado === "esperando")
+            pedirConexao("whatsapp", "cancelar", "");
+        if (passo !== "") pedirAjustes();
+        passo = "";
+    }
+    signal pedirAjustes()
+    Timer {
+        interval: 2000
+        repeat: true
+        running: raiz.aberto && raiz.passo !== "" && raiz.passo !== "relogio" && raiz.passo !== "atalhos"
+        onTriggered: raiz.pedirConexao(raiz.passo, raiz.passo === "fora" ? "conectar" : "estado", "")
+    }
 
     readonly property var categorias: [
         { grupo: "Preferências", itens: [
@@ -49,15 +81,28 @@ Item {
     ]
 
     // As conexões: nome e descrição aqui; o estado vem do PC (jarvis/conexoes.py).
+    // `precisa`: a que tem que estar conectada antes (o cartão mostra "Precisa do…").
     readonly property var conexoes: [
         { id: "whatsapp", nome: "WhatsApp", icone: "whats", descricao: "Ler e mandar mensagens, e avisar quem te escreveu." },
-        { id: "grupo", nome: "Grupo do WhatsApp", icone: "grupo", descricao: "Responde no grupo da família quando chamam o Jarvis." },
-        { id: "celular", nome: "Celular", icone: "celular", descricao: "O app NOVA: conversar e receber avisos pelo celular." },
-        { id: "relogio", nome: "Relógio", icone: "relogio", descricao: "Falar pelo relógio. Precisa do celular conectado." },
-        { id: "fora", nome: "Fora de casa", icone: "globo", descricao: "Usar o celular longe do Wi-Fi de casa (Tailscale)." },
+        { id: "grupo", nome: "Grupo do WhatsApp", icone: "grupo", precisa: "whatsapp", descricao: "Responde no grupo da família quando chamam o Jarvis." },
+        { id: "fora", nome: "Fora de casa", icone: "globo", descricao: "O celular falar com o PC, em casa ou na rua (Tailscale)." },
+        { id: "celular", nome: "Celular", icone: "celular", precisa: "fora", descricao: "O app NOVA: conversar e receber avisos pelo celular." },
+        { id: "relogio", nome: "Relógio", icone: "relogio", precisa: "celular", descricao: "Falar pelo relógio (Wear OS)." },
         { id: "musica", nome: "Música", icone: "musica", descricao: "Tocar música e vídeo do YouTube pelo PC." },
         { id: "atalhos", nome: "Atalhos", icone: "raio", descricao: "Programas e pastas que ele abre pelo nome." },
     ]
+    function infoDe(id) {
+        for (var i = 0; i < conexoes.length; i++)
+            if (conexoes[i].id === id) return conexoes[i];
+        return {};
+    }
+    // "Precisa do WhatsApp" se a de antes não está conectada; "" se pode.
+    function faltaPara(id) {
+        var antes = infoDe(id).precisa;
+        if (!antes) return "";
+        var e = estadoDe(antes).estado;
+        return e === "conectado" || e === "pronto" ? "" : "Precisa do " + infoDe(antes).nome;
+    }
     function estadoDe(id) {
         var lista = raiz.ajustes && raiz.ajustes.conexoes ? raiz.ajustes.conexoes : [];
         for (var i = 0; i < lista.length; i++)
@@ -92,7 +137,7 @@ Item {
     visible: opacity > 0
     opacity: aberto ? 1 : 0
     Behavior on opacity { NumberAnimation { duration: raiz.tema.rapido } }
-    onAbertoChanged: if (aberto) painel.forceActiveFocus()
+    onAbertoChanged: if (aberto) painel.forceActiveFocus(); else fecharPasso()
 
     // -- as peças das páginas -------------------------------------------------
 
@@ -208,6 +253,209 @@ Item {
             color: raiz.tema.textoMedio
             font.family: raiz.tema.familia
             font.pixelSize: 12
+        }
+    }
+
+    // Um botão pequeno: o forte é o azul (Conectar), o outro só contornado.
+    component Botao: Rectangle {
+        id: botaoP
+        property string texto: ""
+        property bool forte: false
+        signal clicado()
+        width: textoBotao.implicitWidth + 26
+        height: 32
+        radius: 9
+        color: forte ? (areaBotao.containsMouse ? Qt.lighter(raiz.tema.persona, 1.1) : raiz.tema.persona)
+                     : (areaBotao.containsMouse ? raiz.tema.superficie2 : "transparent")
+        border.width: forte ? 0 : 1
+        border.color: raiz.tema.tracoForte
+        Text {
+            id: textoBotao
+            anchors.centerIn: parent
+            text: botaoP.texto
+            color: botaoP.forte ? "#06101c" : raiz.tema.textoMedio
+            font.family: raiz.tema.familia
+            font.pixelSize: 13
+            font.weight: botaoP.forte ? Font.DemiBold : Font.Normal
+        }
+        MouseArea { id: areaBotao; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: botaoP.clicado() }
+    }
+
+    // Desconectar sem pop-up: o 1º toque pede o 2º ("Toca de novo…") por 4 s.
+    component BotaoConfirmar: Botao {
+        id: confirmar
+        property bool armado: false
+        signal confirmado()
+        property string textoNormal: ""
+        Component.onCompleted: textoNormal = texto
+        texto: armado ? "Toca de novo pra confirmar" : textoNormal
+        onClicado: { if (armado) { armado = false; confirmado() } else { armado = true; desarmar.restart() } }
+        Timer { id: desarmar; interval: 4000; onTriggered: confirmar.armado = false }
+    }
+
+    // Um passo do passo a passo: a bolinha (número, ✓ ou a azul de agora), o
+    // texto e, embaixo, o que mais precisar (um comando, a espera).
+    component Passo: Item {
+        id: passoItem
+        property int numero: 1
+        property bool feito: false
+        property bool agora: false
+        property bool ultimo: false
+        property string titulo: ""
+        property string dica: ""
+        default property alias extra: extraPasso.data
+        width: parent ? parent.width : 0
+        height: colPasso.height + 22
+        Rectangle {
+            y: 11
+            width: 24; height: 24; radius: 12
+            color: passoItem.feito ? Qt.rgba(0.22, 0.83, 0.62, 0.15) : passoItem.agora ? raiz.tema.persona : raiz.tema.superficie2
+            Text {
+                anchors.centerIn: parent
+                text: passoItem.feito ? "✓" : passoItem.numero
+                color: passoItem.feito ? "#38d39f" : passoItem.agora ? "#06101c" : raiz.tema.textoMedio
+                font.family: raiz.tema.familia
+                font.pixelSize: 12
+                font.weight: Font.DemiBold
+            }
+        }
+        Column {
+            id: colPasso
+            x: 37; y: 11
+            width: parent.width - 37
+            spacing: 3
+            Text {
+                width: parent.width
+                wrapMode: Text.WordWrap
+                textFormat: Text.StyledText
+                text: passoItem.titulo
+                color: passoItem.agora ? raiz.tema.texto : raiz.tema.textoMedio
+                font.family: raiz.tema.familia
+                font.pixelSize: 14
+            }
+            Text {
+                visible: !!passoItem.dica
+                width: parent.width
+                wrapMode: Text.WordWrap
+                text: passoItem.dica
+                color: raiz.tema.textoFraco
+                font.family: raiz.tema.familia
+                font.pixelSize: 13
+            }
+            Column { id: extraPasso; width: parent.width; topPadding: children.length ? 6 : 0; spacing: 6 }
+        }
+        Rectangle { visible: !passoItem.ultimo; anchors.bottom: parent.bottom; width: parent.width; height: 1; color: raiz.tema.traco }
+    }
+
+    // Um comando para copiar e rodar no terminal (o que pede senha de administrador).
+    component Comando: Rectangle {
+        id: comandoC
+        property string texto: ""
+        property bool copiado: false
+        width: parent ? parent.width : 0
+        height: 44
+        radius: 10
+        color: "#07090d"
+        border.width: 1
+        border.color: raiz.tema.tracoForte
+        Text {
+            x: 12
+            width: parent.width - 24 - copiar.width
+            anchors.verticalCenter: parent.verticalCenter
+            elide: Text.ElideRight
+            text: comandoC.texto
+            color: raiz.tema.texto
+            font.family: "monospace"
+            font.pixelSize: 13
+        }
+        TextEdit { id: area; visible: false; text: comandoC.texto }
+        Botao {
+            id: copiar
+            anchors.right: parent.right
+            anchors.rightMargin: 6
+            anchors.verticalCenter: parent.verticalCenter
+            texto: comandoC.copiado ? "Copiado" : "Copiar"
+            onClicado: { area.selectAll(); area.copy(); comandoC.copiado = true }
+        }
+    }
+
+    component Espera: Row {
+        property string texto: ""
+        spacing: 9
+        Rectangle {
+            anchors.verticalCenter: parent.verticalCenter
+            width: 8; height: 8; radius: 4
+            color: raiz.tema.persona
+            SequentialAnimation on opacity { loops: Animation.Infinite; NumberAnimation { to: 0.3; duration: 700 } NumberAnimation { to: 1; duration: 700 } }
+        }
+        Text { text: parent.texto; color: raiz.tema.textoFraco; font.family: raiz.tema.familia; font.pixelSize: 13 }
+    }
+
+    component Nota: Rectangle {
+        property string texto: ""
+        width: parent ? parent.width : 0
+        height: textoNota.height + 24
+        radius: 12
+        color: raiz.tema.superficie
+        border.width: 1
+        border.color: raiz.tema.traco
+        Icone { x: 13; y: 13; caminho: raiz.tema.icones.sobre || ""; cor: raiz.tema.persona; tamanho: 16 }
+        Text {
+            id: textoNota
+            x: 40; y: 12
+            width: parent.width - 54
+            wrapMode: Text.WordWrap
+            text: parent.texto
+            color: raiz.tema.textoFraco
+            font.family: raiz.tema.familia
+            font.pixelSize: 13
+            lineHeight: 1.15
+        }
+    }
+
+    // A caixa do QR (WhatsApp e celular), com a espera e uma linha embaixo.
+    component CaixaQr: Rectangle {
+        id: caixa
+        property string qr: ""
+        property string espera: ""
+        property string rodape: ""
+        default property alias extra: extraCaixa.data
+        width: 300
+        height: colCaixa.height + 36
+        radius: 16
+        color: raiz.tema.superficie
+        border.width: 1
+        border.color: raiz.tema.traco
+        Column {
+            id: colCaixa
+            y: 18
+            width: parent.width
+            spacing: 12
+            Rectangle {
+                anchors.horizontalCenter: parent.horizontalCenter
+                width: 216; height: 216; radius: 12
+                color: caixa.qr ? "#ffffff" : raiz.tema.superficie2
+                Image {
+                    anchors.fill: parent
+                    anchors.margins: 6
+                    source: caixa.qr
+                    smooth: false
+                    fillMode: Image.PreserveAspectFit
+                }
+            }
+            Espera { visible: !!caixa.espera; texto: caixa.espera; anchors.horizontalCenter: parent.horizontalCenter }
+            Text {
+                visible: !!caixa.rodape
+                width: parent.width - 36
+                anchors.horizontalCenter: parent.horizontalCenter
+                horizontalAlignment: Text.AlignHCenter
+                wrapMode: Text.WordWrap
+                text: caixa.rodape
+                color: raiz.tema.textoFraco
+                font.family: raiz.tema.familia
+                font.pixelSize: 12
+            }
+            Column { id: extraCaixa; anchors.horizontalCenter: parent.horizontalCenter }
         }
     }
 
@@ -376,7 +624,8 @@ Item {
                 width: rolagem.width - 56
                 sourceComponent: raiz.aba === "voz" ? paginaVoz : raiz.aba === "avisos" ? paginaAvisos
                                : raiz.aba === "uso" ? paginaUso : raiz.aba === "personas" ? paginaPersonas
-                               : raiz.aba === "conexoes" ? paginaConexoes : raiz.aba === "sobre" ? paginaSobre
+                               : raiz.aba === "conexoes" ? (raiz.passo ? paginaPasso : paginaConexoes)
+                               : raiz.aba === "sobre" ? paginaSobre
                                : paginaGeral
             }
         }
@@ -662,9 +911,10 @@ Item {
         Column {
             width: pagina.width
             Secao {
-                titulo: "Conexões"
-                dica: raiz.ajustes && raiz.ajustes.conexoes ? "O que o Jarvis e a Friday conseguem usar neste PC."
-                                                            : "Aparece quando a NOVA subir."
+                titulo: "Conexões da NOVA"
+                dica: raiz.ajustes && raiz.ajustes.conexoes
+                      ? "O que o Jarvis e a Friday conseguem usar neste PC. Tudo começa desligado: liga só o que quiser."
+                      : "Aparece quando a NOVA subir."
                 Grid {
                     id: grade
                     width: parent.width
@@ -676,6 +926,7 @@ Item {
                         Rectangle {
                             required property var modelData
                             readonly property var agora: raiz.estadoDe(modelData.id)
+                            readonly property string falta: raiz.faltaPara(modelData.id)
                             width: (grade.width - grade.columnSpacing) / 2
                             height: Math.max(118, conteudoCartao.height + 28)
                             radius: 14
@@ -716,20 +967,31 @@ Item {
                                 }
                                 Item {
                                     width: parent.width
-                                    height: 34
+                                    height: 38
                                     Etiqueta {
                                         anchors.verticalCenter: parent.verticalCenter
                                         anchors.verticalCenterOffset: 3
                                         estado: agora.estado
                                     }
-                                    // O grupo liga e desliga daqui (o mesmo interruptor de antes).
-                                    Interruptor {
-                                        visible: modelData.id === "grupo" && !!raiz.ajustes && !!raiz.ajustes.grupo_jid
+                                    Text {
+                                        visible: falta !== "" && agora.estado !== "conectado"
                                         anchors.right: parent.right
                                         anchors.verticalCenter: parent.verticalCenter
                                         anchors.verticalCenterOffset: 3
-                                        ligado: raiz.ajustes ? !!raiz.ajustes.grupo_ligado : false
-                                        onTrocou: raiz.mudarGrupo(!ligado)
+                                        text: falta
+                                        color: raiz.tema.muitoFraco
+                                        font.family: raiz.tema.familia
+                                        font.pixelSize: 12
+                                    }
+                                    Botao {
+                                        visible: falta === "" || agora.estado === "conectado"
+                                        anchors.right: parent.right
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        anchors.verticalCenterOffset: 3
+                                        forte: agora.estado !== "conectado" && agora.estado !== "pronto"
+                                        texto: modelData.id === "atalhos" ? "Como usar"
+                                             : agora.estado === "conectado" || agora.estado === "pronto" ? "Gerenciar" : "Conectar"
+                                        onClicado: raiz.abrirPasso(modelData.id)
                                     }
                                 }
                             }
@@ -737,6 +999,382 @@ Item {
                     }
                 }
             }
+            Secao {
+                titulo: "Da tua conta do Claude"
+                dica: "Gmail, Agenda, Drive e outros: liga no site do Claude e o Jarvis e a Friday já usam, aqui e no celular."
+                Rectangle {
+                    width: parent.width
+                    height: Math.max(62, linhaConta.height + 28)
+                    radius: 14
+                    color: raiz.tema.superficie
+                    border.width: 1
+                    border.color: raiz.tema.traco
+                    Flow {
+                        id: linhaConta
+                        x: 16
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: parent.width - 32 - botaoClaude.width - 16
+                        spacing: 8
+                        Text {
+                            visible: !raiz.ajustes || !(raiz.ajustes.conectores || []).length
+                            height: 30
+                            verticalAlignment: Text.AlignVCenter
+                            text: "Nenhum conector ligado na conta ainda."
+                            color: raiz.tema.textoFraco
+                            font.family: raiz.tema.familia
+                            font.pixelSize: 13
+                        }
+                        Repeater {
+                            model: raiz.ajustes ? (raiz.ajustes.conectores || []) : []
+                            Rectangle {
+                                required property var modelData
+                                width: nomeConector.implicitWidth + 36
+                                height: 30
+                                radius: 15
+                                color: raiz.tema.superficie2
+                                Rectangle { x: 12; anchors.verticalCenter: parent.verticalCenter; width: 7; height: 7; radius: 4; color: "#38d39f" }
+                                Text {
+                                    id: nomeConector
+                                    x: 25
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    text: modelData
+                                    color: raiz.tema.textoMedio
+                                    font.family: raiz.tema.familia
+                                    font.pixelSize: 13
+                                }
+                            }
+                        }
+                    }
+                    Botao {
+                        id: botaoClaude
+                        anchors.right: parent.right
+                        anchors.rightMargin: 16
+                        anchors.verticalCenter: parent.verticalCenter
+                        texto: "Adicionar no claude.ai ↗"
+                        onClicado: Qt.openUrlExternally("https://claude.ai/settings/connectors")
+                    }
+                }
+            }
+        }
+    }
+
+    // O passo a passo de uma conexão (protótipo aprovado em 28/10/2026). O
+    // estado vem do PC (jarvis/conectar.py), pedido de novo a cada 2 s.
+    Component {
+        id: paginaPasso
+        Column {
+            id: passoCol
+            width: pagina.width
+            spacing: 0
+            readonly property var info: raiz.infoDe(raiz.passo)
+
+            // ‹ Conexões
+            Item {
+                width: voltaTxt.implicitWidth + 22
+                height: 30
+                Icone { anchors.verticalCenter: parent.verticalCenter; caminho: raiz.tema.icones.voltar || ""; cor: raiz.tema.textoFraco; tamanho: 15 }
+                Text {
+                    id: voltaTxt
+                    x: 20
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: "Conexões"
+                    color: raiz.tema.textoFraco
+                    font.family: raiz.tema.familia
+                    font.pixelSize: 13
+                }
+                MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: raiz.fecharPasso() }
+            }
+            Item { width: 1; height: 10 }
+            Row {
+                spacing: 14
+                Rectangle {
+                    width: 46; height: 46; radius: 13
+                    color: raiz.tema.superficie2
+                    Icone { anchors.centerIn: parent; caminho: raiz.tema.icones[info.icone] || ""; cor: raiz.tema.persona; tamanho: 22 }
+                }
+                Text {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: info.nome || ""
+                    color: raiz.tema.texto
+                    font.family: raiz.tema.familia
+                    font.pixelSize: 18
+                    font.weight: Font.DemiBold
+                }
+                Etiqueta { anchors.verticalCenter: parent.verticalCenter; estado: raiz.estadoPasso }
+            }
+            Item { width: 1; height: 18 }
+
+            Loader {
+                width: parent.width
+                sourceComponent: raiz.passo === "whatsapp" ? passoWhatsapp : raiz.passo === "fora" ? passoFora
+                               : raiz.passo === "celular" ? passoCelular : raiz.passo === "grupo" ? passoGrupo
+                               : raiz.passo === "relogio" ? passoRelogio : raiz.passo === "musica" ? passoMusica
+                               : passoAtalhos
+            }
+        }
+    }
+
+    Component {
+        id: passoWhatsapp
+        Column {
+            width: parent ? parent.width : 0
+            spacing: 16
+            Column {
+                visible: raiz.estadoPasso === "conectado"
+                width: parent.width
+                spacing: 14
+                Text {
+                    width: parent.width
+                    wrapMode: Text.WordWrap
+                    text: "Conectado. O Jarvis e a Friday leem as mensagens deste PC e avisam quem te escreveu."
+                    color: raiz.tema.textoMedio; font.family: raiz.tema.familia; font.pixelSize: 14
+                }
+                BotaoConfirmar { texto: "Desconectar"; onConfirmado: raiz.pedirConexao("whatsapp", "desconectar", "") }
+            }
+            Text {
+                visible: raiz.cp.estado === "falta" || raiz.cp.estado === "erro"
+                width: parent.width
+                wrapMode: Text.WordWrap
+                text: raiz.cp.detalhe || ""
+                color: raiz.tema.textoMedio; font.family: raiz.tema.familia; font.pixelSize: 14
+            }
+            Row {
+                visible: raiz.estadoPasso !== "conectado" && raiz.cp.estado !== "falta"
+                width: parent.width
+                spacing: 26
+                Column {
+                    width: parent.width - 300 - 26
+                    Passo { numero: 1; agora: true; titulo: "No celular, abre o WhatsApp"; dica: "Android: os três pontinhos. iPhone: Configurações." }
+                    Passo { numero: 2; titulo: "Toca em <b>Aparelhos conectados</b> → <b>Conectar um aparelho</b>" }
+                    Passo { numero: 3; titulo: "Aponta a câmera para o código ao lado"; dica: "Pronto: o cartão vira \"Conectado\" sozinho."; ultimo: true }
+                }
+                CaixaQr {
+                    qr: raiz.cp.qr || ""
+                    espera: raiz.cp.estado === "expirou" || raiz.cp.estado === "saiu" ? "" : raiz.cp.qr ? "esperando o celular ler…" : "gerando o código…"
+                    rodape: raiz.cp.estado === "expirou" || raiz.cp.estado === "saiu" ? "" : "O código troca a cada 20 segundos."
+                    Botao {
+                        visible: raiz.cp.estado === "expirou" || raiz.cp.estado === "saiu" || raiz.cp.estado === "desligado"
+                        forte: true
+                        texto: "Gerar outro código"
+                        onClicado: raiz.pedirConexao("whatsapp", "conectar", "")
+                    }
+                }
+            }
+            Nota { texto: "As mensagens ficam só neste PC. O Jarvis e a Friday leem e avisam quem escreveu, mas mandar sempre pede o teu \"pode\" falado." }
+        }
+    }
+
+    Component {
+        id: passoFora
+        Column {
+            width: parent ? parent.width : 0
+            spacing: 6
+            Text {
+                width: parent.width
+                wrapMode: Text.WordWrap
+                text: "O Tailscale é um app grátis que liga o teu celular ao PC, em casa ou na rua, sem abrir nada para a internet."
+                color: raiz.tema.textoFraco; font.family: raiz.tema.familia; font.pixelSize: 13
+                bottomPadding: 6
+            }
+            Passo {
+                numero: 1; feito: !!raiz.cp.instalado; agora: !raiz.cp.instalado
+                titulo: "Instalar o Tailscale neste PC"
+                dica: raiz.cp.instalado ? "Achei ele instalado." : "Copia e roda no terminal (pede a tua senha do PC):"
+                Comando { visible: !raiz.cp.instalado; texto: raiz.cp.comando_instalar || "" }
+            }
+            Passo {
+                numero: 2; feito: !!raiz.cp.conta; agora: !!raiz.cp.instalado && !raiz.cp.conta
+                titulo: "Entrar com a tua conta"
+                dica: raiz.cp.conta ? "Entrou como " + raiz.cp.conta + "." : "Roda isto e entra no navegador que abrir:"
+                Comando { visible: !!raiz.cp.instalado && !raiz.cp.conta; texto: raiz.cp.comando_entrar || "" }
+            }
+            Passo {
+                numero: 3; feito: !!raiz.cp.celular; agora: !!raiz.cp.conta && !raiz.cp.celular
+                titulo: "No celular, instala o Tailscale (Play Store ou App Store) e entra com a <b>mesma conta</b>"
+                dica: raiz.cp.celular ? "Achei: " + raiz.cp.celular + "." : ""
+                Espera { visible: !!raiz.cp.conta && !raiz.cp.celular; texto: "esperando o celular aparecer na tua conta…" }
+            }
+            Passo {
+                numero: 4; feito: !!raiz.cp.servindo; agora: !!raiz.cp.celular && !raiz.cp.servindo; ultimo: true
+                titulo: "Ligar o acesso do celular"
+                dica: raiz.cp.detalhe ? raiz.cp.detalhe : raiz.cp.servindo ? "Ligado." : "A NOVA faz sozinha quando o celular aparecer."
+            }
+            BotaoConfirmar {
+                visible: raiz.estadoPasso === "conectado"
+                texto: "Desconectar"
+                onConfirmado: raiz.pedirConexao("fora", "desconectar", "")
+            }
+        }
+    }
+
+    Component {
+        id: passoCelular
+        Column {
+            width: parent ? parent.width : 0
+            spacing: 16
+            Column {
+                visible: raiz.cp.estado === "falta"
+                width: parent.width
+                spacing: 12
+                Text {
+                    text: raiz.cp.detalhe || ""
+                    color: raiz.tema.textoMedio; font.family: raiz.tema.familia; font.pixelSize: 14
+                }
+                Botao { forte: true; texto: "Ir para Fora de casa"; onClicado: raiz.abrirPasso("fora") }
+            }
+            Row {
+                visible: raiz.cp.estado !== "falta"
+                width: parent.width
+                spacing: 26
+                Column {
+                    width: parent.width - 300 - 26
+                    Passo { numero: 1; feito: true; titulo: "Fora de casa ligado"; dica: "O celular já alcança o PC." }
+                    Passo { numero: 2; agora: raiz.cp.estado !== "conectado"; feito: raiz.cp.estado === "conectado"
+                            titulo: "Abre a câmera do celular e aponta para o código"; dica: "Sem o app ainda? A página que abrir baixa ele." }
+                    Passo { numero: 3; feito: raiz.cp.estado === "conectado"; ultimo: true
+                            titulo: "Toca em <b>Abrir no app NOVA</b>"; dica: "O app abre já ligado a este PC, sem colar nada." }
+                }
+                CaixaQr {
+                    qr: raiz.cp.qr || ""
+                    espera: raiz.cp.estado === "conectado" ? "" : "esperando o celular…"
+                    rodape: raiz.cp.estado === "conectado" ? "Um celular já está ligado. Outro pode ler o mesmo código."
+                                                    : "O código leva a chave deste PC: não mostra para ninguém."
+                }
+            }
+        }
+    }
+
+    Component {
+        id: passoGrupo
+        Column {
+            width: parent ? parent.width : 0
+            spacing: 16
+            Text {
+                visible: raiz.cp.estado === "falta"
+                text: raiz.cp.detalhe || ""
+                color: raiz.tema.textoMedio; font.family: raiz.tema.familia; font.pixelSize: 14
+            }
+            Row {
+                visible: raiz.cp.estado !== "falta"
+                width: parent.width
+                spacing: 26
+                Column {
+                    width: parent.width - 300 - 26
+                    Text {
+                        width: parent.width
+                        wrapMode: Text.WordWrap
+                        text: "Escolhe o grupo onde o Jarvis responde quando alguém escreve \"Jarvis, …\"."
+                        color: raiz.tema.textoFraco; font.family: raiz.tema.familia; font.pixelSize: 13
+                        bottomPadding: 8
+                    }
+                    Repeater {
+                        model: raiz.cp.grupos || []
+                        Item {
+                            required property var modelData
+                            required property int index
+                            readonly property bool sim: modelData.jid === raiz.cp.escolhido
+                            width: parent.width
+                            height: 44
+                            Rectangle {
+                                anchors.verticalCenter: parent.verticalCenter
+                                x: 4; width: 18; height: 18; radius: 9
+                                color: "transparent"
+                                border.width: 2
+                                border.color: sim ? raiz.tema.persona : raiz.tema.tracoForte
+                                Rectangle { anchors.centerIn: parent; width: 8; height: 8; radius: 4; color: raiz.tema.persona; visible: sim }
+                            }
+                            Text {
+                                x: 34
+                                width: parent.width - 34
+                                anchors.verticalCenter: parent.verticalCenter
+                                elide: Text.ElideRight
+                                text: modelData.nome
+                                color: sim ? raiz.tema.texto : raiz.tema.textoMedio
+                                font.family: raiz.tema.familia; font.pixelSize: 14
+                            }
+                            Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: raiz.tema.traco }
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: raiz.pedirConexao("grupo", "escolher", modelData.jid)
+                            }
+                        }
+                    }
+                }
+                Rectangle {
+                    width: 300
+                    height: 76
+                    radius: 16
+                    color: raiz.tema.superficie
+                    border.width: 1
+                    border.color: raiz.tema.traco
+                    Column {
+                        x: 18
+                        anchors.verticalCenter: parent.verticalCenter
+                        spacing: 3
+                        Text { text: "Responder no grupo"; color: raiz.tema.texto; font.family: raiz.tema.familia; font.pixelSize: 14 }
+                        Text { text: raiz.cp.escolhido ? "Liga e desliga quando quiser." : "Escolhe um grupo primeiro."
+                               color: raiz.tema.textoFraco; font.family: raiz.tema.familia; font.pixelSize: 12 }
+                    }
+                    Interruptor {
+                        anchors.right: parent.right
+                        anchors.rightMargin: 18
+                        anchors.verticalCenter: parent.verticalCenter
+                        opacity: raiz.cp.escolhido ? 1 : 0.4
+                        ligado: !!raiz.cp.ligado
+                        onTrocou: if (raiz.cp.escolhido) { raiz.mudarGrupo(!ligado); raiz.pedirConexao("grupo", "estado", "") }
+                    }
+                }
+            }
+            Nota { visible: raiz.cp.estado !== "falta"
+                   texto: "No grupo ele conversa, pesquisa e anota recados. O que mexe nas tuas coisas (arquivos, mensagens, o PC) só acontece com o teu Sim no celular." }
+        }
+    }
+
+    Component {
+        id: passoRelogio
+        Column {
+            width: parent ? parent.width : 0
+            spacing: 16
+            Column {
+                width: parent.width
+                Passo { numero: 1; feito: raiz.estadoDe("celular").estado === "conectado"; agora: !feito
+                        titulo: "Celular conectado"; dica: feito ? "" : "Liga o Celular primeiro, aqui em Conexões." }
+                Passo { numero: 2; agora: raiz.estadoDe("celular").estado === "conectado"
+                        titulo: "Instalar o NOVA no relógio"; dica: "Por enquanto é pela depuração sem fio do relógio: o Léo te ajuda nesse passo." }
+                Passo { numero: 3; ultimo: true; feito: raiz.estadoPasso === "conectado"
+                        titulo: "Abre o NOVA no relógio e toca no átomo"; dica: "O cartão vira \"Conectado\" quando ele aparecer." }
+            }
+            Nota { texto: "Funciona com relógio Wear OS (Galaxy Watch e parecidos), sempre pelo celular." }
+        }
+    }
+
+    Component {
+        id: passoMusica
+        Column {
+            width: parent ? parent.width : 0
+            Passo {
+                numero: 1; feito: raiz.estadoPasso === "conectado"; agora: !feito
+                titulo: feito ? "O programa que toca o som (o mpv) está instalado" : "Falta o programa que toca o som (o mpv). Copia e roda no terminal:"
+                dica: feito ? "" : "Pede a tua senha do PC. A NOVA não roda nada como administrador sozinha."
+                Comando { visible: raiz.estadoPasso !== "conectado"; texto: raiz.cp.comando || "" }
+            }
+            Passo { numero: 2; ultimo: true; feito: raiz.estadoPasso === "conectado"
+                    titulo: "Pede: <b>\"Jarvis, toca uma música\"</b>" }
+        }
+    }
+
+    Component {
+        id: passoAtalhos
+        Column {
+            width: parent ? parent.width : 0
+            spacing: 16
+            Column {
+                width: parent.width
+                Passo { numero: 1; titulo: "Pede: <b>\"Jarvis, cria um atalho pro Discord\"</b>"; dica: "Vale programa, pasta ou site." }
+                Passo { numero: 2; ultimo: true; titulo: "Depois é só falar: <b>\"abre o Discord\"</b>" }
+            }
+            Nota { texto: "Os atalhos ficam neste PC. " + (raiz.estadoDe("atalhos").detalhe ? "Agora: " + raiz.estadoDe("atalhos").detalhe + "." : "Nenhum ainda.") }
         }
     }
 

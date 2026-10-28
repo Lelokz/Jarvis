@@ -53,8 +53,10 @@ if [ "${1:-}" = "--desligar" ]; then
   exit 0
 fi
 
-if [ -x "$PONTE_WHATS/whatsapp-bridge" ] && ! ponte_ligada; then
-  # umask 077: o que a ponte criar (banco, log) só o Léo lê.
+# Só se já foi pareada alguma vez (tem o banco): num PC novo quem sobe a ponte
+# é o Conectar de Ajustes → Conexões, para mostrar o QR (jarvis/conectar.py).
+if [ -x "$PONTE_WHATS/whatsapp-bridge" ] && [ -f "$PONTE_WHATS/store/whatsapp.db" ] && ! ponte_ligada; then
+  # umask 077: o que a ponte criar (banco, log) só o dono lê.
   ( cd "$PONTE_WHATS" && umask 077 && nohup ./whatsapp-bridge \
       >> "$HOME/.local/share/jarvis/whatsapp-bridge.log" 2>&1 & )
 fi

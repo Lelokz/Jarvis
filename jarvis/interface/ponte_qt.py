@@ -57,6 +57,7 @@ class PonteQt(QObject):
     erroRecebido = Signal(str)             # "espera ele terminar", pedido inválido
     usoMudou = Signal(float, float, float, float)  # 5 h (uso, volta_em), semana (uso, volta_em)
     escrevendo = Signal(int, str, bool, bool)      # bloco, pedaço, fim, descartar
+    conexaoMudou = Signal("QVariant")      # o passo a passo de uma conexão (Ajustes → Conexões)
     somMudou = Signal("QVariant")          # aparelhos de som: o evento "som" inteiro (Ajustes)
     ajustesMudou = Signal("QVariant")      # volume da voz, nome, grupo e conexões (Ajustes)
 
@@ -160,6 +161,10 @@ class PonteQt(QObject):
     @Slot(result=bool)
     def pedirSom(self) -> bool:
         return self._pedir({"pedir": "som"})
+
+    @Slot(str, str, str, result=bool)
+    def conexao(self, id_: str, acao: str, valor: str) -> bool:
+        return self._pedir({"pedir": "conexao", "id": id_, "acao": acao, "valor": valor})
 
     @Slot(result=bool)
     def pedirAjustes(self) -> bool:
@@ -297,6 +302,8 @@ class PonteQt(QObject):
                                     "falas" in ev)
         elif tipo == "conversas":
             self.conversasRecebidas.emit(list(ev.get("lista") or []))
+        elif tipo == "conexao":
+            self.conexaoMudou.emit({k: v for k, v in ev.items() if k != "ev"})
         elif tipo == "som":
             self.somMudou.emit({k: v for k, v in ev.items() if k != "ev"})
         elif tipo == "ajustes":

@@ -1116,7 +1116,8 @@ class Ciclo:
         # reconhece_voz: tem o perfil da voz do dono; sem ele, toda voz vale como a dele.
         self.emissor.emitir("ajustes", **dados, pc=socket.gethostname(),
                             reconhece_voz=self.quem_fala is not None,
-                            conexoes=conexoes.estado(self.cfg, dados, self.quem_conectado()))
+                            conexoes=conexoes.estado(self.cfg, dados, self.quem_conectado()),
+                            conectores=getattr(self.agente, "conectores", list)())
 
     def emitir_cerebro(self) -> None:
         cor = self.cfg.friday.cor if self.persona == "friday" and self.cfg.friday else ""
@@ -1549,6 +1550,8 @@ def conversar(cfg: config.Config) -> int:
         ponte.provedor_renomear = lambda sessao, titulo: sessoes.renomear(agente.casa, sessao, titulo)
         ponte.provedor_apagar = lambda sessao: sessoes.apagar(agente.casa, sessao)
         ponte.provedor_fixar = lambda sessao, sim: sessoes.fixar(agente.casa, sessao, sim)
+        from jarvis import conectar
+        ponte.provedor_conexao = lambda dados: conectar.agir(cfg, dados, ponte.quem_conectado())
 
     mic: microfone.Microfone | None = None
     ciclo: Ciclo | None = None

@@ -193,7 +193,7 @@ ESTADOS = ("dormindo", "ouvindo", "escutando", "pensando", "falando")
 PEDIDOS = frozenset({"ola", "falar", "memoria", "ouvir",
                      "conversas", "abrir", "nova", "continuar", "cerebro", "parar",
                      "renomear", "apagar", "som", "ajustes", "fixar",
-                     "memorias", "ler_memoria", "salvar_memoria"})
+                     "memorias", "ler_memoria", "salvar_memoria", "conexao"})
 
 # Uma linha maior que isto sem quebra é um cliente com defeito, não um pedido.
 MAX_LINHA = 64 * 1024
@@ -315,6 +315,18 @@ def ler_pedido(linha: bytes) -> tuple[str, dict[str, Any]]:
                 raise ErroDeProtocolo("'nome' inválido")
             dados["nome"] = nome
         return tipo, dados
+
+    if tipo == "conexao":
+        # O passo a passo de Ajustes → Conexões (jarvis/conectar.py). A
+        # resposta, {"ev": "conexao", ...}, vai só para quem pediu.
+        id_, acao, valor = objeto.get("id"), objeto.get("acao", "estado"), objeto.get("valor", "")
+        if id_ not in ("whatsapp", "grupo", "fora", "celular", "musica"):
+            raise ErroDeProtocolo("'id' de conexão desconhecido")
+        if acao not in ("estado", "conectar", "cancelar", "desconectar", "escolher"):
+            raise ErroDeProtocolo("'acao' desconhecida")
+        if not isinstance(valor, str) or len(valor) > 200:
+            raise ErroDeProtocolo("'valor' inválido")
+        return tipo, {"id": id_, "acao": acao, "valor": valor}
 
     if tipo == "ouvir":
         arquivo = objeto.get("arquivo")

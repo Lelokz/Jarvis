@@ -106,6 +106,7 @@ class Servidor:
         self.provedor_renomear = None
         self.provedor_apagar = None
         self.provedor_fixar = None
+        self.provedor_conexao = None   # jarvis/conectar.py (Ajustes → Conexões)
         # O histórico da sessão, para um cliente que chega depois — ou que
         # fechou a janela e voltou. Anel de tamanho fixo: o alcance é a sessão,
         # e memória de processo que roda o dia todo não cresce sem teto.
@@ -472,6 +473,13 @@ class Servidor:
                     resposta = {"ev": "memoria_salva", **memorias.salvar(dados["id"], dados["texto"], dados["versao"])}
             except (OSError, ValueError) as e:
                 resposta = {"ev": "erro", "motivo": f"memória: {e}"}
+            self._direto(cliente, resposta)
+        elif tipo == "conexao":
+            try:
+                resposta = self.provedor_conexao(dados) if self.provedor_conexao else \
+                    {"ev": "conexao", "id": dados["id"], "estado": "desligado"}
+            except Exception as e:
+                resposta = {"ev": "conexao", "id": dados["id"], "estado": "erro", "detalhe": str(e)[:200]}
             self._direto(cliente, resposta)
         elif tipo == "memoria":
             try:

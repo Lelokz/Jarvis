@@ -52,6 +52,7 @@ from jarvis import config  # noqa: E402
 from jarvis.ponte import protocolo, recebidos  # noqa: E402
 
 PAGINA = RAIZ / "jarvis" / "remoto" / "pagina.html"
+LIGAR = RAIZ / "jarvis" / "remoto" / "ligar.html"  # o QR do Celular (Ajustes → Conexões)
 # O app do celular (celular/compilar.sh): baixado pelo Chrome do celular em
 # /jarvis.apk. Sem chave: o APK não leva segredo nenhum (a chave se cola nele).
 APK = RAIZ / "celular" / "app" / "build" / "outputs" / "apk" / "debug" / "app-debug.apk"
@@ -138,6 +139,10 @@ def criar_app(cfg: config.Config):
         # WebSocket. Sem cache, para o celular pegar a versão nova.
         return HTMLResponse(PAGINA.read_text(encoding="utf-8"),
                             headers={"Cache-Control": "no-store"})
+
+    async def ligar(_):
+        # Também sem chave: ela vem depois do # e só o app a lê.
+        return HTMLResponse(LIGAR.read_text(encoding="utf-8"), headers={"Cache-Control": "no-store"})
 
     async def saude(_):
         return PlainTextResponse("ok")
@@ -422,7 +427,7 @@ def criar_app(cfg: config.Config):
             except (RuntimeError, WebSocketDisconnect):
                 pass  # já fechado pelo celular
 
-    return Starlette(routes=[Route("/", pagina), Route("/saude", saude), Route("/jarvis.apk", apk),
+    return Starlette(routes=[Route("/", pagina), Route("/ligar", ligar), Route("/saude", saude), Route("/jarvis.apk", apk),
                                Route("/versao", versao), Route("/novidades", novidades),
                              Route("/desbloqueio", desbloqueio_pc, methods=["GET", "POST"]),
                              Route("/anexo", anexo_http, methods=["POST"]),

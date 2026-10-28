@@ -800,6 +800,7 @@ Window {
 
     // Os Ajustes: um painel por cima da janela inteira (lateral junto).
     PaginaAjustes {
+        id: paginaAjustes
         anchors.fill: parent
         z: 50
         aberto: janela.ajustesAbertos
@@ -825,5 +826,11 @@ Window {
         onMudarNome: (nome) => { if (typeof ponte !== "undefined") ponte.mudarNome(nome) }
         onMudarGrupo: (ligado) => { if (typeof ponte !== "undefined") ponte.mudarGrupo(ligado) }
         onEscolherSom: (tipo, aparelho) => { if (typeof ponte !== "undefined") ponte.escolherSom(tipo, aparelho) }
+        onPedirConexao: (id, acao, valor) => { if (typeof ponte !== "undefined") ponte.conexao(id, acao, valor) }
+        onPedirAjustes: { if (typeof ponte !== "undefined") ponte.pedirAjustes() }
+        Connections {
+            target: typeof ponte !== "undefined" ? ponte : null
+            function onConexaoMudou(dados) { paginaAjustes.conexao = dados }
+        }
     }
 }
