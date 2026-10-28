@@ -189,14 +189,15 @@ def carregar_whisper(modelo: str = "large-v3-turbo"):
     jarvis/cuda_setup.py faz lá). No ambiente único do instalador (PyTorch com
     CUDA 12.8) elas já vêm no próprio ambiente: procura ali primeiro."""
     import sys
-    for base in (Path(sys.prefix) / "lib/python3.12/site-packages/nvidia",
-                 Path.home() / "Projetos/Jarvis/.venv/lib/python3.12/site-packages/nvidia"):
-        achou = False
-        for padrao in ("cublas/lib/libcublasLt.so.12", "cublas/lib/libcublas.so.12", "cudnn/lib/libcudnn*.so.9"):
-            for so in sorted(glob.glob(str(base / padrao))):
-                ctypes.CDLL(so, mode=ctypes.RTLD_GLOBAL)
-                achou = True
-        if achou:
+    bases = (Path(sys.prefix) / "lib/python3.12/site-packages/nvidia",
+             Path.home() / "Projetos/Jarvis/.venv/lib/python3.12/site-packages/nvidia")
+    # As três do mesmo lugar: o primeiro que tem o cublas 12. A venv antiga da voz tem
+    # um cudnn, mas do CUDA 13 e sem o cublas 12 (a Friday caiu assim em 28/10/2026).
+    for base in bases:
+        if glob.glob(str(base / "cublas/lib/libcublas.so.12")):
+            for padrao in ("cublas/lib/libcublasLt.so.12", "cublas/lib/libcublas.so.12", "cudnn/lib/libcudnn*.so.9"):
+                for so in sorted(glob.glob(str(base / padrao))):
+                    ctypes.CDLL(so, mode=ctypes.RTLD_GLOBAL)
             break
     from faster_whisper import WhisperModel
     # O nome baixa do Hugging Face na primeira vez; o instalador passa a pasta que já baixou.
