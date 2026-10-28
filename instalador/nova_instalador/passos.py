@@ -59,6 +59,12 @@ GO = (("https://go.dev/dl/go1.27.3.windows-amd64.zip", "f26081f438319757f8a1b46d
       if WINDOWS else
       ("https://go.dev/dl/go1.27.3.linux-amd64.tar.gz", "65efbc80fdc1fa2cd2631cad5b481777a68e8725f34e89f50fc6ac714e379b40"))
 PONTE = Path.home() / ".local/share/jarvis/whatsapp-mcp/whatsapp-bridge"
+PONTE_EXE = "whatsapp-bridge.exe" if WINDOWS else "whatsapp-bridge"
+# A ponte já compilada (instalador/ponte-whatsapp, ver o LEIA.md de lá), no Drive do Léo:
+# só baixa 19 MB, em vez de baixar o Go e compilar no PC da pessoa, que num PC lento com
+# antivírus levava muitos minutos sem dar sinal (SENAI, 28/10/2026). Sem o id, compila.
+PONTE_PRONTA = {"windows": ("", "7cdd9027838d0dfb71055461fa8745ebb1fe703202b032d3e74a383676094c32"),
+                "linux": ("", "dff55f8eb9d2d65d5c2fe892a2fbfb30c345630427a0e1a1349f33cbb739e6de")}
 # Só no Windows: o FFmpeg que a biblioteca de áudio das vozes dubladas procura (no Linux
 # ele vem do sistema). A versão fixa do gyan.dev, a que o site do FFmpeg indica.
 FFMPEG = ("https://github.com/GyanD/codexffmpeg/releases/download/8.1.2/ffmpeg-8.1.2-full_build-shared.zip",
@@ -329,9 +335,26 @@ def _programas_vozes(ctx: Contexto, avisar: Avisar) -> None:
         pacote.unlink()
 
 
+def _ponte_pronta() -> tuple[str, str]:
+    return PONTE_PRONTA["windows" if WINDOWS else "linux"]
+
+
 def _ponte(ctx: Contexto, avisar: Avisar) -> None:
-    """A ponte do WhatsApp: compila os 3 arquivos de instalador/ponte-whatsapp com o Go
-    oficial (SQLite em Go puro: não precisa de gcc). O Go é apagado no fim."""
+    """A ponte do WhatsApp: baixa a já compilada; sem ela, compila (_compilar_ponte)."""
+    id_, sha = _ponte_pronta()
+    if not id_:
+        _compilar_ponte(ctx, avisar)
+        return
+    exe = PONTE / PONTE_EXE
+    _baixar(f"https://drive.usercontent.google.com/download?id={id_}&export=download&confirm=t", exe, avisar,
+            "Ponte do WhatsApp", sha)
+    if not WINDOWS:
+        exe.chmod(0o755)
+
+
+def _compilar_ponte(ctx: Contexto, avisar: Avisar) -> None:
+    """Compila os 3 arquivos de instalador/ponte-whatsapp com o Go oficial (SQLite em Go
+    puro: não precisa de gcc). O Go é apagado no fim."""
     base = ctx.pasta / "programas"
     pacote = base / "download" / ("go.zip" if WINDOWS else "go.tar.gz")
     _baixar(GO[0], pacote, avisar, "Go (para montar a ponte do WhatsApp)", GO[1])
@@ -349,8 +372,7 @@ def _ponte(ctx: Contexto, avisar: Avisar) -> None:
     cache = base / "go-cache"
     env = dict(os.environ, CGO_ENABLED="0", GOTOOLCHAIN="local", GOPATH=str(cache / "path"),
                GOMODCACHE=str(cache / "mod"), GOCACHE=str(cache / "build"))
-    _rodar([str(base / "go" / "bin" / ("go.exe" if WINDOWS else "go")), "build", "-o",
-            "whatsapp-bridge.exe" if WINDOWS else "whatsapp-bridge", "."], avisar,
+    _rodar([str(base / "go" / "bin" / ("go.exe" if WINDOWS else "go")), "build", "-o", PONTE_EXE, "."], avisar,
            "Montando a ponte do WhatsApp", cwd=PONTE, env=env)
     # O Go grava o cache dele como somente leitura: libera antes de apagar.
     def liberar(funcao, caminho, _erro) -> None:
@@ -448,7 +470,8 @@ def lista(ctx: Contexto) -> list[Passo]:
         Passo("voz-leve", "Voz leve (Kokoro)", "350 MB", 4, _soltos("vozes/")),
         Passo("claude", "Claude Code", "220 MB", 3, _claude),
     ]
-    passos.append(Passo("ponte", "Ponte do WhatsApp", "75 MB", 4, _ponte))
+    pronta = bool(_ponte_pronta()[0])
+    passos.append(Passo("ponte", "Ponte do WhatsApp", "19 MB" if pronta else "75 MB", 1 if pronta else 4, _ponte))
     if ctx.dubladas:
         passos.append(Passo("dubladas", "Vozes dubladas", "1,5 GB", 15, _dubladas))
         passos.append(Passo("programas-vozes", "Programas das vozes", "~4 GB", 40, _programas_vozes))
