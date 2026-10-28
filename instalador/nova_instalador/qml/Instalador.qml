@@ -128,7 +128,7 @@ Window {
         Row {
             x: 22; y: 26
             spacing: 10
-            AtomoFixo { tamanho: 32; cor: cor.azul }
+            AtomoFixo { tamanho: 32; cor: "#4da3ff" }
             Column {
                 anchors.verticalCenter: parent.verticalCenter
                 Text { text: "NOVA"; color: tema.texto; font.family: tema.familia; font.pixelSize: 14; font.weight: Font.ExtraBold; font.letterSpacing: 2.8 }
@@ -434,11 +434,10 @@ Window {
                     }
                 }
             }
-            Image {
-                source: "img/atomo.png"
+            Esfera {
                 width: Math.min(parent.width * 0.4, 330); height: width
                 anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
-                sourceSize.width: 512; smooth: true; mipmap: true
+                cor: "#4da3ff"; corDeFundo: janela.color   // (aqui dentro, "cor" é a da Esfera)
             }
         }
     }
@@ -1000,6 +999,8 @@ Window {
                 spacing: 24
                 Cabeca { rotulo: "TUDO PRONTO"; titulo: "A NOVA está"; destaque: "ligada." }
                 Column {
+                    id: dicas
+                    width: parent.width
                     spacing: 14
                     Repeater {
                         model: [["🎙", "Diga <b>\"Hey Jarvis\"</b> ou <b>\"Hey Friday\"</b> de qualquer canto do quarto."],
@@ -1009,16 +1010,16 @@ Window {
                             required property var modelData
                             spacing: 14
                             Text { text: modelData[0]; font.pixelSize: 18; color: cor.azul; width: 24 }
-                            Text { text: modelData[1]; textFormat: Text.StyledText; color: tema.textoMedio; font.family: tema.familia; font.pixelSize: 15; anchors.verticalCenter: parent.verticalCenter }
+                            Text { text: modelData[1]; textFormat: Text.StyledText; color: tema.textoMedio; font.family: tema.familia; font.pixelSize: 15; anchors.verticalCenter: parent.verticalCenter
+                                   width: dicas.width - 38; wrapMode: Text.WordWrap; lineHeight: 1.3 }
                         }
                     }
                 }
             }
-            Image {
-                source: "img/atomo.png"
+            Esfera {
                 width: Math.min(parent.width * 0.36, 300); height: width
                 anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
-                sourceSize.width: 512; smooth: true; mipmap: true
+                cor: "#4da3ff"; corDeFundo: janela.color   // (aqui dentro, "cor" é a da Esfera)
             }
         }
     }
