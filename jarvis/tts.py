@@ -237,11 +237,12 @@ def falar(
             if stream is None:
                 primeiro_audio_s = time.monotonic() - pedido_em
                 taxa = trecho.taxa
+                from . import som
                 stream = sd.RawOutputStream(
                     samplerate=trecho.taxa,
                     channels=trecho.canais,
                     dtype="int16",
-                    device=dispositivo,
+                    device=som.aparelho(dispositivo, entrada=False),
                 )
                 stream.start()
                 inicio_reproducao = time.monotonic()
@@ -414,8 +415,9 @@ class Locutor:
                         stream.stop()
                         stream.close()
                     taxa = trecho.taxa
+                    from . import som
                     stream = sd.RawOutputStream(samplerate=taxa, channels=trecho.canais,
-                                                dtype="int16", device=self.dispositivo)
+                                                dtype="int16", device=som.aparelho(self.dispositivo, entrada=False))
                     stream.start()
                 if self.primeiro_som is None:
                     self.primeiro_som = time.monotonic()

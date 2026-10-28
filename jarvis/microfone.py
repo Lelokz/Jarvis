@@ -110,10 +110,11 @@ class Microfone:
     # -- ciclo de vida -----------------------------------------------------
 
     def __enter__(self) -> Microfone:
+        from jarvis import som
         self._stream = sd.RawInputStream(
             samplerate=self.taxa,
             blocksize=self.amostras_por_bloco,
-            device=self.dispositivo,
+            device=som.aparelho(self.dispositivo, entrada=True),
             channels=1,
             dtype="int16",
             callback=self._callback,

@@ -192,9 +192,16 @@ Feito (o Linux segue igual: os 92 + 81 + 9 testes passam):
 - Conexões: a ponte `.exe` (sem `preexec_fn`/`pkill`), o Tailscale do Windows; o
   aviso do grupo sem `notify-send`.
 
+- Escolher microfone e saída nos Ajustes também no Windows (`jarvis/som.py`: a lista do
+  DirectSound, a escolha pelo nome, o índice achado na hora de abrir cada fluxo).
+- Música no Windows: o instalador põe o mpv oficial (v0.41.0) em `programas\mpv`; a
+  NOVA sabe que o som saiu pela ligação de controle do mpv (named pipe), e os
+  controles de mídia do Windows já pegam o mpv.
+- A ponte do WhatsApp já compilada (19 MB) em vez de compilar no PC da pessoa — falta o
+  Léo subir os dois arquivos (HD, "NOVA - Pacote de vozes/ponte-build") para o Drive e
+  pôr os ids em `PONTE_PRONTA` (passos.py). Até lá, compila como antes.
+- A janela preta do `instalar-nova.cmd` com barra de carregamento.
+
 Falta:
-- Escolher o microfone e a saída de som nos Ajustes (no Windows vale o padrão do
-  sistema, o que estiver marcado nas configurações de som).
-- Música pelo PC (o mpv) no Windows.
 - **Rodar tudo num Windows de verdade** (o PC do Chris ou uma máquina virtual):
   nada da parte do Windows foi executado num Windows ainda.
