@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ajustes — protótipo</title>
+<!-- Protótipo da repaginada dos Ajustes (27/10/2026), nas cores da janela (Tema.qml).
+     ?vista=janela&aba=geral|voz|avisos|uso|personas|conexoes|sobre
+     ?vista=app&aba=lista|<aba> -->
+<style>
+  @font-face { font-family: Inter; src: url("../jarvis/interface/fontes/InterVariable.ttf"); font-weight: 100 900; }
+  :root {
+    --fundo: #0a0c10; --lateral: #0d1016; --sup: #131821; --sup2: #181e29; --realce: #1f2738;
+    --traco: #1f2734; --traco2: #2a3446; --texto: #e6ebf2; --medio: #b9c1cf; --fraco: #7e879b;
+    --mfraco: #4d5568; --persona: #4da3ff; --friday: #ff6fb5; --verde: #38d39f; --ambar: #ffb454;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body { background: var(--fundo); color: var(--texto); font-family: Inter, sans-serif; font-size: 14px; }
+  svg.i { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+
+  /* ---- janela: o fundo da janela escurecido e o painel por cima ---- */
+  .janela { width: 1280px; height: 800px; position: relative; overflow: hidden; display: flex; }
+  .janela .lat { width: 280px; background: var(--lateral); border-right: 1px solid var(--traco); padding: 18px 14px; }
+  .janela .lat .marca { display: flex; align-items: center; gap: 10px; color: var(--fraco); letter-spacing: 3px; font-size: 13px; margin-bottom: 22px; }
+  .janela .lat .marca img { width: 22px; }
+  .janela .lat .falso { height: 42px; border-radius: 10px; background: var(--sup); margin-bottom: 10px; }
+  .janela .lat .linha { height: 14px; border-radius: 6px; background: var(--sup); margin: 14px 6px; width: 70%; }
+  .janela .chat { flex: 1; }
+  .veu { position: absolute; inset: 0; background: rgba(4, 6, 9, .62); }
+  .painel { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 1000px; height: 700px;
+            background: var(--lateral); border: 1px solid var(--traco2); border-radius: 18px; display: flex; flex-direction: column;
+            box-shadow: 0 30px 80px rgba(0,0,0,.55); overflow: hidden; }
+  .painel header { height: 58px; display: flex; align-items: center; justify-content: space-between; padding: 0 18px 0 22px; border-bottom: 1px solid var(--traco); }
+  .painel header h1 { font-size: 16px; font-weight: 600; }
+  .x { width: 32px; height: 32px; border-radius: 9px; display: grid; place-items: center; color: var(--fraco); }
+  .corpo { flex: 1; display: flex; min-height: 0; }
+  nav { width: 232px; border-right: 1px solid var(--traco); padding: 14px 12px; }
+  nav .grupo { font-size: 12px; color: var(--mfraco); margin: 16px 10px 6px; }
+  nav .grupo:first-child { margin-top: 2px; }
+  nav a { display: flex; align-items: center; gap: 11px; height: 36px; padding: 0 10px; border-radius: 9px; color: var(--medio); text-decoration: none; }
+  nav a.sim { background: var(--realce); color: var(--texto); }
+  nav a.sim svg { color: var(--persona); }
+  .conteudo { flex: 1; overflow: hidden; padding: 22px 28px; }
+
+  /* ---- as linhas de ajuste (as mesmas na janela e no app) ---- */
+  h2 { font-size: 15px; font-weight: 600; margin: 4px 0 6px; }
+  h2 + p.dica { color: var(--fraco); font-size: 13px; margin: -2px 0 10px; }
+  .secao + .secao { margin-top: 26px; }
+  .item { display: flex; align-items: center; justify-content: space-between; gap: 18px; min-height: 54px; padding: 10px 0; border-bottom: 1px solid var(--traco); }
+  .item:last-child { border-bottom: 0; }
+  .item .t { color: var(--texto); }
+  .item .d { color: var(--fraco); font-size: 12.5px; margin-top: 3px; max-width: 460px; }
+  .campo { width: 230px; height: 36px; border-radius: 9px; background: var(--sup); border: 1px solid var(--traco); display: flex; align-items: center; padding: 0 12px; color: var(--texto); }
+  .lista-esc { min-width: 230px; height: 36px; border-radius: 9px; background: var(--sup); border: 1px solid var(--traco); display: flex; align-items: center; justify-content: space-between; padding: 0 10px 0 12px; color: var(--medio); gap: 10px; }
+  .chave { width: 40px; height: 23px; border-radius: 12px; background: var(--traco2); position: relative; flex: none; }
+  .chave::after { content: ""; position: absolute; width: 17px; height: 17px; border-radius: 50%; background: var(--medio); top: 3px; left: 3px; }
+  .chave.on { background: var(--persona); }
+  .chave.on::after { left: 20px; background: #fff; }
+  .deslizador { display: flex; align-items: center; gap: 12px; color: var(--medio); }
+  .deslizador .trilho { width: 190px; height: 5px; border-radius: 3px; background: var(--traco2); position: relative; }
+  .deslizador .trilho i { position: absolute; left: 0; top: 0; bottom: 0; width: 62%; border-radius: 3px; background: var(--persona); }
+  .deslizador .trilho b { position: absolute; left: 62%; top: 50%; width: 15px; height: 15px; border-radius: 50%; background: #fff; transform: translate(-50%, -50%); }
+  .bolinhas { display: flex; gap: 9px; }
+  .bolinhas span { width: 24px; height: 24px; border-radius: 50%; }
+  .bolinhas span.sim { outline: 2px solid var(--texto); outline-offset: 2px; }
+  .barra { width: 100%; }
+  .barra .topo { display: flex; justify-content: space-between; color: var(--medio); margin-bottom: 8px; }
+  .barra .topo span:last-child { color: var(--fraco); font-size: 13px; }
+  .barra .trilho { height: 8px; border-radius: 4px; background: var(--sup2); overflow: hidden; }
+  .barra .trilho i { display: block; height: 100%; border-radius: 4px; background: var(--persona); }
+  .tecla { display: inline-block; font-size: 12px; padding: 3px 8px; border-radius: 6px; background: var(--sup2); border: 1px solid var(--traco2); color: var(--medio); }
+  .valor { color: var(--medio); }
+
+  /* ---- conexões: um cartão por conexão ---- */
+  .cartoes { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .cartao { background: var(--sup); border: 1px solid var(--traco); border-radius: 14px; padding: 14px 14px 14px 16px; display: flex; gap: 13px; align-items: flex-start; }
+  .cartao .ic { width: 38px; height: 38px; border-radius: 11px; background: var(--sup2); display: grid; place-items: center; color: var(--medio); flex: none; }
+  .cartao .meio { flex: 1; min-width: 0; }
+  .cartao .nome { font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  .cartao .estado { font-size: 11.5px; font-weight: 500; padding: 2px 8px; border-radius: 20px; }
+  .estado.ok { color: var(--verde); background: rgba(56,211,159,.12); }
+  .estado.des { color: var(--fraco); background: var(--sup2); }
+  .cartao .pe { display: flex; align-items: center; justify-content: space-between; margin-top: 12px; }
+  .cartao .desc { color: var(--fraco); font-size: 12.5px; margin-top: 4px; line-height: 1.4; }
+  .botao { height: 32px; padding: 0 13px; border-radius: 9px; border: 1px solid var(--traco2); color: var(--medio); display: inline-flex; align-items: center; font-size: 13px; white-space: nowrap; margin-top: 2px; }
+  .botao.forte { background: var(--persona); border-color: var(--persona); color: #06101c; font-weight: 600; }
+
+  /* ---- app (celular): lista de categorias e a página de cada uma ---- */
+  .app { width: 412px; min-height: 892px; background: var(--fundo); padding: 0 0 30px; }
+  .app .barra-app { height: 56px; display: flex; align-items: center; gap: 14px; padding: 0 16px; margin-top: 28px; }
+  .app .barra-app h1 { font-size: 22px; font-weight: 600; }
+  .app .barra-app .voltar { color: var(--medio); }
+  .app .grupo { font-size: 12.5px; color: var(--mfraco); margin: 20px 22px 8px; }
+  .app .grupo:empty { margin: 14px 0 0; }
+  .app .bloco { margin: 0 14px; background: var(--lateral); border: 1px solid var(--traco); border-radius: 16px; overflow: hidden; }
+  .app .cat { display: flex; align-items: center; gap: 14px; padding: 0 16px; height: 58px; border-bottom: 1px solid var(--traco); color: var(--texto); }
+  .app .cat:last-child { border-bottom: 0; }
+  .app .cat .ic { width: 34px; height: 34px; border-radius: 10px; background: var(--sup2); display: grid; place-items: center; color: var(--persona); }
+  .app .cat .txt { flex: 1; }
+  .app .cat .txt small { display: block; color: var(--fraco); font-size: 12.5px; margin-top: 2px; }
+  .app .cat .seta { color: var(--mfraco); }
+  .app .pagina { padding: 4px 18px; }
+  .app .item { flex-wrap: wrap; }
+  .app .campo, .app .lista-esc { min-width: 0; width: 100%; }
+  .app .cartoes { grid-template-columns: 1fr; }
+</style>
+</head>
+<body>
+<div id="raiz"></div>
+<script>
+const ic = {
+  geral: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
+  voz: '<path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3z"/><path d="M19 11a7 7 0 0 1-14 0M12 18v3"/>',
+  avisos: '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 8 3 8H3s3-1 3-8"/><path d="M10.3 20a1.9 1.9 0 0 0 3.4 0"/>',
+  uso: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  personas: '<circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-5.5 6-5.5s6 2.2 6 5.5"/><circle cx="17" cy="9" r="2.5"/><path d="M16.5 14.6c2.6.3 4.5 2.2 4.5 4.9"/>',
+  conexoes: '<path d="M9 7H7a5 5 0 0 0 0 10h2M15 7h2a5 5 0 0 1 0 10h-2M8 12h8"/>',
+  sobre: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>',
+  x: '<path d="M6 6l12 12M18 6L6 18"/>', seta: '<path d="M9 6l6 6-6 6"/>', voltar: '<path d="M15 6l-6 6 6 6"/>', baixo: '<path d="M6 9l6 6 6-6"/>',
+  whats: '<path d="M4 20l1.3-4A8 8 0 1 1 8 18.7z"/><path d="M9 9.5c0 3 2.5 5.5 5.5 5.5l1-1.5-2-1-1 1a4 4 0 0 1-2-2l1-1-1-2z"/>',
+  grupo: '<circle cx="8" cy="9" r="2.6"/><circle cx="16" cy="9" r="2.6"/><path d="M3 19c0-2.8 2.2-4.5 5-4.5s5 1.7 5 4.5M11 19c0-2.8 2.2-4.5 5-4.5s5 1.7 5 4.5"/>',
+  celular: '<rect x="7" y="3" width="10" height="18" rx="2.5"/><path d="M11 18h2"/>',
+  relogio: '<rect x="7" y="7" width="10" height="10" rx="3"/><path d="M9 7l1-4h4l1 4M9 17l1 4h4l1-4M12 10v2l1.5 1"/>',
+  fora: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z"/>',
+  escola: '<path d="M2 9l10-5 10 5-10 5z"/><path d="M6 11v5c3 2 9 2 12 0v-5"/>',
+  musica: '<path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/>',
+  atalhos: '<path d="M13 2L4 14h7l-1 8 9-12h-7z"/>',
+};
+const svg = n => `<svg class="i" viewBox="0 0 24 24">${ic[n]}</svg>`;
+
+const CATS = [
+  ["Preferências", [["geral", "Geral", "Teu nome e aparência"], ["voz", "Voz e som", "Microfone, caixa de som, volume"],
+                    ["avisos", "Avisos", "O que ele avisa e onde"], ["uso", "Uso", "A assinatura do Claude"]]],
+  ["Personalização", [["personas", "Personas", "Jarvis e Friday"], ["conexoes", "Conexões", "WhatsApp, celular, escola…"]]],
+  ["", [["sobre", "Sobre a NOVA", "Versão, cérebro e teclas"]]],
+];
+const item = (t, ctl, d = "") => `<div class="item"><div><div class="t">${t}</div>${d ? `<div class="d">${d}</div>` : ""}</div>${ctl}</div>`;
+const escolha = v => `<div class="lista-esc"><span>${v}</span>${svg("baixo")}</div>`;
+const chave = on => `<div class="chave ${on ? "on" : ""}"></div>`;
+const cores = (lista, sim) => `<div class="bolinhas">${lista.map((c, i) => `<span class="${i === sim ? "sim" : ""}" style="background:${c}"></span>`).join("")}</div>`;
+const barra = (nome, p, volta) => `<div class="item"><div class="barra"><div class="topo"><span>${nome}</span><span>${p}%  ·  ${volta}</span></div><div class="trilho"><i style="width:${p}%"></i></div></div></div>`;
+const cartao = (i, nome, ok, desc, botao) => `<div class="cartao"><div class="ic">${svg(i)}</div><div class="meio">
+  <div class="nome">${nome}</div><div class="desc">${desc}</div>
+  <div class="pe"><span class="estado ${ok ? "ok" : "des"}">${ok ? "Conectado" : "Desligado"}</span>
+  <span class="botao ${ok ? "" : "forte"}">${botao || (ok ? "Gerenciar" : "Conectar")}</span></div></div></div>`;
+
+const PAGINAS = {
+  geral: () => `<div class="secao"><h2>Você</h2>
+      ${item("Seu nome", `<div class="campo">Léo</div>`, "Como o Jarvis e a Friday te chamam.")}</div>
+    <div class="secao"><h2>Aparência</h2>
+      ${item("Cor de destaque", cores(["#4da3ff", "#9b7bff", "#38d39f", "#ffb454", "#ff6fb5"], 0), "Botões, barras e seleção. A cor de cada persona fica em Personas.")}</div>`,
+  voz: () => `<div class="secao"><h2>Aparelhos de som</h2>
+      ${item("Microfone", escolha("Microfone do headset"))}
+      ${item("Saída da voz", escolha("Caixa de som (padrão)"))}</div>
+    <div class="secao"><h2>Voz</h2>
+      ${item("Volume da voz", `<div class="deslizador"><div class="trilho"><i></i><b></b></div><span>62%</span></div>`, "O volume do Jarvis e da Friday, separado do resto do PC.")}</div>`,
+  avisos: () => `<div class="secao"><h2>Avisos</h2>
+      ${item("Notificações da escola", chave(true), "Avisa quando aparecer nota, tarefa ou recado novo.")}
+      ${item("Mensagens do WhatsApp", chave(true), "Fala quem mandou mensagem (só no PC).")}</div>`,
+  uso: () => `<div class="secao"><h2>Uso da assinatura</h2><p class="dica">Quanto do limite do Claude já foi usado.</p>
+      ${barra("Últimas 5 horas", 34, "renova às 23:10")}${barra("Esta semana", 58, "renova sábado")}</div>`,
+  personas: () => `<div class="secao"><h2>Jarvis</h2>
+      ${item("Cor", cores(["#4da3ff"], 0), "O mordomo de humor seco. Voz dublada.")}</div>
+    <div class="secao"><h2>Friday</h2>
+      ${item("Cor", cores(["#ff6fb5", "#ff8a65", "#c084fc", "#38d39f"], 0), "Carinhosa e animada. Chamada com \"Hey Friday\".")}</div>
+    <div class="secao"><h2>Ao ligar</h2>
+      ${item("Quem começa ativa", escolha("Jarvis"))}</div>`,
+  conexoes: () => `<div class="secao"><h2>Conexões</h2><p class="dica">O que o Jarvis e a Friday conseguem usar. Toque em Conectar para ver o passo a passo.</p>
+      <div class="cartoes">
+      ${cartao("whats", "WhatsApp", true, "Ler e mandar mensagens, e avisar quem te escreveu.")}
+      ${cartao("grupo", "Grupo do WhatsApp", true, "Responde no grupo da família quando chamam o Jarvis.")}
+      ${cartao("celular", "Celular", true, "O app NOVA: conversar e receber avisos pelo celular.")}
+      ${cartao("relogio", "Relógio", true, "Falar pelo relógio. Precisa do celular conectado.")}
+      ${cartao("fora", "Fora de casa", true, "Usar o celular longe do Wi-Fi de casa (Tailscale).")}
+      ${cartao("escola", "Escola", true, "Notas, tarefas e recados do Estudante Online (SC).")}
+      ${cartao("musica", "Música", true, "Tocar música e vídeo do YouTube pelo PC.")}
+      ${cartao("atalhos", "Atalhos", true, "12 programas e pastas que ele abre pelo nome.", "Editar")}
+      </div></div>`,
+  sobre: () => `<div class="secao"><h2>Sobre a NOVA</h2>
+      ${item("Conexão", `<span class="valor">Ligado</span>`)}${item("Cérebro", `<span class="valor">Rápido (Haiku) + Opus</span>`)}
+      ${item("Esforço", `<span class="valor">Médio</span>`)}${item("Versão da janela", `<span class="valor">beta 0.17.0</span>`)}</div>
+    <div class="secao"><h2>Teclas</h2>
+      ${item("Novo chat", `<span class="tecla">Ctrl + N</span>`)}${item("Procurar conversa", `<span class="tecla">Ctrl + K</span>`)}
+      ${item("Voltar pra conversa de agora", `<span class="tecla">Esc</span>`)}${item("Colar ou anexar", `<span class="tecla">Ctrl + V</span>`)}</div>`,
+};
+
+const q = new URLSearchParams(location.search);
+const vista = q.get("vista") || "janela", aba = q.get("aba") || (vista === "app" ? "lista" : "geral");
+const raiz = document.getElementById("raiz");
+if (vista === "janela") {
+  const nav = CATS.map(([g, itens]) => `${g ? `<div class="grupo">${g}</div>` : `<div class="grupo"></div>`}` +
+    itens.map(([id, nome]) => `<a class="${id === aba ? "sim" : ""}">${svg(id)}${nome}</a>`).join("")).join("");
+  raiz.innerHTML = `<div class="janela"><div class="lat"><div class="marca"><img src="img/logo-azul.png">JARVIS</div>
+      <div class="falso"></div><div class="linha"></div><div class="linha"></div><div class="linha" style="width:50%"></div></div><div class="chat"></div>
+    <div class="veu"></div>
+    <div class="painel"><header><h1>Ajustes</h1><span class="x">${svg("x")}</span></header>
+      <div class="corpo"><nav>${nav}</nav><div class="conteudo">${PAGINAS[aba]()}</div></div></div></div>`;
+} else if (aba === "lista") {
+  raiz.innerHTML = `<div class="app"><div class="barra-app"><span class="voltar">${svg("voltar")}</span><h1>Ajustes</h1></div>` +
+    CATS.map(([g, itens]) => `<div class="grupo">${g}</div><div class="bloco">` +
+      itens.map(([id, nome, sub]) => `<div class="cat"><span class="ic">${svg(id)}</span><span class="txt">${nome}<small>${sub}</small></span><span class="seta">${svg("seta")}</span></div>`).join("") +
+      `</div>`).join("") + `</div>`;
+} else {
+  const nome = CATS.flatMap(c => c[1]).find(c => c[0] === aba)[1];
+  raiz.innerHTML = `<div class="app"><div class="barra-app"><span class="voltar">${svg("voltar")}</span><h1>${nome}</h1></div><div class="pagina">${PAGINAS[aba]()}</div></div>`;
+}
+document.body.dataset.pronto = "1";
+</script>
+</body>
+</html>
