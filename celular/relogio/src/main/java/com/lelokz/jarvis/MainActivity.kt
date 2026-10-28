@@ -33,9 +33,23 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.wrapContentWidth
-import androidx.wear.compose.foundation.lazy.AutoCenteringParams
-import androidx.wear.compose.foundation.lazy.ScalingLazyColumn
-import androidx.wear.compose.foundation.lazy.rememberScalingLazyListState
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.wear.compose.foundation.ExperimentalWearFoundationApi
+import androidx.wear.compose.foundation.rememberActiveFocusRequester
+import androidx.wear.compose.foundation.rotary.RotaryScrollableDefaults
+import androidx.wear.compose.foundation.rotary.rotaryScrollable
 import androidx.core.content.ContextCompat
 
 private val Fundo = Color(0xFF0A0C10)
@@ -111,6 +125,7 @@ private fun Tela(r: Relogio, tocar: () -> Unit, telaAcesa: (Boolean) -> Unit) {
     val ocupado = r.ocupado
     LaunchedEffect(ocupado) { telaAcesa(ocupado) }
     val cor = corDaPersona(r)
+    val temConversa = r.conversa.isNotEmpty()
 
     // O que ele está fazendo, embaixo do átomo.
     val linha = when {
@@ -122,29 +137,53 @@ private fun Tela(r: Relogio, tocar: () -> Unit, telaAcesa: (Boolean) -> Unit) {
         else -> "toca pra falar"
     }
 
-    // A lista curva da tela redonda: o átomo começa no meio; a conversa vem
-    // embaixo, a troca mais nova primeiro. Começou a ouvir: volta para o átomo.
-    val lista = rememberScalingLazyListState(initialCenterItemIndex = 1)
-    LaunchedEffect(r.ouvindo.value) { if (r.ouvindo.value) lista.animateScrollToItem(1) }
-
-    ScalingLazyColumn(
-        modifier = Modifier.fillMaxSize().background(Fundo),
-        state = lista,
-        autoCentering = AutoCenteringParams(itemIndex = 1),
+    // O nome e o átomo ficam SEMPRE na tela (o Léo: senão não dá para tocar
+    // para falar ou parar). Com conversa, o átomo encolhe e ela rola embaixo.
+    val ladoDoAtomo by animateDpAsState(if (temConversa) 64.dp else 112.dp, tween(400), label = "atomo")
+    Column(
+        Modifier.fillMaxSize().background(Fundo).padding(top = 10.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(6.dp),
-        contentPadding = PaddingValues(horizontal = 14.dp),
+        verticalArrangement = if (temConversa) Arrangement.Top else Arrangement.Center,
     ) {
-        item { NomeDaPersona(r, cor, vivo) }
-        item { AtomoDoRelogio(r, estado, vivo, tocar) }
-        item {
-            BasicText(
-                linha,
-                style = TextStyle(color = Fraco, fontSize = 12.sp, textAlign = TextAlign.Center),
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
+        NomeDaPersona(r, cor, vivo)
+        AtomoDoRelogio(r, estado, vivo, tocar, Modifier.size(ladoDoAtomo))
+        BasicText(
+            linha,
+            style = TextStyle(color = Fraco, fontSize = 12.sp, textAlign = TextAlign.Center),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(horizontal = 30.dp),
+        )
+        if (temConversa) Conversa(r, cor, Modifier.weight(1f))
+        else Spacer(Modifier.height(10.dp))
+    }
+}
+
+/**
+ * A conversa, no espaço embaixo do átomo: a troca mais nova em cima (chegou
+ * uma, volta para ela). Rola com o dedo e com a borda giratória, e apaga nas
+ * pontas para não cortar seco na tela redonda.
+ */
+@OptIn(ExperimentalWearFoundationApi::class)   // o foco da borda giratória
+@Composable
+private fun Conversa(r: Relogio, cor: Color, modifier: Modifier) {
+    val lista = rememberLazyListState()
+    val foco = rememberActiveFocusRequester()
+    LaunchedEffect(r.conversa.size) { lista.animateScrollToItem(0) }
+    LazyColumn(
+        state = lista,
+        modifier = modifier
+            .fillMaxWidth()
+            .rotaryScrollable(RotaryScrollableDefaults.behavior(lista), foco)
+            .graphicsLayer(compositingStrategy = CompositingStrategy.Offscreen)
+            .drawWithContent {
+                drawContent()
+                drawRect(Brush.verticalGradient(0f to Color.Transparent, 0.08f to Color.Black,
+                    0.82f to Color.Black, 1f to Color.Transparent), blendMode = BlendMode.DstIn)
+            },
+        contentPadding = PaddingValues(start = 22.dp, end = 22.dp, top = 6.dp, bottom = 28.dp),
+        verticalArrangement = Arrangement.spacedBy(5.dp),
+    ) {
         r.conversa.forEach { troca ->
             if (troca.voce.isNotBlank()) item { Bolha(troca.voce, voce = true, cor) }
             if (troca.resposta.isNotBlank()) item { Bolha(troca.resposta, voce = false, cor) }
@@ -190,7 +229,7 @@ private fun NomeDaPersona(r: Relogio, cor: Color, vivo: Boolean) {
  * devagar; ouvindo, pensando e falando, nas cores de sempre.
  */
 @Composable
-private fun AtomoDoRelogio(r: Relogio, estado: String, vivo: Boolean, tocar: () -> Unit) {
+private fun AtomoDoRelogio(r: Relogio, estado: String, vivo: Boolean, tocar: () -> Unit, modifier: Modifier) {
     Atomo(
         cor = corDoEstado(estado),
         escala = when (estado) {
@@ -207,8 +246,7 @@ private fun AtomoDoRelogio(r: Relogio, estado: String, vivo: Boolean, tocar: () 
         parado = !vivo,
         pulsando = estado == "dormindo",
         fundo = Fundo,
-        modifier = Modifier
-            .size(112.dp)
+        modifier = modifier
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { tocar() },
     )
 }

@@ -15,8 +15,8 @@ android {
         applicationId = "com.lelokz.jarvis"
         minSdk = 30          // Wear OS 3+
         targetSdk = 34       // Wear OS 5 é Android 14
-        versionCode = 5
-        versionName = "0.3.5"
+        versionCode = 6
+        versionName = "0.4.0"
         // O Galaxy Watch 7 roda em 32 bits (conferido no adb).
         ndk { abiFilters += listOf("armeabi-v7a") }
     }
@@ -48,7 +48,7 @@ dependencies {
     implementation(composeBom)
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.foundation:foundation")
-    // A lista que curva com a tela redonda (e rola com a borda giratória).
+    // A borda giratória rolando a conversa.
     implementation("androidx.wear.compose:compose-foundation:1.4.0")
     implementation("androidx.activity:activity-compose:1.9.3")
     implementation("androidx.core:core-ktx:1.15.0")
