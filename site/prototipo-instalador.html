@@ -147,6 +147,13 @@
   /* 7. Pronto */
   .pronto { display: grid; grid-template-columns: 300px 1fr; gap: 24px; align-items: center; flex: 1; }
   .pronto canvas { width: 300px; height: 300px; }
+  .conex { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 20px; }
+  .conex .c { padding: 16px 18px; display: grid; grid-template-columns: 1fr auto; grid-template-rows: auto auto; column-gap: 14px; align-items: center; }
+  .conex .c b { font-size: 15px; }
+  .conex .c small { grid-column: 1; color: var(--fraco); font-size: 13px; margin-top: 3px; }
+  .conex .c .botao, .conex .c .precisa, .conex .c .feito { grid-column: 2; grid-row: 1 / 3; height: 38px; padding: 0 16px; font-size: 13.5px; }
+  .conex .c .precisa { font: 12px var(--mono); color: var(--muito-fraco); display: flex; align-items: center; }
+  .conex .c .feito { color: var(--ok); font: 600 13px var(--mono); display: flex; align-items: center; }
   .dicas { display: grid; gap: 10px; margin-top: 18px; }
   .dica { display: flex; gap: 12px; align-items: center; padding: 12px 14px; border-radius: 11px; border: 1px solid var(--traco); background: rgba(14,19,28,.6); font-size: 14px; color: var(--medio); }
   .dica b { color: var(--texto); font-weight: 600; }
@@ -167,7 +174,8 @@
       <li><b>4</b>Instalação</li>
       <li><b>5</b>Conta do Claude</li>
       <li><b>6</b>Microfone</li>
-      <li><b>7</b>Pronto</li>
+      <li><b>7</b>Conexões</li>
+      <li><b>8</b>Pronto</li>
     </ol>
     <div class="rodape">// beta fechado<br>// só convidados</div>
   </aside>
@@ -313,8 +321,23 @@
       <div class="acoes"><span class="botao fantasma">Pular</span><span class="botao cheio">Continuar →</span></div>
     </section>
 
-    <!-- 7 -->
+    <!-- 7: as conexões (28/10/2026), as mesmas de Ajustes → Conexões -->
     <section class="tela" data-t="7">
+      <span class="rotulo">PASSO 7 · CONEXÕES</span>
+      <h1>Ligar as <span class="cor">suas coisas.</span></h1>
+      <p class="sub">Tudo opcional. O que você pular fica em Ajustes → Conexões, na janela e no app.</p>
+      <div class="conex">
+        <div class="vidro c"><b>WhatsApp</b><small>Ler, mandar e avisar quem te escreveu</small><span class="botao vazio">Conectar</span></div>
+        <div class="vidro c"><b>Fora de casa</b><small>O celular fala com o PC de qualquer lugar (Tailscale)</small><span class="botao vazio">Conectar</span></div>
+        <div class="vidro c"><b>Celular</b><small>O app NOVA, ligado por QR code</small><span class="precisa">depois do Fora de casa</span></div>
+        <div class="vidro c ok"><b>Música</b><small>Tocar YouTube pelo PC</small><span class="feito">✓ pronto</span></div>
+      </div>
+      <div class="destaque vidro">✦ <span><b>Gmail, Agenda e Drive</b> vêm da sua conta do Claude: ligue em claude.ai → Configurações → Conectores, e o Jarvis e a Friday já usam.</span></div>
+      <div class="acoes"><span class="botao fantasma">Pular</span><span class="botao cheio">Continuar →</span></div>
+    </section>
+
+    <!-- 8 -->
+    <section class="tela" data-t="8">
       <div class="pronto">
         <canvas data-n="final"></canvas>
         <div>

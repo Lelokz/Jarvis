@@ -1,0 +1,297 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Conexões — protótipo</title>
+<!-- Protótipo dos botões "Conectar" e do passo a passo (28/10/2026), no visual
+     dos Ajustes aprovados (prototipo-ajustes.html). Como um tester vê.
+     ?vista=janela&passo=(vazio)|whatsapp|celular|fora|grupo|relogio|musica|atalhos
+     ?vista=app&passo=(vazio)|whatsapp|fora -->
+<style>
+  @font-face { font-family: Inter; src: url("../jarvis/interface/fontes/InterVariable.ttf"); font-weight: 100 900; }
+  :root {
+    --fundo: #0a0c10; --lateral: #0d1016; --sup: #131821; --sup2: #181e29; --realce: #1f2738;
+    --traco: #1f2734; --traco2: #2a3446; --texto: #e6ebf2; --medio: #b9c1cf; --fraco: #7e879b;
+    --mfraco: #4d5568; --persona: #4da3ff; --verde: #38d39f; --ambar: #ffb454;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body { background: var(--fundo); color: var(--texto); font-family: Inter, sans-serif; font-size: 14px; }
+  svg.i { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+
+  .janela { width: 1280px; height: 800px; position: relative; overflow: hidden; display: flex; }
+  .janela .lat { width: 280px; background: var(--lateral); border-right: 1px solid var(--traco); padding: 18px 14px; }
+  .janela .lat .marca { display: flex; align-items: center; gap: 10px; color: var(--fraco); letter-spacing: 3px; font-size: 13px; margin-bottom: 22px; }
+  .janela .lat .marca img { width: 22px; }
+  .janela .lat .falso { height: 42px; border-radius: 10px; background: var(--sup); margin-bottom: 10px; }
+  .janela .lat .linha { height: 14px; border-radius: 6px; background: var(--sup); margin: 14px 6px; width: 70%; }
+  .janela .chat { flex: 1; }
+  .veu { position: absolute; inset: 0; background: rgba(4, 6, 9, .62); }
+  .painel { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 1000px; height: 700px;
+            background: var(--lateral); border: 1px solid var(--traco2); border-radius: 18px; display: flex; flex-direction: column;
+            box-shadow: 0 30px 80px rgba(0,0,0,.55); overflow: hidden; }
+  .painel header { height: 58px; display: flex; align-items: center; justify-content: space-between; padding: 0 18px 0 22px; border-bottom: 1px solid var(--traco); }
+  .painel header h1 { font-size: 16px; font-weight: 600; }
+  .x { width: 32px; height: 32px; border-radius: 9px; display: grid; place-items: center; color: var(--fraco); }
+  .corpo { flex: 1; display: flex; min-height: 0; }
+  nav { width: 232px; border-right: 1px solid var(--traco); padding: 14px 12px; }
+  nav .grupo { font-size: 12px; color: var(--mfraco); margin: 16px 10px 6px; }
+  nav .grupo:first-child { margin-top: 2px; }
+  nav a { display: flex; align-items: center; gap: 11px; height: 36px; padding: 0 10px; border-radius: 9px; color: var(--medio); }
+  nav a.sim { background: var(--realce); color: var(--texto); }
+  nav a.sim svg { color: var(--persona); }
+  .conteudo { flex: 1; overflow: auto; padding: 20px 28px; }
+  .passos li div b { color: var(--texto); font-weight: 600; }
+
+  h2 { font-size: 15px; font-weight: 600; margin: 4px 0 6px; }
+  p.dica { color: var(--fraco); font-size: 13px; margin: -2px 0 12px; line-height: 1.45; }
+  .secao + .secao { margin-top: 22px; }
+
+  .cartoes { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .cartao { background: var(--sup); border: 1px solid var(--traco); border-radius: 14px; padding: 13px 14px 13px 16px; display: flex; gap: 13px; align-items: flex-start; }
+  .cartao .ic { width: 38px; height: 38px; border-radius: 11px; background: var(--sup2); display: grid; place-items: center; color: var(--medio); flex: none; }
+  .cartao .meio { flex: 1; min-width: 0; }
+  .cartao .nome { font-weight: 600; }
+  .cartao .desc { color: var(--fraco); font-size: 12.5px; margin-top: 3px; line-height: 1.4; }
+  .cartao .pe { display: flex; align-items: center; justify-content: space-between; margin-top: 10px; gap: 8px; }
+  .estado { font-size: 11.5px; font-weight: 500; padding: 2px 8px; border-radius: 20px; white-space: nowrap; }
+  .estado.ok { color: var(--verde); background: rgba(56,211,159,.12); }
+  .estado.des { color: var(--fraco); background: var(--sup2); }
+  .estado.pronto { color: var(--persona); background: rgba(77,163,255,.12); }
+  .botao { height: 32px; padding: 0 13px; border-radius: 9px; border: 1px solid var(--traco2); color: var(--medio); display: inline-flex; align-items: center; gap: 7px; font-size: 13px; white-space: nowrap; }
+  .botao.forte { background: var(--persona); border-color: var(--persona); color: #06101c; font-weight: 600; }
+  .botao.apagado { opacity: .45; }
+  .precisa { font-size: 12px; color: var(--mfraco); }
+
+  /* a conta do Claude */
+  .conta { background: var(--sup); border: 1px solid var(--traco); border-radius: 14px; padding: 14px 16px; display: flex; align-items: center; gap: 14px; }
+  .conta .chips { display: flex; gap: 8px; flex-wrap: wrap; flex: 1; }
+  .chip { display: inline-flex; align-items: center; gap: 7px; height: 30px; padding: 0 11px; border-radius: 20px; background: var(--sup2); color: var(--medio); font-size: 13px; }
+  .chip i { width: 7px; height: 7px; border-radius: 50%; background: var(--verde); }
+
+  /* o passo a passo */
+  .volta { display: inline-flex; align-items: center; gap: 4px; color: var(--fraco); font-size: 13px; margin-bottom: 14px; }
+  .cabeca { display: flex; align-items: center; gap: 14px; margin-bottom: 6px; }
+  .cabeca .ic { width: 46px; height: 46px; border-radius: 13px; background: var(--sup2); display: grid; place-items: center; color: var(--persona); }
+  .cabeca .ic svg { width: 22px; height: 22px; }
+  .cabeca h2 { font-size: 18px; margin: 0; }
+  .cabeca .estado { margin-left: 4px; }
+  .duas { display: grid; grid-template-columns: 1fr 300px; gap: 26px; margin-top: 18px; align-items: start; }
+  .passos { list-style: none; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+  .passos li { display: flex; gap: 13px; padding: 10px 0; border-bottom: 1px solid var(--traco); line-height: 1.45; color: var(--medio); }
+  .passos li:last-child { border-bottom: 0; }
+  .passos li > b { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; background: var(--sup2); color: var(--medio); flex: none; margin-top: -1px; }
+  .passos li.feito > b { background: rgba(56,211,159,.15); color: var(--verde); }
+  .passos li.agora > b { background: var(--persona); color: #06101c; }
+  .passos li.agora { color: var(--texto); }
+  .passos li small { display: block; color: var(--fraco); font-size: 12.5px; margin-top: 2px; }
+  .passos li .botao { margin-top: 8px; }
+  .caixa { background: var(--sup); border: 1px solid var(--traco); border-radius: 16px; padding: 18px; display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; }
+  .caixa .qr { width: 216px; height: 216px; background: #fff; border-radius: 12px; padding: 12px; }
+  .caixa small { color: var(--fraco); font-size: 12.5px; line-height: 1.45; }
+  .espera { display: flex; align-items: center; gap: 9px; color: var(--fraco); font-size: 13px; }
+  .espera i { width: 8px; height: 8px; border-radius: 50%; background: var(--persona); box-shadow: 0 0 10px var(--persona); }
+  .nota { margin-top: 16px; display: flex; gap: 10px; align-items: flex-start; color: var(--fraco); font-size: 12.5px; line-height: 1.5; background: var(--sup); border: 1px solid var(--traco); border-radius: 12px; padding: 11px 13px; }
+  .nota svg { color: var(--persona); margin-top: 1px; }
+  .comando { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: #07090d; border: 1px solid var(--traco2); border-radius: 10px; padding: 10px 12px; font: 13px ui-monospace, "DejaVu Sans Mono", monospace; color: var(--texto); margin-top: 8px; }
+  .comando span.botao { height: 28px; font-family: Inter, sans-serif; }
+  .codigo { font: 700 30px ui-monospace, "DejaVu Sans Mono", monospace; letter-spacing: .12em; color: var(--texto); background: var(--sup2); border-radius: 12px; padding: 14px 18px; }
+  .lista { width: 100%; text-align: left; }
+  .lista .op { display: flex; align-items: center; gap: 12px; padding: 11px 4px; border-bottom: 1px solid var(--traco); color: var(--medio); }
+  .lista .op:last-child { border-bottom: 0; }
+  .lista .op .bola { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--traco2); flex: none; }
+  .lista .op.sim { color: var(--texto); }
+  .lista .op.sim .bola { border-color: var(--persona); box-shadow: inset 0 0 0 3px var(--sup), inset 0 0 0 9px var(--persona); }
+  .lista .op small { margin-left: auto; color: var(--mfraco); font-size: 12px; }
+  .chave { width: 40px; height: 23px; border-radius: 12px; background: var(--persona); position: relative; flex: none; }
+  .chave::after { content: ""; position: absolute; width: 17px; height: 17px; border-radius: 50%; background: #fff; top: 3px; left: 20px; }
+  .linha-chave { display: flex; align-items: center; justify-content: space-between; width: 100%; padding-top: 4px; text-align: left; gap: 14px; }
+  .linha-chave div small { display: block; }
+  .rodape-passo { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
+
+  /* app */
+  .app { width: 412px; min-height: 892px; background: var(--fundo); padding: 0 0 30px; }
+  .app .barra-app { height: 56px; display: flex; align-items: center; gap: 14px; padding: 0 16px; margin-top: 28px; }
+  .app .barra-app h1 { font-size: 22px; font-weight: 600; }
+  .app .barra-app .voltar { color: var(--medio); }
+  .app .pagina { padding: 4px 18px; }
+  .app .cartoes { grid-template-columns: 1fr; }
+  .app .duas { grid-template-columns: 1fr; gap: 16px; margin-top: 12px; }
+  .app .conta { flex-direction: column; align-items: stretch; }
+</style>
+</head>
+<body>
+<div id="raiz"></div>
+<script>
+const ic = {
+  geral: '<circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/>',
+  voz: '<path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3z"/><path d="M19 11a7 7 0 0 1-14 0M12 18v3"/>',
+  avisos: '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 8 3 8H3s3-1 3-8"/><path d="M10.3 20a1.9 1.9 0 0 0 3.4 0"/>',
+  uso: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  personas: '<circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-5.5 6-5.5s6 2.2 6 5.5"/><circle cx="17" cy="9" r="2.5"/><path d="M16.5 14.6c2.6.3 4.5 2.2 4.5 4.9"/>',
+  conexoes: '<path d="M9 7H7a5 5 0 0 0 0 10h2M15 7h2a5 5 0 0 1 0 10h-2M8 12h8"/>',
+  sobre: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>',
+  x: '<path d="M6 6l12 12M18 6L6 18"/>', voltar: '<path d="M15 6l-6 6 6 6"/>', fora_link: '<path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>',
+  info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>', copiar: '<path d="M9 9h10a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-8a2 2 0 0 1-2-2zM5 15V5a2 2 0 0 1 2-2h8"/>',
+  whatsapp: '<path d="M4 20l1.3-4A8 8 0 1 1 8 18.7z"/><path d="M9 9.5c0 3 2.5 5.5 5.5 5.5l1-1.5-2-1-1 1a4 4 0 0 1-2-2l1-1-1-2z"/>',
+  grupo: '<circle cx="8" cy="9" r="2.6"/><circle cx="16" cy="9" r="2.6"/><path d="M3 19c0-2.8 2.2-4.5 5-4.5s5 1.7 5 4.5M11 19c0-2.8 2.2-4.5 5-4.5s5 1.7 5 4.5"/>',
+  celular: '<rect x="7" y="3" width="10" height="18" rx="2.5"/><path d="M11 18h2"/>',
+  relogio: '<rect x="7" y="7" width="10" height="10" rx="3"/><path d="M9 7l1-4h4l1 4M9 17l1 4h4l1-4"/>',
+  fora: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z"/>',
+  musica: '<path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/>',
+  atalhos: '<path d="M13 2L4 14h7l-1 8 9-12h-7z"/>',
+  claude: '<path d="M12 3v18M3 12h18M5.6 5.6l12.8 12.8M18.4 5.6L5.6 18.4"/>',
+};
+const svg = n => `<svg class="i" viewBox="0 0 24 24">${ic[n]}</svg>`;
+
+// Um QR de mentira (só o desenho): 29×29, com os três quadrados de canto.
+function qr(semente) {
+  const n = 29, t = 192 / n; let s = semente, r = "";
+  const rnd = () => (s = (s * 9301 + 49297) % 233280) / 233280;
+  const canto = (x, y) => { for (const [cx, cy] of [[0, 0], [n - 7, 0], [0, n - 7]]) if (x >= cx && x < cx + 7 && y >= cy && y < cy + 7) {
+    const dx = x - cx, dy = y - cy; return (dx === 0 || dx === 6 || dy === 0 || dy === 6 || (dx >= 2 && dx <= 4 && dy >= 2 && dy <= 4)) ? 1 : 0; } return -1; };
+  for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
+    const c = canto(x, y); const preto = c === -1 ? rnd() > .52 : c === 1;
+    if (preto) r += `<rect x="${(x * t).toFixed(2)}" y="${(y * t).toFixed(2)}" width="${(t + .3).toFixed(2)}" height="${(t + .3).toFixed(2)}"/>`;
+  }
+  return `<svg class="qr" viewBox="0 0 192 192" fill="#0a0c10">${r}</svg>`;
+}
+
+// O PC de um tester: só a música e os atalhos já funcionam.
+const CONEXOES = [
+  ["whatsapp", "WhatsApp", "des", "Ler e mandar mensagens, e avisar quem te escreveu."],
+  ["grupo", "Grupo do WhatsApp", "des", "Responde no grupo da família quando chamam o Jarvis.", "Precisa do WhatsApp"],
+  ["fora", "Fora de casa", "des", "O celular falar com o PC, em casa ou na rua (Tailscale)."],
+  ["celular", "Celular", "des", "O app NOVA: conversar e receber avisos pelo celular.", "Precisa do Fora de casa"],
+  ["relogio", "Relógio", "des", "Falar pelo relógio (Wear OS).", "Precisa do Celular"],
+  ["musica", "Música", "des", "Tocar música e vídeo do YouTube pelo PC."],
+  ["atalhos", "Atalhos", "ok", "Programas e pastas que ele abre pelo nome. Nenhum ainda."],
+];
+const rotulo = { ok: "Conectado", des: "Desligado", pronto: "Pronto" };
+const cartao = ([id, nome, est, desc, precisa]) => `<div class="cartao"><div class="ic">${svg(id)}</div><div class="meio">
+  <div class="nome">${nome}</div><div class="desc">${desc}</div>
+  <div class="pe"><span class="estado ${est}">${rotulo[est]}</span>
+  ${precisa ? `<span class="precisa">${precisa}</span>` : `<span class="botao ${est === "ok" ? "" : "forte"}">${est === "ok" ? "Como usar" : "Conectar"}</span>`}</div></div></div>`;
+
+const listaConexoes = (app) => `<div class="secao"><h2>Conexões da NOVA</h2><p class="dica">O que o Jarvis e a Friday conseguem usar neste PC. Tudo começa desligado: liga só o que quiser.</p>
+    <div class="cartoes">${CONEXOES.map(cartao).join("")}</div></div>
+  <div class="secao"><h2>Da tua conta do Claude</h2><p class="dica">Gmail, Agenda, Drive e outros: liga no site do Claude e o Jarvis e a Friday já usam, aqui e no celular.</p>
+    <div class="conta"><div class="chips"><span class="chip"><i></i>Google Agenda</span><span class="chip"><i></i>Gmail</span><span class="chip"><i></i>Google Drive</span></div>
+    <span class="botao">${svg("fora_link")}Adicionar no claude.ai</span></div></div>`;
+
+const cabeca = (id, nome, est = "des") => `<span class="volta">${svg("voltar")}Conexões</span>
+  <div class="cabeca"><div class="ic">${svg(id)}</div><h2>${nome}</h2><span class="estado ${est}">${rotulo[est]}</span></div>`;
+const nota = t => `<div class="nota">${svg("info")}<span>${t}</span></div>`;
+
+const PASSOS = {
+  whatsapp: () => `${cabeca("whatsapp", "WhatsApp")}
+    <div class="duas"><ol class="passos">
+      <li class="agora"><b>1</b><div>No celular, abre o WhatsApp<small>Android: os três pontinhos. iPhone: Configurações.</small></div></li>
+      <li><b>2</b><div>Toca em <b>Aparelhos conectados</b> → <b>Conectar um aparelho</b></div></li>
+      <li><b>3</b><div>Aponta a câmera para o código ao lado<small>Pronto: o cartão vira "Conectado" sozinho.</small></div></li>
+    </ol>
+    <div class="caixa">${qr(7)}<div class="espera"><i></i>esperando o celular ler…</div><small>O código troca a cada 20 segundos.</small></div></div>
+    ${nota("As mensagens ficam só neste PC. O Jarvis e a Friday leem e avisam quem escreveu, mas mandar sempre pede o teu \"pode\" falado.")}`,
+  fora: () => `${cabeca("fora", "Fora de casa")}
+    <p class="dica" style="margin-top:12px">O Tailscale é um app grátis que liga o teu celular ao PC, em casa ou na rua, sem abrir nada para a internet.</p>
+    <ol class="passos" style="margin-top:6px">
+      <li class="feito"><b>✓</b><div>Instalar o Tailscale neste PC<small>Achei ele instalado.</small></div></li>
+      <li class="feito"><b>✓</b><div>Entrar com a tua conta<small>Entrou como chris@gmail.com.</small></div></li>
+      <li class="agora"><b>3</b><div>No celular, instala o Tailscale (Play Store ou App Store) e entra com a <b>mesma conta</b>
+        <div class="espera" style="margin-top:8px"><i></i>esperando o celular aparecer na tua conta…</div></div></li>
+      <li><b>4</b><div>Ligar o acesso do celular<small>A NOVA faz sozinha quando o celular aparecer.</small></div></li>
+    </ol>`,
+  celular: () => `${cabeca("celular", "Celular")}
+    <div class="duas"><ol class="passos">
+      <li class="feito"><b>✓</b><div>Fora de casa ligado<small>O celular já alcança o PC.</small></div></li>
+      <li class="agora"><b>2</b><div>Abre a câmera do celular e aponta para o código<small>Sem o app ainda? O código baixa ele primeiro.</small></div></li>
+      <li><b>3</b><div>Toca no link que aparecer<small>O app NOVA abre já ligado a este PC, sem colar nada.</small></div></li>
+    </ol>
+    <div class="caixa">${qr(31)}<div class="espera"><i></i>esperando o celular…</div><small>O código leva a chave deste PC: não mostra para ninguém.</small></div></div>`,
+  grupo: () => `${cabeca("grupo", "Grupo do WhatsApp")}
+    <div class="duas"><div>
+      <p class="dica" style="margin-top:2px">Escolhe o grupo onde o Jarvis responde quando alguém escreve "Jarvis, …".</p>
+      <div class="lista">
+        <div class="op sim"><span class="bola"></span>Família 🏠<small>6 pessoas</small></div>
+        <div class="op"><span class="bola"></span>Turma do 2º B<small>31 pessoas</small></div>
+        <div class="op"><span class="bola"></span>Futebol de quinta<small>14 pessoas</small></div>
+      </div></div>
+    <div class="caixa" style="align-items:stretch"><div class="linha-chave"><div>Responder no grupo<small style="color:var(--fraco);font-size:12.5px;margin-top:3px">Liga e desliga quando quiser.</small></div><span class="chave"></span></div></div></div>
+    ${nota("No grupo ele conversa, pesquisa e anota recados. O que mexe nas tuas coisas (arquivos, mensagens, o PC) só acontece com o teu Sim no celular.")}`,
+  relogio: () => `${cabeca("relogio", "Relógio")}
+    <ol class="passos" style="margin-top:14px">
+      <li class="feito"><b>✓</b><div>Celular conectado</div></li>
+      <li class="agora"><b>2</b><div>Instalar o NOVA no relógio<small>Por enquanto é pela depuração sem fio do relógio: o Léo te ajuda nesse passo.</small></div></li>
+      <li><b>3</b><div>Abre o NOVA no relógio e toca no átomo<small>O cartão vira "Conectado" quando ele aparecer.</small></div></li>
+    </ol>
+    ${nota("Funciona com relógio Wear OS (Galaxy Watch e parecidos), sempre pelo celular.")}`,
+  musica: () => `${cabeca("musica", "Música")}
+    <ol class="passos" style="margin-top:14px">
+      <li class="agora"><b>1</b><div>Falta o programa que toca o som (o mpv). Copia e roda no terminal:
+        <div class="comando"><span>sudo apt install mpv mpv-mpris</span><span class="botao">${svg("copiar")}Copiar</span></div>
+        <small>Pede a tua senha do PC. A NOVA não roda nada como administrador sozinha.</small></div></li>
+      <li><b>2</b><div>Volta aqui: o cartão vira "Conectado" sozinho</div></li>
+    </ol>`,
+  atalhos: () => `${cabeca("atalhos", "Atalhos", "ok")}
+    <ol class="passos" style="margin-top:14px">
+      <li><b>1</b><div>Pede: <b>"Jarvis, cria um atalho pro Discord"</b><small>Vale programa, pasta ou site.</small></div></li>
+      <li><b>2</b><div>Depois é só falar: <b>"abre o Discord"</b></div></li>
+    </ol>
+    ${nota("Os atalhos ficam neste PC. Nenhum ainda.")}`,
+};
+
+// No app, o WhatsApp não tem QR (o próprio celular não lê a tela dele):
+// vai pelo código de 8 letras do "Conectar com número de telefone".
+const PASSOS_APP = {
+  whatsapp: () => `${cabeca("whatsapp", "WhatsApp")}
+    <div class="duas"><div class="caixa"><div class="codigo">K7QM-29XA</div><div class="espera"><i></i>esperando o WhatsApp…</div></div>
+    <ol class="passos">
+      <li class="agora"><b>1</b><div>Abre o WhatsApp → <b>Aparelhos conectados</b> → <b>Conectar um aparelho</b></div></li>
+      <li><b>2</b><div>Toca em <b>Conectar com número de telefone</b></div></li>
+      <li><b>3</b><div>Digita o código acima<small>Pronto: o cartão vira "Conectado".</small></div></li>
+    </ol></div>
+    ${nota("As mensagens ficam só no PC. Mandar sempre pede o teu \"pode\" falado.")}`,
+  fora: () => `${cabeca("fora", "Fora de casa")}
+    <p class="dica" style="margin-top:12px">O Tailscale liga este celular ao PC, em casa ou na rua.</p>
+    <ol class="passos">
+      <li class="feito"><b>✓</b><div>Tailscale no PC<small>Ligado na conta chris@gmail.com.</small></div></li>
+      <li class="agora"><b>2</b><div>Instala o Tailscale neste celular<div><span class="botao forte" style="margin-top:8px">Abrir a Play Store</span></div></div></li>
+      <li><b>3</b><div>Entra com a <b>mesma conta</b> do PC</div></li>
+      <li><b>4</b><div>Volta aqui: a NOVA confere e liga sozinha</div></li>
+    </ol>`,
+};
+
+const CATS = [
+  ["Preferências", [["geral", "Geral"], ["voz", "Voz e som"], ["avisos", "Avisos"], ["uso", "Uso"]]],
+  ["Personalização", [["personas", "Personas"], ["conexoes", "Conexões"]]],
+  ["", [["sobre", "Sobre a NOVA"]]],
+];
+const q = new URLSearchParams(location.search);
+const vista = q.get("vista") || "janela", passo = q.get("passo") || "";
+const raiz = document.getElementById("raiz");
+if (vista === "janela") {
+  const nav = CATS.map(([g, itens]) => `<div class="grupo">${g}</div>` +
+    itens.map(([id, nome]) => `<a class="${id === "conexoes" ? "sim" : ""}">${svg(id)}${nome}</a>`).join("")).join("");
+  raiz.innerHTML = `<div class="janela"><div class="lat"><div class="marca"><img src="img/logo-azul.png">NOVA</div>
+      <div class="falso"></div><div class="linha"></div><div class="linha"></div><div class="linha" style="width:50%"></div></div><div class="chat"></div>
+    <div class="veu"></div>
+    <div class="painel"><header><h1>Ajustes</h1><span class="x">${svg("x")}</span></header>
+      <div class="corpo"><nav>${nav}</nav><div class="conteudo">${passo ? PASSOS[passo]() : listaConexoes(false)}</div></div></div></div>`;
+} else {
+  const titulo = passo ? "Conexões" : "Conexões";
+  const corpo = passo ? PASSOS_APP[passo]().replace(/<span class="volta">.*?<\/span>/s, "") : listaConexoes(true)
+    .replace('["celular"]', "");
+  raiz.innerHTML = `<div class="app"><div class="barra-app"><span class="voltar">${svg("voltar")}</span><h1>${titulo}</h1></div><div class="pagina">${corpo}</div></div>`;
+  if (!passo) {  // no app, o cartão do Celular é este próprio celular
+    const c = [...document.querySelectorAll(".cartao")].find(e => e.textContent.includes("O app NOVA"));
+    c.querySelector(".desc").textContent = "Este celular.";
+    c.querySelector(".pe").innerHTML = `<span class="estado ok">Conectado</span>`;
+    const f = [...document.querySelectorAll(".cartao")].find(e => e.textContent.includes("Tailscale"));
+    f.querySelector(".pe").innerHTML = `<span class="estado ok">Conectado</span>`;
+  }
+}
+if (q.get("rolar")) document.querySelector(".conteudo").scrollTop = 1e6;
+document.body.dataset.pronto = "1";
+</script>
+</body>
+</html>
