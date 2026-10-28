@@ -68,7 +68,8 @@ Window {
 
     property string conversaAtual: ""    // o id da conversa do Jarvis agora
     property string vendo: ""            // "" = a de agora; senão, o id da antiga
-    property string pagina: "chat"       // "chat" | "memoria" | "ajustes"
+    property string pagina: "chat"       // "chat" | "memoria"
+    property bool ajustesAbertos: false  // o painel dos Ajustes, por cima de tudo (beta 0.17.0)
     property var listaDeConversas: []
     property string modelo: "auto"
     property string esforco: "medium"
@@ -288,7 +289,7 @@ Window {
 
     Shortcut { sequence: "Ctrl+N"; onActivated: janela.novoChat() }
     Shortcut { sequence: "Ctrl+K"; onActivated: lateral.focarBusca() }
-    Shortcut { sequence: "Esc"; onActivated: janela.abrir("") }
+    Shortcut { sequence: "Esc"; onActivated: if (janela.ajustesAbertos) janela.ajustesAbertos = false; else janela.abrir("") }
 
     // -- a barra lateral -------------------------------------------------------
     Lateral {
@@ -319,6 +320,13 @@ Window {
             janela.avisar("Conversa mandada pra lixeira");
         }
         onIrPara: function (p) {
+            if (p === "ajustes") {
+                // A lista de som e o estado das conexões vêm de novo: um fone
+                // plugado ou o celular que conectou agora aparecem.
+                janela.ajustesAbertos = true;
+                if (typeof ponte !== "undefined") { ponte.pedirSom(); ponte.pedirAjustes(); }
+                return;
+            }
             janela.pagina = p;
             if (p === "memoria") {
                 memoria.voltarParaLista();
@@ -699,29 +707,6 @@ Window {
             onAvisar: function (t) { janela.avisar(t) }
         }
 
-        PaginaAjustes {
-            anchors { top: topo.bottom; left: parent.left; right: parent.right; bottom: parent.bottom }
-            visible: janela.pagina === "ajustes"
-            tema: tema
-            conectado: janela.conectado
-            conversa: janela.conversaAtual
-            modelo: janela.modelo
-            esforco: janela.esforco
-            usoCinco: janela.usoCinco
-            voltaCinco: janela.voltaCinco
-            usoSemana: janela.usoSemana
-            voltaSemana: janela.voltaSemana
-            som: janela.som
-            ajustes: janela.ajustes
-            onMudarVolume: (volume) => { if (typeof ponte !== "undefined") ponte.mudarVolumeVoz(volume) }
-            onMudarNotificar: (ligado) => { if (typeof ponte !== "undefined") ponte.mudarNotificarEscola(ligado) }
-            onMudarNome: (nome) => { if (typeof ponte !== "undefined") ponte.mudarNome(nome) }
-            onMudarGrupo: (ligado) => { if (typeof ponte !== "undefined") ponte.mudarGrupo(ligado) }
-            // Ao abrir os Ajustes, a lista vem de novo: um fone plugado agora aparece.
-            onVisibleChanged: if (visible && typeof ponte !== "undefined") ponte.pedirSom()
-            onEscolherSom: (tipo, aparelho) => { if (typeof ponte !== "undefined") ponte.escolherSom(tipo, aparelho) }
-        }
-
         // -- avisos rápidos ----------------------------------------------------------
         Rectangle {
             id: aviso
@@ -811,5 +796,35 @@ Window {
                 onPressed: janela.startSystemResize(aresta.borda)
             }
         }
+    }
+
+    // Os Ajustes: um painel por cima da janela inteira (lateral junto).
+    PaginaAjustes {
+        anchors.fill: parent
+        z: 50
+        aberto: janela.ajustesAbertos
+        onFechar: janela.ajustesAbertos = false
+        tema: tema
+        conectado: janela.conectado
+        conversa: janela.conversaAtual
+        modelo: janela.modelo
+        esforco: janela.esforco
+        persona: janela.persona
+        corFriday: janela.corPersona
+        usoCinco: janela.usoCinco
+        voltaCinco: janela.voltaCinco
+        usoSemana: janela.usoSemana
+        voltaSemana: janela.voltaSemana
+        som: janela.som
+        ajustes: janela.ajustes
+        onEscolherPersona: (v) => {
+            janela.persona = v;
+            if (typeof ponte !== "undefined") ponte.definirPersona(v);
+        }
+        onMudarVolume: (volume) => { if (typeof ponte !== "undefined") ponte.mudarVolumeVoz(volume) }
+        onMudarNotificar: (ligado) => { if (typeof ponte !== "undefined") ponte.mudarNotificarEscola(ligado) }
+        onMudarNome: (nome) => { if (typeof ponte !== "undefined") ponte.mudarNome(nome) }
+        onMudarGrupo: (ligado) => { if (typeof ponte !== "undefined") ponte.mudarGrupo(ligado) }
+        onEscolherSom: (tipo, aparelho) => { if (typeof ponte !== "undefined") ponte.escolherSom(tipo, aparelho) }
     }
 }

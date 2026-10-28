@@ -224,6 +224,10 @@ class Servidor:
             return True
         return False
 
+    def quem_conectado(self) -> set[str]:
+        """Quem está conectado agora ("interface", "celular-app", "relogio"...)."""
+        return {c.quem for c in list(self._clientes.values()) if c.apresentado}
+
     def app_desde(self) -> float | None:
         """Desde quando o app do celular (corpo com a janela) está conectado,
         sem cair; None se não está. A conexão morta cai sozinha em ~40 s (o

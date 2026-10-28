@@ -298,6 +298,8 @@ class Ciclo:
         # Manda um erro só para quem pediu (a ponte põe aqui; ex.: "nova" no
         # meio de uma tarefa).
         self.avisar_cliente = lambda _id, _motivo: None
+        # Quem está na ponte agora (a aba Conexões: o celular e o relógio).
+        self.quem_conectado = lambda: set()
         self.vad = detector_vad
         self.ww = detector_ww
         self.transcritor = transcritor
@@ -1109,9 +1111,13 @@ class Ciclo:
     def emitir_ajustes(self) -> None:
         # tem_escola: este PC está ligado a uma escola (jarvis/escola). Sem
         # ela, a janela e o app nem mostram o interruptor.
+        # conexoes: o estado de cada uma, para a aba Conexões (beta 0.17.0).
         from jarvis.escola.__main__ import RESUMO
+        from jarvis import conexoes
         import socket
-        self.emissor.emitir("ajustes", **ajustes.ler(), tem_escola=RESUMO.exists(), pc=socket.gethostname())
+        dados, escola = ajustes.ler(), RESUMO.exists()
+        self.emissor.emitir("ajustes", **dados, tem_escola=escola, pc=socket.gethostname(),
+                            conexoes=conexoes.estado(self.cfg, dados, self.quem_conectado(), escola))
 
     def emitir_cerebro(self) -> None:
         cor = self.cfg.friday.cor if self.persona == "friday" and self.cfg.friday else ""
@@ -1577,6 +1583,7 @@ def conversar(cfg: config.Config) -> int:
             if ponte is not None:
                 ciclo.avisar_cliente = ponte.avisar
                 ciclo.pediu_parar = ponte.consumir_parar
+                ciclo.quem_conectado = ponte.quem_conectado
             ciclo.som_ativo = usar_som
             ciclo.emitir_cerebro()
             ciclo.emitir_som()

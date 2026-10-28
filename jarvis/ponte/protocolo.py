@@ -81,8 +81,10 @@ ASSISTENTE -> CLIENTES
         Pediram para desbloquear o PC: o app pergunta "Desbloquear o PC?" e
         responde na porta remota (POST /desbloqueio, com a chave).
     {"ev":"ajustes", "volume_voz":0-100, "notificar_escola":bool, "tem_escola":bool,
-     "nome":"<como chamar quem usa>", "pc":"<nome do computador>"}
-        O volume da voz no PC e as notificações da escola (beta 0.6.5).
+     "nome":"<como chamar quem usa>", "pc":"<nome do computador>",
+     "conexoes":[{"id":"whatsapp", "estado":"conectado|pronto|desligado", "detalhe":"..."}]}
+        O volume da voz no PC e as notificações da escola (beta 0.6.5); o
+        estado de cada conexão, para a aba Conexões (jarvis/conexoes.py, beta 0.17.0).
     {"ev":"conversa_atual", "id":"<uuid>", "falas":[...]}
         A conversa do Jarvis mudou (ligou, "nova", "continuar"): o id da
         sessão do Claude Code e as falas dela (vazio na nova). O histórico

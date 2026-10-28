@@ -161,6 +161,11 @@ class PonteQt(QObject):
     def pedirSom(self) -> bool:
         return self._pedir({"pedir": "som"})
 
+    @Slot(result=bool)
+    def pedirAjustes(self) -> bool:
+        """Os ajustes de novo (com o estado das conexões de agora)."""
+        return self._pedir({"pedir": "ajustes"})
+
     @Slot(int, result=bool)
     def mudarVolumeVoz(self, volume: int) -> bool:
         return self._pedir({"pedir": "ajustes", "volume_voz": max(0, min(100, int(volume)))})
