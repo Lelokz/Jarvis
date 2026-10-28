@@ -76,3 +76,6 @@ uvicorn==0.54.0
 websockets==17.3
 playwright>=1.64  # escola: navegador escondido (Khan e Estudante Online)
 pulsectl>=24  # os aparelhos de som do Linux (Ajustes, jarvis/som.py)
+pyside6-essentials==6.11.2  # a janela (interface.py)
+httpx==0.28.1
+# kokoro-onnx==0.6.1 também, mas com --no-deps (ver a voz Kokoro acima).

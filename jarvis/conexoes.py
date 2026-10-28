@@ -56,8 +56,12 @@ def estado(cfg: Config, ajustes: dict, conectados: set[str], tem_escola: bool) -
     def item(id_: str, estado_: str, detalhe: str = "") -> dict:
         return {"id": id_, "estado": estado_, "detalhe": detalhe}
 
-    whats = cfg.whatsapp.ativo and _porta_aberta(cfg.whatsapp.api)
-    remoto = cfg.remoto.ligada
+    # A ponte instalada (o banco dela existe) E respondendo: só a porta aberta
+    # podia ser outro programa.
+    whats = cfg.whatsapp.ativo and Path(cfg.whatsapp.banco).expanduser().is_file() \
+        and _porta_aberta(cfg.whatsapp.api)
+    fora = _tailscale()
+    remoto = cfg.remoto.ligada and fora
     n = _atalhos()
     return [
         item("whatsapp", "conectado" if whats else "desligado"),
@@ -65,7 +69,7 @@ def estado(cfg: Config, ajustes: dict, conectados: set[str], tem_escola: bool) -
              else "pronto" if ajustes.get("grupo_jid") else "desligado"),
         item("celular", "conectado" if "celular-app" in conectados else "pronto" if remoto else "desligado"),
         item("relogio", "conectado" if "relogio" in conectados else "pronto" if remoto else "desligado"),
-        item("fora", "conectado" if _tailscale() else "desligado"),
+        item("fora", "conectado" if fora else "desligado"),
         item("escola", "conectado" if tem_escola else "desligado"),
         item("musica", "conectado" if shutil.which("mpv") else "desligado"),
         item("atalhos", "conectado" if n else "desligado", f"{n} atalhos" if n else ""),

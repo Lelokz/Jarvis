@@ -882,7 +882,8 @@ class Ciclo:
             self.emissor.emitir("conversa_atual", id=s.texto, falas=falas)
         elif s.tipo == "erro":
             fala = {"limite": self._fala_de_limite(self.agente.limite.volta_em),
-                    "offline": self.persona_cfg.sem_internet}.get(
+                    "offline": self.persona_cfg.sem_internet,
+                    "sem_conta": self.persona_cfg.sem_conta}.get(
                         s.texto, self.persona_cfg.cerebro_falhou)
             self.registrador.registrar_estado("erro_do_claude", tipo=s.texto, detalhe=s.titulo)
             self._fim_da_escrita()
@@ -1116,7 +1117,9 @@ class Ciclo:
         from jarvis import conexoes
         import socket
         dados, escola = ajustes.ler(), RESUMO.exists()
+        # reconhece_voz: tem o perfil da voz do dono; sem ele, toda voz vale como a dele.
         self.emissor.emitir("ajustes", **dados, tem_escola=escola, pc=socket.gethostname(),
+                            reconhece_voz=self.quem_fala is not None,
                             conexoes=conexoes.estado(self.cfg, dados, self.quem_conectado(), escola))
 
     def emitir_cerebro(self) -> None:

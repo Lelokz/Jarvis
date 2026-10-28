@@ -689,6 +689,9 @@ class Agente:
                         self.saidas.put(Saida("fim", interrompido=True))
                     elif m.is_error and self.limite.status == "rejected":
                         self.saidas.put(Saida("erro", "limite"))
+                    elif final.startswith("Not logged in"):
+                        # Claude Code instalado sem conta (o PC de um tester).
+                        self.saidas.put(Saida("erro", "sem_conta"))
                     elif m.is_error and not final:
                         self._falhou(m.result or m.subtype)
                     else:

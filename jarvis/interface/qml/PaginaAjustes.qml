@@ -519,6 +519,18 @@ Item {
                     }
                 }
             }
+            Secao {
+                titulo: "Quem fala"
+                visible: !!raiz.ajustes && raiz.ajustes.reconhece_voz !== undefined
+                Linha {
+                    titulo: "Reconhecer a tua voz"
+                    descricao: raiz.ajustes && raiz.ajustes.reconhece_voz
+                        ? "Só a tua voz pode apagar memória, mexer nos teus arquivos e outras coisas importantes."
+                        : "Sem o perfil da tua voz: qualquer pessoa que falar perto do PC vale como você."
+                    ultima: true
+                    Valor { text: raiz.ajustes && raiz.ajustes.reconhece_voz ? "Ligado" : "Desligado" }
+                }
+            }
         }
     }
 

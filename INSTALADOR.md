@@ -47,10 +47,29 @@ foi aprovado pelo Léo em 26/10. Ordem: Linux primeiro, depois Windows.
   e só baixa se ela aguentar. Senão, a Kokoro (reserva).
 - Piper (vozes/, 518 MB) e wakeword (9 MB) vão sempre.
 
+## Etapa 2 feita (28/10/2026): a NOVA num PC sem nada
+
+Testado com `testes/testar_pc_novo.py` (pasta de usuário vazia, sem microfone):
+- O nome do dono já vinha dos Ajustes ("Seu nome", ajustes.json); sem nome é
+  "usuário". O instalador grava o nome que a pessoa digitar. Saíram o "Léo" do
+  persona.md e a família dele do exemplo do grupo.
+- Conexões começam desligadas: o WhatsApp só conta com a ponte instalada (antes
+  bastava a porta 8080 aberta), celular e relógio só ficam "Pronto" com o
+  Tailscale de pé, e a escola não tenta ler sem o escola.env (antes avisava
+  "saiu da sua conta" para quem nunca entrou). Pediram algo de uma conexão
+  desligada: ele diz para ligar em Ajustes → Conexões.
+- Claude Code instalado sem conta: fala o `sem_conta` da persona, não o
+  "Not logged in" em inglês. Sem o `claude`, o assistente para com a
+  instrução de instalar (o instalador cuida disso).
+- Sem o perfil de voz: o reconhecimento desliga, toda voz vale como o dono, e
+  Ajustes → Voz e som mostra "Reconhecer a tua voz: Desligado" (janela e app).
+- O microfone se escolhe em Ajustes → Voz e som; a tela 6 do instalador também.
+- requirements.txt ganhou pyside6-essentials e httpx (kokoro-onnx vai com --no-deps).
+
 ## Próximas etapas
 
-2. Primeira vez: nome do dono, conta do Claude dele, microfone; WhatsApp, escola e
-   Tailscale opcionais (desligados de saída).
+2. ~~Primeira vez: nome do dono, conta do Claude dele, microfone; WhatsApp, escola e
+   Tailscale opcionais (desligados de saída).~~ Feita.
 3. Pacote de vozes separado.
 4. Instalador Linux (as 7 telas), com a escolha da pasta.
 5. Teste limpo (usuário novo, sem nada deste PC).

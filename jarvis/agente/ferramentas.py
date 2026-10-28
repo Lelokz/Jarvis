@@ -102,7 +102,7 @@ def criar_servidor(mostrar: Callable[[str, str], None], whatsapp,
               {"nome": str})
         async def _contatos(args):
             if not _ligado():
-                return _texto("O WhatsApp não está conectado no Jarvis.", True)
+                return _texto("O WhatsApp não está conectado neste PC. Diga que dá pra ligar em Ajustes → Conexões, na janela ou no app.", True)
             achados = whatsapp.achar_contato(str(args.get("nome") or ""))
             if not achados:
                 return _texto("Nenhum contato com esse nome.")
@@ -117,7 +117,7 @@ def criar_servidor(mostrar: Callable[[str, str], None], whatsapp,
               {"jid": str, "quantas": int})
         async def _conversa(args):
             if not _ligado():
-                return _texto("O WhatsApp não está conectado no Jarvis.", True)
+                return _texto("O WhatsApp não está conectado neste PC. Diga que dá pra ligar em Ajustes → Conexões, na janela ou no app.", True)
             linhas = whatsapp.ultimas_da_conversa(str(args.get("jid") or ""),
                                                  int(args.get("quantas") or 10))
             corpo = "\n".join(f"{quem}: {texto}" for quem, texto in linhas) or "(vazia)"
@@ -133,7 +133,7 @@ def criar_servidor(mostrar: Callable[[str, str], None], whatsapp,
               {"jid": str, "nome": str, "texto": str, "confirmado": bool, "arquivo": str})
         async def _mandar(args):
             if not _ligado():
-                return _texto("O WhatsApp não está conectado no Jarvis.", True)
+                return _texto("O WhatsApp não está conectado neste PC. Diga que dá pra ligar em Ajustes → Conexões, na janela ou no app.", True)
             falas = " ".join(falas_do_pedido())
             if not PEDIDO_DE_MANDAR.search(normalizar(falas)):
                 return _texto("Bloqueado pelo Jarvis: o usuário não pediu para mandar "

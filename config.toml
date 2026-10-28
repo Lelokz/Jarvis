@@ -20,6 +20,8 @@ limite_acabou = "Meu limite do Claude acabou. Volta {hora}, daqui a {falta}."
 limite_acabou_sem_hora = "Meu limite do Claude acabou. Ainda não sei quando volta."
 sem_internet = "Tô sem internet. Pausar, voltar e o volume ainda funcionam; o resto espera a internet voltar."
 cerebro_falhou = "Não consegui falar com o Claude agora. Tenta de novo?"
+# O Claude Code instalado, mas sem ninguém ter entrado com a conta.
+sem_conta = "Ainda não estou ligado a nenhuma conta do Claude. Abre o terminal, roda claude e entra com a tua conta."
 
 # WhatsApp que chega (o aviso é do corpo do Jarvis, sem o Claude).
 whats_chegou = "{nome} mandou: {texto}"
@@ -50,6 +52,7 @@ limite_acabou = "Ai, meu limite do Claude acabou. Volta {hora}, daqui a {falta}.
 limite_acabou_sem_hora = "Ai, meu limite do Claude acabou. Ainda não sei quando volta."
 sem_internet = "Tô sem internet! Pausar, voltar e o volume ainda funcionam; o resto espera a internet voltar."
 cerebro_falhou = "Ai, não consegui falar com o Claude agora. Tenta de novo?"
+sem_conta = "Ai, ainda não tô ligada a nenhuma conta do Claude! Abre o terminal, roda claude e entra com a tua conta."
 whats_chegou = "{nome} mandou: {texto}"
 whats_chegou_sem_texto = "Mensagem de {nome} no WhatsApp!"
 whats_varias = "{nome} mandou {n} mensagens! A última: {texto}"

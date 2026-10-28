@@ -19,6 +19,7 @@ import time
 from jarvis.config import RAIZ
 
 from .__main__ import RESUMO
+from .estudante import CREDENCIAIS
 
 HORAS_DE_LER = (7, 12, 18)
 MANTER_A_CADA_S = 10 * 60
@@ -64,7 +65,9 @@ class Vigia(threading.Thread):
         ultimo_manter = time.monotonic()
         while True:
             agora = dt.datetime.now()
-            if not _noite(agora):
+            # Sem a escola ligada neste PC (o PC de um tester), não tenta: senão
+            # avisava "saiu da sua conta" para quem nunca entrou.
+            if CREDENCIAIS.exists() and not _noite(agora):
                 if self._devia_ler(agora):
                     self._rodar("ler")
                     ultimo_manter = time.monotonic()

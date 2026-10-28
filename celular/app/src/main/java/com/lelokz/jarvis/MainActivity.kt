@@ -1402,6 +1402,15 @@ private fun AjustesVoz(modelo: Jarvis) {
             }
         }
     }
+    modelo.reconheceVoz.value?.let { reconhece ->
+        SecaoDosAjustes("Quem fala") {
+            LinhaDeAjuste("Reconhecer a tua voz",
+                if (reconhece) "Só a tua voz pode apagar memória, mexer nos teus arquivos e outras coisas importantes."
+                else "Sem o perfil da tua voz: qualquer pessoa que falar perto do PC vale como você.", ultima = true) {
+                Text(if (reconhece) "Ligado" else "Desligado", color = TextoMedio, fontSize = 14.sp)
+            }
+        }
+    }
 }
 
 @Composable

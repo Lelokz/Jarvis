@@ -118,6 +118,8 @@ class Jarvis(private val app: Application) {
     val grupoLigado = mutableStateOf(false)
     // O volume da voz NO PC e o estado das conexões (do evento "ajustes"; beta 0.17.0).
     val volumeVoz = mutableIntStateOf(100)
+    // O PC tem o perfil da voz do dono (null = PC antigo, que não manda).
+    val reconheceVoz = mutableStateOf<Boolean?>(null)
     val conexoes = mutableStateOf<List<EstadoConexao>>(emptyList())
     // O pedido de alguém do grupo esperando o Sim: (id, quem, pedido).
     val pedidoGrupo = mutableStateOf<Triple<String, String, String>?>(null)
@@ -732,6 +734,7 @@ class Jarvis(private val app: Application) {
                 prefs.edit().putBoolean("tem_grupo", temGrupo.value).apply()
                 nomePc.value = ev.optString("pc", "")
                 volumeVoz.intValue = ev.optInt("volume_voz", volumeVoz.intValue)
+                reconheceVoz.value = if (ev.has("reconhece_voz")) ev.optBoolean("reconhece_voz") else null
                 ev.optJSONArray("conexoes")?.let { lista ->
                     conexoes.value = (0 until lista.length()).mapNotNull { i ->
                         lista.optJSONObject(i)?.let { EstadoConexao(it.optString("id"), it.optString("estado"), it.optString("detalhe")) }
