@@ -93,3 +93,27 @@ Testado com `testes/testar_pc_novo.py` (pasta de usuário vazia, sem microfone):
    Ajustes, tudo opcional), com a escolha da pasta.
 5. Teste limpo (usuário novo, sem nada deste PC).
 6. Windows.
+
+## Etapa 4: como o instalador funciona (28/10/2026)
+
+- **Quem recebe:** só convidado. O site (login do Google + `convites/<email>`) é a
+  barreira; o `link` do convite aponta para o `instalar-nova.sh` (um script
+  pequeno, fora do site público). Esse script é o ÚNICO lugar com o endereço do
+  pacote de vozes no Drive (`VOZES_DRIVE`): o GitHub é público, então o modelo
+  em `instalador/instalar-nova.sh` vai com o campo vazio e a cópia preenchida
+  nunca entra no git.
+- **Sem sudo e sem Python do sistema:** o script baixa o `uv` (Astral, oficial)
+  numa pasta temporária, baixa o código da NOVA do GitHub (zip do `main`) e abre
+  a janela do instalador com `uv run --python 3.12 --with pyside6-essentials`.
+- **A janela:** PySide6 + QML, com o tema, as fontes e o átomo da janela da
+  NOVA; as 8 telas do protótipo aprovado. Código em `instalador/nova_instalador/`.
+- **Tela 2 (Seu PC):** sistema, placa (`nvidia-smi`), memória, microfone
+  (`pactl`), internet. Vozes dubladas: NVIDIA com 8 GB ou mais (a NOVA usa ~5,8
+  GB da placa do Léo: ouvido 2,8 + Friday 2,0 + Jarvis 1,0). Abaixo: vozes leves.
+- **Tela 4 (Instalação):** cada parte é um passo que recomeça de onde parou:
+  código, venv (`uv`, CUDA só com NVIDIA), ouvido (Whisper), "Hey Jarvis/Friday",
+  voz leve (Kokoro), Claude Code, e se for o caso as vozes dubladas (Drive +
+  programas delas). No fim: atalho, ícone perto do relógio, ligar com o PC.
+- **Tela 5:** o login do Claude Code da conta da PESSOA.
+- **Tela 6:** o teste do microfone com o "Hey Jarvis" / "Hey Friday" de verdade.
+- **Tela 7:** as Conexões, com o mesmo `jarvis/conectar.py` dos Ajustes.
