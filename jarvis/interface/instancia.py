@@ -4,8 +4,9 @@ Fechar a janela para a bandeja torna fácil esquecer que ela está aberta e
 mandar abrir de novo. Sem isto, o segundo `interface.py` sobe uma segunda
 janela, com um segundo ícone no painel e duas conversas em paralelo.
 
-O cadeado é um socket no `$XDG_RUNTIME_DIR`, do lado do socket da ponte: quem
-consegue escutar é a primeira; quem não consegue avisa a que está lá e sai.
+O cadeado é um socket no `$XDG_RUNTIME_DIR`, do lado do socket da ponte (no
+Windows, um "named pipe" com o nome do usuário): quem consegue escutar é a
+primeira; quem não consegue avisa a que está lá e sai.
 """
 
 from __future__ import annotations
@@ -17,7 +18,9 @@ from PySide6.QtCore import QObject, Signal
 from PySide6.QtNetwork import QLocalServer, QLocalSocket
 
 
-def caminho_do_cadeado() -> Path:
+def caminho_do_cadeado() -> Path | str:
+    if os.name == "nt":   # o QLocalServer do Windows quer um nome, não um caminho
+        return f"jarvis-interface-{os.environ.get('USERNAME', '')}"
     base = os.environ.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}"
     return Path(base) / "jarvis-interface.sock"
 

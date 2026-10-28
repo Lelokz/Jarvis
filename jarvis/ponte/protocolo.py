@@ -362,15 +362,15 @@ def caminho_socket(configurado: str = "") -> Path:
     """
     if configurado:
         return Path(configurado).expanduser()
-    base = os.environ.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}"
-    return Path(base) / "jarvis.sock"
+    from jarvis import canal
+    return canal.pasta() / "jarvis.sock"
 
 
 def pasta_audio() -> Path:
     """Onde a porta remota deixa as falas gravadas no celular para o "ouvir".
     Dentro do `$XDG_RUNTIME_DIR` (só o usuário entra, some no logout)."""
-    base = os.environ.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}"
-    return Path(base) / "jarvis-remoto"
+    from jarvis import canal
+    return canal.pasta() / "jarvis-remoto"
 
 
 def pasta_recebidos() -> Path:

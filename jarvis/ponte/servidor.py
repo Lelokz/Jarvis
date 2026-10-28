@@ -24,13 +24,14 @@ import os
 import queue
 import selectors
 import socket
-import stat
 import threading
 import time
 from collections import deque
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+
+from jarvis import canal
 
 from . import protocolo
 
@@ -141,23 +142,14 @@ class Servidor:
 
     def iniciar(self) -> None:
         if os.path.lexists(self.caminho):
-            if not stat.S_ISSOCK(os.lstat(self.caminho).st_mode):
+            if not canal.eh_canal(self.caminho):
                 raise OSError(f"{self.caminho} existe e não é um socket — não apago")
             if self._alguem_responde():
                 raise ServidorOcupado(str(self.caminho))
             # Sobra de um Jarvis que morreu sem limpar (kill -9, queda de luz).
             self.caminho.unlink()
 
-        escuta = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        # O socket nasce já fechado para os outros usuários: sem janela entre o
-        # bind e o chmod em que alguém de fora poderia conectar.
-        mascara = os.umask(0o177)
-        try:
-            escuta.bind(str(self.caminho))
-        finally:
-            os.umask(mascara)
-        os.chmod(self.caminho, 0o600)
-        escuta.listen(8)
+        escuta = canal.escutar(self.caminho, fila=8)
         escuta.setblocking(False)
 
         self._escuta = escuta
@@ -178,18 +170,14 @@ class Servidor:
         pegou — justamente o caso que acontece na primeira vez que o Jarvis é
         religado depois de um travamento.
         """
-        teste = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        teste.settimeout(0.5)
         try:
-            teste.connect(str(self.caminho))
+            canal.conectar(self.caminho, timeout=0.5).close()
             return True
         except (ConnectionRefusedError, FileNotFoundError):
             return False
         except TimeoutError:
             # Escutando, mas com a fila de conexões cheia: vivo e ocupado.
             return True
-        finally:
-            teste.close()
 
     def encerrar(self) -> None:
         self._parar.set()

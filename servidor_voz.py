@@ -23,7 +23,6 @@ import json
 import os
 import re
 import shutil
-import socket
 import subprocess
 import time
 from collections import OrderedDict
@@ -31,6 +30,8 @@ from collections import OrderedDict
 import numpy as np
 from f5_tts.api import F5TTS
 from num2words import num2words
+
+from jarvis import canal  # o canal com o assistente (só biblioteca padrão)
 
 
 def normalizar(texto: str) -> str:
@@ -76,8 +77,7 @@ def main() -> int:
     p.add_argument("--modelo", required=True)
     p.add_argument("--ref", required=True)
     p.add_argument("--ref-texto", required=True)
-    p.add_argument("--socket", default=os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"),
-                                                    "jarvis-voz.sock"))
+    p.add_argument("--socket", default=str(canal.pasta() / "jarvis-voz.sock"))
     # 32 passos: com 16 sai em metade do tempo, mas a voz borbulha mais e
     # fica fina (o Léo escolheu de ouvido a versão de 32, 19/10/2026).
     p.add_argument("--nfe", type=int, default=32)
@@ -138,10 +138,7 @@ def main() -> int:
         gerar(fixa)
     if os.path.exists(a.socket):
         os.unlink(a.socket)
-    srv = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    srv.bind(a.socket)
-    os.chmod(a.socket, 0o600)
-    srv.listen(4)
+    srv = canal.escutar(a.socket, fila=4)
     print(f"voz pronta em {time.monotonic() - inicio:.1f}s: {a.socket}", flush=True)
 
     while True:

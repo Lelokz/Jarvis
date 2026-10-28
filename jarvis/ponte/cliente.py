@@ -24,6 +24,8 @@ from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
+from jarvis import canal
+
 from . import protocolo
 
 
@@ -40,9 +42,7 @@ class Cliente:
         O pedido de histórico vai JUNTO do `ola`, e não numa segunda ida: entre
         uma e outra, um evento ao vivo podia chegar e aparecer duas vezes.
         """
-        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        sock.settimeout(timeout)
-        sock.connect(str(self.caminho))
+        sock = canal.conectar(self.caminho, timeout=timeout)
         sock.settimeout(None)
         self._sock = sock
         self._buffer = bytearray()

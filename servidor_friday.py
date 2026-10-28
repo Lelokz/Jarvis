@@ -44,7 +44,6 @@ import hashlib
 import json
 import os
 import re
-import socket
 import time
 from collections import OrderedDict
 from pathlib import Path
@@ -58,6 +57,8 @@ from f5_tts.infer import utils_infer
 from num2words import num2words
 from parselmouth.praat import call
 from pydub import AudioSegment
+
+from jarvis import canal  # o canal com o assistente (só biblioteca padrão)
 
 _tirar_bordas = utils_infer.remove_silence_edges
 utils_infer.remove_silence_edges = lambda seg, *a, **k: _tirar_bordas(seg, *a, **k) + AudioSegment.silent(duration=400)
@@ -244,7 +245,7 @@ def main() -> int:
     p.add_argument("--modelo", default="friday-emilia-v1")
     p.add_argument("--whisper", default="large-v3-turbo", help="o nome ou a pasta do Whisper que confere a fala")
     p.add_argument("--ref", default="limpa1")
-    p.add_argument("--socket", default=os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "jarvis-friday.sock"))
+    p.add_argument("--socket", default=str(canal.pasta() / "jarvis-friday.sock"))
     p.add_argument("--nfe", type=int, default=12)
     # Sem o acabamento (corte, pergunta, volume): só para comparar de ouvido.
     p.add_argument("--cru", action="store_true")
@@ -358,10 +359,7 @@ def main() -> int:
     (disco / (hashlib.sha1(normalizar(aquecer).encode()).hexdigest() + ".pcm")).unlink(missing_ok=True)
     if os.path.exists(a.socket):
         os.unlink(a.socket)
-    srv = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    srv.bind(a.socket)
-    os.chmod(a.socket, 0o600)
-    srv.listen(4)
+    srv = canal.escutar(a.socket, fila=4)
     print(f"voz da Friday pronta em {time.monotonic() - inicio:.1f}s: {a.socket}", flush=True)
 
     while True:

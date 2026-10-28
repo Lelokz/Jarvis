@@ -5,10 +5,11 @@ A Kokoro gera a fala (no Jarvis) e este servidor troca o timbre pelo do
 JARVIS do filme. Substitui a F5 porque o "s" dela estourava e abafava, e
 nenhum filtro resolvia; o Léo aprovou a receita R1 de ouvido (20/10/2026).
 
-Roda na venv do Applio, com o PyTorch, de dentro da pasta do Applio. Não
-importa nada do pacote `jarvis`: se cair, o Jarvis fala com a Kokoro.
+Roda na venv do Applio, com o PyTorch, de dentro da pasta do Applio. Do pacote
+`jarvis` só usa o canal (biblioteca padrão): se cair, o Jarvis fala com a Kokoro.
 
-Protocolo (socket unix, uma conexão por frase):
+Protocolo (jarvis/canal.py: socket unix no Linux, TCP local no Windows; uma
+conexão por frase):
     -> {"taxa": 24000, "n": <bytes>}\\n + n bytes de PCM int16   ou  {"ping": true}\\n
     <- {"taxa": 40000, "n": <bytes>}\\n + n bytes de PCM int16   ou  {"erro": "..."}\\n
     <- (ping) {"ok": true, "receita": "<modelo e ajustes>"}\\n
@@ -24,19 +25,19 @@ import functools
 import hashlib
 import json
 import os
-import socket
 import sys
 import time
 
 import numpy as np
+
+from jarvis import canal  # o canal com o assistente (só biblioteca padrão)
 
 
 def main() -> int:
     p = argparse.ArgumentParser()
     p.add_argument("--modelo", required=True)
     p.add_argument("--index", required=True)
-    p.add_argument("--socket", default=os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"),
-                                                    "jarvis-rvc.sock"))
+    p.add_argument("--socket", default=str(canal.pasta() / "jarvis-rvc.sock"))
     # A receita R1 que o Léo aprovou: a Kokoro fala ~1 semitom acima do
     # JARVIS (136 x 127 Hz); índice 0,5 e proteção 0,33 (padrões do Applio).
     p.add_argument("--tom", type=float, default=-1)
@@ -102,10 +103,7 @@ def main() -> int:
     print(" · ".join(marcas), flush=True)
     if os.path.exists(a.socket):
         os.unlink(a.socket)
-    srv = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    srv.bind(a.socket)
-    os.chmod(a.socket, 0o600)
-    srv.listen(4)
+    srv = canal.escutar(a.socket, fila=4)
     # A receita vai no ping: o Jarvis guarda as frases repetidas em disco, numa
     # pasta por receita (trocar o modelo ou o tom não reaproveita áudio velho).
     receita = hashlib.sha1(f"{a.modelo}|{os.path.getmtime(a.modelo)}|{a.index}|{a.tom}|"

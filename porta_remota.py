@@ -48,7 +48,7 @@ from pathlib import Path
 RAIZ = Path(__file__).resolve().parent
 sys.path.insert(0, str(RAIZ))
 
-from jarvis import config  # noqa: E402
+from jarvis import canal, config  # noqa: E402
 from jarvis.ponte import protocolo, recebidos  # noqa: E402
 
 PAGINA = RAIZ / "jarvis" / "remoto" / "pagina.html"
@@ -266,8 +266,7 @@ def criar_app(cfg: config.Config):
             await ws.close(code=4401)
             return
         try:
-            leitor, escritor = await asyncio.open_unix_connection(
-                str(socket_ponte), limit=LIMITE_LINHA_PONTE)
+            leitor, escritor = await canal.abrir(socket_ponte, limit=LIMITE_LINHA_PONTE)
         except OSError:
             await ws.send_text(json.dumps({"ev": "erro", "motivo": "o Jarvis está desligado"},
                                           ensure_ascii=False))

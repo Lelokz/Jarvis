@@ -458,11 +458,12 @@ class VozF5(Voz):
                  rotulo: str = "jarvis dublado") -> None:
         import os
 
+        from . import canal
+
         self.rotulo = rotulo
         self.cfg = cfg
         self.reserva = reserva
-        self.caminho = cfg.socket_f5 if cfg.socket_f5.startswith("/") else os.path.join(
-            os.environ.get("XDG_RUNTIME_DIR", "/tmp"), cfg.socket_f5)
+        self.caminho = cfg.socket_f5 if os.path.isabs(cfg.socket_f5) else str(canal.pasta() / cfg.socket_f5)
         # O servidor sobe junto (jarvis.sh) e leva ~10 s carregando o modelo:
         # espera um pouco na partida em vez de começar já na reserva.
         inicio = time.monotonic()
@@ -472,12 +473,10 @@ class VozF5(Voz):
 
     def _vivo(self) -> bool:
         import json
-        import socket
+        from . import canal
 
         try:
-            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
-                s.settimeout(2)
-                s.connect(self.caminho)
+            with canal.conectar(self.caminho, timeout=2) as s:
                 s.sendall(b'{"ping": true}\n')
                 return json.loads(s.makefile("rb").readline() or b"{}").get("ok") is True
         except (OSError, ValueError):
@@ -490,15 +489,13 @@ class VozF5(Voz):
 
     def sintetizar(self, texto: str) -> Iterator[Trecho]:
         import json
-        import socket
+        from . import canal
 
         import numpy as np
 
         entregou = False
         try:
-            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
-                s.settimeout(2)
-                s.connect(self.caminho)
+            with canal.conectar(self.caminho, timeout=2) as s:
                 s.settimeout(30)
                 s.sendall(json.dumps({"texto": texto}, ensure_ascii=False).encode() + b"\n")
                 arq = s.makefile("rb")
@@ -572,11 +569,12 @@ class VozRVC(Voz):
         import os
         import threading
 
+        from . import canal
+
         self.cfg = cfg
         self.entrada = entrada
         self.reserva = reserva
-        self.caminho = cfg.socket_rvc if cfg.socket_rvc.startswith("/") else os.path.join(
-            os.environ.get("XDG_RUNTIME_DIR", "/tmp"), cfg.socket_rvc)
+        self.caminho = cfg.socket_rvc if os.path.isabs(cfg.socket_rvc) else str(canal.pasta() / cfg.socket_rvc)
         self._pasta_base = pasta_cache
         self._guardadas: dict[str, bytes] = {}
         # O servidor sobe junto (jarvis.sh), mas leva ~50 s carregando: o
@@ -593,12 +591,10 @@ class VozRVC(Voz):
     def _receita(self) -> str | None:
         """A receita do servidor (modelo e ajustes), ou None se ele não responde."""
         import json
-        import socket
+        from . import canal
 
         try:
-            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
-                s.settimeout(2)
-                s.connect(self.caminho)
+            with canal.conectar(self.caminho, timeout=2) as s:
                 s.sendall(b'{"ping": true}\n')
                 r = json.loads(s.makefile("rb").readline() or b"{}")
                 return str(r.get("receita", "")) if r.get("ok") is True else None
@@ -639,7 +635,7 @@ class VozRVC(Voz):
         """Kokoro → servidor → volume igual ao da Kokoro. Levanta OSError se
         o servidor falhar."""
         import json
-        import socket
+        from . import canal
 
         import numpy as np
 
@@ -658,9 +654,7 @@ class VozRVC(Voz):
             if not self._rec:  # fora do ar: nem gasta a Kokoro à toa
                 raise OSError("servidor do timbre fora do ar")
         for trecho in self.entrada.sintetizar(pedaco):
-            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
-                s.settimeout(2)
-                s.connect(self.caminho)
+            with canal.conectar(self.caminho, timeout=2) as s:
                 s.settimeout(30)
                 s.sendall(json.dumps({"taxa": trecho.taxa, "n": len(trecho.pcm)}).encode()
                           + b"\n" + trecho.pcm)
