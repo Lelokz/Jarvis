@@ -98,7 +98,7 @@ def _estado_whatsapp(cfg: Config) -> dict:
     p = _pareamento(cfg)
     if p.get("estado") == "esperando":
         return {"estado": "esperando", "qr": _qr(p["qr"]) if p.get("qr") else "",
-                "codigo": p.get("codigo", "")}
+                "codigo": p.get("codigo", ""), "erro_codigo": p.get("erro", "")}
     if p.get("estado") == "conectado":
         return {"estado": "conectado"}
     if _ponte is not None and _ponte.poll() is None:
@@ -112,14 +112,18 @@ def _whatsapp(cfg: Config, acao: str, valor: str, _conectados) -> dict:
     if acao == "conectar":
         atual = _estado_whatsapp(cfg)
         telefone = "".join(c for c in valor if c.isdigit())
-        quer_codigo = telefone and telefone != _telefone
+        # Número novo, ou o mesmo depois de o WhatsApp recusar: sobe a ponte de novo.
+        quer_codigo = telefone and (telefone != _telefone or atual.get("erro_codigo"))
         if atual["estado"] in ("conectado", "pronto") or (atual["estado"] in ("esperando", "abrindo")
                                                         and not quer_codigo):
             return atual
         if atual["estado"] == "esperando" and (_ponte is None or _ponte.poll() is not None):
-            # Esperando, mas numa ponte que não é a nossa (o jarvis.sh): sem ela não dá
-            # para pedir o código; o QR dela serve.
-            return atual
+            # Esperando numa ponte que não é a nossa (a do jarvis.sh, ainda sem conta):
+            # o QR dela serve para a janela; o código (o app) pede uma nossa no lugar.
+            if not quer_codigo:
+                return atual
+            subprocess.run(["pkill", "-x", "whatsapp-bridge"], capture_output=True)
+            time.sleep(0.5)
         _subir_ponte(cfg, telefone)
         return {"estado": "abrindo"}
     if acao == "cancelar":

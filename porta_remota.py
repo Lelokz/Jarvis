@@ -70,7 +70,8 @@ LIMITE_LINHA_PONTE = 32 * 1024 * 1024
 # Os da janela nova (beta 0.6) também: conversas, cérebro, Parar.
 PEDIDOS_DO_CELULAR = {"falar", "memoria", "conversas", "abrir", "nova", "continuar", "cerebro",
                       "parar", "renomear", "apagar", "fixar", "ajustes",
-                      "memorias", "ler_memoria", "salvar_memoria"}  # a aba Memórias (25/10/2026)
+                      "memorias", "ler_memoria", "salvar_memoria",  # a aba Memórias (25/10/2026)
+                      "conexao"}  # o Conectar de Ajustes → Conexões (beta 0.17)
 # Foto, vídeo ou arquivo mandado pelo clipe do app. Vídeo de celular passa
 # disso fácil; por enquanto é o teto (o WebSocket guarda tudo na memória).
 MAX_ANEXO_BYTES = 64 * 1024 * 1024
@@ -406,6 +407,12 @@ def criar_app(cfg: config.Config):
                         pedido = {k: v for k, v in pedido.items() if k in ("pedir", "nome", "grupo_ligado")}
                         if len(pedido) == 1:
                             continue
+                    if pedido.get("pedir") == "conexao" and (
+                            pedido.get("id") == "celular" or
+                            (pedido.get("id") == "fora" and pedido.get("acao") == "desconectar")):
+                        # O QR com a chave é só da janela; e desligar o Fora de casa
+                        # pelo celular cortaria o próprio celular.
+                        continue
                     if pedido.get("pedir") == "falar":
                         relogio.clear()
                         relogio.update(pedido=time.monotonic(), tipo="texto")

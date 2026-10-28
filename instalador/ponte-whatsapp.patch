@@ -162,7 +162,7 @@ index d92eb5f..7314ff3 100644
  gopkg.in/yaml.v3 v3.0.1/go.mod h1:K4uyk7z7BCEPqu6E+C64Yfv1cQ7kz7rIZviUmN+EgEM=
  rsc.io/qr v0.2.0 h1:6vBLea5/NRMVTz8V66gipeLycZMl/+UlFmk8DvqQ6WY=
 diff --git a/whatsapp-bridge/main.go b/whatsapp-bridge/main.go
-index d1e0270..1b52328 100644
+index d1e0270..b5b7384 100644
 --- a/whatsapp-bridge/main.go
 +++ b/whatsapp-bridge/main.go
 @@ -54,7 +54,7 @@ func NewMessageStore() (*MessageStore, error) {
@@ -267,7 +267,7 @@ index d1e0270..1b52328 100644
  		}
  	})
  
-@@ -867,11 +897,26 @@ func main() {
+@@ -867,11 +897,29 @@ func main() {
  		}
  
  		// Print QR code for pairing with phone
@@ -275,26 +275,29 @@ index d1e0270..1b52328 100644
 +		// (só números, com o código do país), pede também o código de 8 letras
 +		// do "Conectar com número de telefone" (o app no celular não lê QR).
 +		telefone := os.Getenv("NOVA_TELEFONE")
-+		codigo := ""
++		codigo, erroCodigo := "", ""
  		for evt := range qrChan {
  			if evt.Event == "code" {
  				fmt.Println("\nScan this QR code with your WhatsApp app:")
  				qrterminal.GenerateHalfBlock(evt.Code, qrterminal.L, os.Stdout)
-+				if telefone != "" && codigo == "" {
++				// Uma tentativa só: o WhatsApp recusa (número errado) e não adianta insistir.
++				if telefone != "" && codigo == "" && erroCodigo == "" {
 +					if c, err := client.PairPhone(context.Background(), telefone, true,
 +						whatsmeow.PairClientChrome, "Chrome (Linux)"); err == nil {
 +						codigo = c
 +					} else {
++						erroCodigo = err.Error()
 +						logger.Errorf("Código de pareamento: %v", err)
 +					}
 +				}
-+				gravarPareamento(map[string]string{"estado": "esperando", "qr": evt.Code, "codigo": codigo})
++				gravarPareamento(map[string]string{"estado": "esperando", "qr": evt.Code, "codigo": codigo,
++					"erro": erroCodigo})
  			} else if evt.Event == "success" {
 +				gravarPareamento(map[string]string{"estado": "conectado"})
  				connected <- true
  				break
  			}
-@@ -883,10 +928,12 @@ func main() {
+@@ -883,10 +931,12 @@ func main() {
  			fmt.Println("\nSuccessfully connected and authenticated!")
  		case <-time.After(3 * time.Minute):
  			logger.Errorf("Timeout waiting for QR code scan")
@@ -307,7 +310,7 @@ index d1e0270..1b52328 100644
  		err = client.Connect()
  		if err != nil {
  			logger.Errorf("Failed to connect: %v", err)
-@@ -973,7 +1020,7 @@ func GetChatName(client *whatsmeow.Client, messageStore *MessageStore, jid types
+@@ -973,7 +1023,7 @@ func GetChatName(client *whatsmeow.Client, messageStore *MessageStore, jid types
  
  		// If we didn't get a name, try group info
  		if name == "" {
@@ -316,7 +319,7 @@ index d1e0270..1b52328 100644
  			if err == nil && groupInfo.Name != "" {
  				name = groupInfo.Name
  			} else {
-@@ -988,7 +1035,7 @@ func GetChatName(client *whatsmeow.Client, messageStore *MessageStore, jid types
+@@ -988,7 +1038,7 @@ func GetChatName(client *whatsmeow.Client, messageStore *MessageStore, jid types
  		logger.Infof("Getting name for contact: %s", chatJID)
  
  		// Just use contact info (full name)

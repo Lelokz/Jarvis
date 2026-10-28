@@ -3,6 +3,8 @@ package com.lelokz.jarvis
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Bundle
+import android.net.Uri
+import android.content.Intent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
@@ -201,13 +203,17 @@ class MainActivity : ComponentActivity() {
         if (intent.getBooleanExtra("desbloqueio", false)) (application as App).jarvis.conferirDesbloqueio()
         if (intent.getBooleanExtra("aprovacao", false)) (application as App).jarvis.conferirPedidos()
         (application as App).jarvis.receberCompartilhado(intent)
+        (application as App).jarvis.ligarPorLink(intent)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         if (intent?.getBooleanExtra("desbloqueio", false) == true) (application as App).jarvis.conferirDesbloqueio()
         if (intent?.getBooleanExtra("aprovacao", false) == true) (application as App).jarvis.conferirPedidos()
-        if (savedInstanceState == null) intent?.let { (application as App).jarvis.receberCompartilhado(it) }
+        if (savedInstanceState == null) intent?.let {
+            (application as App).jarvis.receberCompartilhado(it)
+            (application as App).jarvis.ligarPorLink(it)
+        }
         enableEdgeToEdge()
         setContent {
             MaterialTheme(colorScheme = darkColorScheme(background = Fundo, surface = Fundo)) {
@@ -236,10 +242,11 @@ fun Entrada(modelo: Jarvis) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             AtomoFixo(Azul, 28.dp)
             Spacer(Modifier.width(10.dp))
-            Text("JARVIS", color = Texto, fontSize = 22.sp, fontWeight = FontWeight.Bold, letterSpacing = 4.sp)
+            Text("NOVA", color = Texto, fontSize = 22.sp, fontWeight = FontWeight.Bold, letterSpacing = 4.sp)
         }
         Spacer(Modifier.height(8.dp))
-        Text("Cola o link da NOVA (o mesmo da página, com a chave).", color = Fraco, fontSize = 14.sp)
+        Text("Escaneia o QR da janela do PC (Ajustes → Conexões → Celular) com a câmera, ou cola o link da NOVA aqui.",
+            color = Fraco, fontSize = 14.sp)
         Spacer(Modifier.height(16.dp))
         OutlinedTextField(
             value = link, onValueChange = { link = it; erro = false },
@@ -288,6 +295,8 @@ fun Tela(modelo: Jarvis) {
             gaveta.isOpen -> escopo.launch { gaveta.close() }
             // Uma memória aberta: o voltar volta para a lista das Memórias.
             modelo.pagina.value == "memoria" && modelo.memoriaAberta.value != null -> modelo.pedirMemorias()
+            // Num passo a passo das Conexões: o voltar volta para os cartões.
+            modelo.pagina.value == "ajustes" && modelo.passoConexao.value.isNotEmpty() -> modelo.fecharPasso()
             // Dentro de uma categoria dos Ajustes: o voltar volta para a lista delas.
             modelo.pagina.value == "ajustes" && modelo.abaAjustes.value.isNotEmpty() -> modelo.abaAjustes.value = ""
             modelo.pagina.value != "chat" -> modelo.pagina.value = "chat"
@@ -998,7 +1007,7 @@ private fun Gaveta(modelo: Jarvis, fechar: () -> Unit) {
                     .clickable {
                         modelo.pagina.value = if (aqui) "chat" else pagina
                         if (pagina == "memoria") modelo.pedirMemoria()
-                        if (pagina == "ajustes") { modelo.abaAjustes.value = ""; modelo.pedirAjustes() }
+                        if (pagina == "ajustes") { modelo.fecharPasso(); modelo.abaAjustes.value = ""; modelo.pedirAjustes() }
                         fechar()
                     }.padding(horizontal = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -1248,19 +1257,6 @@ private val categoriasDosAjustes = listOf(
     "" to listOf(Categoria("sobre", "Sobre a NOVA", "Versão e o que é a NOVA", Icones.sobre)),
 )
 
-private data class InfoConexao(val id: String, val nome: String, val descricao: String, val icone: ImageVector)
-
-// O nome e a descrição de cada conexão (os mesmos da janela); o estado vem do PC.
-private val infoConexoes = listOf(
-    InfoConexao("whatsapp", "WhatsApp", "Ler e mandar mensagens, e avisar quem te escreveu.", Icones.whats),
-    InfoConexao("grupo", "Grupo do WhatsApp", "Responde no grupo da família quando chamam o Jarvis.", Icones.grupo),
-    InfoConexao("celular", "Celular", "O app NOVA: conversar e receber avisos pelo celular.", Icones.celular),
-    InfoConexao("relogio", "Relógio", "Falar pelo relógio. Precisa do celular conectado.", Icones.relogio),
-    InfoConexao("fora", "Fora de casa", "Usar o celular longe do Wi-Fi de casa (Tailscale).", Icones.globo),
-    InfoConexao("musica", "Música", "Tocar música e vídeo do YouTube pelo PC.", Icones.musica),
-    InfoConexao("atalhos", "Atalhos", "Programas e pastas que ele abre pelo nome.", Icones.raioTraco),
-)
-
 @Composable
 private fun PaginaAjustes(modelo: Jarvis) {
     val aba = modelo.abaAjustes.value
@@ -1272,7 +1268,7 @@ private fun PaginaAjustes(modelo: Jarvis) {
             "avisos" -> AjustesAvisos(modelo)
             "uso" -> AjustesUso(modelo)
             "personas" -> AjustesPersonas(modelo)
-            "conexoes" -> AjustesConexoes(modelo)
+            "conexoes" -> if (modelo.passoConexao.value.isEmpty()) AjustesConexoes(modelo) else PassoDaConexao(modelo)
             else -> AjustesSobre(modelo)
         }
         Spacer(Modifier.height(24.dp))
@@ -1470,13 +1466,119 @@ private fun EtiquetaDeEstado(estado: String) {
             .padding(horizontal = 9.dp, vertical = 3.dp))
 }
 
+private data class InfoConexao(val id: String, val nome: String, val descricao: String, val icone: ImageVector,
+                               val precisa: String = "")
+
+// O nome e a descrição de cada conexão (os mesmos da janela); o estado vem do PC.
+// `precisa`: a que tem que estar conectada antes (o cartão mostra "Precisa do…").
+private val infoConexoes = listOf(
+    InfoConexao("whatsapp", "WhatsApp", "Ler e mandar mensagens, e avisar quem te escreveu.", Icones.whats),
+    InfoConexao("grupo", "Grupo do WhatsApp", "Responde no grupo da família quando chamam o Jarvis.", Icones.grupo, "whatsapp"),
+    InfoConexao("fora", "Fora de casa", "O celular falar com o PC, em casa ou na rua (Tailscale).", Icones.globo),
+    InfoConexao("celular", "Celular", "Este celular.", Icones.celular),
+    InfoConexao("relogio", "Relógio", "Falar pelo relógio (Wear OS).", Icones.relogio, "celular"),
+    InfoConexao("musica", "Música", "Tocar música e vídeo do YouTube pelo PC.", Icones.musica),
+    InfoConexao("atalhos", "Atalhos", "Programas e pastas que ele abre pelo nome.", Icones.raioTraco),
+)
+
+private val Verde = Color(0xFF38D39F)
+private const val TAILSCALE = "com.tailscale.ipn"
+
+private fun estadoDe(modelo: Jarvis, id: String) = modelo.conexoes.value.firstOrNull { it.id == id }?.estado ?: ""
+
+/** "Precisa do WhatsApp" se a de antes não está conectada; "" se pode. */
+private fun faltaPara(modelo: Jarvis, c: InfoConexao): String {
+    if (c.precisa.isEmpty()) return ""
+    val e = estadoDe(modelo, c.precisa)
+    return if (e == "conectado" || e == "pronto") "" else "Precisa do " + infoConexoes.first { it.id == c.precisa }.nome
+}
+
+/** O texto com **negrito** (os passos têm os nomes dos botões do WhatsApp em negrito). */
+private fun negrito(texto: String) = buildAnnotatedString {
+    texto.split("**").forEachIndexed { i, pedaco ->
+        if (i % 2 == 1) withStyle(SpanStyle(color = Texto, fontWeight = FontWeight.SemiBold)) { append(pedaco) }
+        else append(pedaco)
+    }
+}
+
+@Composable
+private fun BotaoDeConexao(texto: String, forte: Boolean = false, ativo: Boolean = true, aoTocar: () -> Unit) {
+    Text(texto, color = if (forte) Color(0xFF06101D) else TextoMedio, fontSize = 13.5.sp,
+        fontWeight = if (forte) FontWeight.SemiBold else FontWeight.Normal,
+        modifier = Modifier.alpha(if (ativo) 1f else 0.4f).clip(RoundedCornerShape(9.dp))
+            .then(if (forte) Modifier.background(Azul) else Modifier.border(1.dp, TracoForte, RoundedCornerShape(9.dp)))
+            .clickable(enabled = ativo) { aoTocar() }.padding(horizontal = 14.dp, vertical = 8.dp))
+}
+
+/** Desconectar sem pop-up: o primeiro toque arma, o segundo (em até 4 s) faz. */
+@Composable
+private fun BotaoDesconectar(aoConfirmar: () -> Unit) {
+    var armado by remember { mutableStateOf(false) }
+    LaunchedEffect(armado) { if (armado) { delay(4000); armado = false } }
+    Text(if (armado) "Toca de novo pra confirmar" else "Desconectar", color = Perigo, fontSize = 13.5.sp,
+        modifier = Modifier.clip(RoundedCornerShape(9.dp))
+            .background(if (armado) Perigo.copy(alpha = 0.12f) else Color.Transparent)
+            .border(1.dp, Color(0xFF5C2A2C), RoundedCornerShape(9.dp))
+            .clickable { if (armado) { armado = false; aoConfirmar() } else armado = true }
+            .padding(horizontal = 14.dp, vertical = 8.dp))
+}
+
+/** Um passo do passo a passo: a bolinha (número, ✓ ou a de agora), o texto e o que mais precisar. */
+@Composable
+private fun PassoDaLista(numero: Int, titulo: String, dica: String = "", feito: Boolean = false, agora: Boolean = false,
+                         extra: @Composable () -> Unit = {}) {
+    Row(Modifier.fillMaxWidth().padding(vertical = 9.dp)) {
+        Box(Modifier.size(26.dp).clip(CircleShape)
+            .background(when { feito -> Verde.copy(alpha = 0.16f); agora -> Azul; else -> Superficie2 }),
+            contentAlignment = Alignment.Center) {
+            if (feito) Ic(Icones.certo, Verde, 14.dp)
+            else Text("$numero", color = if (agora) Color(0xFF06101D) else Fraco, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+        }
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f).padding(top = 3.dp)) {
+            Text(negrito(titulo), color = if (feito) TextoMedio else Texto, fontSize = 14.sp, lineHeight = 20.sp)
+            if (dica.isNotEmpty()) Text(dica, color = Fraco, fontSize = 12.5.sp, lineHeight = 18.sp, modifier = Modifier.padding(top = 2.dp))
+            extra()
+        }
+    }
+}
+
+@Composable
+private fun Espera(texto: String) {
+    Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        CircularProgressIndicator(Modifier.size(13.dp), color = Azul, strokeWidth = 2.dp)
+        Spacer(Modifier.width(8.dp))
+        Text(texto, color = Fraco, fontSize = 13.sp)
+    }
+}
+
+@Composable
+private fun NotaDaConexao(texto: String) {
+    Row(Modifier.fillMaxWidth().padding(top = 14.dp).clip(RoundedCornerShape(12.dp)).background(Superficie)
+        .border(1.dp, Traco, RoundedCornerShape(12.dp)).padding(12.dp)) {
+        Ic(Icones.sobre, Fraco, 17.dp)
+        Spacer(Modifier.width(10.dp))
+        Text(texto, color = Fraco, fontSize = 13.sp, lineHeight = 19.sp)
+    }
+}
+
+@Composable
+private fun CaixaDaConexao(conteudo: @Composable () -> Unit) {
+    Column(Modifier.fillMaxWidth().padding(vertical = 10.dp).clip(RoundedCornerShape(14.dp)).background(Superficie)
+        .border(1.dp, Traco, RoundedCornerShape(14.dp)).padding(18.dp),
+        horizontalAlignment = Alignment.CenterHorizontally) { conteudo() }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun AjustesConexoes(modelo: Jarvis) {
     val estados = modelo.conexoes.value
-    SecaoDosAjustes("O que eles usam", if (estados.isEmpty()) "Aparece quando o PC responder." else "O que o Jarvis e a Friday conseguem usar no PC.") {
+    SecaoDosAjustes("Conexões da NOVA", if (estados.isEmpty()) "Aparece quando o PC responder."
+        else "O que o Jarvis e a Friday conseguem usar no PC. Tudo começa desligado: liga só o que quiser.") {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             for (c in infoConexoes) {
-                val agora = estados.firstOrNull { it.id == c.id }
+                val estado = estadoDe(modelo, c.id)
+                val falta = faltaPara(modelo, c)
                 Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Superficie)
                     .border(1.dp, Traco, RoundedCornerShape(14.dp)).padding(14.dp)) {
                     Box(Modifier.size(38.dp).clip(RoundedCornerShape(11.dp)).background(Superficie2),
@@ -1484,20 +1586,242 @@ private fun AjustesConexoes(modelo: Jarvis) {
                     Spacer(Modifier.width(13.dp))
                     Column(Modifier.weight(1f)) {
                         Text(c.nome, color = Texto, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                        Text(c.descricao + (agora?.detalhe?.takeIf { it.isNotEmpty() }?.let { " ($it)" } ?: ""),
-                            color = Fraco, fontSize = 13.sp, modifier = Modifier.padding(top = 3.dp))
+                        Text(c.descricao, color = Fraco, fontSize = 13.sp, modifier = Modifier.padding(top = 3.dp))
                         Row(Modifier.fillMaxWidth().padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                            EtiquetaDeEstado(agora?.estado ?: "")
+                            EtiquetaDeEstado(estado)
                             Spacer(Modifier.weight(1f))
-                            // O grupo liga e desliga daqui (o mesmo interruptor de antes).
-                            if (c.id == "grupo" && modelo.temGrupo.value)
-                                Chave(modelo.grupoLigado.value) { modelo.alternarGrupo() }
+                            when {
+                                // O cartão do Celular é este próprio celular: não tem o que conectar.
+                                c.id == "celular" || estados.isEmpty() -> {}
+                                falta.isNotEmpty() -> Text(falta, color = MuitoFraco, fontSize = 12.5.sp)
+                                c.id == "atalhos" || (estado == "conectado" && c.id in listOf("relogio", "musica")) ->
+                                    BotaoDeConexao("Como usar") { modelo.abrirPasso(c.id) }
+                                estado == "conectado" || estado == "pronto" -> BotaoDeConexao("Gerenciar") { modelo.abrirPasso(c.id) }
+                                else -> BotaoDeConexao("Conectar", forte = true) { modelo.abrirPasso(c.id) }
+                            }
                         }
                     }
                 }
             }
         }
     }
+    val abrir = androidx.compose.ui.platform.LocalUriHandler.current
+    SecaoDosAjustes("Da tua conta do Claude",
+        "Gmail, Agenda, Drive e outros: liga no site do Claude e o Jarvis e a Friday já usam, aqui e no PC.") {
+        val lista = modelo.conectores.value
+        if (lista.isEmpty()) Text("Nenhum ligado ainda.", color = MuitoFraco, fontSize = 13.sp)
+        else FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            for (nome in lista) Row(Modifier.clip(RoundedCornerShape(16.dp)).background(Superficie)
+                .border(1.dp, Traco, RoundedCornerShape(16.dp)).padding(horizontal = 11.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(7.dp).clip(CircleShape).background(Verde))
+                Spacer(Modifier.width(7.dp))
+                Text(nome, color = TextoMedio, fontSize = 13.sp)
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+        BotaoDeConexao("Adicionar no claude.ai") { abrir.openUri("https://claude.ai/settings/connectors") }
+    }
+}
+
+/** O passo a passo de uma conexão (o Conectar ou o Gerenciar de um cartão). */
+@Composable
+private fun PassoDaConexao(modelo: Jarvis) {
+    val id = modelo.passoConexao.value
+    val info = infoConexoes.first { it.id == id }
+    // O estado de agora, de 2 em 2 s; o Fora de casa repete o "conectar" para ligar o
+    // acesso sozinho quando o celular aparecer na conta (o mesmo da janela).
+    if (id != "relogio" && id != "atalhos") LaunchedEffect(id) {
+        while (true) { delay(2000); modelo.pedirConexao(id, if (id == "fora") "conectar" else "estado") }
+    }
+    val e = modelo.estadoPasso.value
+    val estado = e.optString("estado").ifEmpty { estadoDe(modelo, id) }
+    Row(Modifier.padding(top = 10.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(38.dp).clip(RoundedCornerShape(11.dp)).background(Superficie2),
+            contentAlignment = Alignment.Center) { Ic(info.icone, Azul, 18.dp) }
+        Spacer(Modifier.width(12.dp))
+        Text(info.nome, color = Texto, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+        EtiquetaDeEstado(if (id == "atalhos") "conectado" else if (estado in listOf("conectado", "pronto")) estado else "desligado")
+    }
+    val detalhe = e.optString("detalhe")
+    if (estado == "falta" || estado == "erro") {
+        Text(detalhe, color = Pergunta, fontSize = 14.sp, modifier = Modifier.padding(top = 10.dp))
+        return
+    }
+    when (id) {
+        "whatsapp" -> PassoWhatsapp(modelo, e, estado)
+        "grupo" -> PassoGrupo(modelo, e)
+        "fora" -> PassoFora(e, estado)
+        "relogio" -> {
+            val celular = estadoDe(modelo, "celular") == "conectado"
+            PassoDaLista(1, "Celular conectado", feito = celular)
+            PassoDaLista(2, "Instalar o NOVA no relógio", agora = celular,
+                dica = "Por enquanto é pela depuração sem fio do relógio: o Léo te ajuda nesse passo.")
+            PassoDaLista(3, "Abre o NOVA no relógio e toca no átomo", feito = estadoDe(modelo, "relogio") == "conectado",
+                dica = "O cartão vira \"Conectado\" quando ele aparecer.")
+            NotaDaConexao("Funciona com relógio Wear OS (Galaxy Watch e parecidos), sempre por este celular.")
+        }
+        "musica" -> {
+            val feito = estado == "conectado"
+            PassoDaLista(1, if (feito) "O programa que toca o som (o mpv) está instalado no PC"
+                else "Falta o programa que toca o som (o mpv). Roda isto no terminal do PC:", feito = feito, agora = !feito,
+                dica = if (feito) "" else "Pede a tua senha do PC. A NOVA não roda nada como administrador sozinha.") {
+                if (!feito) Text(e.optString("comando", "sudo apt install mpv mpv-mpris"), color = Texto, fontSize = 13.sp,
+                    fontFamily = FontFamily.Monospace,
+                    modifier = Modifier.padding(top = 8.dp).fillMaxWidth().clip(RoundedCornerShape(9.dp)).background(Superficie)
+                        .border(1.dp, Traco, RoundedCornerShape(9.dp)).padding(horizontal = 12.dp, vertical = 10.dp))
+            }
+            PassoDaLista(2, if (feito) "Pede: **\"Jarvis, toca uma música\"**" else "Volta aqui: o cartão vira \"Conectado\" sozinho",
+                agora = feito)
+        }
+        else -> {
+            PassoDaLista(1, "Pede: **\"Jarvis, cria um atalho pro Discord\"**", dica = "Vale programa, pasta ou site.")
+            PassoDaLista(2, "Depois é só falar: **\"abre o Discord\"**")
+            NotaDaConexao("Os atalhos ficam no PC.")
+        }
+    }
+}
+
+/** No app, o WhatsApp vai pelo código de 8 letras do "Conectar com número de telefone":
+ *  o próprio celular não lê o QR da tela dele. */
+@Composable
+private fun PassoWhatsapp(modelo: Jarvis, e: org.json.JSONObject, estado: String) {
+    var numero by remember { mutableStateOf("") }
+    var pediu by remember { mutableStateOf(false) }
+    var invalido by remember { mutableStateOf(false) }
+    val codigo = e.optString("codigo")
+    val erroCodigo = e.optString("erro_codigo")
+    if (estado == "conectado" || estado == "pronto") {
+        Text("Conectado. O Jarvis e a Friday leem as mensagens do PC e avisam quem te escreveu.",
+            color = TextoMedio, fontSize = 14.sp, lineHeight = 20.sp, modifier = Modifier.padding(vertical = 10.dp))
+        BotaoDesconectar { modelo.pedirConexao("whatsapp", "desconectar") }
+        NotaDaConexao("As mensagens ficam só no PC. Mandar sempre pede o teu \"pode\" falado.")
+        return
+    }
+    if (codigo.isNotEmpty() || (pediu && estado in listOf("esperando", "abrindo"))) {
+        CaixaDaConexao {
+            when {
+                codigo.isNotEmpty() -> {
+                    Text(codigo.chunked(4).joinToString("-"), color = Texto, fontSize = 30.sp, letterSpacing = 3.sp,
+                        fontFamily = FontFamily.Monospace, fontWeight = FontWeight.SemiBold)
+                    Espera("esperando o WhatsApp…")
+                }
+                erroCodigo.isNotEmpty() -> {
+                    Text("O WhatsApp não aceitou esse número. Confere o DDD e tenta de novo.", color = Pergunta,
+                        fontSize = 14.sp, textAlign = TextAlign.Center)
+                    Spacer(Modifier.height(10.dp))
+                    BotaoDeConexao("Tentar de novo") { pediu = false }
+                }
+                else -> Espera("pedindo o código ao WhatsApp…")
+            }
+        }
+        PassoDaLista(1, "Abre o WhatsApp → **Aparelhos conectados** → **Conectar um aparelho**", agora = true,
+            dica = "Android: os três pontinhos. iPhone: Configurações.")
+        PassoDaLista(2, "Toca em **Conectar com número de telefone**")
+        PassoDaLista(3, "Digita o código acima", dica = "Pronto: o cartão vira \"Conectado\" sozinho.")
+        NotaDaConexao("As mensagens ficam só no PC. Mandar sempre pede o teu \"pode\" falado.")
+        return
+    }
+    if (estado == "expirou") Text("O código expirou. Pede outro.", color = Pergunta, fontSize = 14.sp,
+        modifier = Modifier.padding(top = 10.dp))
+    Text("O teu número do WhatsApp", color = Texto, fontSize = 14.sp, modifier = Modifier.padding(top = 12.dp))
+    Text("Com o DDD. O WhatsApp manda um código de 8 letras para ligar o PC à tua conta.", color = Fraco,
+        fontSize = 12.5.sp, modifier = Modifier.padding(top = 2.dp, bottom = 10.dp))
+    Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(9.dp)).background(Superficie)
+        .border(1.dp, if (invalido) Perigo else Traco, RoundedCornerShape(9.dp)).padding(horizontal = 12.dp, vertical = 11.dp)) {
+        if (numero.isEmpty()) Text("48 99999-9999", color = MuitoFraco, fontSize = 15.sp)
+        BasicTextField(numero, { numero = it.take(20); invalido = false }, singleLine = true,
+            textStyle = TextStyle(color = Texto, fontSize = 15.sp, fontFamily = Inter), cursorBrush = SolidColor(Azul),
+            keyboardOptions = KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Phone),
+            modifier = Modifier.fillMaxWidth())
+    }
+    if (invalido) Text("Esse número está curto. Põe o DDD junto.", color = Perigo, fontSize = 12.5.sp,
+        modifier = Modifier.padding(top = 4.dp))
+    Spacer(Modifier.height(12.dp))
+    BotaoDeConexao("Pedir o código", forte = true, ativo = modelo.conectado.value) {
+        // Com DDD e sem o país, é do Brasil: o WhatsApp quer o 55 na frente.
+        val digitos = numero.filter { it.isDigit() }.let { if (it.length in 10..11) "55$it" else it }
+        if (digitos.length < 12) invalido = true
+        else { pediu = true; modelo.pedirConexao("whatsapp", "conectar", digitos) }
+    }
+    NotaDaConexao("As mensagens ficam só no PC. Mandar sempre pede o teu \"pode\" falado.")
+}
+
+@Composable
+private fun PassoGrupo(modelo: Jarvis, e: org.json.JSONObject) {
+    val escolhido = e.optString("escolhido")
+    val ligado = e.optBoolean("ligado")
+    val grupos = e.optJSONArray("grupos")
+    LinhaDeAjuste("Responder no grupo", if (escolhido.isEmpty()) "Escolhe um grupo primeiro." else "Liga e desliga quando quiser.",
+        ultima = true) {
+        Switch(checked = ligado, enabled = escolhido.isNotEmpty(), onCheckedChange = { modelo.ligarGrupo(it) },
+            colors = SwitchDefaults.colors(checkedTrackColor = Azul, checkedThumbColor = Color.White,
+                uncheckedTrackColor = Superficie2, uncheckedThumbColor = Fraco, uncheckedBorderColor = TracoForte))
+    }
+    Text("Escolhe o grupo onde o Jarvis responde quando alguém escreve \"Jarvis, …\".", color = Fraco, fontSize = 13.sp,
+        modifier = Modifier.padding(top = 8.dp, bottom = 8.dp))
+    if (grupos == null) { Espera("procurando os teus grupos…"); return }
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Superficie)
+        .border(1.dp, Traco, RoundedCornerShape(14.dp))) {
+        for (i in 0 until grupos.length()) {
+            val g = grupos.optJSONObject(i) ?: continue
+            val jid = g.optString("jid")
+            val sim = jid == escolhido
+            if (i > 0) Box(Modifier.fillMaxWidth().height(1.dp).background(Traco))
+            Row(Modifier.fillMaxWidth().clickable(enabled = !sim) { modelo.pedirConexao("grupo", "escolher", jid) }
+                .padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(18.dp).clip(CircleShape).border(2.dp, if (sim) Azul else TracoForte, CircleShape),
+                    contentAlignment = Alignment.Center) {
+                    if (sim) Box(Modifier.size(8.dp).clip(CircleShape).background(Azul))
+                }
+                Spacer(Modifier.width(12.dp))
+                Text(g.optString("nome"), color = if (sim) Texto else TextoMedio, fontSize = 14.sp, maxLines = 1,
+                    overflow = TextOverflow.Ellipsis)
+            }
+        }
+    }
+    if (escolhido.isNotEmpty()) {
+        Spacer(Modifier.height(12.dp))
+        BotaoDesconectar { modelo.pedirConexao("grupo", "desconectar") }
+    }
+    NotaDaConexao("No grupo ele conversa, pesquisa e anota recados. O que mexe nas tuas coisas (arquivos, mensagens, " +
+        "o PC) só acontece com o teu Sim neste celular.")
+}
+
+@Composable
+private fun PassoFora(e: org.json.JSONObject, estado: String) {
+    val contexto = LocalContext.current
+    val noPc = e.optBoolean("instalado") && e.optString("conta").isNotEmpty()
+    val aqui = remember(e) { contexto.packageManager.getLaunchIntentForPackage(TAILSCALE) != null }
+    val celular = e.optString("celular")
+    val servindo = e.optBoolean("servindo")
+    if (estado == "conectado") Text("Conectado: este celular alcança o PC em casa ou na rua.", color = TextoMedio,
+        fontSize = 14.sp, modifier = Modifier.padding(vertical = 10.dp))
+    else Text("O Tailscale é um app grátis que liga este celular ao PC, em casa ou na rua, sem abrir nada para a internet.",
+        color = Fraco, fontSize = 13.sp, lineHeight = 19.sp, modifier = Modifier.padding(vertical = 10.dp))
+    PassoDaLista(1, "Tailscale no PC", feito = noPc, agora = !noPc,
+        dica = if (noPc) "Ligado na conta ${e.optString("conta")}." else "Esse passo é na janela do PC: Ajustes → Conexões → Fora de casa.")
+    PassoDaLista(2, "Instala o Tailscale neste celular", feito = aqui, agora = noPc && !aqui) {
+        if (!aqui) Box(Modifier.padding(top = 8.dp)) {
+            BotaoDeConexao("Abrir a Play Store", forte = noPc) {
+                val loja = Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=$TAILSCALE"))
+                runCatching { contexto.startActivity(loja) }.onFailure {
+                    contexto.startActivity(Intent(Intent.ACTION_VIEW,
+                        Uri.parse("https://play.google.com/store/apps/details?id=$TAILSCALE")))
+                }
+            }
+        }
+    }
+    PassoDaLista(3, "Entra com a **mesma conta** do PC", feito = celular.isNotEmpty(), agora = aqui && celular.isEmpty(),
+        dica = if (celular.isNotEmpty()) "Achei: $celular." else "") {
+        if (aqui && celular.isEmpty()) Box(Modifier.padding(top = 8.dp)) {
+            BotaoDeConexao("Abrir o Tailscale") {
+                contexto.packageManager.getLaunchIntentForPackage(TAILSCALE)?.let { contexto.startActivity(it) }
+            }
+        }
+    }
+    PassoDaLista(4, "Volta aqui: a NOVA confere e liga sozinha", feito = servindo, agora = celular.isNotEmpty() && !servindo,
+        dica = e.optString("detalhe"))
 }
 
 @Composable

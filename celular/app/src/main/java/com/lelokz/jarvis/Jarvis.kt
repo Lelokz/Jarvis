@@ -109,13 +109,17 @@ class Jarvis(private val app: Application) {
     val nomeUsuario = mutableStateOf(prefs.getString("nome_usuario", "") ?: "")
     val nomePc = mutableStateOf(prefs.getString("nome_pc", "") ?: "")
     // O Jarvis no grupo da família (beta 0.13.0): configurado no PC? ligado?
-    val temGrupo = mutableStateOf(prefs.getBoolean("tem_grupo", false))
     val grupoLigado = mutableStateOf(false)
     // O volume da voz NO PC e o estado das conexões (do evento "ajustes"; beta 0.17.0).
     val volumeVoz = mutableIntStateOf(100)
     // O PC tem o perfil da voz do dono (null = PC antigo, que não manda).
     val reconheceVoz = mutableStateOf<Boolean?>(null)
     val conexoes = mutableStateOf<List<EstadoConexao>>(emptyList())
+    // Os conectores da conta do Claude ligados no PC (Gmail, Agenda...).
+    val conectores = mutableStateOf<List<String>>(emptyList())
+    // O passo a passo aberto em Conexões ("" = a lista) e a última resposta do PC para ele.
+    val passoConexao = mutableStateOf("")
+    val estadoPasso = mutableStateOf(JSONObject())
     // O pedido de alguém do grupo esperando o Sim: (id, quem, pedido).
     val pedidoGrupo = mutableStateOf<Triple<String, String, String>?>(null)
     val avisoAtualizacao = mutableStateOf(false)
@@ -170,6 +174,23 @@ class Jarvis(private val app: Application) {
         configurado.value = true
         conectar()
         return true
+    }
+
+    /** O QR do Celular na janela abre a página /ligar, que chama nova://ligar?link=...
+     *  Só liga um app ainda sem PC (ou ao mesmo PC): um site qualquer não pode trocar o
+     *  PC deste app por outro. Trocar de PC é em Ajustes → Geral. */
+    fun ligarPorLink(intent: Intent) {
+        val dados = intent.data ?: return
+        if (dados.scheme != "nova" || dados.host != "ligar") return
+        val link = dados.getQueryParameter("link") ?: return
+        val base = Regex("https://[A-Za-z0-9.-]+\\.ts\\.net").find(link)?.value
+        if (base == null) { aviso.value = "Esse link não é de um PC da NOVA."; return }
+        val atual = prefs.getString("base", null)?.trimEnd('/')
+        if (configurado.value && atual != null && atual != base) {
+            aviso.value = "Este celular já está ligado a outro PC. Para trocar: Ajustes → Geral."
+            return
+        }
+        if (configurar(link)) aviso.value = "Ligado ao PC"
     }
 
     fun esquecer() {
@@ -245,8 +266,27 @@ class Jarvis(private val app: Application) {
         conexao?.enviar(JSONObject().put("pedir", "ajustes").put("volume_voz", v.coerceIn(0, 100)))
     }
 
-    fun alternarGrupo() {
-        conexao?.enviar(JSONObject().put("pedir", "ajustes").put("grupo_ligado", !grupoLigado.value))
+    /** O Conectar de Ajustes → Conexões: a resposta volta como o evento "conexao". */
+    fun pedirConexao(id: String, acao: String = "estado", valor: String = "") {
+        conexao?.enviar(JSONObject().put("pedir", "conexao").put("id", id).put("acao", acao).put("valor", valor))
+    }
+
+    fun abrirPasso(id: String) {
+        passoConexao.value = id
+        estadoPasso.value = JSONObject()
+        if (id != "relogio" && id != "atalhos") pedirConexao(id)
+    }
+
+    /** Fechar o passo a passo: um código do WhatsApp esperando é cancelado (a ponte para). */
+    fun fecharPasso() {
+        if (passoConexao.value == "whatsapp" && estadoPasso.value.optString("estado") == "esperando")
+            pedirConexao("whatsapp", "cancelar")
+        if (passoConexao.value.isNotEmpty()) pedirAjustes()
+        passoConexao.value = ""
+    }
+
+    fun ligarGrupo(ligado: Boolean) {
+        conexao?.enviar(JSONObject().put("pedir", "ajustes").put("grupo_ligado", ligado))
     }
 
     fun conferirDesbloqueio() {
@@ -718,9 +758,7 @@ class Jarvis(private val app: Application) {
             "notificacao" -> viewModelScope.launch(Dispatchers.IO) { Novidades.buscar(app) }
             "ajustes" -> {
                 nomeUsuario.value = ev.optString("nome", "")
-                temGrupo.value = ev.optString("grupo_jid", "").isNotEmpty()
                 grupoLigado.value = ev.optBoolean("grupo_ligado", false)
-                prefs.edit().putBoolean("tem_grupo", temGrupo.value).apply()
                 nomePc.value = ev.optString("pc", "")
                 volumeVoz.intValue = ev.optInt("volume_voz", volumeVoz.intValue)
                 reconheceVoz.value = if (ev.has("reconhece_voz")) ev.optBoolean("reconhece_voz") else null
@@ -729,8 +767,10 @@ class Jarvis(private val app: Application) {
                         lista.optJSONObject(i)?.let { EstadoConexao(it.optString("id"), it.optString("estado"), it.optString("detalhe")) }
                     }
                 }
+                ev.optJSONArray("conectores")?.let { lista -> conectores.value = List(lista.length()) { lista.optString(it) } }
                 prefs.edit().putString("nome_usuario", nomeUsuario.value).putString("nome_pc", nomePc.value).apply()
             }
+            "conexao" -> if (ev.optString("id") == passoConexao.value) estadoPasso.value = ev
             "uso" -> {
                 ev.optJSONObject("cinco_horas")?.let {
                     usoCinco.value = it.optDouble("uso", -1.0); voltaCinco.value = it.optDouble("volta_em", 0.0)
