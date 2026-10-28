@@ -103,7 +103,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.ExperimentalTextApi
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontVariation
@@ -139,9 +142,6 @@ val corDaFriday = mutableStateOf(Color(0xFFFF6FB5))
 private val CorDoJarvis = Color(0xFF4DA3FF)
 private val Azul: Color get() = if (personaAtiva.value == "friday") corDaFriday.value else CorDoJarvis
 private val Roxo = Color(0xFF9B7BFF)
-
-/** A versão da janela (a numeração do Léo, igual à do PC) e a do app. */
-const val VERSAO_JANELA = "beta 0.17.0"
 
 // A Inter, a fonte da janela do PC (licença OFL). Variável: o peso funciona.
 @OptIn(ExperimentalTextApi::class)
@@ -1245,7 +1245,7 @@ private val categoriasDosAjustes = listOf(
     "Personalização" to listOf(
         Categoria("personas", "Personas", "Jarvis e Friday", Icones.personas),
         Categoria("conexoes", "Conexões", "WhatsApp, celular, escola…", Icones.conexoes)),
-    "" to listOf(Categoria("sobre", "Sobre a NOVA", "Versão e cérebro", Icones.sobre)),
+    "" to listOf(Categoria("sobre", "Sobre a NOVA", "Versão e o que é a NOVA", Icones.sobre)),
 )
 
 private data class InfoConexao(val id: String, val nome: String, val descricao: String, val icone: ImageVector)
@@ -1501,20 +1501,25 @@ private fun AjustesConexoes(modelo: Jarvis) {
 private fun AjustesSobre(modelo: Jarvis) {
     val contexto = LocalContext.current
     val versaoDoApp = remember {
-        runCatching { contexto.packageManager.getPackageInfo(contexto.packageName, 0).versionName }.getOrNull()
-            ?.substringBefore(" (") ?: "—"
+        runCatching { contexto.packageManager.getPackageInfo(contexto.packageName, 0).versionName }.getOrNull() ?: "—"
     }
     SecaoDosAjustes("Sobre a NOVA") {
         val linhas = listOf(
+            "Versão" to versaoDoApp,
             "Conexão" to (if (modelo.conectado.value) "Ligado" else modelo.motivo.value),
-            "Cérebro" to (nomesModelo[modelo.modelo.value] ?: modelo.modelo.value),
-            "Esforço" to (nomesEsforco[modelo.esforco.value] ?: modelo.esforco.value),
-            "Versão do app" to versaoDoApp,
-            "Versão da janela" to VERSAO_JANELA,
         )
         linhas.forEachIndexed { i, (rotulo, valor) ->
             LinhaDeAjuste(rotulo, ultima = i == linhas.lastIndex) { Text(valor, color = TextoMedio, fontSize = 14.sp) }
         }
+        Text(buildAnnotatedString {
+            append("A NOVA é uma assistente que mora no teu PC e conversa contigo por voz, pela janela, " +
+                "pelo celular e pelo relógio. Ela tem duas personas: o ")
+            withStyle(SpanStyle(color = Texto, fontWeight = FontWeight.SemiBold)) { append("Jarvis") }
+            append(", mais sério e direto, e a ")
+            withStyle(SpanStyle(color = Texto, fontWeight = FontWeight.SemiBold)) { append("Friday") }
+            append(", mais carinhosa e animada. Você escolhe com quem quer falar, e os dois conhecem a tua " +
+                "rotina, lembram das tuas coisas e cuidam do que você pedir.")
+        }, color = TextoMedio, fontSize = 14.sp, lineHeight = 21.sp, modifier = Modifier.padding(top = 14.dp))
     }
 }
 

@@ -748,19 +748,31 @@ Item {
                 titulo: "Sobre a NOVA"
                 Repeater {
                     model: [
+                        ["Versão", "beta 0.17.0"],
                         ["Conexão", raiz.conectado ? "Ligado" : "Esperando o Jarvis subir"],
-                        ["Cérebro", raiz.nomes[raiz.modelo] || raiz.modelo || "—"],
-                        ["Esforço", raiz.nomes[raiz.esforco] || raiz.esforco || "—"],
-                        ["Conversa", raiz.conversa ? raiz.conversa.slice(0, 8) : "—"],
-                        ["Versão da janela", "beta 0.17.0"],
                     ]
                     Linha {
                         required property var modelData
                         required property int index
                         titulo: modelData[0]
-                        ultima: index === 4
+                        ultima: index === 1
                         Valor { text: modelData[1] }
                     }
+                }
+                Text {
+                    width: parent.width
+                    topPadding: 16
+                    wrapMode: Text.WordWrap
+                    textFormat: Text.StyledText
+                    lineHeight: 1.45
+                    color: raiz.tema.textoMedio
+                    font.family: raiz.tema.familia
+                    font.pixelSize: 14
+                    text: "A NOVA é uma assistente que mora no teu PC e conversa contigo por voz, pela janela, "
+                        + "pelo celular e pelo relógio. Ela tem duas personas: o <font color='" + raiz.tema.texto
+                        + "'><b>Jarvis</b></font>, mais sério e direto, e a <font color='" + raiz.tema.texto
+                        + "'><b>Friday</b></font>, mais carinhosa e animada. Você escolhe com quem quer falar, "
+                        + "e os dois conhecem a tua rotina, lembram das tuas coisas e cuidam do que você pedir."
                 }
             }
             Secao {
