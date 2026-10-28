@@ -43,6 +43,18 @@ ARQUIVOS_SOLTOS = {
     "vozes/voices-v1.0.bin": (KOKORO + "voices-v1.0.bin", "bca610b8308e8d99f32e6fe4197e7ec01679264efed0cac9140fe9c29f1fbf7d"),
 }
 VOZES_SHA256 = "d64bafe1df9dfb29404c122e48ca823d89ed1267224b90118a683aa9dbcba5bd"
+# A parte de tocar do Applio (o timbre do Jarvis): o código no commit testado e os
+# dois modelos auxiliares dele (Hugging Face oficial do Applio).
+APPLIO = "https://github.com/IAHispano/Applio/archive/da174445ec98d15d006175ac99db3879bd3a73d1.tar.gz"
+HF_APPLIO = "https://huggingface.co/IAHispano/Applio/resolve/main/Resources/"
+APPLIO_MODELOS = {
+    "rvc/models/predictors/rmvpe.pt": (HF_APPLIO + "predictors/rmvpe.pt", "6d62215f4306e3ca278246188607209f09af3dc77ed4232efdd069798c4ec193"),
+    "rvc/models/embedders/contentvec/pytorch_model.bin": (HF_APPLIO + "embedders/contentvec/pytorch_model.bin", "d8dd400e054ddf4e6be75dab5a2549db748cc99e756a097c496c099f65a4854e"),
+    "rvc/models/embedders/contentvec/config.json": (HF_APPLIO + "embedders/contentvec/config.json", "2ddde063b795d38d9051a7215a092fecf4cfe148b54251e38de51d88d356898b"),
+}
+# O Go oficial, só para compilar a ponte do WhatsApp (apagado depois).
+GO = ("https://go.dev/dl/go1.27.3.linux-amd64.tar.gz", "65efbc80fdc1fa2cd2631cad5b481777a68e8725f34e89f50fc6ac714e379b40")
+PONTE = Path.home() / ".local/share/jarvis/whatsapp-mcp/whatsapp-bridge"
 # O que não precisa ir para o PC de quem instala.
 # Os modelos vêm pelos passos (vozes/, modelos-wakeword/), e os arquivos pessoais do Léo
 # nunca estão no zip do GitHub, mas ficam de fora também se rodar de uma pasta como a dele.
@@ -235,6 +247,69 @@ def _dubladas(ctx: Contexto, avisar: Avisar) -> None:
     pacote.unlink()
 
 
+def _programas_vozes(ctx: Contexto, avisar: Avisar) -> None:
+    """Um ambiente só para a Friday e o timbre do Jarvis (instalador/requisitos-vozes.txt)."""
+    base = ctx.pasta / "programas"
+    venv = base / "vozes" / ".venv"
+    _rodar([ctx.uv, "venv", "--python", "3.12", "--allow-existing", str(venv)], avisar, "Preparando os programas das vozes")
+    # O torchcodec vai à parte, só do PyPI: com o índice do PyTorch junto viria a versão
+    # de placa, que pede bibliotecas CUDA que não vêm (testado em 28/10/2026).
+    lista = base / "requisitos-vozes.txt"
+    lista.parent.mkdir(parents=True, exist_ok=True)
+    linhas = (CODIGO / "instalador" / "requisitos-vozes.txt").read_text().splitlines()
+    lista.write_text("\n".join(l for l in linhas if not l.startswith("torchcodec==")) + "\n")
+    codec = next(l for l in linhas if l.startswith("torchcodec=="))
+    python = str(venv / "bin" / "python")
+    _rodar([ctx.uv, "pip", "install", "--python", python,
+            "--extra-index-url", "https://download.pytorch.org/whl/cu128", "--index-strategy", "unsafe-best-match",
+            "-r", str(lista)], avisar, "Baixando os programas das vozes")
+    _rodar([ctx.uv, "pip", "install", "--python", python, "--reinstall-package", "torchcodec", codec],
+           avisar, "Baixando os programas das vozes")
+    applio = base / "applio"
+    if not (applio / "rvc" / "infer" / "infer.py").exists():
+        avisar(-1, "Baixando a parte de tocar do Applio")
+        import io
+        import tarfile
+        with urllib.request.urlopen(APPLIO, timeout=120) as r:
+            with tarfile.open(fileobj=io.BytesIO(r.read()), mode="r:gz") as tar:
+                for membro in tar.getmembers():
+                    partes = Path(membro.name).parts
+                    if len(partes) > 1 and partes[1] == "rvc":
+                        membro.name = str(Path(*partes[1:]))
+                        tar.extract(membro, applio, filter="data")
+    for dentro, (url, sha) in APPLIO_MODELOS.items():
+        _baixar(url, applio / dentro, avisar, Path(dentro).name, sha)
+
+
+def _ponte(ctx: Contexto, avisar: Avisar) -> None:
+    """A ponte do WhatsApp: compila os 3 arquivos de instalador/ponte-whatsapp com o Go
+    oficial (SQLite em Go puro: não precisa de gcc). O Go é apagado no fim."""
+    base = ctx.pasta / "programas"
+    pacote = base / "download" / "go.tar.gz"
+    _baixar(GO[0], pacote, avisar, "Go (para montar a ponte do WhatsApp)", GO[1])
+    avisar(-1, "Abrindo o Go")
+    import tarfile
+    with tarfile.open(pacote) as tar:
+        tar.extractall(base, filter="data")
+    PONTE.mkdir(parents=True, exist_ok=True)
+    for nome in ("main.go", "go.mod", "go.sum"):
+        shutil.copy2(CODIGO / "instalador" / "ponte-whatsapp" / nome, PONTE / nome)
+    cache = base / "go-cache"
+    env = dict(os.environ, CGO_ENABLED="0", GOTOOLCHAIN="local", GOPATH=str(cache / "path"),
+               GOMODCACHE=str(cache / "mod"), GOCACHE=str(cache / "build"))
+    _rodar([str(base / "go" / "bin" / "go"), "build", "-o", "whatsapp-bridge", "."], avisar,
+           "Montando a ponte do WhatsApp", cwd=PONTE, env=env)
+    # O Go grava o cache dele como somente leitura: libera antes de apagar.
+    def liberar(funcao, caminho, _erro) -> None:
+        os.chmod(caminho, 0o700)
+        os.chmod(os.path.dirname(caminho), 0o700)
+        funcao(caminho)
+    for sobra in (base / "go", cache):
+        if sobra.is_dir():
+            shutil.rmtree(sobra, onexc=liberar)
+    pacote.unlink(missing_ok=True)
+
+
 def _finalizar(ctx: Contexto, avisar: Avisar) -> None:
     avisar(-1, "Ajustando a NOVA para este PC")
     config = ctx.app / "config.toml"
@@ -254,6 +329,7 @@ def _finalizar(ctx: Contexto, avisar: Avisar) -> None:
     ajustes["persona_inicial"] = ctx.persona
     if ctx.dubladas:
         ajustes["pasta_vozes"] = str(ctx.pasta / "vozes")
+        ajustes["programas_vozes"] = str(ctx.pasta / "programas")
     arquivo.write_text(json.dumps(ajustes, ensure_ascii=False), encoding="utf-8")
     # O menu e o ligar com o PC.
     icone = ctx.app / "jarvis" / "interface" / "icone.png"
@@ -284,8 +360,10 @@ def lista(ctx: Contexto) -> list[Passo]:
         Passo("voz-leve", "Voz leve (Kokoro)", "350 MB", 4, _soltos("vozes/")),
         Passo("claude", "Claude Code", "220 MB", 3, _claude),
     ]
+    passos.append(Passo("ponte", "Ponte do WhatsApp", "75 MB", 4, _ponte))
     if ctx.dubladas:
         passos.append(Passo("dubladas", "Vozes dubladas", "1,5 GB", 15, _dubladas))
+        passos.append(Passo("programas-vozes", "Programas das vozes", "~4 GB", 40, _programas_vozes))
     passos.append(Passo("finalizar", "Atalhos e ajustes", "", 1, _finalizar))
     return passos
 

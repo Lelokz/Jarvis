@@ -9,13 +9,24 @@ import "../../../jarvis/interface/qml"
 // direita e os botões embaixo. Sem barra do sistema: arrasta pelo fundo.
 Window {
     id: janela
-    width: 1040
-    height: 680
-    minimumWidth: 900
-    minimumHeight: 620
+    // Do tamanho do monitor (pedido do Léo, 28/10/2026): uns 55–60% dele, grande ou
+    // pequeno, no meio da tela; arrasta para onde quiser, mas não estica nem maximiza.
+    // O desenho é feito em 1040 × 680 e a janela inteira cresce ou encolhe junto.
+    readonly property real proporcao: 680 / 1040
+    readonly property int largura: Math.round(Math.min(Screen.desktopAvailableWidth * 0.55,
+                                                       Screen.desktopAvailableHeight * 0.6 / proporcao))
+    readonly property int altura: Math.round(largura * proporcao)
+    width: largura
+    height: altura
+    minimumWidth: largura
+    maximumWidth: largura
+    minimumHeight: altura
+    maximumHeight: altura
+    x: Screen.virtualX + (Screen.desktopAvailableWidth - largura) / 2
+    y: Screen.virtualY + (Screen.desktopAvailableHeight - altura) / 2
     visible: true
     title: "Instalador da NOVA"
-    flags: Qt.Window | Qt.FramelessWindowHint
+    flags: Qt.Window | Qt.FramelessWindowHint | Qt.WindowMinimizeButtonHint | Qt.WindowCloseButtonHint
     color: cor.fundo
 
     Tema { id: tema }
@@ -49,9 +60,30 @@ Window {
 
     // A tela 4: o que o motor da instalação (passos.py) manda.
     property var prog: null
+    // Tela 5: a conta do Claude. Tela 6: o microfone. Tela 7: a conexão aberta.
+    property var conta: null
+    property var mic: ({ nivel: -90, ruido: -90 })
+    property real picoMic: -90
+    property int ouviuJarvis: 0
+    property int ouviuFriday: 0
+    property string conexaoAberta: ""
+    property var conexoes: ({})
     Connections {
         target: instalador
         function onProgresso(dados) { janela.prog = dados }
+        function onClaude(dados) {
+            janela.conta = dados;
+            if (dados.url && !janela.conta.abriu) { Qt.openUrlExternally(dados.url); janela.conta.abriu = true }
+        }
+        function onMicrofone(dados) {
+            if (dados.ouviu === "jarvis") janela.ouviuJarvis++;
+            else if (dados.ouviu === "friday") janela.ouviuFriday++;
+            else if (dados.nivel !== undefined) { janela.mic = dados; janela.picoMic = Math.max(janela.picoMic - 0.4, dados.nivel) }
+            else if (dados.erro) janela.mic = dados;
+        }
+        function onConexao(dados) {
+            var c = Object.assign({}, janela.conexoes); c[dados.id] = dados; janela.conexoes = c;
+        }
         function onChecou(dados) {
             janela.pc = dados;
             janela.vozes = dados.dubladas ? "dubladas" : "leves";
@@ -60,7 +92,24 @@ Window {
     onTelaChanged: {
         if (tela === 2 && !pc) instalador.checar();
         if (tela === 4 && !(prog && prog.fim)) instalador.instalar();
+        if (tela === 5 && !conta) instalador.claudeConferir();
+        if (tela === 6) { ouviuJarvis = 0; ouviuFriday = 0; instalador.microfoneTestar("") } else instalador.microfoneParar();
+        if (tela === 7) for (var id of ["whatsapp", "fora", "musica"]) instalador.conectar(id, "estado", "");
     }
+    // A conexão aberta na tela 7 se confere sozinha de 2 em 2 s (o QR troca, o celular aparece).
+    Timer {
+        interval: 2000; repeat: true
+        running: janela.tela === 7 && janela.conexaoAberta !== ""
+        onTriggered: instalador.conectar(janela.conexaoAberta, janela.conexaoAberta === "fora" ? "conectar" : "estado", "")
+    }
+
+    // O palco: tudo desenhado em 1040 × 680, na escala da janela.
+    Item {
+    id: palco
+    width: 1040
+    height: 680
+    scale: janela.width / 1040
+    transformOrigin: Item.TopLeft
 
     // Arrastar a janela pelo fundo (não há barra do sistema).
     MouseArea {
@@ -168,12 +217,23 @@ Window {
             }
         }
 
-        Loader {
-            id: telaAtual
+        // A tela da vez rola quando passa da altura (a 7 com o WhatsApp aberto).
+        Flickable {
+            id: rolagem
             x: 46; y: 54
             width: area.width - 92
             height: area.height - 54 - 96
-            sourceComponent: [tela1, tela2, tela3, tela4, emConstrucao, emConstrucao, emConstrucao, emConstrucao][janela.tela - 1]
+            contentHeight: Math.max(height, telaAtual.item ? telaAtual.item.implicitHeight : 0)
+            clip: true
+            boundsBehavior: Flickable.StopAtBounds
+            ScrollBar.vertical: ScrollBar { policy: rolagem.contentHeight > rolagem.height ? ScrollBar.AsNeeded : ScrollBar.AlwaysOff }
+        Loader {
+            id: telaAtual
+            width: rolagem.width
+            height: rolagem.contentHeight
+            sourceComponent: [tela1, tela2, tela3, tela4, tela5, tela6, tela7, tela8][janela.tela - 1]
+            onLoaded: rolagem.contentY = 0
+        }
         }
 
         // Os botões de baixo.
@@ -182,17 +242,38 @@ Window {
             anchors.bottom: parent.bottom; anchors.bottomMargin: 30
             spacing: 18
             Botao {
-                visible: janela.tela > 1 && janela.tela !== 4
+                visible: janela.tela > 1 && janela.tela < 4
                 texto: "← Voltar"
                 vazio: true
                 onClicado: janela.tela--
             }
             Botao {
+                visible: janela.tela === 6 || janela.tela === 7
+                texto: "Pular"
+                vazio: true
+                onClicado: { janela.conexaoAberta = ""; janela.tela++ }
+            }
+            Botao {
+                visible: janela.tela === 8
+                texto: "Concluir"
+                vazio: true
+                onClicado: Qt.quit()
+            }
+            Botao {
+                visible: janela.tela === 8
+                texto: "Abrir a NOVA"
+                onClicado: { instalador.abrirNova(); Qt.quit() }
+            }
+            Botao {
                 texto: janela.tela === 1 ? "Começar →" : janela.tela === 3 ? "Instalar →" : "Continuar →"
-                ativo: janela.tela !== 2 || (!!janela.pc && janela.pc.pode)
+                ativo: (janela.tela !== 2 || (!!janela.pc && janela.pc.pode))
+                       && (janela.tela !== 5 || (!!janela.conta && janela.conta.logado))
+                       && (janela.tela !== 6 || janela.ouviuJarvis > 0 || janela.ouviuFriday > 0)
                 // Na instalação, só quando ela terminar.
-                visible: janela.tela < 4 || (janela.tela === 4 && !!janela.prog && !!janela.prog.fim) || janela.tela > 4
+                visible: janela.tela < 4 || (janela.tela === 4 && !!janela.prog && !!janela.prog.fim)
+                         || (janela.tela > 4 && janela.tela < 8)
                 onClicado: {
+                    janela.conexaoAberta = "";
                     if (janela.tela === 3)
                         instalador.guardarEscolhas({ nome: janela.nome, persona: janela.persona, vozes: janela.vozes,
                                                      pasta: janela.pasta, comOPc: janela.comOPc, atalho: janela.atalho,
@@ -207,6 +288,8 @@ Window {
             text: "// núcleo operacional de vozes autônomas"
             color: tema.muitoFraco; font.family: cor.mono; font.pixelSize: 12
         }
+    }
+
     }
 
     // ------------------------------------------------------------ componentes
@@ -626,6 +709,316 @@ Window {
                     }
                     Botao { texto: "Tentar de novo"; height: 36; onClicado: instalador.instalar() }
                 }
+            }
+        }
+    }
+
+
+    component Espera: Row {
+        property string texto: ""
+        spacing: 9
+        BusyIndicator { width: 18; height: 18; running: true; anchors.verticalCenter: parent.verticalCenter }
+        Text { text: parent.texto; color: tema.textoFraco; font.family: cor.mono; font.pixelSize: 12; anchors.verticalCenter: parent.verticalCenter }
+    }
+
+    // Uma linha de comando para copiar (o que precisa da senha do PC a pessoa roda).
+    component Comando: Rectangle {
+        id: comando
+        property string texto: ""
+        property bool copiado: false
+        width: parent ? parent.width : 0; height: 40; radius: 9
+        color: "#03050a"; border.width: 1; border.color: cor.traco
+        Text {
+            x: 12; width: parent.width - 110; anchors.verticalCenter: parent.verticalCenter; elide: Text.ElideRight
+            text: comando.texto; color: tema.texto; font.family: cor.mono; font.pixelSize: 12
+        }
+        TextEdit { id: copiar; visible: false; text: comando.texto }
+        Botao {
+            anchors.right: parent.right; anchors.rightMargin: 4; anchors.verticalCenter: parent.verticalCenter
+            height: 32; vazio: true; texto: comando.copiado ? "Copiado ✓" : "Copiar"
+            onClicado: { copiar.selectAll(); copiar.copy(); comando.copiado = true }
+        }
+    }
+
+    Component {
+        id: tela5
+        Column {
+            spacing: 20
+            readonly property var c: janela.conta || ({})
+            Cabeca {
+                rotulo: "PASSO 5 · CONTA DO CLAUDE"
+                titulo: "O cérebro é"; destaque: "o seu Claude."
+                sub: "O Jarvis e a Friday pensam com o Claude, na sua própria conta. Nada passa por servidor nosso."
+            }
+            Caixa {
+                folga: 20
+                Column {
+                    width: parent.width; spacing: 14
+                    // Já entrou (ou acabou de entrar).
+                    Row {
+                        visible: !!c.logado
+                        spacing: 12
+                        Rectangle {
+                            width: 28; height: 28; radius: 14; color: Qt.rgba(56 / 255, 211 / 255, 159 / 255, 0.14)
+                            Text { anchors.centerIn: parent; text: "✓"; color: cor.ok; font.weight: Font.Bold }
+                        }
+                        Column {
+                            anchors.verticalCenter: parent.verticalCenter
+                            Text { text: "Conta ligada: " + (c.email || ""); color: tema.texto; font.family: tema.familia; font.pixelSize: 15; font.weight: Font.DemiBold }
+                            Text {
+                                text: c.plano ? "Plano " + c.plano + "." : "Confere se a conta tem o plano Pro ou Max."
+                                color: tema.textoFraco; font.family: tema.familia; font.pixelSize: 13
+                            }
+                        }
+                    }
+                    Column {
+                        visible: !c.logado
+                        width: parent.width; spacing: 14
+                        Text { text: "Entrar no Claude"; color: tema.texto; font.family: tema.familia; font.pixelSize: 16; font.weight: Font.DemiBold }
+                        Text {
+                            width: parent.width; wrapMode: Text.WordWrap; textFormat: Text.StyledText
+                            text: "Abre o navegador, você entra com a sua conta do Claude e o site mostra um <b>código</b>. Cola ele aqui embaixo. Precisa do plano <b>Pro</b> ou <b>Max</b>."
+                            color: tema.textoMedio; font.family: tema.familia; font.pixelSize: 14; lineHeight: 1.3
+                        }
+                        Botao { texto: c.url ? "Abrir o login de novo" : "Abrir o login do Claude"; height: 42; onClicado: {
+                            if (c.url) Qt.openUrlExternally(c.url); else instalador.claudeEntrar() } }
+                        Row {
+                            visible: !!c.url
+                            width: parent.width; spacing: 10
+                            Rectangle {
+                                width: parent.width - botaoCodigo.width - 10; height: 42; radius: 10; color: "#03050a"
+                                border.width: 1; border.color: campoCodigo.activeFocus ? cor.azul : cor.traco
+                                Text { visible: !campoCodigo.text; x: 14; anchors.verticalCenter: parent.verticalCenter; text: "Cola o código aqui"; color: tema.muitoFraco; font.family: tema.familia; font.pixelSize: 14 }
+                                TextInput {
+                                    id: campoCodigo
+                                    x: 14; width: parent.width - 28; anchors.verticalCenter: parent.verticalCenter
+                                    color: tema.texto; font.family: cor.mono; font.pixelSize: 13; selectByMouse: true; clip: true
+                                    onAccepted: if (text) instalador.claudeCodigo(text)
+                                }
+                            }
+                            Botao { id: botaoCodigo; texto: "Entrar"; height: 42; ativo: !!campoCodigo.text; onClicado: instalador.claudeCodigo(campoCodigo.text) }
+                        }
+                        Espera { visible: !!c.url; texto: "esperando você entrar no navegador…" }
+                        Text {
+                            visible: !!c.erro; width: parent.width; wrapMode: Text.WordWrap
+                            text: c.erro || ""; color: cor.aviso; font.family: tema.familia; font.pixelSize: 13
+                        }
+                    }
+                }
+            }
+            Text {
+                text: "Não tem conta? Dá pra criar no mesmo lugar."
+                color: tema.textoFraco; font.family: tema.familia; font.pixelSize: 13
+            }
+        }
+    }
+
+    Component {
+        id: tela6
+        Column {
+            spacing: 18
+            readonly property bool volumeBom: janela.picoMic > -40
+            readonly property bool ruidoBaixo: janela.mic.ruido < -50
+            Cabeca {
+                rotulo: "PASSO 6 · MICROFONE"
+                titulo: "Agora"; destaque: "fala com ele."
+                sub: "Diga \"Hey Jarvis\" e depois \"Hey Friday\", do jeito que você vai chamar no dia a dia."
+            }
+            Row {
+                width: parent.width; spacing: 22
+                // A onda: o volume de agora.
+                Rectangle {
+                    width: 240; height: 150; radius: 14; color: cor.vidro; border.width: 1; border.color: cor.traco
+                    Row {
+                        anchors.centerIn: parent; spacing: 5
+                        Repeater {
+                            model: 22
+                            Rectangle {
+                                required property int index
+                                readonly property real forca: Math.max(0.06, Math.min(1, (janela.mic.nivel + 70) / 50))
+                                width: 5; radius: 3; anchors.verticalCenter: parent.verticalCenter
+                                height: 8 + 100 * forca * (0.45 + 0.55 * Math.abs(Math.sin(index * 1.7 + janela.mic.nivel)))
+                                color: janela.ouviuJarvis + janela.ouviuFriday > 0 ? cor.ok : cor.azul
+                                Behavior on height { NumberAnimation { duration: 90 } }
+                            }
+                        }
+                    }
+                }
+                Column {
+                    width: parent.width - 262; spacing: 10
+                    Rotulo { text: "MICROFONE" }
+                    ComboBox {
+                        id: escolhaMic
+                        width: parent.width
+                        height: 40
+                        // No tema escuro do instalador (o padrão do Qt é claro).
+                        background: Rectangle { radius: 10; color: cor.vidro; border.width: 1; border.color: escolhaMic.popup.visible ? cor.azul : cor.traco }
+                        contentItem: Text {
+                            leftPadding: 12; rightPadding: 30; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight
+                            text: escolhaMic.displayText; color: tema.texto; font.family: tema.familia; font.pixelSize: 14
+                        }
+                        indicator: Text { x: escolhaMic.width - 24; anchors.verticalCenter: parent.verticalCenter; text: "▾"; color: tema.textoFraco; font.pixelSize: 13 }
+                        delegate: ItemDelegate {
+                            required property var modelData
+                            required property int index
+                            width: escolhaMic.width; height: 36
+                            highlighted: escolhaMic.highlightedIndex === index
+                            background: Rectangle { color: parent.highlighted ? cor.tracoForte : cor.vidro }
+                            contentItem: Text { text: modelData.nome; color: tema.texto; font.family: tema.familia; font.pixelSize: 14; elide: Text.ElideRight; verticalAlignment: Text.AlignVCenter }
+                        }
+                        popup.background: Rectangle { radius: 10; color: cor.vidro; border.width: 1; border.color: cor.tracoForte }
+                        model: instalador.entradas()
+                        textRole: "nome"; valueRole: "id"
+                        onActivated: { janela.ouviuJarvis = 0; janela.ouviuFriday = 0; instalador.microfoneTestar(currentValue) }
+                    }
+                    Repeater {
+                        model: [
+                            ["Volume", volumeBom ? "bom ✓" : "muito baixo: chega mais perto ou aumenta", volumeBom],
+                            ["Ruído do ambiente", ruidoBaixo ? "baixo ✓" : "alto: o \"Hey\" pode falhar", ruidoBaixo],
+                            ["\"Hey Jarvis\"", janela.ouviuJarvis ? "ouvido " + janela.ouviuJarvis + "× ✓" : "falta testar", janela.ouviuJarvis > 0],
+                            ["\"Hey Friday\"", janela.ouviuFriday ? "ouvido " + janela.ouviuFriday + "× ✓" : "falta testar", janela.ouviuFriday > 0]
+                        ]
+                        Item {
+                            required property var modelData
+                            width: parent.width; height: 26
+                            Text { text: modelData[0]; color: tema.textoMedio; font.family: tema.familia; font.pixelSize: 14; anchors.verticalCenter: parent.verticalCenter }
+                            Text {
+                                anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
+                                text: modelData[1]; color: modelData[2] ? cor.ok : tema.textoFraco; font.family: cor.mono; font.pixelSize: 12
+                            }
+                        }
+                    }
+                    Text { visible: !!janela.mic.erro; width: parent.width; wrapMode: Text.WordWrap; text: janela.mic.erro || ""; color: cor.aviso; font.pixelSize: 13 }
+                }
+            }
+        }
+    }
+
+    Component {
+        id: tela7
+        Column {
+            spacing: 14
+            Cabeca {
+                rotulo: "PASSO 7 · CONEXÕES"
+                titulo: "Ligar as"; destaque: "suas coisas."
+                sub: "Tudo opcional. O que você pular fica em Ajustes → Conexões, na janela e no app."
+            }
+            Repeater {
+                model: [
+                    ["whatsapp", "WhatsApp", "Ler, mandar e avisar quem te escreveu"],
+                    ["fora", "Fora de casa", "O celular fala com o PC de qualquer lugar (Tailscale)"],
+                    ["celular", "Celular", "O app NOVA: depois do Fora de casa, em Ajustes → Conexões, com a NOVA ligada"],
+                    ["musica", "Música", "Tocar YouTube pelo PC"]
+                ]
+                Rectangle {
+                    id: cartao
+                    required property var modelData
+                    readonly property string cid: modelData[0]
+                    readonly property var e: janela.conexoes[cid] || ({})
+                    readonly property bool aberto: janela.conexaoAberta === cid
+                    width: parent.width; radius: 12; color: cor.vidro; border.width: 1
+                    border.color: aberto ? cor.azul : cor.traco
+                    height: linhaCartao.height + (aberto ? passoCartao.height + 14 : 0) + 24
+                    Item {
+                        id: linhaCartao
+                        x: 16; y: 12; width: parent.width - 32; height: 40
+                        Column {
+                            anchors.verticalCenter: parent.verticalCenter
+                            Text { text: modelData[1]; color: tema.texto; font.family: tema.familia; font.pixelSize: 15; font.weight: Font.DemiBold }
+                            Text { text: modelData[2]; color: tema.textoFraco; font.family: tema.familia; font.pixelSize: 13 }
+                        }
+                        Text {
+                            visible: e.estado === "conectado"
+                            anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
+                            text: "✓ " + (cid === "musica" ? "pronto" : "conectado"); color: cor.ok; font.family: cor.mono; font.pixelSize: 12
+                        }
+                        Botao {
+                            visible: cid !== "celular" && e.estado !== "conectado"
+                            anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; height: 36
+                            texto: aberto ? "Fechar" : "Conectar"; vazio: aberto
+                            onClicado: {
+                                if (aberto) { if (cid === "whatsapp" && e.estado === "esperando") instalador.conectar("whatsapp", "cancelar", ""); janela.conexaoAberta = "" }
+                                else { janela.conexaoAberta = cid; instalador.conectar(cid, cid === "musica" ? "estado" : "conectar", "") }
+                            }
+                        }
+                    }
+                    Column {
+                        id: passoCartao
+                        visible: aberto
+                        x: 16; anchors.top: linhaCartao.bottom; anchors.topMargin: 14; width: parent.width - 32; spacing: 10
+                        // WhatsApp: o QR da ponte.
+                        Row {
+                            visible: cid === "whatsapp"
+                            spacing: 18
+                            Rectangle {
+                                width: 150; height: 150; radius: 10; color: "white"
+                                Image { anchors.fill: parent; anchors.margins: 4; source: e.qr || ""; smooth: false; visible: !!e.qr }
+                                Espera { anchors.centerIn: parent; visible: !e.qr; texto: "" }
+                            }
+                            Column {
+                                width: passoCartao.width - 168; spacing: 8; anchors.verticalCenter: parent.verticalCenter
+                                Text { width: parent.width; wrapMode: Text.WordWrap; textFormat: Text.StyledText; color: tema.textoMedio; font.family: tema.familia; font.pixelSize: 14; lineHeight: 1.35
+                                    text: "1. No celular, abre o WhatsApp<br>2. <b>Aparelhos conectados</b> → <b>Conectar um aparelho</b><br>3. Aponta a câmera para o código" }
+                                Text { text: e.estado === "expirou" ? "O código expirou: fecha e abre de novo." : "O código troca a cada 20 segundos."; color: tema.textoFraco; font.family: tema.familia; font.pixelSize: 12 }
+                            }
+                        }
+                        // Fora de casa: os passos do Tailscale.
+                        Column {
+                            visible: cid === "fora"
+                            width: parent.width; spacing: 8
+                            Text { text: (e.instalado ? "✓ " : "1. ") + "Instalar o Tailscale neste PC"; color: e.instalado ? cor.ok : tema.texto; font.family: tema.familia; font.pixelSize: 14 }
+                            Comando { visible: !e.instalado; texto: e.comando_instalar || "" }
+                            Text { text: (e.conta ? "✓ Entrou como " + e.conta : "2. Entrar com a sua conta"); color: e.conta ? cor.ok : tema.texto; font.family: tema.familia; font.pixelSize: 14 }
+                            Comando { visible: !!e.instalado && !e.conta; texto: e.comando_entrar || "" }
+                            Text { text: (e.celular ? "✓ Achei: " + e.celular : "3. No celular, instala o Tailscale e entra com a mesma conta"); color: e.celular ? cor.ok : tema.texto; font.family: tema.familia; font.pixelSize: 14 }
+                            Text { visible: !!e.detalhe; width: parent.width; wrapMode: Text.WordWrap; text: e.detalhe || ""; color: cor.aviso; font.family: tema.familia; font.pixelSize: 13 }
+                        }
+                        // Música: o comando do mpv.
+                        Column {
+                            visible: cid === "musica"
+                            width: parent.width; spacing: 8
+                            Text { text: "Falta o programa que toca o som (o mpv). Copia e roda no terminal (pede a senha do PC):"; width: parent.width; wrapMode: Text.WordWrap; color: tema.textoMedio; font.family: tema.familia; font.pixelSize: 14 }
+                            Comando { texto: e.comando || "sudo apt install mpv mpv-mpris" }
+                        }
+                    }
+                }
+            }
+            Text {
+                width: parent.width; wrapMode: Text.WordWrap; textFormat: Text.StyledText
+                text: "✦ Gmail, Agenda e Drive vêm da sua conta do Claude: ligue em <b>claude.ai → Configurações → Conectores</b>, e o Jarvis e a Friday já usam."
+                color: tema.textoFraco; font.family: tema.familia; font.pixelSize: 13
+            }
+        }
+    }
+
+    Component {
+        id: tela8
+        Item {
+            Column {
+                width: parent.width * 0.6
+                anchors.verticalCenter: parent.verticalCenter
+                spacing: 24
+                Cabeca { rotulo: "TUDO PRONTO"; titulo: "A NOVA está"; destaque: "ligada." }
+                Column {
+                    spacing: 14
+                    Repeater {
+                        model: [["🎙", "Diga <b>\"Hey Jarvis\"</b> ou <b>\"Hey Friday\"</b> de qualquer canto do quarto."],
+                                ["◎", "A janela fica no <b>ícone perto do relógio</b>."],
+                                ["📱", "Quer no celular? Pede: <b>\"Jarvis, me ajuda a ligar o app.\"</b>"]]
+                        Row {
+                            required property var modelData
+                            spacing: 14
+                            Text { text: modelData[0]; font.pixelSize: 18; color: cor.azul; width: 24 }
+                            Text { text: modelData[1]; textFormat: Text.StyledText; color: tema.textoMedio; font.family: tema.familia; font.pixelSize: 15; anchors.verticalCenter: parent.verticalCenter }
+                        }
+                    }
+                }
+            }
+            Image {
+                source: "img/atomo.png"
+                width: Math.min(parent.width * 0.36, 300); height: width
+                anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
+                sourceSize.width: 512; smooth: true; mipmap: true
             }
         }
     }

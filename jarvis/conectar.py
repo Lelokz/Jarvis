@@ -245,3 +245,18 @@ def _vozes(cfg: Config, acao: str, valor: str, _conectados) -> dict:
         # Os servidores de voz sobem com a NOVA (jarvis.sh): a pasta nova vale no próximo ligar.
         v["detalhe"] = "Achei. As vozes dubladas entram na próxima vez que a NOVA ligar."
     return {"estado": "conectado" if v["jarvis"] or v["friday"] else "desligado", **v}
+
+
+if __name__ == "__main__":
+    # A tela 7 do instalador (a NOVA ainda não está ligada): um pedido JSON por
+    # linha na entrada, a resposta de `agir` por linha na saída.
+    import sys
+    from jarvis.config import carregar
+
+    _cfg = carregar()
+    for _linha in sys.stdin:
+        try:
+            _dados = json.loads(_linha)
+        except ValueError:
+            continue
+        print(json.dumps(agir(_cfg, _dados, set()), ensure_ascii=False), flush=True)

@@ -117,3 +117,27 @@ Testado com `testes/testar_pc_novo.py` (pasta de usuário vazia, sem microfone):
 - **Tela 5:** o login do Claude Code da conta da PESSOA.
 - **Tela 6:** o teste do microfone com o "Hey Jarvis" / "Hey Friday" de verdade.
 - **Tela 7:** as Conexões, com o mesmo `jarvis/conectar.py` dos Ajustes.
+
+### Feito em 28/10/2026 (as 8 telas)
+
+- Telas 1–8 na janela do instalador, do tamanho do monitor (desenho em 1040 × 680
+  numa escala só: ~52% da largura e 60% da altura, grande ou pequeno; arrasta,
+  mas não estica nem maximiza). Logo da lateral = o ícone desenhado da janela.
+- Tela 4, testada de verdade num usuário falso no HD (CPU e com dubladas): código,
+  bibliotecas, Whisper, Hey Jarvis/Friday, Kokoro, Claude Code, ponte do WhatsApp,
+  vozes do Drive (1,45 GB, sha ok) e os programas das vozes; a NOVA instalada ouve,
+  fala, acorda, e as duas vozes dubladas tocam pelos caminhos que o instalador montou.
+- Programas das vozes num ambiente só (`instalador/requisitos-vozes.txt`, 7,9 GB em
+  vez de 15): PyTorch 2.11 + CUDA 12.8, a Friday (F5) e a parte de tocar do Applio
+  (só `rvc/`, commit da17444, + rmvpe e contentvec do Hugging Face do Applio). O
+  torchcodec vai do PyPI (a versão de placa pede bibliotecas que não vêm).
+- Ponte do WhatsApp: `instalador/ponte-whatsapp/` (os 3 arquivos do upstream MIT com
+  as mudanças da NOVA e o SQLite em Go puro) compilada com o Go oficial, sem gcc;
+  compila também para Windows (`GOOS=windows`). O Go e o cache são apagados no fim.
+- `jarvis/vozes.py --shell` diz ao jarvis.sh onde estão os programas das vozes
+  (`programas_vozes` nos ajustes) e o Whisper (a Friday usa o mesmo, `--whisper`).
+- Tela 5: `claude auth login` (o site mostra um código, cola na tela) + `auth status`.
+- Tela 6: `jarvis/teste_microfone.py` (volume, ruído e o Hey Jarvis/Friday de verdade).
+- Tela 7: `python -m jarvis.conectar` (o mesmo dos Ajustes): WhatsApp por QR,
+  Tailscale, música; o Celular fica para os Ajustes, com a NOVA ligada.
+- Falta: o teste limpo de ponta a ponta pela janela, e o Windows.

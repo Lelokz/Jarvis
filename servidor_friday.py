@@ -182,16 +182,24 @@ def subir_pergunta(audio: np.ndarray, sr: int, alvo: float = 4.0, janela: float 
     return saida
 
 
-def carregar_whisper():
+def carregar_whisper(modelo: str = "large-v3-turbo"):
     """O faster-whisper (ctranslate2) quer o CUDA 12 que a venv da voz não
     tem: carrega as bibliotecas da venv do Jarvis antes (como o
-    jarvis/cuda_setup.py faz lá)."""
-    base = Path.home() / "Projetos/Jarvis/.venv/lib/python3.12/site-packages/nvidia"
-    for padrao in ("cublas/lib/libcublasLt.so.12", "cublas/lib/libcublas.so.12", "cudnn/lib/libcudnn*.so.9"):
-        for so in sorted(glob.glob(str(base / padrao))):
-            ctypes.CDLL(so, mode=ctypes.RTLD_GLOBAL)
+    jarvis/cuda_setup.py faz lá). No ambiente único do instalador (PyTorch com
+    CUDA 12.8) elas já vêm no próprio ambiente: procura ali primeiro."""
+    import sys
+    for base in (Path(sys.prefix) / "lib/python3.12/site-packages/nvidia",
+                 Path.home() / "Projetos/Jarvis/.venv/lib/python3.12/site-packages/nvidia"):
+        achou = False
+        for padrao in ("cublas/lib/libcublasLt.so.12", "cublas/lib/libcublas.so.12", "cudnn/lib/libcudnn*.so.9"):
+            for so in sorted(glob.glob(str(base / padrao))):
+                ctypes.CDLL(so, mode=ctypes.RTLD_GLOBAL)
+                achou = True
+        if achou:
+            break
     from faster_whisper import WhisperModel
-    return WhisperModel("large-v3-turbo", device="cuda", compute_type="int8")
+    # O nome baixa do Hugging Face na primeira vez; o instalador passa a pasta que já baixou.
+    return WhisperModel(modelo, device="cuda", compute_type="int8")
 
 
 _INTERJEICOES = {"hmm", "hum", "ahn", "aham", "uhum", "ué", "eita", "opa", "oba", "nossa"}
@@ -234,6 +242,7 @@ def main() -> int:
     # Só as 2 últimas versões boas ficam guardadas (pedido do Léo, 25/10/2026):
     # v1 = a aprovada (24/10), v2 = treinada com os recortes limpos (25/10).
     p.add_argument("--modelo", default="friday-emilia-v1")
+    p.add_argument("--whisper", default="large-v3-turbo", help="o nome ou a pasta do Whisper que confere a fala")
     p.add_argument("--ref", default="limpa1")
     p.add_argument("--socket", default=os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "jarvis-friday.sock"))
     p.add_argument("--nfe", type=int, default=12)
@@ -264,7 +273,7 @@ def main() -> int:
     arq, ref_texto = utils_infer.preprocess_ref_audio_text(
         str(pasta / f"ref/{a.ref}.wav"), normalizar((pasta / f"ref/{a.ref}.txt").read_text()), show_info=lambda *_: None)
     ref = torchaudio.load(arq)
-    whisper = carregar_whisper() if a.tentativas > 1 else None
+    whisper = carregar_whisper(a.whisper) if a.tentativas > 1 else None
     ref_quadros = ref[0].shape[-1] // 256
     ref_bytes = len(ref_texto.encode("utf-8"))
 

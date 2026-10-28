@@ -7,9 +7,13 @@ mais as Conexões). Roda pelo `instalar-nova.sh`, com o Python e o PySide6 que o
 
 from __future__ import annotations
 
+import json
 import os
+import re
+import subprocess
 import sys
 import threading
+import time
 from pathlib import Path
 
 from PySide6.QtCore import Property, QObject, QUrl, Signal, Slot
@@ -84,6 +88,151 @@ class Instalador(QObject):
             estados[i] = "feito"
         mandar(1.0, "Pronto.", fim=True)
         self._rodando = False
+
+    # -- tela 5: a conta do Claude -----------------------------------------------
+    # {"logado": bool, "email", "plano", "url": o endereço do login, "erro"}
+    claude = Signal("QVariant")
+
+    def _claude_bin(self) -> str:
+        return str(Path.home() / ".local/bin/claude")
+
+    def _status_claude(self) -> dict:
+        try:
+            r = subprocess.run([self._claude_bin(), "auth", "status", "--json"], capture_output=True, text=True, timeout=20)
+            d = json.loads(r.stdout or "{}")
+        except (OSError, ValueError, subprocess.TimeoutExpired):
+            return {"logado": False}
+        return {"logado": bool(d.get("loggedIn")), "email": d.get("email") or "",
+                "plano": (d.get("subscriptionType") or "").capitalize()}
+
+    @Slot()
+    def claudeConferir(self) -> None:
+        threading.Thread(target=lambda: self.claude.emit(self._status_claude()), daemon=True).start()
+
+    @Slot()
+    def claudeEntrar(self) -> None:
+        """`claude auth login`: pega o endereço que ele mostra (a janela abre no navegador)
+        e fica esperando o código; confere a conta de 3 em 3 s até entrar."""
+        if getattr(self, "_login", None) is not None and self._login.poll() is None:
+            if getattr(self, "_url_login", ""):
+                self.claude.emit({"logado": False, "url": self._url_login})
+            return
+        self._url_login = ""
+        try:
+            self._login = subprocess.Popen([self._claude_bin(), "auth", "login"], stdin=subprocess.PIPE,
+                                           stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                           env=dict(os.environ, BROWSER="true"))
+        except OSError as erro:
+            self.claude.emit({"logado": False, "erro": f"O Claude Code não abriu: {erro}"})
+            return
+
+        def ler() -> None:
+            texto = b""
+            while True:
+                pedaco = os.read(self._login.stdout.fileno(), 4096)
+                if not pedaco:
+                    break
+                texto += pedaco
+                achou = re.search(rb"https://\S+", texto)
+                if achou and not self._url_login:
+                    self._url_login = achou.group(0).decode()
+                    self.claude.emit({"logado": False, "url": self._url_login})
+
+        def conferir() -> None:
+            while self._login.poll() is None or not self._url_login:
+                time.sleep(3)
+                s = self._status_claude()
+                if s["logado"]:
+                    self.claude.emit(s)
+                    self._login.kill()
+                    return
+                if self._login.poll() is not None:
+                    break
+            self.claude.emit(self._status_claude())
+
+        threading.Thread(target=ler, daemon=True).start()
+        threading.Thread(target=conferir, daemon=True).start()
+
+    @Slot(str)
+    def claudeCodigo(self, codigo: str) -> None:
+        if getattr(self, "_login", None) is not None and self._login.poll() is None:
+            self._login.stdin.write(codigo.strip().encode() + b"\n")
+            self._login.stdin.flush()
+
+    # -- tela 6: o microfone (o teste roda na NOVA instalada) -------------------
+    microfone = Signal("QVariant")
+
+    def _app(self) -> Path:
+        return Path(self._escolhas.get("pasta") or self._pasta_padrao()).expanduser() / "app"
+
+    @Slot(result="QVariant")
+    def entradas(self) -> list:
+        try:
+            fontes = json.loads(subprocess.run(["pactl", "-f", "json", "list", "sources"], capture_output=True,
+                                               text=True, timeout=5).stdout or "[]")
+        except (OSError, ValueError, subprocess.TimeoutExpired):
+            return []
+        return [{"id": f["name"], "nome": f.get("description") or f["name"]} for f in fontes
+                if not f.get("name", "").endswith(".monitor")]
+
+    @Slot(str)
+    def microfoneTestar(self, entrada: str) -> None:
+        self.microfoneParar()
+        app = self._app()
+        cmd = [str(app / ".venv/bin/python"), "-m", "jarvis.teste_microfone"] + (["--entrada", entrada] if entrada else [])
+        try:
+            self._mic = subprocess.Popen(cmd, cwd=app, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                                         stderr=subprocess.DEVNULL, text=True)
+        except OSError as erro:
+            self.microfone.emit({"erro": str(erro)})
+            return
+
+        def ler(p=self._mic) -> None:
+            for linha in p.stdout:
+                try:
+                    self.microfone.emit(json.loads(linha))
+                except ValueError:
+                    pass
+        threading.Thread(target=ler, daemon=True).start()
+
+    @Slot()
+    def microfoneParar(self) -> None:
+        p = getattr(self, "_mic", None)
+        if p is not None and p.poll() is None:
+            p.stdin.close()
+            try:
+                p.wait(timeout=3)
+            except subprocess.TimeoutExpired:
+                p.kill()
+
+    # -- tela 7: as conexões (o mesmo jarvis/conectar.py dos Ajustes) -----------
+    conexao = Signal("QVariant")
+
+    @Slot(str, str, str)
+    def conectar(self, id_: str, acao: str, valor: str) -> None:
+        p = getattr(self, "_conectar", None)
+        if p is None or p.poll() is not None:
+            app = self._app()
+            self._conectar = p = subprocess.Popen([str(app / ".venv/bin/python"), "-m", "jarvis.conectar"], cwd=app,
+                                                  stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                                                  stderr=subprocess.DEVNULL, text=True)
+
+            def ler() -> None:
+                for linha in p.stdout:
+                    try:
+                        self.conexao.emit(json.loads(linha))
+                    except ValueError:
+                        pass
+            threading.Thread(target=ler, daemon=True).start()
+        p.stdin.write(json.dumps({"id": id_, "acao": acao, "valor": valor}) + "\n")
+        p.stdin.flush()
+
+    # -- tela 8 --------------------------------------------------------------------
+    @Slot()
+    def abrirNova(self) -> None:
+        """Liga a NOVA (o jarvis.sh, solto do instalador) e fecha o instalador."""
+        subprocess.Popen([str(self._app() / "jarvis.sh")], cwd=self._app(), start_new_session=True,
+                         stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
     @Slot()
     def checar(self) -> None:

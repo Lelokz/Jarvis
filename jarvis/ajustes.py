@@ -18,6 +18,8 @@ PADRAO: dict[str, Any] = {"volume_voz": 100, "nome": "",
                           "grupo_jid": "", "grupo_ligado": False,
                           # Onde o instalador pôs as vozes dubladas (jarvis/vozes.py).
                           "pasta_vozes": "",
+                          # Os programas das vozes dubladas, quando foi o instalador que pôs.
+                          "programas_vozes": "",
                           # Quem atende quando a NOVA liga (o instalador pergunta).
                           "persona_inicial": "jarvis"}
 
@@ -46,6 +48,8 @@ def ler() -> dict[str, Any]:
             saida["grupo_jid"] = dados["grupo_jid"]
         if isinstance(dados.get("grupo_ligado"), bool):
             saida["grupo_ligado"] = dados["grupo_ligado"]
+        if isinstance(dados.get("programas_vozes"), str):
+            saida["programas_vozes"] = dados["programas_vozes"][:1000]
         if isinstance(dados.get("pasta_vozes"), str):
             saida["pasta_vozes"] = dados["pasta_vozes"][:1000]
         if dados.get("persona_inicial") in ("jarvis", "friday"):

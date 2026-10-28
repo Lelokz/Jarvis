@@ -117,5 +117,14 @@ if __name__ == "__main__":
         v = achar(procurar=True)
         print(f"VOZ_JARVIS={shlex.quote(str(v['jarvis'] or ''))}")
         print(f"VOZ_FRIDAY={shlex.quote(str(v['friday'] or ''))}")
+        # Os programas que tocam as vozes, se foi o instalador que pôs (um ambiente só
+        # para as duas, e a parte de tocar do Applio). Sem isso, o jarvis.sh usa os de antes.
+        programas = Path(ajustes.ler()["programas_vozes"] or "/nao-existe")
+        if (programas / "vozes/.venv/bin/python").exists():
+            print(f"VOZ_PY={shlex.quote(str(programas / 'vozes/.venv/bin/python'))}")
+            print(f"APPLIO={shlex.quote(str(programas / 'applio'))}")
+            print(f"APPLIO_PY={shlex.quote(str(programas / 'vozes/.venv/bin/python'))}")
+        from jarvis import config
+        print(f"WHISPER={shlex.quote(config.carregar().stt.modelo)}")
     else:
         print(json.dumps(estado(), ensure_ascii=False))

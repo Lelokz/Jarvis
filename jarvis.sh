@@ -31,6 +31,9 @@ rvc_ligado() { pgrep -f "$PROJETO/servidor_rvc.py" > /dev/null; }
 # Onde estão as vozes dubladas (jarvis/vozes.py): a pasta do pacote que o
 # instalador anotou, ou as pastas soltas de antes. Vazio = fala com a Kokoro.
 eval "$(cd "$PROJETO" && .venv/bin/python -m jarvis.vozes --shell 2>/dev/null)"
+# Os programas das vozes: os do instalador (um ambiente só) ou, no PC do Léo, os de antes.
+VOZ_PY="${VOZ_PY:-$VOZ/venv/bin/python}"
+APPLIO_PY="${APPLIO_PY:-$APPLIO/.venv/bin/python}"
 friday_ligada() { pgrep -f "$PROJETO/servidor_friday.py" > /dev/null; }
 FRIDAY_ON="$(sed -n '/^\[friday\]/,/^\[/s/^ligada *= *\(true\|false\).*/\1/p' config.toml | head -1)"
 # A porta do celular (porta_remota.py): só em 127.0.0.1; o `tailscale serve`
@@ -63,11 +66,11 @@ if [ -x "$PONTE_WHATS/whatsapp-bridge" ] && [ -f "$PONTE_WHATS/store/whatsapp.db
       >> "$HOME/.local/share/jarvis/whatsapp-bridge.log" 2>&1 & )
 fi
 
-if [ "$MOTOR" = "rvc" ] && [ -n "${VOZ_JARVIS:-}" ] && [ -f "$VOZ_JARVIS/rvc/jarvis-dublado.pth" ] && [ -x "$APPLIO/.venv/bin/python" ] \
+if [ "$MOTOR" = "rvc" ] && [ -n "${VOZ_JARVIS:-}" ] && [ -f "$VOZ_JARVIS/rvc/jarvis-dublado.pth" ] && [ -x "$APPLIO_PY" ] \
     && ! rvc_ligado; then
   mkdir -p logs
   # De dentro da pasta do Applio: ele acha os modelos dele (rmvpe, contentvec) por ali.
-  ( cd "$APPLIO" && PATH="$HOME/.local/share/lelokz-estudio/ffmpeg:$PATH" nohup .venv/bin/python -u \
+  ( cd "$APPLIO" && PATH="$HOME/.local/share/lelokz-estudio/ffmpeg:$PATH" nohup "$APPLIO_PY" -u \
       "$PROJETO/servidor_rvc.py" --modelo "$VOZ_JARVIS/rvc/jarvis-dublado.pth" \
       --index "$VOZ_JARVIS/rvc/jarvis-dublado.index" >> "$PROJETO/logs/servidor-rvc.log" 2>&1 & )
 fi
@@ -83,10 +86,11 @@ if [ "$MOTOR" = "f5" ] && [ -f "$VOZ/modelo/jarvis-dublado.safetensors" ] && ! v
 fi
 
 if [ "$FRIDAY_ON" = "true" ] && [ -n "${VOZ_FRIDAY:-}" ] && [ -f "$VOZ_FRIDAY/modelo/friday-emilia-v1.safetensors" ] \
-    && [ -x "$VOZ/venv/bin/python" ] && ! friday_ligada; then
+    && [ -x "$VOZ_PY" ] && ! friday_ligada; then
   mkdir -p logs
-  PATH="$HOME/.local/share/lelokz-estudio/ffmpeg:$PATH" nohup "$VOZ/venv/bin/python" -u \
-      "$PROJETO/servidor_friday.py" --pasta "$VOZ_FRIDAY" --modelo friday-emilia-v1 >> logs/servidor-friday.log 2>&1 &
+  PATH="$HOME/.local/share/lelokz-estudio/ffmpeg:$PATH" nohup "$VOZ_PY" -u \
+      "$PROJETO/servidor_friday.py" --pasta "$VOZ_FRIDAY" --modelo friday-emilia-v1 \
+      --whisper "${WHISPER:-large-v3-turbo}" >> logs/servidor-friday.log 2>&1 &
 fi
 
 if ! ligado; then
