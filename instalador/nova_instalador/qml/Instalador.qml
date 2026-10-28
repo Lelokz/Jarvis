@@ -9,12 +9,15 @@ import "../../../jarvis/interface/qml"
 // direita e os botões embaixo. Sem barra do sistema: arrasta pelo fundo.
 Window {
     id: janela
-    // Do tamanho do monitor (pedido do Léo, 28/10/2026): uns 55–60% dele, grande ou
-    // pequeno, no meio da tela; arrasta para onde quiser, mas não estica nem maximiza.
-    // O desenho é feito em 1040 × 680 e a janela inteira cresce ou encolhe junto.
+    // Do tamanho do monitor (pedido do Léo, 28/10/2026): uns 55–60% dele, no meio da
+    // tela; arrasta para onde quiser, mas não estica nem maximiza. Em tela pequena
+    // (menos de 1600 de largura, como os 1366 × 768 do SENAI) 60% deixava a letra
+    // ilegível: lá ela usa uns 90%. O desenho é feito em 1040 × 680 e a janela
+    // inteira cresce ou encolhe junto.
     readonly property real proporcao: 680 / 1040
-    readonly property int largura: Math.round(Math.min(Screen.desktopAvailableWidth * 0.55,
-                                                       Screen.desktopAvailableHeight * 0.6 / proporcao))
+    readonly property bool telaPequena: Screen.desktopAvailableWidth < 1600
+    readonly property int largura: Math.round(Math.min(Screen.desktopAvailableWidth * (telaPequena ? 0.9 : 0.55),
+                                                       Screen.desktopAvailableHeight * (telaPequena ? 0.9 : 0.6) / proporcao))
     readonly property int altura: Math.round(largura * proporcao)
     width: largura
     height: altura
