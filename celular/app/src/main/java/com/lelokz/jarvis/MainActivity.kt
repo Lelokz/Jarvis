@@ -958,8 +958,11 @@ private fun Gaveta(modelo: Jarvis, fechar: () -> Unit) {
             }
         }
         val visiveis = modelo.conversas.filter { busca.isBlank() || it.titulo.contains(busca.trim(), ignoreCase = true) }
+        // A conversa de agora ainda sem nada salvo (a NOVA acabou de ligar) entra depois das fixadas.
         val comAtual = if (modelo.conversaAtual.value.isNotEmpty() && modelo.conversas.none { it.id == modelo.conversaAtual.value } && busca.isBlank())
-            listOf(Conversa(modelo.conversaAtual.value, "Chat novo", System.currentTimeMillis() / 1000.0, "nova")) + visiveis
+            visiveis.filter { it.fixada } +
+                Conversa(modelo.conversaAtual.value, "Chat novo", System.currentTimeMillis() / 1000.0, "nova") +
+                visiveis.filter { !it.fixada }
         else visiveis
         LazyColumn(Modifier.weight(1f)) {
             var grupoAnterior = ""
@@ -967,7 +970,8 @@ private fun Gaveta(modelo: Jarvis, fechar: () -> Unit) {
                 val grupo = if (c.fixada) "Fixadas" else grupoDe(c.quando)
                 if (grupo != grupoAnterior) {
                     grupoAnterior = grupo
-                    item(key = "g-$grupo") {
+                    // A chave vem da primeira conversa do grupo: um grupo repetido não derruba o app.
+                    item(key = "g-${c.id}") {
                         Text(grupo.uppercase(), color = MuitoFraco, fontSize = 11.sp, fontWeight = FontWeight.SemiBold,
                             letterSpacing = 0.8.sp, modifier = Modifier.padding(start = 22.dp, top = 14.dp, bottom = 6.dp))
                     }
