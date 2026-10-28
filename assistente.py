@@ -1110,14 +1110,16 @@ class Ciclo:
 
     def emitir_ajustes(self) -> None:
         # conexoes: o estado de cada uma, para a aba Conexões (beta 0.17.0).
-        from jarvis import conexoes
+        from jarvis import conexoes, vozes
         import socket
         dados = ajustes.ler()
         # reconhece_voz: tem o perfil da voz do dono; sem ele, toda voz vale como a dele.
         self.emissor.emitir("ajustes", **dados, pc=socket.gethostname(),
                             reconhece_voz=self.quem_fala is not None,
                             conexoes=conexoes.estado(self.cfg, dados, self.quem_conectado()),
-                            conectores=getattr(self.agente, "conectores", list)())
+                            conectores=getattr(self.agente, "conectores", list)(),
+                            # As vozes dubladas: achadas ou não (Ajustes → Voz e som).
+                            vozes=vozes.estado())
 
     def emitir_cerebro(self) -> None:
         cor = self.cfg.friday.cor if self.persona == "friday" and self.cfg.friday else ""

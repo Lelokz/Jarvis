@@ -15,7 +15,9 @@ ARQUIVO = Path.home() / ".local/share/jarvis/ajustes.json"
 # Léo uma vez (HISTORIA). Daqui só se abaixa.
 PADRAO: dict[str, Any] = {"volume_voz": 100, "nome": "",
                           # O Jarvis no grupo da família do WhatsApp (jarvis/grupo).
-                          "grupo_jid": "", "grupo_ligado": False}
+                          "grupo_jid": "", "grupo_ligado": False,
+                          # Onde o instalador pôs as vozes dubladas (jarvis/vozes.py).
+                          "pasta_vozes": ""}
 
 
 def limpar_nome(nome: str) -> str:
@@ -42,6 +44,8 @@ def ler() -> dict[str, Any]:
             saida["grupo_jid"] = dados["grupo_jid"]
         if isinstance(dados.get("grupo_ligado"), bool):
             saida["grupo_ligado"] = dados["grupo_ligado"]
+        if isinstance(dados.get("pasta_vozes"), str):
+            saida["pasta_vozes"] = dados["pasta_vozes"][:1000]
         if isinstance(dados.get("nome"), str):
             saida["nome"] = limpar_nome(dados["nome"])
     return saida

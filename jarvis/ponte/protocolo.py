@@ -320,11 +320,12 @@ def ler_pedido(linha: bytes) -> tuple[str, dict[str, Any]]:
         # O passo a passo de Ajustes → Conexões (jarvis/conectar.py). A
         # resposta, {"ev": "conexao", ...}, vai só para quem pediu.
         id_, acao, valor = objeto.get("id"), objeto.get("acao", "estado"), objeto.get("valor", "")
-        if id_ not in ("whatsapp", "grupo", "fora", "celular", "musica"):
+        # "vozes": a pasta das vozes dubladas (Ajustes → Voz e som; jarvis/vozes.py).
+        if id_ not in ("whatsapp", "grupo", "fora", "celular", "musica", "vozes"):
             raise ErroDeProtocolo("'id' de conexão desconhecido")
         if acao not in ("estado", "conectar", "cancelar", "desconectar", "escolher"):
             raise ErroDeProtocolo("'acao' desconhecida")
-        if not isinstance(valor, str) or len(valor) > 200:
+        if not isinstance(valor, str) or len(valor) > (1000 if id_ == "vozes" else 200):
             raise ErroDeProtocolo("'valor' inválido")
         return tipo, {"id": id_, "acao": acao, "valor": valor}
 

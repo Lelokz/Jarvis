@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Controls.Basic
+import QtQuick.Dialogs
 
 // Ajustes (beta 0.17.0, como as configurações do Claude; protótipo aprovado
 // pelo Léo em 27/10/2026): um painel por cima da janela, com o fundo
@@ -776,6 +777,40 @@ Item {
                         : "Sem o perfil da tua voz: qualquer pessoa que falar perto do PC vale como você."
                     ultima: true
                     Valor { text: raiz.ajustes && raiz.ajustes.reconhece_voz ? "Ligado" : "Desligado" }
+                }
+            }
+            // As vozes dubladas (jarvis/vozes.py): o instalador anota a pasta; se ela
+            // mudar de lugar e a NOVA não achar sozinha, escolhe aqui.
+            Secao {
+                id: secaoVozes
+                titulo: "Vozes dubladas"
+                visible: !!raiz.ajustes && !!raiz.ajustes.vozes
+                readonly property var v: raiz.ajustes && raiz.ajustes.vozes ? raiz.ajustes.vozes : ({})
+                dica: v.jarvis || v.friday ? "Ficam em " + v.pasta
+                                           : "Não achei as vozes dubladas: o Jarvis e a Friday falam com a voz reserva."
+                Linha {
+                    titulo: "Jarvis"
+                    Valor { text: secaoVozes.v.jarvis ? "Encontrada" : "Voz reserva" }
+                }
+                Linha {
+                    titulo: "Friday"
+                    Valor { text: secaoVozes.v.friday ? "Encontrada" : "Voz reserva" }
+                }
+                Linha {
+                    titulo: "Mudou a pasta de lugar?"
+                    descricao: raiz.conexao.id === "vozes" && raiz.conexao.detalhe ? raiz.conexao.detalhe
+                               : "Mostra onde ela está agora (a que tem o nova-vozes.json)."
+                    ultima: true
+                    Botao { texto: "Procurar pasta"; onClicado: pastaVozes.open() }
+                }
+                FolderDialog {
+                    id: pastaVozes
+                    title: "Onde estão as vozes da NOVA?"
+                    onAccepted: {
+                        raiz.pedirConexao("vozes", "escolher",
+                                          decodeURIComponent(selectedFolder.toString().replace(/^file:\/\//, "")));
+                        raiz.pedirAjustes();
+                    }
                 }
             }
         }

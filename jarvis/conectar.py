@@ -31,7 +31,7 @@ _telefone = ""
 def agir(cfg: Config, dados: dict, conectados: set[str]) -> dict:
     id_, acao, valor = dados.get("id", ""), dados.get("acao", "estado"), dados.get("valor", "")
     funcao = {"whatsapp": _whatsapp, "grupo": _grupo, "fora": _fora,
-              "celular": _celular, "musica": _musica}.get(id_)
+              "celular": _celular, "musica": _musica, "vozes": _vozes}.get(id_)
     if funcao is None:
         return {"ev": "conexao", "id": id_, "estado": "desligado"}
     try:
@@ -234,3 +234,14 @@ def _celular(cfg: Config, acao: str, valor: str, conectados: set[str]) -> dict:
 def _musica(cfg: Config, acao: str, valor: str, _conectados) -> dict:
     return {"estado": "conectado" if shutil.which("mpv") else "desligado",
             "comando": "sudo apt install mpv mpv-mpris"}
+
+
+# -- Vozes dubladas (Ajustes → Voz e som) ---------------------------------------
+
+def _vozes(cfg: Config, acao: str, valor: str, _conectados) -> dict:
+    from jarvis import vozes
+    v = vozes.escolher(valor) if acao == "escolher" and valor else vozes.estado()
+    if acao == "escolher" and not v.get("detalhe"):
+        # Os servidores de voz sobem com a NOVA (jarvis.sh): a pasta nova vale no próximo ligar.
+        v["detalhe"] = "Achei. As vozes dubladas entram na próxima vez que a NOVA ligar."
+    return {"estado": "conectado" if v["jarvis"] or v["friday"] else "desligado", **v}

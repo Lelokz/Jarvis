@@ -1410,6 +1410,14 @@ private fun AjustesVoz(modelo: Jarvis) {
             }
         }
     }
+    modelo.vozesDubladas.value?.let { (jarvis, friday, pasta) ->
+        SecaoDosAjustes("Vozes dubladas", if (jarvis || friday) "Ficam no PC, em $pasta."
+            else "O PC não achou as vozes dubladas: o Jarvis e a Friday falam com a voz reserva. " +
+                "Para mostrar onde elas estão: Ajustes → Voz e som, na janela do PC.") {
+            LinhaDeAjuste("Jarvis") { Text(if (jarvis) "Encontrada" else "Voz reserva", color = TextoMedio, fontSize = 14.sp) }
+            LinhaDeAjuste("Friday", ultima = true) { Text(if (friday) "Encontrada" else "Voz reserva", color = TextoMedio, fontSize = 14.sp) }
+        }
+    }
 }
 
 @Composable

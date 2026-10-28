@@ -114,6 +114,8 @@ class Jarvis(private val app: Application) {
     val volumeVoz = mutableIntStateOf(100)
     // O PC tem o perfil da voz do dono (null = PC antigo, que não manda).
     val reconheceVoz = mutableStateOf<Boolean?>(null)
+    // As vozes dubladas no PC: (Jarvis achada, Friday achada, a pasta); null = PC antigo, que não manda.
+    val vozesDubladas = mutableStateOf<Triple<Boolean, Boolean, String>?>(null)
     val conexoes = mutableStateOf<List<EstadoConexao>>(emptyList())
     // Os conectores da conta do Claude ligados no PC (Gmail, Agenda...).
     val conectores = mutableStateOf<List<String>>(emptyList())
@@ -762,6 +764,9 @@ class Jarvis(private val app: Application) {
                 nomePc.value = ev.optString("pc", "")
                 volumeVoz.intValue = ev.optInt("volume_voz", volumeVoz.intValue)
                 reconheceVoz.value = if (ev.has("reconhece_voz")) ev.optBoolean("reconhece_voz") else null
+                vozesDubladas.value = ev.optJSONObject("vozes")?.let {
+                    Triple(it.optBoolean("jarvis"), it.optBoolean("friday"), it.optString("pasta"))
+                }
                 ev.optJSONArray("conexoes")?.let { lista ->
                     conexoes.value = (0 until lista.length()).mapNotNull { i ->
                         lista.optJSONObject(i)?.let { EstadoConexao(it.optString("id"), it.optString("estado"), it.optString("detalhe")) }

@@ -409,9 +409,10 @@ def criar_app(cfg: config.Config):
                             continue
                     if pedido.get("pedir") == "conexao" and (
                             pedido.get("id") == "celular" or
+                            (pedido.get("id") == "vozes" and pedido.get("acao") == "escolher") or
                             (pedido.get("id") == "fora" and pedido.get("acao") == "desconectar")):
-                        # O QR com a chave é só da janela; e desligar o Fora de casa
-                        # pelo celular cortaria o próprio celular.
+                        # O QR com a chave e a pasta das vozes são só da janela; e
+                        # desligar o Fora de casa pelo celular cortaria o próprio celular.
                         continue
                     if pedido.get("pedir") == "falar":
                         relogio.clear()

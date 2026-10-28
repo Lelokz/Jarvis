@@ -75,7 +75,18 @@ Testado com `testes/testar_pc_novo.py` (pasta de usuário vazia, sem microfone):
      grupo, Tailscale, celular por QR (nova://ligar), música, relógio, atalhos e os
      conectores da conta do Claude. A ponte do WhatsApp é a do upstream +
      `instalador/ponte-whatsapp.patch`.
-3. Pacote de vozes separado.
+3. Pacote de vozes separado (Drive do Léo, só para convidados; 28/10).
+   - Só os modelos vão no pacote (~1,4 GB): o timbre do Jarvis (rvc/, 97 MB) e a
+     Friday (modelo F5 1,3 GB, vocab, ref). Os programas das vozes (PyTorch, F5,
+     Applio; 7–12 GB) o instalador instala da internet, e só se a placa aguentar.
+   - ~~Achar as vozes em qualquer pasta~~ Feito: `jarvis/vozes.py`. O instalador
+     anota a pasta (ajustes.json → "pasta_vozes"); a etiqueta `nova-vozes.json`
+     dentro do pacote deixa a NOVA se achar se a pasta for movida (busca na pasta
+     pessoal e nos discos, ~1 s); sem achar, voz reserva e Ajustes → Voz e som
+     mostra "Procurar pasta" (janela; o app mostra o estado). O jarvis.sh pergunta
+     a pasta com `python -m jarvis.vozes --shell`.
+   - Falta: o script que monta o pacote, o Léo subir no Drive, e o download no
+     instalador (conferindo o convite).
 4. Instalador Linux (agora 8 telas: a 7ª é "Conexões", o mesmo passo a passo dos
    Ajustes, tudo opcional), com a escolha da pasta.
 5. Teste limpo (usuário novo, sem nada deste PC).
