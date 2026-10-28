@@ -69,8 +69,14 @@ Testado com `testes/testar_pc_novo.py` (pasta de usuário vazia, sem microfone):
 ## Próximas etapas
 
 2. ~~Primeira vez: nome do dono, conta do Claude dele, microfone; WhatsApp, escola e
-   Tailscale opcionais (desligados de saída).~~ Feita.
+   Tailscale opcionais (desligados de saída).~~ Feita. (A escola saiu em 28/10.)
+   - Conexões com Conectar e passo a passo, na janela e no app (28/10): WhatsApp por
+     QR (janela) ou código de 8 letras (app, testado pelo Léo religando o dele),
+     grupo, Tailscale, celular por QR (nova://ligar), música, relógio, atalhos e os
+     conectores da conta do Claude. A ponte do WhatsApp é a do upstream +
+     `instalador/ponte-whatsapp.patch`.
 3. Pacote de vozes separado.
-4. Instalador Linux (as 7 telas), com a escolha da pasta.
+4. Instalador Linux (agora 8 telas: a 7ª é "Conexões", o mesmo passo a passo dos
+   Ajustes, tudo opcional), com a escolha da pasta.
 5. Teste limpo (usuário novo, sem nada deste PC).
 6. Windows.
