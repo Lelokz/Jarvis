@@ -61,7 +61,9 @@ _COM_CAMINHO = {"Read", "Write", "Edit", "MultiEdit", "NotebookEdit", "Glob", "G
 # sair da pasta com "..", e os bancos/segredos pelo nome.
 _PESSOAL = re.compile(r"(~|\$HOME|\$\{HOME\}|/home/[\w.-]+)(?!/\.local/share/jarvis/grupo\b)"
                       r"|\.\./|/root\b|/etc/(shadow|passwd)|\bsqlite3?\b|messages\.db|whatsapp\.db"
-                      r"|\.ssh\b|\.env\b|senha|password|token|cookie", re.I)
+                      r"|\.ssh\b|\.env\b|senha|password|token|cookie"
+                      # o Windows: a pasta do usuário e os outros discos
+                      r"|\$env:|%\w+%|\b[a-z]:[\\/]", re.I)
 
 
 def trava_do_grupo(ferramenta: str, entrada: dict, casa: Path | None = None) -> str | None:
@@ -84,16 +86,18 @@ def trava_do_grupo(ferramenta: str, entrada: dict, casa: Path | None = None) -> 
                 if alvo != casa.resolve() and casa.resolve() not in alvo.parents:
                     return "abrir ou mexer em coisa do dono (fora da sua pasta)"
         return None
-    if ferramenta == "Bash":
+    if ferramenta in travas.TERMINAIS:
         comando = str(entrada.get("command") or "")
         if travas.mexe_na_tela(comando):
             return "bloquear ou desbloquear o PC"
         if _PESSOAL.search(comando):
             return "abrir coisa do dono (fora da sua pasta)"
-        motivo = travas.precisa_do_leo("Bash", entrada, casa / "nada.md")
+        motivo = travas.precisa_do_leo(ferramenta, entrada, casa / "nada.md")
         # Gravar, mover e apagar na própria pasta (o terminal roda dentro dela)
-        # pode; com qualquer caminho de fora, ou sudo/permissões, não.
-        if motivo in _MEXE_EM_ARQUIVO and not _CAMINHO_DE_FORA.search(comando) and not _NUNCA.search(comando):
+        # pode; com qualquer caminho de fora, ou sudo/permissões, não. No PowerShell
+        # (Windows) os caminhos são outros: lá, mexer em arquivo só pelo Write/Edit.
+        if motivo in _MEXE_EM_ARQUIVO and ferramenta == "Bash" and not _CAMINHO_DE_FORA.search(comando) \
+                and not _NUNCA.search(comando):
             return None
         return motivo
     return None

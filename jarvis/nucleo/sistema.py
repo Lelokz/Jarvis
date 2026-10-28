@@ -14,6 +14,7 @@ MiB, 0 %, 21.06 W" não é.
 
 from __future__ import annotations
 
+import os
 import re
 import shutil
 import subprocess
@@ -72,6 +73,27 @@ def status_gpu() -> Resultado:
 _SINK = "@DEFAULT_SINK@"
 
 
+WINDOWS = os.name == "nt"
+
+
+def _volume_windows():
+    """O volume da saída padrão do Windows (pycaw), ou None se não deu."""
+    try:
+        import comtypes
+        comtypes.CoInitialize()   # cada thread que fala com o som do Windows precisa disto
+        from pycaw.pycaw import AudioUtilities
+        alto = AudioUtilities.GetSpeakers()
+        volume = getattr(alto, "EndpointVolume", None)
+        if volume is None:   # pycaw antigo: pede o controle à mão
+            from ctypes import POINTER, cast
+            from pycaw.pycaw import IAudioEndpointVolume
+            volume = cast(alto.Activate(IAudioEndpointVolume._iid_, comtypes.CLSCTX_ALL, None),
+                          POINTER(IAudioEndpointVolume))
+        return volume
+    except Exception:
+        return None
+
+
 def _pactl(args: list[str]) -> str | None:
     if shutil.which("pactl") is None:
         return None
@@ -85,6 +107,12 @@ def _pactl(args: list[str]) -> str | None:
 
 
 def volume_atual() -> int | None:
+    if WINDOWS:
+        volume = _volume_windows()
+        try:
+            return round(volume.GetMasterVolumeLevelScalar() * 100) if volume else None
+        except Exception:
+            return None
     saida = _pactl(["get-sink-volume", _SINK])
     if not saida:
         return None
@@ -186,6 +214,13 @@ def planejar_volume(dito: str, passo: int = 10) -> PlanoDeVolume:
 
 
 def alternar_mudo() -> Resultado:
+    if WINDOWS:
+        volume = _volume_windows()
+        try:
+            volume.SetMute(not volume.GetMute(), None)
+        except Exception:
+            return Resultado(False, "Não consegui mudar o mudo.")
+        return Resultado(True, "Pronto.", {"acao": "mudo"})
     if _pactl(["set-sink-mute", _SINK, "toggle"]) is None:
         return Resultado(False, "Não consegui mudar o mudo.")
     return Resultado(True, "Pronto.", {"acao": "mudo"})
@@ -195,6 +230,13 @@ def aplicar_volume(novo: int) -> Resultado:
     """Executa um plano já decidido — e, quando precisa, já confirmado."""
     atual = volume_atual()
     novo = max(0, min(100, int(novo)))
+    if WINDOWS:
+        volume = _volume_windows()
+        try:
+            volume.SetMasterVolumeLevelScalar(novo / 100, None)
+        except Exception:
+            return Resultado(False, "Não consegui mudar o volume.")
+        return Resultado(True, f"Volume em {novo}.", {"de": atual, "para": novo})
     if _pactl(["set-sink-volume", _SINK, f"{novo}%"]) is None:
         return Resultado(False, "Não consegui mudar o volume.")
     return Resultado(True, f"Volume em {novo}.", {"de": atual, "para": novo})

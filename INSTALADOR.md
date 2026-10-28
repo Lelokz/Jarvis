@@ -169,15 +169,32 @@ x86_64-pc-windows-msvc`), que a ponte compila para lá e que o Linux segue igual
   `<pasta>\programas\python` (antes ficava no cache do instalador: apagar o cache
   quebraria a NOVA).
 
-### Falta para a NOVA rodar no Windows (a NOVA em si, não o instalador)
+### A NOVA em si no Windows (28/10/2026, com o OK do Léo)
 
-- A janela, o assistente e as vozes conversam por socket Unix (`jarvis.sock`,
-  `jarvis-rvc.sock`, `jarvis-friday.sock`), que o Python do Windows não tem: trocar
-  por TCP em 127.0.0.1 nos dois sistemas.
-- Som: `jarvis/som.py` e `jarvis/nucleo/sistema.py` usam o PulseAudio (escolher
-  aparelho, volume); o microfone abre o dispositivo "pulse".
-- Mídia (`midia.py`, MPRIS pelo gdbus), tela bloqueada (`tela.py`, loginctl), as
-  travas do agente (`travas.py`) e o `conectar.py` (sobe `./whatsapp-bridge`, `pkill`).
-- Desligar com calma no Windows: hoje o `ligar.py --desligar` para na hora (sem o
-  resumo do dia que o SIGTERM dá no Linux).
-- Testar tudo num Windows de verdade (o PC do Chris, ou uma máquina virtual).
+Feito (o Linux segue igual: os 92 + 81 + 9 testes passam):
+- `jarvis/canal.py`: as partes conversam por socket Unix no Linux (como antes) e por
+  TCP em 127.0.0.1 no Windows, com a porta anotada no mesmo arquivo do canal. Usado
+  pela ponte, pela porta do celular e pelos três servidores de voz; testado no modo
+  Windows aqui (conecta, recusa servidor duplicado, apaga sobra de canal morto).
+- Cadeado da janela: "named pipe" com o nome do usuário no Windows.
+- `jarvis/ligar.py --desligar` no Windows: deixa `logs/desligar.pedido`, e o
+  assistente sai como no ctrl+c (fecha o microfone, grava o resumo); 20 s e à força.
+- Travas da voz e do grupo da família também para a ferramenta **PowerShell** do
+  Claude Code (no Windows ela roda os comandos): apagar, mover, criar arquivo,
+  instalar (winget, msiexec, irm | iex), desligar e fechar programa (Stop-Computer,
+  Stop-Process, taskkill), bloquear a tela (LockWorkStation). No grupo, pelo
+  PowerShell nunca mexe em arquivo, e `$env:`, `%VAR%` e `C:\` contam como coisa do dono.
+- Tela: bloquear (`LockWorkStation`) e saber se está bloqueada; desbloquear pelo
+  celular não existe no Windows (lá só com a senha).
+- Volume e mudo pelo pycaw; pausar, continuar, próxima, anterior e "o que está
+  tocando" pelo controle de mídia do Windows (pywinrt 3.2.1); vídeo no navegador
+  padrão. Bibliotecas só para Windows no `requirements.txt` (marcador `win32`).
+- Conexões: a ponte `.exe` (sem `preexec_fn`/`pkill`), o Tailscale do Windows; o
+  aviso do grupo sem `notify-send`.
+
+Falta:
+- Escolher o microfone e a saída de som nos Ajustes (no Windows vale o padrão do
+  sistema, o que estiver marcado nas configurações de som).
+- Música pelo PC (o mpv) no Windows.
+- **Rodar tudo num Windows de verdade** (o PC do Chris ou uma máquina virtual):
+  nada da parte do Windows foi executado num Windows ainda.

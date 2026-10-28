@@ -4,6 +4,9 @@ Desbloquear não precisa da senha: a sessão é do próprio usuário, e o Linux
 deixa ele mesmo destravar. Por isso o Jarvis NUNCA chama `desbloquear()`
 direto de um pedido falado: só pelo `desbloqueio.py`, depois do Sim no
 celular (decisão do Léo, 23/10/2026: a voz pode ser imitada ou gravada).
+
+No Windows: bloquear e saber se está bloqueada, sim; desbloquear, não (lá só
+com a senha, o Windows não deixa programa nenhum destravar).
 """
 
 from __future__ import annotations
@@ -11,6 +14,8 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
+
+WINDOWS = os.name == "nt"
 
 
 def _rodar(*comando: str) -> str:
@@ -35,7 +40,22 @@ def _sessao() -> str:
     return ""
 
 
+def _bloqueada_windows() -> bool:
+    # Com a tela bloqueada, a área de trabalho de entrada é a do Windows (a da senha):
+    # quem não é ela não consegue trocar para lá.
+    import ctypes
+    u = ctypes.windll.user32
+    mesa = u.OpenInputDesktop(0, False, 0x0100)   # DESKTOP_SWITCHDESKTOP
+    if not mesa:
+        return True
+    livre = u.SwitchDesktop(mesa)
+    u.CloseDesktop(mesa)
+    return not livre
+
+
 def bloqueada() -> bool:
+    if WINDOWS:
+        return _bloqueada_windows()
     for destino, caminho in (("org.cinnamon.ScreenSaver", "/org/cinnamon/ScreenSaver"),
                              ("org.freedesktop.ScreenSaver", "/org/freedesktop/ScreenSaver")):
         saida = _rodar("gdbus", "call", "--session", "--dest", destino, "--object-path", caminho,
@@ -48,6 +68,10 @@ def bloqueada() -> bool:
 
 
 def bloquear() -> None:
+    if WINDOWS:
+        import ctypes
+        ctypes.windll.user32.LockWorkStation()
+        return
     if shutil.which("cinnamon-screensaver-command"):
         subprocess.run(["cinnamon-screensaver-command", "--lock"], timeout=10, check=False)
     else:
@@ -56,6 +80,8 @@ def bloquear() -> None:
 
 def desbloquear() -> bool:
     """Só pelo desbloqueio.py (o Sim no celular). True se destravou."""
+    if WINDOWS:
+        return False
     sessao = _sessao()
     if sessao:
         subprocess.run(["loginctl", "unlock-session", sessao], timeout=10, check=False)

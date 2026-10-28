@@ -31,6 +31,8 @@ from pathlib import Path
 from ..config import Midia as ConfigMidia
 from .atalhos import normalizar
 
+WINDOWS = os.name == "nt"
+
 # Comandos de mídia crus: a fala INTEIRA é o comando, sem objeto nenhum.
 #
 # Estes não passam pelo modelo, e a razão é medida. Com o núcleo em 9 funções,
@@ -248,7 +250,7 @@ def _soltar(comando: list[str]) -> int | None:
     """
     p = subprocess.Popen(
         comando,
-        start_new_session=True,
+        **({"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP} if WINDOWS else {"start_new_session": True}),
         stdin=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
@@ -371,8 +373,8 @@ def tocar_audio(video: Video, cfg: ConfigMidia) -> Resultado:
     if shutil.which(cfg.comando_mpv) is None:
         return Resultado(
             False,
-            f"O {cfg.comando_mpv} não está instalado. "
-            "Instale com: sudo apt install mpv",
+            f"O {cfg.comando_mpv} não está instalado."
+            + ("" if WINDOWS else " Instale com: sudo apt install mpv"),
         )
 
     direta = url_de_audio(video, cfg)
@@ -403,6 +405,12 @@ def tocar_audio(video: Video, cfg: ConfigMidia) -> Resultado:
 
 def tocar_navegador(video: Video, cfg: ConfigMidia) -> Resultado:
     """Abre o vídeo no navegador, para quando o Léo quer ver e não só ouvir."""
+    if WINDOWS:   # o navegador padrão do Windows
+        try:
+            os.startfile(video.url)
+        except OSError as e:
+            return Resultado(False, f"Não consegui abrir: {e}")
+        return Resultado(True, f"Abrindo {video.titulo} no YouTube.", {"video": video.id})
     if shutil.which(cfg.comando_navegador) is None:
         return Resultado(
             False, f"O {cfg.comando_navegador} não está instalado."
@@ -506,13 +514,80 @@ def _escolher_player(qual: str | None = None) -> str | None:
 NOME_FALAVEL = {"brave": "no Brave", "nosso": "no computador"}
 
 
+# -- Windows -------------------------------------------------------------------
+# Lá não existe o MPRIS: quem sabe o que toca é o controle de mídia do próprio Windows
+# (o mesmo das teclas de mídia e do painel do volume), pelo pywinrt. Ele responde pelo
+# que está tocando agora (Spotify, o navegador...), e diz o título e se dá para pausar.
+_TOCANDO = 4   # GlobalSystemMediaTransportControlsSessionPlaybackStatus.PLAYING
+
+
+def _esperar(operacao):
+    """Espera uma operação do Windows (as "async" do pywinrt) e devolve o resultado."""
+    import asyncio
+
+    async def esperar():
+        return await operacao
+    return asyncio.run(esperar())
+
+
+def _sessao_windows():
+    """A sessão de mídia atual do Windows, ou None (nada aberto ou o pywinrt falhou)."""
+    try:
+        from winrt.windows.media.control import GlobalSystemMediaTransportControlsSessionManager as Gerente
+        return _esperar(Gerente.request_async()).get_current_session()
+    except Exception:
+        return None
+
+
+def _titulo_windows(sessao) -> str | None:
+    try:
+        return _esperar(sessao.try_get_media_properties_async()).title or None
+    except Exception:
+        return None
+
+
+def _controlar_windows(acao: str) -> Resultado:
+    sessao = _sessao_windows()
+    if sessao is None:
+        return Resultado(False, "Não tem nada tocando.")
+    info = sessao.get_playback_info()
+    c = info.controls
+    tocando = info.playback_status == _TOCANDO
+    if acao == "pausar" and not tocando:
+        return Resultado(False, "Não tem nada tocando.")
+    pode, fazer, confirmacao = {
+        "pausar": (c.is_pause_enabled, sessao.try_pause_async, "Pausei."),
+        "continuar": (c.is_play_enabled, sessao.try_play_async, "Voltando."),
+        "proxima": (c.is_next_enabled, sessao.try_skip_next_async, "Próxima."),
+        "anterior": (c.is_previous_enabled, sessao.try_skip_previous_async, "Anterior."),
+    }[acao]
+    if not pode:
+        return Resultado(False, f"O que está tocando não tem {acao}.")
+    # Como no Linux: só diz "Próxima." se a faixa mudou de verdade.
+    antes = _titulo_windows(sessao) if acao in ("proxima", "anterior") else None
+    try:
+        ok = _esperar(fazer())
+    except Exception:
+        ok = False
+    if not ok:
+        return Resultado(False, f"Não consegui {acao}.")
+    if antes is not None:
+        time.sleep(0.6)
+        if _titulo_windows(sessao) == antes:
+            rotulo = "próxima" if acao == "proxima" else "anterior"
+            return Resultado(False, f"Não tem {rotulo} — é só isso na fila.")
+    return Resultado(True, confirmacao, {"player": sessao.source_app_user_model_id})
+
+
 def controlar(acao: str, qual: str | None = None) -> Resultado:
     """pausar | continuar | proxima | anterior — no player que estiver ativo.
 
     `qual` vem do que o Léo falou: "pausa a do Brave", "dá play na do
     computador". Sem `qual`, vale a regra de sempre — o que o Jarvis iniciou
-    ganha.
+    ganha. (No Windows vale o que o próprio Windows diz que está tocando.)
     """
+    if WINDOWS and acao in ("pausar", "continuar", "proxima", "anterior"):
+        return _controlar_windows(acao)
     metodos = {
         "pausar": ("Pause", "CanPause", "Pausei."),
         "continuar": ("Play", "CanPlay", "Voltando."),
@@ -578,6 +653,9 @@ def _faixa(player: str) -> str | None:
 
 def o_que_esta_tocando() -> str | None:
     """Título do que toca agora, para o Jarvis poder mencionar."""
+    if WINDOWS:
+        sessao = _sessao_windows()
+        return _titulo_windows(sessao) if sessao is not None else None
     player = _escolher_player()
     if player is None:
         return None
@@ -607,6 +685,9 @@ def tem_algo_tocando() -> bool:
     (ver `_esperar_o_som`); para isto, errar para "tocando" é o lado seguro.
     """
     try:
+        if WINDOWS:
+            sessao = _sessao_windows()
+            return sessao is not None and sessao.get_playback_info().playback_status == _TOCANDO
         return any(_propriedade(p, "PlaybackStatus") == "Playing" for p in players())
     except Exception:
         return False

@@ -10,7 +10,8 @@ convença o Claude. Decisão do Léo (21/10/2026):
 - só o Léo (aqui): apagar ou trocar o que está na memória, criar/editar/mover/
   apagar arquivo, instalar ou desinstalar, desligar ou bloquear o PC.
 
-A lista do Bash é de comandos claramente perigosos, não um cadeado perfeito:
+A lista do Bash (e a do PowerShell, no Windows) é de comandos claramente perigosos,
+não um cadeado perfeito:
 o resto fica com o julgamento do Claude. Bloquear demais só atrapalha os
 amigos do Léo, nunca ele.
 """
@@ -42,6 +43,24 @@ _BASH = [
      "mexer em arquivo"),
 ]
 
+# No Windows o Claude Code roda comando pelo PowerShell (e não só pelo Bash): as
+# mesmas regras, com os nomes de lá. Os apelidos do PowerShell (rm, mv, cp, kill...)
+# já caem na lista do Bash, que também vale para ele.
+_POWERSHELL = [
+    (re.compile(r"\b(Remove-Item|Move-Item|Rename-Item|Clear-Content|Clear-RecycleBin|del|erase|rd|ri|ren|move|mi|rni)\b",
+                re.I), "apagar, mover ou mexer em arquivo"),
+    (re.compile(r"\b(New-Item|Copy-Item|Set-Content|Add-Content|Out-File|Export-\w+|md|ni|copy|cpi|sc|ac)\b"
+                r"|\[System\.IO\.File\]::Write", re.I), "criar ou editar arquivo"),
+    (re.compile(r"\b(winget|choco|scoop)\s+(install|uninstall|upgrade|remove)\b|\bmsiexec\b"
+                r"|\b(Install|Uninstall)-(Package|Module|Script)\b|-Verb\s+RunAs\b"
+                r"|\b(irm|iwr|Invoke-RestMethod|Invoke-WebRequest)\b.*\|\s*(iex|Invoke-Expression)\b", re.I),
+     "instalar ou desinstalar programa"),
+    (re.compile(r"\b(Stop-Computer|Restart-Computer|Stop-Process|spps|taskkill|tskill|Stop-Service|Set-Service"
+                r"|Disable-\w+|Suspend-Computer)\b|\bshutdown(\.exe)?\s", re.I),
+     "desligar o PC ou fechar programa à força"),
+]
+TERMINAIS = {"Bash", "PowerShell"}
+
 _EDITAM = {"Write", "Edit", "MultiEdit", "NotebookEdit"}
 
 # A tela de bloqueio por comando direto: sempre barrado, até para o Léo. Só
@@ -50,6 +69,8 @@ _EDITAM = {"Write", "Edit", "MultiEdit", "NotebookEdit"}
 _TELA = re.compile(r"\bcinnamon-screensaver-command\b|\bloginctl\s+(un)?lock-sessions?\b"
                    r"|\bxdg-screensaver\b|ScreenSaver\.(SetActive|Lock)|\bgnome-screensaver-command\b"
                    r"|\bdm-tool\s+lock\b|\bxdg-screensaver\s+lock\b"
+                   # o Windows
+                   r"|LockWorkStation|\btsdiscon\b|\blogoff(\.exe)?\b"
                    # o código do próprio Jarvis e a porta que recebe o Sim do celular
                    r"|desbloque|tela\.(bloquear|desbloquear)")
 
@@ -74,9 +95,9 @@ def precisa_do_leo(ferramenta: str, entrada: dict, memoria: Path) -> str | None:
             return None if _so_acrescenta(ferramenta, entrada, memoria) else \
                 "apagar ou trocar o que está na memória"
         return "criar ou editar arquivo"
-    if ferramenta == "Bash":
+    if ferramenta in TERMINAIS:
         comando = str(entrada.get("command") or "")
-        for padrao, o_que in _BASH:
+        for padrao, o_que in _BASH + (_POWERSHELL if ferramenta == "PowerShell" else []):
             if padrao.search(comando):
                 return o_que
         return None

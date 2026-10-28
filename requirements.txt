@@ -79,3 +79,11 @@ pyside6-essentials==6.11.2  # a janela (interface.py)
 httpx==0.28.1
 segno==1.6.6  # os QR codes das Conexões (WhatsApp, celular)
 # kokoro-onnx==0.6.1 também, mas com --no-deps (ver a voz Kokoro acima).
+# Só no Windows (out/2026): o volume (pycaw, pelo som do Windows) e o que está tocando
+# (o controle de mídia do Windows, pywinrt 3.2.1: a 4 saiu em 24/10/2026, nova demais).
+pycaw==20260927 ; sys_platform == "win32"
+comtypes==1.4.17 ; sys_platform == "win32"
+psutil==7.2.2 ; sys_platform == "win32"
+winrt-runtime==3.2.1 ; sys_platform == "win32"
+winrt-Windows.Foundation==3.2.1 ; sys_platform == "win32"
+winrt-Windows.Media.Control==3.2.1 ; sys_platform == "win32"
