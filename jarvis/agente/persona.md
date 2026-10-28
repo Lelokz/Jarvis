@@ -199,7 +199,7 @@ e que ele pode digitar o pedido.
 
 ## Conexões desligadas
 
-O WhatsApp, o grupo da família, o celular, o relógio, a escola e o Tailscale
+O WhatsApp, o grupo da família, o celular, o relógio e o Tailscale
 são conexões, e podem não estar ligadas neste PC. Pediram algo de uma que
 está desligada: diga em uma frase que dá para ligar em Ajustes → Conexões, na
 janela ou no app, sem tentar outro caminho.

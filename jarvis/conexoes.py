@@ -51,7 +51,7 @@ def _atalhos() -> int:
         return 0
 
 
-def estado(cfg: Config, ajustes: dict, conectados: set[str], tem_escola: bool) -> list[dict]:
+def estado(cfg: Config, ajustes: dict, conectados: set[str]) -> list[dict]:
     """`conectados`: quem está na ponte agora ("celular-app", "relogio"...)."""
     def item(id_: str, estado_: str, detalhe: str = "") -> dict:
         return {"id": id_, "estado": estado_, "detalhe": detalhe}
@@ -70,7 +70,6 @@ def estado(cfg: Config, ajustes: dict, conectados: set[str], tem_escola: bool) -
         item("celular", "conectado" if "celular-app" in conectados else "pronto" if remoto else "desligado"),
         item("relogio", "conectado" if "relogio" in conectados else "pronto" if remoto else "desligado"),
         item("fora", "conectado" if fora else "desligado"),
-        item("escola", "conectado" if tem_escola else "desligado"),
         item("musica", "conectado" if shutil.which("mpv") else "desligado"),
         item("atalhos", "conectado" if n else "desligado", f"{n} atalhos" if n else ""),
     ]

@@ -1,8 +1,7 @@
 """Os ajustes da janela (beta 0.6.5) que não são som: o volume da voz do
-Jarvis no PC e as notificações da escola NO PC (o app do celular tem o
-interruptor dele). Ficam em
-~/.local/share/jarvis/ajustes.json; quem usa lê na hora (a escola roda em
-outro processo).
+Jarvis no PC, o nome de quem usa e o grupo da família. Ficam em
+~/.local/share/jarvis/ajustes.json; quem usa lê na hora (o grupo roda em
+outra thread).
 """
 
 from __future__ import annotations
@@ -14,7 +13,7 @@ from typing import Any
 ARQUIVO = Path.home() / ".local/share/jarvis/ajustes.json"
 # 100 = o volume de sempre, que é o TETO: o volume já machucou o ouvido do
 # Léo uma vez (HISTORIA). Daqui só se abaixa.
-PADRAO: dict[str, Any] = {"volume_voz": 100, "notificar_escola": True, "nome": "",
+PADRAO: dict[str, Any] = {"volume_voz": 100, "nome": "",
                           # O Jarvis no grupo da família do WhatsApp (jarvis/grupo).
                           "grupo_jid": "", "grupo_ligado": False}
 
@@ -39,8 +38,6 @@ def ler() -> dict[str, Any]:
         volume = dados.get("volume_voz")
         if isinstance(volume, (int, float)) and not isinstance(volume, bool):
             saida["volume_voz"] = int(min(100, max(0, volume)))
-        if isinstance(dados.get("notificar_escola"), bool):
-            saida["notificar_escola"] = dados["notificar_escola"]
         if isinstance(dados.get("grupo_jid"), str) and (not dados["grupo_jid"] or dados["grupo_jid"].endswith("@g.us")):
             saida["grupo_jid"] = dados["grupo_jid"]
         if isinstance(dados.get("grupo_ligado"), bool):

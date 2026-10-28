@@ -269,7 +269,7 @@ fun Tela(modelo: Jarvis) {
     var seletores by remember { mutableStateOf(false) }
     val contexto = LocalContext.current
 
-    // As notificações da escola precisam da permissão (Android 13+): pede uma
+    // As notificações (avisos do PC, pedidos do grupo) precisam da permissão (Android 13+): pede uma
     // vez só, na primeira abertura desta versão.
     val pedirNotificacao = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
     LaunchedEffect(Unit) {
@@ -1244,7 +1244,7 @@ private val categoriasDosAjustes = listOf(
         Categoria("uso", "Uso", "A assinatura do Claude", Icones.uso)),
     "Personalização" to listOf(
         Categoria("personas", "Personas", "Jarvis e Friday", Icones.personas),
-        Categoria("conexoes", "Conexões", "WhatsApp, celular, escola…", Icones.conexoes)),
+        Categoria("conexoes", "Conexões", "WhatsApp, celular, relógio…", Icones.conexoes)),
     "" to listOf(Categoria("sobre", "Sobre a NOVA", "Versão e o que é a NOVA", Icones.sobre)),
 )
 
@@ -1257,7 +1257,6 @@ private val infoConexoes = listOf(
     InfoConexao("celular", "Celular", "O app NOVA: conversar e receber avisos pelo celular.", Icones.celular),
     InfoConexao("relogio", "Relógio", "Falar pelo relógio. Precisa do celular conectado.", Icones.relogio),
     InfoConexao("fora", "Fora de casa", "Usar o celular longe do Wi-Fi de casa (Tailscale).", Icones.globo),
-    InfoConexao("escola", "Escola", "Notas, tarefas e recados do Estudante Online (SC).", Icones.escola),
     InfoConexao("musica", "Música", "Tocar música e vídeo do YouTube pelo PC.", Icones.musica),
     InfoConexao("atalhos", "Atalhos", "Programas e pastas que ele abre pelo nome.", Icones.raioTraco),
 )
@@ -1416,12 +1415,7 @@ private fun AjustesVoz(modelo: Jarvis) {
 @Composable
 private fun AjustesAvisos(modelo: Jarvis) {
     SecaoDosAjustes("Avisos neste celular",
-        if (modelo.temEscola.value) "" else "Nenhum aviso para ajustar ainda: eles aparecem aqui quando a conexão de cada um estiver ligada.") {
-        if (modelo.temEscola.value)
-            LinhaDeAjuste("Notificações da escola", "Avisa quando aparecer nota, tarefa ou recado novo.", ultima = true) {
-                Chave(modelo.notificarEscola.value) { modelo.alternarNotificarEscola() }
-            }
-    }
+        "Nenhum aviso para ajustar ainda: eles aparecem aqui quando a conexão de cada um estiver ligada.") {}
 }
 
 @Composable

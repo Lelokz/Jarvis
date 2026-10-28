@@ -104,11 +104,6 @@ class Jarvis(private val app: Application) {
     val atualizando = mutableStateOf(-1f)
     // O pedido de desbloquear o PC esperando o Sim/Não (o id), ou "".
     val desbloqueio = mutableStateOf("")
-    // As notificações da escola NO CELULAR (o PC tem o interruptor dele, nos
-    // Ajustes da janela; decisão do Léo, 23/10/2026).
-    val notificarEscola = mutableStateOf(prefs.getBoolean("notificar_escola", true))
-    // O PC está ligado a uma escola? Sem ela, os Ajustes nem mostram o interruptor.
-    val temEscola = mutableStateOf(prefs.getBoolean("tem_escola", false))
     // Como o Jarvis chama quem usa e o nome do computador (vêm do PC, no
     // evento "ajustes"; beta 0.12.5). Guardados para o app abrir já com eles.
     val nomeUsuario = mutableStateOf(prefs.getString("nome_usuario", "") ?: "")
@@ -307,11 +302,6 @@ class Jarvis(private val app: Application) {
     /** O mesmo "Seu nome" da janela: o nome é um só, guardado no PC. */
     fun mudarNome(nome: String) {
         conexao?.enviar(JSONObject().put("pedir", "ajustes").put("nome", nome.trim().take(30)))
-    }
-
-    fun alternarNotificarEscola() {
-        notificarEscola.value = !notificarEscola.value
-        prefs.edit().putBoolean("notificar_escola", notificarEscola.value).apply()
     }
 
     fun alternarMudo() {
@@ -727,7 +717,6 @@ class Jarvis(private val app: Application) {
             }
             "notificacao" -> viewModelScope.launch(Dispatchers.IO) { Novidades.buscar(app) }
             "ajustes" -> {
-                temEscola.value = ev.optBoolean("tem_escola", false)
                 nomeUsuario.value = ev.optString("nome", "")
                 temGrupo.value = ev.optString("grupo_jid", "").isNotEmpty()
                 grupoLigado.value = ev.optBoolean("grupo_ligado", false)
@@ -740,8 +729,7 @@ class Jarvis(private val app: Application) {
                         lista.optJSONObject(i)?.let { EstadoConexao(it.optString("id"), it.optString("estado"), it.optString("detalhe")) }
                     }
                 }
-                prefs.edit().putBoolean("tem_escola", temEscola.value)
-                    .putString("nome_usuario", nomeUsuario.value).putString("nome_pc", nomePc.value).apply()
+                prefs.edit().putString("nome_usuario", nomeUsuario.value).putString("nome_pc", nomePc.value).apply()
             }
             "uso" -> {
                 ev.optJSONObject("cinco_horas")?.let {

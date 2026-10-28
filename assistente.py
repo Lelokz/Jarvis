@@ -40,7 +40,6 @@ from jarvis import ajustes, config, cronometro, eventos, microfone, som, tts, wa
 from jarvis.agente import sessoes
 from jarvis.agente.agente import Agente, ErroDoAgente, Saida
 from jarvis.agente.avisos import AvisosWhatsApp
-from jarvis.escola.vigia import Vigia
 from jarvis.agente.reflexos import reflexo
 from jarvis.cronometro import Tempos
 from jarvis.nucleo import recados, relogio
@@ -1110,17 +1109,14 @@ class Ciclo:
             self._responder(valor, origem="grupo")
 
     def emitir_ajustes(self) -> None:
-        # tem_escola: este PC está ligado a uma escola (jarvis/escola). Sem
-        # ela, a janela e o app nem mostram o interruptor.
         # conexoes: o estado de cada uma, para a aba Conexões (beta 0.17.0).
-        from jarvis.escola.__main__ import RESUMO
         from jarvis import conexoes
         import socket
-        dados, escola = ajustes.ler(), RESUMO.exists()
+        dados = ajustes.ler()
         # reconhece_voz: tem o perfil da voz do dono; sem ele, toda voz vale como a dele.
-        self.emissor.emitir("ajustes", **dados, tem_escola=escola, pc=socket.gethostname(),
+        self.emissor.emitir("ajustes", **dados, pc=socket.gethostname(),
                             reconhece_voz=self.quem_fala is not None,
-                            conexoes=conexoes.estado(self.cfg, dados, self.quem_conectado(), escola))
+                            conexoes=conexoes.estado(self.cfg, dados, self.quem_conectado()))
 
     def emitir_cerebro(self) -> None:
         cor = self.cfg.friday.cor if self.persona == "friday" and self.cfg.friday else ""
@@ -1596,9 +1592,6 @@ def conversar(cfg: config.Config) -> int:
 
             ciclo.atualizar_aviso()
             proximo_aviso = time.monotonic() + 30
-            # Escola (Estudante Online): lê sozinha 3x por dia. O que
-            # for novo vira notificação, sem voz (decisão do Léo).
-            Vigia().start()
             # O Jarvis no grupo da família (WhatsApp): só com o grupo ligado nos Ajustes.
             grupo = None
             if agente.whatsapp is not None:

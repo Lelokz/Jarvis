@@ -58,7 +58,7 @@ class PonteQt(QObject):
     usoMudou = Signal(float, float, float, float)  # 5 h (uso, volta_em), semana (uso, volta_em)
     escrevendo = Signal(int, str, bool, bool)      # bloco, pedaço, fim, descartar
     somMudou = Signal("QVariant")          # aparelhos de som: o evento "som" inteiro (Ajustes)
-    ajustesMudou = Signal("QVariant")      # volume da voz e notificações da escola (Ajustes)
+    ajustesMudou = Signal("QVariant")      # volume da voz, nome, grupo e conexões (Ajustes)
 
     def __init__(self, caminho: Path, parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -177,10 +177,6 @@ class PonteQt(QObject):
     @Slot(str, result=bool)
     def mudarNome(self, nome: str) -> bool:
         return self._pedir({"pedir": "ajustes", "nome": nome.strip()[:60]})
-
-    @Slot(bool, result=bool)
-    def mudarNotificarEscola(self, ligado: bool) -> bool:
-        return self._pedir({"pedir": "ajustes", "notificar_escola": bool(ligado)})
 
     @Slot(str, str, result=bool)
     def escolherSom(self, tipo: str, aparelho: str) -> bool:

@@ -74,7 +74,6 @@ claude-agent-sdk==0.2.168
 starlette==1.9.0
 uvicorn==0.54.0
 websockets==17.3
-playwright>=1.64  # escola: navegador escondido (Khan e Estudante Online)
 pulsectl>=24  # os aparelhos de som do Linux (Ajustes, jarvis/som.py)
 pyside6-essentials==6.11.2  # a janela (interface.py)
 httpx==0.28.1

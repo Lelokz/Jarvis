@@ -27,8 +27,7 @@ def passo(nome, f):
 from jarvis import config, ajustes, conexoes
 cfg = passo("config", lambda: config.carregar(None) and "carregou") and config.carregar(None)
 passo("ajustes", ajustes.ler)
-from jarvis.escola.__main__ import RESUMO
-passo("conexoes", lambda: conexoes.estado(cfg, ajustes.ler(), set(), RESUMO.exists()))
+passo("conexoes", lambda: conexoes.estado(cfg, ajustes.ler(), set()))
 from jarvis.quem_fala import QuemFala
 passo("quem_fala", lambda: QuemFala().perfil)
 from jarvis.nucleo.whatsapp import WhatsApp

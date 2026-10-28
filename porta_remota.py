@@ -59,7 +59,7 @@ APK = RAIZ / "celular" / "app" / "build" / "outputs" / "apk" / "debug" / "app-de
 # A versão do APK compilado: o app compara com a dele e oferece atualizar.
 METADADOS_APK = APK.parent / "output-metadata.json"
 # As notificações que o celular busca sozinho, mesmo com o app fechado
-# (por enquanto, as da escola: jarvis/escola/__main__.py).
+# (por enquanto, os avisos do grupo da família: jarvis/grupo/familia.py).
 NOVIDADES = Path.home() / ".local/share/jarvis/novidades.jsonl"
 MAX_AUDIO_BYTES = 8 * 1024 * 1024
 # Um minuto de PCM 16 kHz: o resto é cortado antes de ir para o Whisper.

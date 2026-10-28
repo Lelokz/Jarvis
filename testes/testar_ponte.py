@@ -657,13 +657,13 @@ def rodar_janela(base: Path) -> None:
     janela.enviar({"pedir": "ajustes", "volume_voz": 150})
     r = janela.ler(1)
     checa("volume acima de 100: erro", r and r[0]["ev"] == "erro")
-    janela.enviar({"pedir": "ajustes", "volume_voz": 60, "notificar_escola": False})
+    janela.enviar({"pedir": "ajustes", "volume_voz": 60})
     pedidos_aj = []
     esperar(lambda: pedidos_aj.append(srv.proximo_pedido()) or any(pedidos_aj))
     p_aj = next((x for x in pedidos_aj if x), None)
     checa("ajustes: vão para a fila",
           p_aj is not None and p_aj.tipo == "ajustes"
-          and json.loads(p_aj.valor) == {"volume_voz": 60, "notificar_escola": False})
+          and json.loads(p_aj.valor) == {"volume_voz": 60})
     janela.enviar({"pedir": "renomear", "id": "a1b2c3d4", "titulo": "  Meu nome  "})
     r = janela.ler(1)
     checa("renomear: chama o provedor e devolve a lista", r and r[0]["ev"] == "conversas"

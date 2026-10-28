@@ -20,14 +20,14 @@ import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 
 /**
- * O que o PC guardou para o celular (por enquanto, a escola: nota nova, prova
- * na agenda) e a versão do app compilado. O app busca na porta remota
+ * O que o PC guardou para o celular (por enquanto, os avisos do grupo da
+ * família) e a versão do app compilado. O app busca na porta remota
  * (`/novidades` e `/versao`): ao conectar e, com o app fechado, a cada 15 min
  * pelo Android (`TarefaNovidades`). Sem o celular precisar ficar ligado no PC.
  */
 object Novidades {
     private val cliente = OkHttpClient.Builder().callTimeout(15, TimeUnit.SECONDS).build()
-    private const val CANAL = "escola"
+    private const val CANAL = "escola"  // o id antigo: trocar criaria outro canal no Android
 
     private fun prefs(c: Context) = c.getSharedPreferences("jarvis", Context.MODE_PRIVATE)
 
@@ -47,9 +47,6 @@ object Novidades {
         } catch (e: Exception) {
             return  // PC desligado ou sem Tailscale: tenta na próxima
         }
-        // Desligadas nos Ajustes do app: marca como vistas, sem mostrar. O
-        // interruptor é o da escola; os avisos do grupo da família sempre saem.
-        val mostrarEscola = p.getBoolean("notificar_escola", true)
         var maior = ultima
         for (i in 0 until lista.length()) {
             val n = lista.getJSONObject(i)
@@ -57,7 +54,7 @@ object Novidades {
             if (id <= ultima) continue
             maior = maxOf(maior, id)
             // Na primeira vez só marca o que já existia: nada de enxurrada.
-            if (!primeiraVez && (n.optString("tipo") == "grupo" || mostrarEscola)) mostrar(c, id, n.optString("titulo", "NOVA"), n.optString("texto"))
+            if (!primeiraVez) mostrar(c, id, n.optString("titulo", "NOVA"), n.optString("texto"))
         }
         p.edit().putLong("novidade_ultima", maior).apply()
     }
@@ -65,8 +62,8 @@ object Novidades {
     private fun mostrar(c: Context, id: Long, titulo: String, texto: String) {
         val gerente = c.getSystemService(NotificationManager::class.java)
         gerente.createNotificationChannel(
-            NotificationChannel(CANAL, "Escola", NotificationManager.IMPORTANCE_DEFAULT).apply {
-                description = "Nota nova, média e o que os professores postaram na agenda"
+            NotificationChannel(CANAL, "Avisos do PC", NotificationManager.IMPORTANCE_DEFAULT).apply {
+                description = "O que a NOVA avisa do PC, como os recados do grupo da família"
             })
         val abrir = PendingIntent.getActivity(c, 0, Intent(c, MainActivity::class.java),
             PendingIntent.FLAG_IMMUTABLE)

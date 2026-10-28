@@ -30,7 +30,6 @@ Item {
     // O evento "ajustes": volume, notificações, nome, grupo e as conexões.
     property var ajustes: null
     signal mudarVolume(int volume)
-    signal mudarNotificar(bool ligado)
     signal mudarNome(string nome)
     signal mudarGrupo(bool ligado)
 
@@ -56,7 +55,6 @@ Item {
         { id: "celular", nome: "Celular", icone: "celular", descricao: "O app NOVA: conversar e receber avisos pelo celular." },
         { id: "relogio", nome: "Relógio", icone: "relogio", descricao: "Falar pelo relógio. Precisa do celular conectado." },
         { id: "fora", nome: "Fora de casa", icone: "globo", descricao: "Usar o celular longe do Wi-Fi de casa (Tailscale)." },
-        { id: "escola", nome: "Escola", icone: "escola", descricao: "Notas, tarefas e recados do Estudante Online (SC)." },
         { id: "musica", nome: "Música", icone: "musica", descricao: "Tocar música e vídeo do YouTube pelo PC." },
         { id: "atalhos", nome: "Atalhos", icone: "raio", descricao: "Programas e pastas que ele abre pelo nome." },
     ]
@@ -540,17 +538,7 @@ Item {
             width: pagina.width
             Secao {
                 titulo: "Avisos"
-                dica: raiz.ajustes && raiz.ajustes.tem_escola ? "" : "Nenhum aviso para ajustar ainda: eles aparecem aqui quando a conexão de cada um estiver ligada."
-                Linha {
-                    visible: !!raiz.ajustes && !!raiz.ajustes.tem_escola
-                    titulo: "Notificações da escola"
-                    descricao: "Avisa quando aparecer nota, tarefa ou recado novo."
-                    ultima: true
-                    Interruptor {
-                        ligado: raiz.ajustes ? raiz.ajustes.notificar_escola : true
-                        onTrocou: raiz.mudarNotificar(!ligado)
-                    }
-                }
+                dica: "Nenhum aviso para ajustar ainda: eles aparecem aqui quando a conexão de cada um estiver ligada."
             }
         }
     }

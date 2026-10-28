@@ -822,7 +822,6 @@ Window {
             if (typeof ponte !== "undefined") ponte.definirPersona(v);
         }
         onMudarVolume: (volume) => { if (typeof ponte !== "undefined") ponte.mudarVolumeVoz(volume) }
-        onMudarNotificar: (ligado) => { if (typeof ponte !== "undefined") ponte.mudarNotificarEscola(ligado) }
         onMudarNome: (nome) => { if (typeof ponte !== "undefined") ponte.mudarNome(nome) }
         onMudarGrupo: (ligado) => { if (typeof ponte !== "undefined") ponte.mudarGrupo(ligado) }
         onEscolherSom: (tipo, aparelho) => { if (typeof ponte !== "undefined") ponte.escolherSom(tipo, aparelho) }

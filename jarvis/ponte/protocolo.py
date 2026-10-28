@@ -80,10 +80,10 @@ ASSISTENTE -> CLIENTES
     {"ev":"desbloqueio", "id":"<hex>", "expira_em":<época>}
         Pediram para desbloquear o PC: o app pergunta "Desbloquear o PC?" e
         responde na porta remota (POST /desbloqueio, com a chave).
-    {"ev":"ajustes", "volume_voz":0-100, "notificar_escola":bool, "tem_escola":bool,
+    {"ev":"ajustes", "volume_voz":0-100, "reconhece_voz":bool,
      "nome":"<como chamar quem usa>", "pc":"<nome do computador>",
      "conexoes":[{"id":"whatsapp", "estado":"conectado|pronto|desligado", "detalhe":"..."}]}
-        O volume da voz no PC e as notificações da escola (beta 0.6.5); o
+        O volume da voz no PC (beta 0.6.5); se tem o perfil da voz do dono; o
         estado de cada conexão, para a aba Conexões (jarvis/conexoes.py, beta 0.17.0).
     {"ev":"conversa_atual", "id":"<uuid>", "falas":[...]}
         A conversa do Jarvis mudou (ligou, "nova", "continuar"): o id da
@@ -132,7 +132,7 @@ CLIENTES -> ASSISTENTE
          {"pedir":"som"}                  -> "som" (a lista de aparelhos)
          {"pedir":"som", "saida":"<id>", "entrada":"<id>"} (um ou os dois;
              "" = o padrão do sistema) -> troca e manda "som" para todos
-         {"pedir":"ajustes", "volume_voz":0-100, "notificar_escola":bool}
+         {"pedir":"ajustes", "volume_voz":0-100}
              (um ou os dois; sem nada, só pede) -> "ajustes" para todos
     (as Memórias, 25/10/2026; janela e app)
          {"pedir":"memorias"}             -> {"ev":"memorias", "lista":[{"id","titulo","tipo","atualizado"}]}
@@ -314,11 +314,6 @@ def ler_pedido(linha: bytes) -> tuple[str, dict[str, Any]]:
             if not isinstance(nome, str) or len(nome) > 60:
                 raise ErroDeProtocolo("'nome' inválido")
             dados["nome"] = nome
-        notificar = objeto.get("notificar_escola")
-        if notificar is not None:
-            if not isinstance(notificar, bool):
-                raise ErroDeProtocolo("'notificar_escola' tem que ser true ou false")
-            dados["notificar_escola"] = notificar
         return tipo, dados
 
     if tipo == "ouvir":

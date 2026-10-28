@@ -928,6 +928,10 @@ Sem ordem rígida: faz, o Léo testa o que é de voz, segue.
    um modelo de ~8B bom em ferramentas, local, entrando quando o limite do
    Claude acabar ou a internet cair.
 7. **Escola: Khan Academy e Estudante Online (planejado em 22/10/2026).**
+   **Removida em 28/10/2026** (pedido do Léo: "nem to usando", "muito beta"):
+   o `jarvis/escola/` saiu do código (está no git, antes do commit da remoção),
+   junto com a conexão, o interruptor dos avisos e a vigia. Volta só com um
+   plano separado.
    Nenhum dos dois tem API aberta (a do Khan foi desligada em 2020). Plano:
    um navegador escondido (Playwright, sem janela) com um perfil só do
    Jarvis, em `~/.local/share/jarvis/`. O Léo entra uma vez em cada site

@@ -12,7 +12,7 @@ android {
         applicationId = "com.lelokz.jarvis"
         minSdk = 29          // Android 10+: o S21 FE e o Galaxy Watch 7 sobram
         targetSdk = 35
-        versionCode = 35
+        versionCode = 36
         versionName = "beta 0.17.5"
         // O S21 FE e o Galaxy Watch 7 são 64 bits: sem as outras arquiteturas,
         // o onnxruntime não incha o APK.
