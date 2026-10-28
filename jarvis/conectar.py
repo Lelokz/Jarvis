@@ -244,8 +244,9 @@ def _celular(cfg: Config, acao: str, valor: str, conectados: set[str]) -> dict:
 # -- Música --------------------------------------------------------------------
 
 def _musica(cfg: Config, acao: str, valor: str, _conectados) -> dict:
-    return {"estado": "conectado" if shutil.which("mpv") else "desligado",
-            "comando": "sudo apt install mpv mpv-mpris"}
+    # No Windows o instalador põe o mpv na pasta da NOVA (config.toml aponta para ele).
+    return {"estado": "conectado" if shutil.which(cfg.midia.comando_mpv) else "desligado",
+            "comando": "" if WINDOWS else "sudo apt install mpv mpv-mpris"}
 
 
 # -- Vozes dubladas (Ajustes → Voz e som) ---------------------------------------

@@ -69,6 +69,10 @@ PONTE_PRONTA = {"windows": ("", "7cdd9027838d0dfb71055461fa8745ebb1fe703202b032d
 # ele vem do sistema). A versão fixa do gyan.dev, a que o site do FFmpeg indica.
 FFMPEG = ("https://github.com/GyanD/codexffmpeg/releases/download/8.1.2/ffmpeg-8.1.2-full_build-shared.zip",
           "274923c68904a9b76c73b908f57923dafba81155856cd742138515ded570d066")
+# Só no Windows: o mpv que toca a música sem janela (no Linux ele vem do sistema). O build
+# oficial do próprio mpv (v0.41.0); lá ele já entra nos controles de mídia do Windows.
+MPV = ("https://github.com/mpv-player/mpv/releases/download/v0.41.0/mpv-v0.41.0-x86_64-w64-mingw32.zip",
+       "a49811c0752c108b8260636f9c6f6fcb97406641c98b30f1e7b500dfb20177de")
 # Do requirements.txt, o que só existe no Linux (o som e as janelas de lá).
 SO_LINUX = ("python-xlib", "pulsectl")
 # O que não precisa ir para o PC de quem instala.
@@ -335,6 +339,26 @@ def _programas_vozes(ctx: Contexto, avisar: Avisar) -> None:
         pacote.unlink()
 
 
+def _musica(ctx: Contexto, avisar: Avisar) -> None:
+    """Só no Windows: o mpv em programas/mpv (o config.toml aponta para ele no finalizar)."""
+    pasta = ctx.pasta / "programas" / "mpv"
+    if any(pasta.rglob("mpv.exe")):
+        return
+    pacote = ctx.pasta / "programas" / "download" / "mpv.zip"
+    _baixar(MPV[0], pacote, avisar, "Música (mpv)", MPV[1])
+    avisar(-1, "Abrindo o mpv")
+    # O zip do GitHub do mpv traz outro zip dentro (o artefato do build), com o mpv.exe.
+    import io
+    with zipfile.ZipFile(pacote) as z:
+        for nome in z.namelist():
+            if nome.lower().endswith(".zip"):
+                with zipfile.ZipFile(io.BytesIO(z.read(nome))) as dentro:
+                    dentro.extractall(pasta)
+            else:
+                z.extract(nome, pasta)
+    pacote.unlink()
+
+
 def _ponte_pronta() -> tuple[str, str]:
     return PONTE_PRONTA["windows" if WINDOWS else "linux"]
 
@@ -407,6 +431,11 @@ def _finalizar(ctx: Contexto, avisar: Avisar) -> None:
         ajustes["programas_vozes"] = str(ctx.pasta / "programas")
     arquivo.write_text(json.dumps(ajustes, ensure_ascii=False), encoding="utf-8")
     if WINDOWS:
+        # A música: o mpv que o passo "musica" pôs, e o yt-dlp da própria NOVA.
+        mpv = next((ctx.pasta / "programas" / "mpv").rglob("mpv.exe"), None)
+        if mpv is not None:
+            _mudar_config(config, "midia", "comando_mpv", json.dumps(str(mpv)))
+        _mudar_config(config, "midia", "comando_ytdlp", json.dumps(str(ctx.app / ".venv" / "Scripts" / "yt-dlp.exe")))
         _atalhos_windows(ctx)
         return
     # O menu e o ligar com o PC.
@@ -470,6 +499,8 @@ def lista(ctx: Contexto) -> list[Passo]:
         Passo("voz-leve", "Voz leve (Kokoro)", "350 MB", 4, _soltos("vozes/")),
         Passo("claude", "Claude Code", "220 MB", 3, _claude),
     ]
+    if WINDOWS:
+        passos.append(Passo("musica", "Música (mpv)", "39 MB", 1, _musica))
     pronta = bool(_ponte_pronta()[0])
     passos.append(Passo("ponte", "Ponte do WhatsApp", "19 MB" if pronta else "75 MB", 1 if pronta else 4, _ponte))
     if ctx.dubladas:

@@ -19,6 +19,7 @@ e extrair a URL de áudio (precisa da versão nova — a do apt falha com
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import shutil
@@ -171,6 +172,8 @@ MPRIS_CAMINHO = "/org/mpris/MediaPlayer2"
 # O D-Bus responde qual PID é dono de cada nome, então o PID é identidade de
 # verdade e não precisa de adivinhação.
 _nosso_pid: int | None = None
+# No Windows o mpv não está no MPRIS: perguntamos a ele pelo "IPC" (um named pipe).
+_nosso_pipe: str | None = None
 MPRIS_PLAYER = "org.mpris.MediaPlayer2.Player"
 
 
@@ -313,6 +316,23 @@ def _posicao(player: str) -> int | None:
     return int(achado.group(1)) if achado else None
 
 
+def _posicao_windows() -> float | None:
+    """Em que segundo o NOSSO mpv está (Windows), pela ligação de controle dele."""
+    if not _nosso_pipe:
+        return None
+    try:
+        with open(_nosso_pipe, "r+b", buffering=0) as cano:
+            cano.write(b'{"command": ["get_property", "time-pos"]}\n')
+            for _ in range(20):   # avisos do mpv podem vir antes da resposta
+                resposta = json.loads(cano.readline() or b"{}")
+                if "error" in resposta:
+                    dado = resposta.get("data")
+                    return float(dado) if resposta["error"] == "success" and dado is not None else None
+    except (OSError, ValueError, TypeError):
+        return None
+    return None
+
+
 def _esperar_o_som(pid: int, segundos: float) -> bool:
     """Espera a POSIÇÃO andar. É a única prova de que saiu som.
 
@@ -324,6 +344,12 @@ def _esperar_o_som(pid: int, segundos: float) -> bool:
     """
     limite = time.monotonic() + segundos
     while time.monotonic() < limite:
+        if WINDOWS:
+            pos = _posicao_windows()
+            if pos is not None and pos > 0:
+                return True
+            time.sleep(0.25)
+            continue
         for nome in players():
             if _dono(nome) != pid:
                 continue
@@ -369,7 +395,7 @@ def tocar_audio(video: Video, cfg: ConfigMidia) -> Resultado:
     mpv aberto na mão ficam de fora — a lição da Etapa 3, quando eu pausei a
     sessão real dele num teste.
     """
-    global _nosso_pid
+    global _nosso_pid, _nosso_pipe
     if shutil.which(cfg.comando_mpv) is None:
         return Resultado(
             False,
@@ -379,6 +405,9 @@ def tocar_audio(video: Video, cfg: ConfigMidia) -> Resultado:
 
     direta = url_de_audio(video, cfg)
     comando = [cfg.comando_mpv, "--no-video", "--really-quiet"]
+    if WINDOWS:   # a ligação de controle, para saber quando o som saiu (e os controles do Windows já vêm ligados)
+        _nosso_pipe = rf"\\.\pipe\nova-mpv-{os.getpid()}-{int(time.time())}"
+        comando.append(f"--input-ipc-server={_nosso_pipe}")
     if direta:
         comando.append(direta)
     else:
