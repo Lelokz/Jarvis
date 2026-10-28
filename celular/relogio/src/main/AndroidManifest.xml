@@ -7,7 +7,7 @@
 
     <application
         android:name=".App"
-        android:label="Jarvis"
+        android:label="NOVA"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher"
         android:theme="@style/Tema.Jarvis"
@@ -15,8 +15,8 @@
         <uses-library android:name="com.google.android.wearable" android:required="false" />
         <!-- Precisa do celular: é por ele que o relógio chega no PC. -->
         <meta-data android:name="com.google.android.wearable.standalone" android:value="false" />
-        <!-- singleTask: apertar o botão de novo traz a mesma tela (onNewIntent)
-             e começa a ouvir, em vez de abrir outra. -->
+        <!-- singleTask: apertar o botão de novo traz a mesma tela, em vez de
+             abrir outra. -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
