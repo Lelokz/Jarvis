@@ -157,8 +157,11 @@ class GrupoFamilia(threading.Thread):
 
     def _notificar(self, texto: str) -> None:
         """Para o dono: notificação no PC e no app (nada de WhatsApp)."""
-        subprocess.run(["notify-send", "-a", "Jarvis", "-i", "jarvis-atomo", "Grupo da família", texto],
-                       check=False, timeout=10)
+        try:   # o aviso do PC (Linux); sem ele (Windows), o app e a janela avisam do mesmo jeito
+            subprocess.run(["notify-send", "-a", "Jarvis", "-i", "jarvis-atomo", "Grupo da família", texto],
+                           check=False, timeout=10)
+        except (OSError, subprocess.TimeoutExpired):
+            pass
         NOVIDADES.touch(mode=0o600, exist_ok=True)
         with NOVIDADES.open("a", encoding="utf-8") as f:
             f.write(json.dumps({"id": time.time_ns() // 1_000_000, "titulo": "Grupo da família",

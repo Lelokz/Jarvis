@@ -36,7 +36,7 @@ from pathlib import Path
 
 import numpy as np
 
-from jarvis import ajustes, config, cronometro, eventos, microfone, som, tts, wakeword
+from jarvis import ajustes, config, cronometro, eventos, ligar, microfone, som, tts, wakeword
 from jarvis.agente import sessoes
 from jarvis.agente.agente import Agente, ErroDoAgente, Saida
 from jarvis.agente.avisos import AvisosWhatsApp
@@ -1609,7 +1609,13 @@ def conversar(cfg: config.Config) -> int:
                                      app_desde=ponte.app_desde if ponte is not None else None)
                 grupo.start()
             proximo_whats = time.monotonic() + cfg.whatsapp.intervalo_s
+            proximo_desligar = 0.0
             while True:
+                # O "Desligar NOVA" do Windows (lá não existe o SIGTERM): vira o ctrl+c de sempre.
+                if time.monotonic() >= proximo_desligar:
+                    proximo_desligar = time.monotonic() + 1
+                    if ligar.pediram_desligar():
+                        raise KeyboardInterrupt
                 if time.monotonic() >= proximo_aviso:
                     ciclo.atualizar_aviso(conferir_internet=True)
                     proximo_aviso = time.monotonic() + 30

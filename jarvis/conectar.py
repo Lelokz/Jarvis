@@ -26,6 +26,8 @@ from jarvis.config import Config
 # telefone). A que o jarvis.sh sobe se acha pelo arquivo do pareamento.
 _ponte: subprocess.Popen | None = None
 _telefone = ""
+WINDOWS = os.name == "nt"
+PONTE_EXE = "whatsapp-bridge.exe" if WINDOWS else "whatsapp-bridge"
 
 
 def agir(cfg: Config, dados: dict, conectados: set[str]) -> dict:
@@ -85,9 +87,13 @@ def _subir_ponte(cfg: Config, telefone: str) -> None:
     (pasta / "store" / "pareamento.json").unlink(missing_ok=True)
     env = dict(os.environ, NOVA_TELEFONE=telefone)
     log = open(Path.home() / ".local/share/jarvis/whatsapp-bridge.log", "ab")
-    _ponte = subprocess.Popen(["./whatsapp-bridge"], cwd=pasta, env=env, stdout=log, stderr=log,
-                              stdin=subprocess.DEVNULL, start_new_session=True,
-                              preexec_fn=lambda: os.umask(0o077))
+    # Solta da NOVA (sobrevive a ela) e, no Linux, com o que criar (banco, log) só para o dono.
+    solto = ({"creationflags": subprocess.CREATE_NO_WINDOW | subprocess.CREATE_NEW_PROCESS_GROUP} if WINDOWS
+             else {"start_new_session": True, "preexec_fn": lambda: os.umask(0o077)})
+    # "./whatsapp-bridge" no Linux: é por esse nome que o jarvis.sh reconhece a ponte.
+    _ponte = subprocess.Popen([str(pasta / PONTE_EXE) if WINDOWS else f"./{PONTE_EXE}"], cwd=pasta, env=env,
+                              stdout=log, stderr=log,
+                              stdin=subprocess.DEVNULL, **solto)
     _telefone = telefone
 
 
@@ -107,7 +113,7 @@ def _estado_whatsapp(cfg: Config) -> dict:
 
 
 def _whatsapp(cfg: Config, acao: str, valor: str, _conectados) -> dict:
-    if not (_pasta_ponte(cfg) / "whatsapp-bridge").is_file():
+    if not (_pasta_ponte(cfg) / PONTE_EXE).is_file():
         return {"estado": "falta", "detalhe": "A ponte do WhatsApp não está instalada neste PC."}
     if acao == "conectar":
         atual = _estado_whatsapp(cfg)
@@ -122,7 +128,8 @@ def _whatsapp(cfg: Config, acao: str, valor: str, _conectados) -> dict:
             # o QR dela serve para a janela; o código (o app) pede uma nossa no lugar.
             if not quer_codigo:
                 return atual
-            subprocess.run(["pkill", "-x", "whatsapp-bridge"], capture_output=True)
+            subprocess.run(["taskkill", "/IM", PONTE_EXE, "/F"] if WINDOWS else ["pkill", "-x", PONTE_EXE],
+                           capture_output=True)
             time.sleep(0.5)
         _subir_ponte(cfg, telefone)
         return {"estado": "abrindo"}
@@ -163,6 +170,9 @@ def _grupo(cfg: Config, acao: str, valor: str, _conectados) -> dict:
 # -- Fora de casa (Tailscale) e celular -----------------------------------------
 
 def _tailscale_exe() -> str:
+    if WINDOWS:
+        return shutil.which("tailscale") or str(Path(os.environ.get("ProgramFiles", r"C:\Program Files"))
+                                                / "Tailscale" / "tailscale.exe")
     return shutil.which("tailscale") or str(Path.home() / ".local/bin/tailscale")
 
 
@@ -206,7 +216,8 @@ def _fora(cfg: Config, acao: str, valor: str, _conectados) -> dict:
         # O último passo é nosso: levar a porta do celular para a rede do Tailscale.
         r = _ts("serve", "--bg", str(cfg.remoto.porta), teto=8)
         if r is None or r.returncode != 0:
-            detalhe = ("O Tailscale não deixou. Roda isto uma vez no terminal e tenta de novo: "
+            detalhe = ("O Tailscale não deixou. Confere se ele está aberto e com a conta entrada, e tenta de novo."
+                       if WINDOWS else "O Tailscale não deixou. Roda isto uma vez no terminal e tenta de novo: "
                        "sudo tailscale set --operator=$USER")
         s = _situacao_tailscale(cfg)
     elif acao == "desconectar" and s["servindo"]:
@@ -216,8 +227,9 @@ def _fora(cfg: Config, acao: str, valor: str, _conectados) -> dict:
     return {"estado": "conectado" if pronto else "desligado", "detalhe": detalhe,
             "instalado": s["instalado"], "conta": s["conta"], "celular": s["celular"],
             "servindo": s["servindo"],
-            "comando_instalar": "curl -fsSL https://tailscale.com/install.sh | sh",
-            "comando_entrar": "sudo tailscale up --operator=$USER"}
+            "comando_instalar": "winget install tailscale.tailscale" if WINDOWS
+            else "curl -fsSL https://tailscale.com/install.sh | sh",
+            "comando_entrar": "tailscale up" if WINDOWS else "sudo tailscale up --operator=$USER"}
 
 
 def _celular(cfg: Config, acao: str, valor: str, conectados: set[str]) -> dict:

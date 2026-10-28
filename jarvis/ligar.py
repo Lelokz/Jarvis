@@ -29,6 +29,13 @@ PONTE_EXE = PONTE / ("whatsapp-bridge.exe" if WINDOWS else "whatsapp-bridge")
 SOLTO = ({"creationflags": subprocess.CREATE_NO_WINDOW | subprocess.CREATE_NEW_PROCESS_GROUP} if WINDOWS
          else {"start_new_session": True})
 PARTES = ("janela", "assistente", "porta", "ponte", "rvc", "friday")
+# O Windows não tem o SIGTERM que o assistente trata como ctrl+c: o "Desligar NOVA"
+# deixa este pedido, e o assistente sai do mesmo jeito (fecha o microfone, grava o resumo).
+PEDIDO_DE_DESLIGAR = LOGS / "desligar.pedido"
+
+
+def pediram_desligar() -> bool:
+    return PEDIDO_DE_DESLIGAR.exists()
 
 
 def _rodando(pid: int) -> bool:
@@ -94,6 +101,8 @@ def ligar(argumentos: list[str]) -> None:
         _subir("friday", [programas["python"], "-u", PROJETO / "servidor_friday.py", "--pasta", v["friday"],
                           "--modelo", "friday-emilia-v1", "--whisper", cfg.stt.modelo],
                caminho=programas["ffmpeg"])
+    if not _pid("assistente"):
+        PEDIDO_DE_DESLIGAR.unlink(missing_ok=True)   # sobra de um desligar que não terminou
     _subir("assistente", [PYTHON, "-u", PROJETO / "assistente.py"])
     _subir("porta", [PYTHON, "-u", PROJETO / "porta_remota.py"])
     # A janela sobe na hora e mostra "esperando o Jarvis subir" enquanto o assistente
@@ -106,8 +115,21 @@ def ligar(argumentos: list[str]) -> None:
 
 
 def desligar() -> None:
-    # No Linux o assistente trata o SIGTERM como ctrl+c (grava o resumo). No Windows o
-    # mesmo pedido para o programa na hora.
+    # Primeiro o assistente, com calma: até 20 s (ao desligar, ele resume a conversa
+    # em andamento para o diário, uma chamada ao Claude). Não saiu: à força.
+    assistente = _pid("assistente")
+    if assistente:
+        if WINDOWS:
+            LOGS.mkdir(exist_ok=True)
+            PEDIDO_DE_DESLIGAR.touch()
+        else:
+            os.kill(assistente, signal.SIGTERM)
+        for _ in range(40):
+            if not _rodando(assistente):
+                break
+            time.sleep(0.5)
+    PEDIDO_DE_DESLIGAR.unlink(missing_ok=True)
+    # O resto (e o assistente, se não saiu). No Windows, o SIGTERM do Python para na hora.
     for parte in PARTES:
         pid = _pid(parte)
         if pid:
