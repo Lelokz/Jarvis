@@ -1706,7 +1706,8 @@ private fun PassoWhatsapp(modelo: Jarvis, e: org.json.JSONObject, estado: String
         CaixaDaConexao {
             when {
                 codigo.isNotEmpty() -> {
-                    Text(codigo.chunked(4).joinToString("-"), color = Texto, fontSize = 30.sp, letterSpacing = 3.sp,
+                    // O WhatsApp já manda com o tracinho ("B1N6-3GXT").
+                    Text(if ('-' in codigo) codigo else codigo.chunked(4).joinToString("-"), color = Texto, fontSize = 30.sp, letterSpacing = 3.sp,
                         fontFamily = FontFamily.Monospace, fontWeight = FontWeight.SemiBold)
                     Espera("esperando o WhatsApp…")
                 }

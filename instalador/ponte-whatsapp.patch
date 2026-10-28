@@ -162,10 +162,18 @@ index d92eb5f..7314ff3 100644
  gopkg.in/yaml.v3 v3.0.1/go.mod h1:K4uyk7z7BCEPqu6E+C64Yfv1cQ7kz7rIZviUmN+EgEM=
  rsc.io/qr v0.2.0 h1:6vBLea5/NRMVTz8V66gipeLycZMl/+UlFmk8DvqQ6WY=
 diff --git a/whatsapp-bridge/main.go b/whatsapp-bridge/main.go
-index d1e0270..b5b7384 100644
+index d1e0270..87c4c0a 100644
 --- a/whatsapp-bridge/main.go
 +++ b/whatsapp-bridge/main.go
-@@ -54,7 +54,7 @@ func NewMessageStore() (*MessageStore, error) {
+@@ -1,6 +1,7 @@
+ package main
+ 
+ import (
++	"strconv"
+ 	"context"
+ 	"database/sql"
+ 	"encoding/binary"
+@@ -54,7 +55,7 @@ func NewMessageStore() (*MessageStore, error) {
  	}
  
  	// Open SQLite database for messages
@@ -174,7 +182,7 @@ index d1e0270..b5b7384 100644
  	if err != nil {
  		return nil, fmt.Errorf("failed to open message database: %v", err)
  	}
-@@ -641,7 +641,7 @@ func downloadMedia(client *whatsmeow.Client, messageStore *MessageStore, message
+@@ -641,7 +642,7 @@ func downloadMedia(client *whatsmeow.Client, messageStore *MessageStore, message
  	}
  
  	// Download the media using whatsmeow client
@@ -183,7 +191,7 @@ index d1e0270..b5b7384 100644
  	if err != nil {
  		return false, "", "", "", fmt.Errorf("failed to download media: %v", err)
  	}
-@@ -666,13 +666,17 @@ func extractDirectPathFromURL(url string) string {
+@@ -666,13 +667,17 @@ func extractDirectPathFromURL(url string) string {
  		return url // Return original URL if parsing fails
  	}
  
@@ -207,7 +215,7 @@ index d1e0270..b5b7384 100644
  }
  
  // Start a REST API server to expose the WhatsApp client functionality
-@@ -774,8 +778,33 @@ func startRESTServer(client *whatsmeow.Client, messageStore *MessageStore, port
+@@ -774,8 +779,33 @@ func startRESTServer(client *whatsmeow.Client, messageStore *MessageStore, port
  		})
  	})
  
@@ -242,7 +250,7 @@ index d1e0270..b5b7384 100644
  	fmt.Printf("Starting REST API server on %s...\n", serverAddr)
  
  	// Run server in a goroutine so it doesn't block
-@@ -800,14 +829,14 @@ func main() {
+@@ -800,14 +830,14 @@ func main() {
  		return
  	}
  
@@ -259,7 +267,7 @@ index d1e0270..b5b7384 100644
  	if err != nil {
  		if err == sql.ErrNoRows {
  			// No device exists, create one
-@@ -850,6 +879,7 @@ func main() {
+@@ -850,6 +880,7 @@ func main() {
  
  		case *events.LoggedOut:
  			logger.Warnf("Device logged out, please scan QR code to log in again")
@@ -267,7 +275,7 @@ index d1e0270..b5b7384 100644
  		}
  	})
  
-@@ -867,11 +897,29 @@ func main() {
+@@ -867,11 +898,29 @@ func main() {
  		}
  
  		// Print QR code for pairing with phone
@@ -297,7 +305,7 @@ index d1e0270..b5b7384 100644
  				connected <- true
  				break
  			}
-@@ -883,10 +931,12 @@ func main() {
+@@ -883,10 +932,12 @@ func main() {
  			fmt.Println("\nSuccessfully connected and authenticated!")
  		case <-time.After(3 * time.Minute):
  			logger.Errorf("Timeout waiting for QR code scan")
@@ -310,7 +318,21 @@ index d1e0270..b5b7384 100644
  		err = client.Connect()
  		if err != nil {
  			logger.Errorf("Failed to connect: %v", err)
-@@ -973,7 +1023,7 @@ func GetChatName(client *whatsmeow.Client, messageStore *MessageStore, jid types
+@@ -906,7 +957,12 @@ func main() {
+ 	fmt.Println("\n✓ Connected to WhatsApp! Type 'help' for commands.")
+ 
+ 	// Start REST API server
+-	startRESTServer(client, messageStore, 8080)
++	// NOVA: NOVA_PORTA troca a porta (uma ponte de teste ao lado da de verdade).
++	porta := 8080
++	if p, err := strconv.Atoi(os.Getenv("NOVA_PORTA")); err == nil {
++		porta = p
++	}
++	startRESTServer(client, messageStore, porta)
+ 
+ 	// Create a channel to keep the main goroutine alive
+ 	exitChan := make(chan os.Signal, 1)
+@@ -973,7 +1029,7 @@ func GetChatName(client *whatsmeow.Client, messageStore *MessageStore, jid types
  
  		// If we didn't get a name, try group info
  		if name == "" {
@@ -319,7 +341,7 @@ index d1e0270..b5b7384 100644
  			if err == nil && groupInfo.Name != "" {
  				name = groupInfo.Name
  			} else {
-@@ -988,7 +1038,7 @@ func GetChatName(client *whatsmeow.Client, messageStore *MessageStore, jid types
+@@ -988,7 +1044,7 @@ func GetChatName(client *whatsmeow.Client, messageStore *MessageStore, jid types
  		logger.Infof("Getting name for contact: %s", chatJID)
  
  		// Just use contact info (full name)
