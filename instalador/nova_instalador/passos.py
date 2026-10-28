@@ -26,6 +26,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 
+from nova_instalador.checar import SEM_JANELA, WINDOWS
+
 # O código que veio junto com o instalador (o zip do GitHub).
 CODIGO = Path(__file__).resolve().parent.parent.parent
 
@@ -53,8 +55,16 @@ APPLIO_MODELOS = {
     "rvc/models/embedders/contentvec/config.json": (HF_APPLIO + "embedders/contentvec/config.json", "2ddde063b795d38d9051a7215a092fecf4cfe148b54251e38de51d88d356898b"),
 }
 # O Go oficial, só para compilar a ponte do WhatsApp (apagado depois).
-GO = ("https://go.dev/dl/go1.27.3.linux-amd64.tar.gz", "65efbc80fdc1fa2cd2631cad5b481777a68e8725f34e89f50fc6ac714e379b40")
+GO = (("https://go.dev/dl/go1.27.3.windows-amd64.zip", "f26081f438319757f8a1b46d7d0b2c5ec7583d4038e485e0aa725cfde7885fff")
+      if WINDOWS else
+      ("https://go.dev/dl/go1.27.3.linux-amd64.tar.gz", "65efbc80fdc1fa2cd2631cad5b481777a68e8725f34e89f50fc6ac714e379b40"))
 PONTE = Path.home() / ".local/share/jarvis/whatsapp-mcp/whatsapp-bridge"
+# Só no Windows: o FFmpeg que a biblioteca de áudio das vozes dubladas procura (no Linux
+# ele vem do sistema). A versão fixa do gyan.dev, a que o site do FFmpeg indica.
+FFMPEG = ("https://github.com/GyanD/codexffmpeg/releases/download/8.1.2/ffmpeg-8.1.2-full_build-shared.zip",
+          "274923c68904a9b76c73b908f57923dafba81155856cd742138515ded570d066")
+# Do requirements.txt, o que só existe no Linux (o som e as janelas de lá).
+SO_LINUX = ("python-xlib", "pulsectl")
 # O que não precisa ir para o PC de quem instala.
 # Os modelos vêm pelos passos (vozes/, modelos-wakeword/), e os arquivos pessoais do Léo
 # nunca estão no zip do GitHub, mas ficam de fora também se rodar de uma pasta como a dele.
@@ -81,7 +91,7 @@ class Contexto:
 
     @property
     def python(self) -> Path:
-        return self.app / ".venv" / "bin" / "python"
+        return python_do(self.app / ".venv")
 
     @property
     def whisper(self) -> str:
@@ -107,6 +117,13 @@ class Cancelado(Exception):
 
 
 # -- ajudantes -----------------------------------------------------------------
+
+def python_do(venv: Path, sem_janela: bool = False) -> Path:
+    """O Python de um ambiente (no Windows, o pythonw é o que não abre terminal)."""
+    if WINDOWS:
+        return venv / "Scripts" / ("pythonw.exe" if sem_janela else "python.exe")
+    return venv / "bin" / "python"
+
 
 def _baixar(url: str, destino: Path, avisar: Avisar, texto: str, sha256: str = "") -> None:
     """Baixa continuando do byte onde parou (Range) e confere o sha256."""
@@ -144,7 +161,8 @@ def _sha256(arquivo: Path) -> str:
 def _rodar(cmd: list[str], avisar: Avisar, texto: str, **kw) -> None:
     """Roda um programa mostrando a última linha dele no texto do passo."""
     avisar(-1, texto)
-    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, **kw)
+    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8",
+                         errors="replace", **SEM_JANELA, **kw)
     ultimas: list[str] = []
     for linha in p.stdout:  # type: ignore[union-attr]
         linha = linha.strip()
@@ -185,8 +203,14 @@ def _programa(ctx: Contexto, avisar: Avisar) -> None:
             shutil.copy2(item, alvo)
 
 
+def _env_uv(ctx: Contexto, **mais: str) -> dict:
+    """O Python que o uv baixar fica na pasta da NOVA: o ambiente aponta para ele, e o
+    cache do instalador (de onde ele viria) pode ser apagado depois."""
+    return dict(os.environ, UV_PYTHON_INSTALL_DIR=str(ctx.pasta / "programas" / "python"), **mais)
+
+
 def _bibliotecas(ctx: Contexto, avisar: Avisar) -> None:
-    env = dict(os.environ, VIRTUAL_ENV=str(ctx.app / ".venv"))
+    env = _env_uv(ctx, VIRTUAL_ENV=str(ctx.app / ".venv"))
     _rodar([ctx.uv, "venv", "--python", "3.12", "--allow-existing", str(ctx.app / ".venv")], avisar,
            "Preparando o Python da NOVA", env=env)
     pacotes = []
@@ -196,6 +220,8 @@ def _bibliotecas(ctx: Contexto, avisar: Avisar) -> None:
             continue
         # Sem placa NVIDIA: nada de CUDA (o onnxruntime de processador vem com o Whisper).
         if not ctx.nvidia and (linha.startswith("nvidia-") or linha.startswith("onnxruntime-gpu")):
+            continue
+        if WINDOWS and linha.split("=")[0].split(">")[0].strip() in SO_LINUX:
             continue
         pacotes.append(linha)
     _rodar([ctx.uv, "pip", "install", "--python", str(ctx.python), *pacotes], avisar,
@@ -229,10 +255,17 @@ def _soltos(prefixo: str) -> Callable[[Contexto, Avisar], None]:
     return fazer
 
 
+CLAUDE = Path.home() / ".local" / "bin" / ("claude.exe" if WINDOWS else "claude")
+
+
 def _claude(ctx: Contexto, avisar: Avisar) -> None:
-    if (Path.home() / ".local/bin/claude").exists():
+    if CLAUDE.exists():
         return
-    _rodar(["bash", "-c", "curl -fsSL https://claude.ai/install.sh | bash"], avisar, "Instalando o Claude Code")
+    if WINDOWS:
+        _rodar(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
+                "irm https://claude.ai/install.ps1 | iex"], avisar, "Instalando o Claude Code")
+    else:
+        _rodar(["bash", "-c", "curl -fsSL https://claude.ai/install.sh | bash"], avisar, "Instalando o Claude Code")
 
 
 def _dubladas(ctx: Contexto, avisar: Avisar) -> None:
@@ -251,15 +284,18 @@ def _programas_vozes(ctx: Contexto, avisar: Avisar) -> None:
     """Um ambiente só para a Friday e o timbre do Jarvis (instalador/requisitos-vozes.txt)."""
     base = ctx.pasta / "programas"
     venv = base / "vozes" / ".venv"
-    _rodar([ctx.uv, "venv", "--python", "3.12", "--allow-existing", str(venv)], avisar, "Preparando os programas das vozes")
+    _rodar([ctx.uv, "venv", "--python", "3.12", "--allow-existing", str(venv)], avisar, "Preparando os programas das vozes",
+           env=_env_uv(ctx))
     # O torchcodec vai à parte, só do PyPI: com o índice do PyTorch junto viria a versão
     # de placa, que pede bibliotecas CUDA que não vêm (testado em 28/10/2026).
     lista = base / "requisitos-vozes.txt"
     lista.parent.mkdir(parents=True, exist_ok=True)
     linhas = (CODIGO / "instalador" / "requisitos-vozes.txt").read_text().splitlines()
-    lista.write_text("\n".join(l for l in linhas if not l.startswith("torchcodec==")) + "\n")
+    # No Windows o torch da placa já traz o CUDA dentro, e o triton e o cuda-* não existem.
+    fora = ("torchcodec==",) + (("nvidia-", "cuda-", "triton==") if WINDOWS else ())
+    lista.write_text("\n".join(l for l in linhas if not l.startswith(fora)) + "\n")
     codec = next(l for l in linhas if l.startswith("torchcodec=="))
-    python = str(venv / "bin" / "python")
+    python = str(python_do(venv))
     _rodar([ctx.uv, "pip", "install", "--python", python,
             "--extra-index-url", "https://download.pytorch.org/whl/cu128", "--index-strategy", "unsafe-best-match",
             "-r", str(lista)], avisar, "Baixando os programas das vozes")
@@ -279,25 +315,42 @@ def _programas_vozes(ctx: Contexto, avisar: Avisar) -> None:
                         tar.extract(membro, applio, filter="data")
     for dentro, (url, sha) in APPLIO_MODELOS.items():
         _baixar(url, applio / dentro, avisar, Path(dentro).name, sha)
+    if WINDOWS and not (base / "ffmpeg" / "bin" / "ffmpeg.exe").exists():
+        pacote = base / "download" / "ffmpeg.zip"
+        _baixar(FFMPEG[0], pacote, avisar, "FFmpeg (o áudio das vozes)", FFMPEG[1])
+        avisar(-1, "Abrindo o FFmpeg")
+        with zipfile.ZipFile(pacote) as z:
+            z.extractall(base / "download" / "ffmpeg")
+        # Dentro do zip vem uma pasta com a versão no nome: vira programas/ffmpeg.
+        dentro = next((base / "download" / "ffmpeg").iterdir())
+        shutil.rmtree(base / "ffmpeg", ignore_errors=True)
+        dentro.replace(base / "ffmpeg")
+        shutil.rmtree(base / "download" / "ffmpeg", ignore_errors=True)
+        pacote.unlink()
 
 
 def _ponte(ctx: Contexto, avisar: Avisar) -> None:
     """A ponte do WhatsApp: compila os 3 arquivos de instalador/ponte-whatsapp com o Go
     oficial (SQLite em Go puro: não precisa de gcc). O Go é apagado no fim."""
     base = ctx.pasta / "programas"
-    pacote = base / "download" / "go.tar.gz"
+    pacote = base / "download" / ("go.zip" if WINDOWS else "go.tar.gz")
     _baixar(GO[0], pacote, avisar, "Go (para montar a ponte do WhatsApp)", GO[1])
     avisar(-1, "Abrindo o Go")
-    import tarfile
-    with tarfile.open(pacote) as tar:
-        tar.extractall(base, filter="data")
+    if WINDOWS:
+        with zipfile.ZipFile(pacote) as z:
+            z.extractall(base)
+    else:
+        import tarfile
+        with tarfile.open(pacote) as tar:
+            tar.extractall(base, filter="data")
     PONTE.mkdir(parents=True, exist_ok=True)
     for nome in ("main.go", "go.mod", "go.sum"):
         shutil.copy2(CODIGO / "instalador" / "ponte-whatsapp" / nome, PONTE / nome)
     cache = base / "go-cache"
     env = dict(os.environ, CGO_ENABLED="0", GOTOOLCHAIN="local", GOPATH=str(cache / "path"),
                GOMODCACHE=str(cache / "mod"), GOCACHE=str(cache / "build"))
-    _rodar([str(base / "go" / "bin" / "go"), "build", "-o", "whatsapp-bridge", "."], avisar,
+    _rodar([str(base / "go" / "bin" / ("go.exe" if WINDOWS else "go")), "build", "-o",
+            "whatsapp-bridge.exe" if WINDOWS else "whatsapp-bridge", "."], avisar,
            "Montando a ponte do WhatsApp", cwd=PONTE, env=env)
     # O Go grava o cache dele como somente leitura: libera antes de apagar.
     def liberar(funcao, caminho, _erro) -> None:
@@ -331,6 +384,9 @@ def _finalizar(ctx: Contexto, avisar: Avisar) -> None:
         ajustes["pasta_vozes"] = str(ctx.pasta / "vozes")
         ajustes["programas_vozes"] = str(ctx.pasta / "programas")
     arquivo.write_text(json.dumps(ajustes, ensure_ascii=False), encoding="utf-8")
+    if WINDOWS:
+        _atalhos_windows(ctx)
+        return
     # O menu e o ligar com o PC.
     icone = ctx.app / "jarvis" / "interface" / "icone.png"
     abrir = ctx.app / "jarvis.sh"
@@ -349,6 +405,38 @@ def _finalizar(ctx: Contexto, avisar: Avisar) -> None:
         (inicio / "nova.desktop").write_text(entrada.format(
             nome="NOVA", comentario="Liga a NOVA ao entrar no PC, escondida perto do relógio",
             exec=f"{abrir} --na-bandeja") + "X-GNOME-Autostart-enabled=true\nX-GNOME-Autostart-Delay=10\n")
+
+
+def _atalho(lnk: Path, ctx: Contexto, argumentos: str, descricao: str) -> None:
+    """Um atalho .lnk do Windows (pelo PowerShell, que já vem no Windows). Os valores
+    vão pelo ambiente: nome com espaço ou acento não quebra o comando."""
+    lnk.parent.mkdir(parents=True, exist_ok=True)
+    env = dict(os.environ, NOVA_LNK=str(lnk), NOVA_ALVO=str(python_do(ctx.app / ".venv", sem_janela=True)),
+               NOVA_ARGS=argumentos, NOVA_PASTA=str(ctx.app), NOVA_DESC=descricao,
+               NOVA_ICONE=str(ctx.app / "jarvis" / "interface" / "icone.ico"))
+    subprocess.run(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
+                    "$a = (New-Object -ComObject WScript.Shell).CreateShortcut($env:NOVA_LNK); "
+                    "$a.TargetPath = $env:NOVA_ALVO; $a.Arguments = $env:NOVA_ARGS; "
+                    "$a.WorkingDirectory = $env:NOVA_PASTA; $a.Description = $env:NOVA_DESC; "
+                    "$a.IconLocation = $env:NOVA_ICONE; $a.Save()"],
+                   env=env, check=True, capture_output=True, timeout=30, **SEM_JANELA)
+
+
+def _atalhos_windows(ctx: Contexto) -> None:
+    """Menu Iniciar e a pasta Inicializar (liga com o PC), com o ícone desenhado. Quem
+    liga é o jarvis/ligar.py, o irmão do jarvis.sh."""
+    # O .ico é o próprio PNG de 256 px dentro do cabeçalho de ícone (o Windows aceita).
+    png = (ctx.app / "jarvis" / "interface" / "icone.png").read_bytes()
+    cabeca = (b"\0\0\1\0\1\0" + bytes([0, 0, 0, 0]) + (1).to_bytes(2, "little") + (32).to_bytes(2, "little")
+              + len(png).to_bytes(4, "little") + (22).to_bytes(4, "little"))
+    (ctx.app / "jarvis" / "interface" / "icone.ico").write_bytes(cabeca + png)
+    programas = Path(os.environ["APPDATA"]) / "Microsoft" / "Windows" / "Start Menu" / "Programs"
+    if ctx.atalho:
+        _atalho(programas / "NOVA.lnk", ctx, "-m jarvis.ligar", "Liga a NOVA e abre a janela")
+        _atalho(programas / "Desligar NOVA.lnk", ctx, "-m jarvis.ligar --desligar", "Desliga a NOVA")
+    if ctx.com_o_pc:
+        _atalho(programas / "Startup" / "NOVA.lnk", ctx, "-m jarvis.ligar --na-bandeja",
+                "Liga a NOVA ao entrar no PC, escondida perto do relógio")
 
 
 def lista(ctx: Contexto) -> list[Passo]:

@@ -140,4 +140,44 @@ Testado com `testes/testar_pc_novo.py` (pasta de usuário vazia, sem microfone):
 - Tela 6: `jarvis/teste_microfone.py` (volume, ruído e o Hey Jarvis/Friday de verdade).
 - Tela 7: `python -m jarvis.conectar` (o mesmo dos Ajustes): WhatsApp por QR,
   Tailscale, música; o Celular fica para os Ajustes, com a NOVA ligada.
-- Falta: o teste limpo de ponta a ponta pela janela, e o Windows.
+- Falta: o teste limpo de ponta a ponta pela janela (com o Léo, 28/10 à noite).
+
+## Windows (começado em 28/10/2026)
+
+O instalador já sabe instalar no Windows (10 de 1809 ou mais novo, sem administrador).
+Nada disso foi rodado num Windows de verdade ainda: daqui só deu para conferir que
+todas as bibliotecas existem para Windows (`uv pip compile --python-platform
+x86_64-pc-windows-msvc`), que a ponte compila para lá e que o Linux segue igual.
+
+- **Entrada:** `instalador/instalar-nova.cmd` (o irmão do `.sh`; só ASCII, CRLF). Usa o
+  curl e o tar que vêm no Windows, baixa o uv pelo `install.ps1` oficial, monta um
+  Python só para a janela e abre com `pythonw` (sem terminal). Mesmo esquema do
+  convite: no git com `VOZES_DRIVE` vazio.
+- **Tela 2:** placa pelo `nvidia-smi` (vem com o driver) ou pelo PowerShell
+  (`Win32_VideoController`); memória pela API do Windows; microfones pelo registro
+  (`MMDevices\Audio\Capture`, só os ativos).
+- **Tela 4:** `Scripts\python.exe` nos ambientes; sem `python-xlib`/`pulsectl`; Go
+  oficial `.zip` e a ponte vira `whatsapp-bridge.exe`; Claude Code pelo `install.ps1`
+  (fica em `~\.local\bin\claude.exe`; o Git é opcional); nas vozes, sem os pacotes
+  `nvidia-*`/`cuda-*`/`triton` (o torch de placa do Windows já traz o CUDA) e com o
+  FFmpeg 8.1.2 do gyan.dev (versão fixa, sha conferido) em `programas\ffmpeg`.
+- **Atalhos:** `.lnk` no Menu Iniciar ("NOVA", "Desligar NOVA") e na pasta Inicializar
+  (liga com o PC), pelo PowerShell, com o ícone desenhado em `.ico`.
+- **`jarvis/ligar.py`:** o `jarvis.sh` do Windows (liga ponte, vozes, assistente,
+  porta e janela; `--desligar`; `--na-bandeja`), anotando cada parte em `logs/*.pid`.
+- **Nos dois sistemas:** o Python que o uv baixa para a NOVA fica em
+  `<pasta>\programas\python` (antes ficava no cache do instalador: apagar o cache
+  quebraria a NOVA).
+
+### Falta para a NOVA rodar no Windows (a NOVA em si, não o instalador)
+
+- A janela, o assistente e as vozes conversam por socket Unix (`jarvis.sock`,
+  `jarvis-rvc.sock`, `jarvis-friday.sock`), que o Python do Windows não tem: trocar
+  por TCP em 127.0.0.1 nos dois sistemas.
+- Som: `jarvis/som.py` e `jarvis/nucleo/sistema.py` usam o PulseAudio (escolher
+  aparelho, volume); o microfone abre o dispositivo "pulse".
+- Mídia (`midia.py`, MPRIS pelo gdbus), tela bloqueada (`tela.py`, loginctl), as
+  travas do agente (`travas.py`) e o `conectar.py` (sobe `./whatsapp-bridge`, `pkill`).
+- Desligar com calma no Windows: hoje o `ligar.py --desligar` para na hora (sem o
+  resumo do dia que o SIGTERM dá no Linux).
+- Testar tudo num Windows de verdade (o PC do Chris, ou uma máquina virtual).

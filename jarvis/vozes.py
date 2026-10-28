@@ -13,7 +13,7 @@ O pacote:
     <pasta>/friday/ref/...                           (servidor_friday.py --pasta)
 
 O jarvis.sh pergunta aqui (`python -m jarvis.vozes --shell`) antes de ligar
-os servidores de voz.
+os servidores de voz; no Windows, o jarvis/ligar.py chama achar() e programas().
 """
 
 from __future__ import annotations
@@ -50,7 +50,11 @@ def _procurar(teto_s: float = 8.0) -> Path | None:
     """A etiqueta na pasta pessoal (até 4 níveis) e nos outros discos (até 3)."""
     fim = time.monotonic() + teto_s
     raizes = [(Path.home(), 4)]
-    for montagens in (Path("/mnt"), Path("/media") / os.environ.get("USER", ""), Path("/run/media") / os.environ.get("USER", "")):
+    if os.name == "nt":
+        # Os outros discos do Windows (D:\, E:\...).
+        raizes += [(Path(d), 3) for d in os.listdrives() if Path(d) != Path(Path.home().anchor)]
+    for montagens in () if os.name == "nt" else (
+            Path("/mnt"), Path("/media") / os.environ.get("USER", ""), Path("/run/media") / os.environ.get("USER", "")):
         try:
             raizes += [(d, 3) for d in montagens.iterdir() if d.is_dir()]
         except OSError:
@@ -105,6 +109,16 @@ def escolher(pasta: str) -> dict:
     return {**estado(), "detalhe": "Essa pasta não tem as vozes da NOVA (falta o nova-vozes.json)."}
 
 
+def programas() -> dict[str, Path] | None:
+    """Os programas que tocam as vozes, se foi o instalador que pôs: um ambiente só para
+    as duas, a parte de tocar do Applio e (só no Windows) o FFmpeg. Sem eles, None."""
+    base = Path(ajustes.ler()["programas_vozes"] or "/nao-existe")
+    python = base / "vozes" / ".venv" / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+    if not python.exists():
+        return None
+    return {"python": python, "applio": base / "applio", "ffmpeg": base / "ffmpeg" / "bin"}
+
+
 def estado() -> dict:
     """Para Ajustes → Voz e som (janela e app)."""
     v = achar()
@@ -119,11 +133,11 @@ if __name__ == "__main__":
         print(f"VOZ_FRIDAY={shlex.quote(str(v['friday'] or ''))}")
         # Os programas que tocam as vozes, se foi o instalador que pôs (um ambiente só
         # para as duas, e a parte de tocar do Applio). Sem isso, o jarvis.sh usa os de antes.
-        programas = Path(ajustes.ler()["programas_vozes"] or "/nao-existe")
-        if (programas / "vozes/.venv/bin/python").exists():
-            print(f"VOZ_PY={shlex.quote(str(programas / 'vozes/.venv/bin/python'))}")
-            print(f"APPLIO={shlex.quote(str(programas / 'applio'))}")
-            print(f"APPLIO_PY={shlex.quote(str(programas / 'vozes/.venv/bin/python'))}")
+        p = programas()
+        if p is not None:
+            print(f"VOZ_PY={shlex.quote(str(p['python']))}")
+            print(f"APPLIO={shlex.quote(str(p['applio']))}")
+            print(f"APPLIO_PY={shlex.quote(str(p['python']))}")
         from jarvis import config
         print(f"WHISPER={shlex.quote(config.carregar().stt.modelo)}")
     else:

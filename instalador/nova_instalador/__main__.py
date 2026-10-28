@@ -21,6 +21,7 @@ from PySide6.QtGui import QFontDatabase, QGuiApplication, QIcon
 from PySide6.QtQml import QQmlApplicationEngine
 
 from nova_instalador import checar, passos
+from nova_instalador.checar import SEM_JANELA, WINDOWS
 
 AQUI = Path(__file__).resolve().parent
 # O código da NOVA veio junto (o zip do GitHub): o tema, as fontes e o átomo da janela.
@@ -94,11 +95,12 @@ class Instalador(QObject):
     claude = Signal("QVariant")
 
     def _claude_bin(self) -> str:
-        return str(Path.home() / ".local/bin/claude")
+        return str(passos.CLAUDE)
 
     def _status_claude(self) -> dict:
         try:
-            r = subprocess.run([self._claude_bin(), "auth", "status", "--json"], capture_output=True, text=True, timeout=20)
+            r = subprocess.run([self._claude_bin(), "auth", "status", "--json"], capture_output=True, text=True,
+                               encoding="utf-8", errors="replace", timeout=20, **SEM_JANELA)
             d = json.loads(r.stdout or "{}")
         except (OSError, ValueError, subprocess.TimeoutExpired):
             return {"logado": False}
@@ -121,7 +123,7 @@ class Instalador(QObject):
         try:
             self._login = subprocess.Popen([self._claude_bin(), "auth", "login"], stdin=subprocess.PIPE,
                                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                                           env=dict(os.environ, BROWSER="true"))
+                                           env=dict(os.environ, BROWSER="true"), **SEM_JANELA)
         except OSError as erro:
             self.claude.emit({"logado": False, "erro": f"O Claude Code não abriu: {erro}"})
             return
@@ -165,8 +167,13 @@ class Instalador(QObject):
     def _app(self) -> Path:
         return Path(self._escolhas.get("pasta") or self._pasta_padrao()).expanduser() / "app"
 
+    def _python(self) -> str:
+        return str(passos.python_do(self._app() / ".venv"))
+
     @Slot(result="QVariant")
     def entradas(self) -> list:
+        if WINDOWS:   # a lista de microfones vem do som do Linux; no Windows o teste usa o padrão
+            return []
         try:
             fontes = json.loads(subprocess.run(["pactl", "-f", "json", "list", "sources"], capture_output=True,
                                                text=True, timeout=5).stdout or "[]")
@@ -179,10 +186,10 @@ class Instalador(QObject):
     def microfoneTestar(self, entrada: str) -> None:
         self.microfoneParar()
         app = self._app()
-        cmd = [str(app / ".venv/bin/python"), "-m", "jarvis.teste_microfone"] + (["--entrada", entrada] if entrada else [])
+        cmd = [self._python(), "-m", "jarvis.teste_microfone"] + (["--entrada", entrada] if entrada else [])
         try:
             self._mic = subprocess.Popen(cmd, cwd=app, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                                         stderr=subprocess.DEVNULL, text=True)
+                                         stderr=subprocess.DEVNULL, text=True, encoding="utf-8", **SEM_JANELA)
         except OSError as erro:
             self.microfone.emit({"erro": str(erro)})
             return
@@ -213,9 +220,10 @@ class Instalador(QObject):
         p = getattr(self, "_conectar", None)
         if p is None or p.poll() is not None:
             app = self._app()
-            self._conectar = p = subprocess.Popen([str(app / ".venv/bin/python"), "-m", "jarvis.conectar"], cwd=app,
+            self._conectar = p = subprocess.Popen([self._python(), "-m", "jarvis.conectar"], cwd=app,
                                                   stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                                                  stderr=subprocess.DEVNULL, text=True)
+                                                  stderr=subprocess.DEVNULL, text=True, encoding="utf-8",
+                                                  **SEM_JANELA)
 
             def ler() -> None:
                 for linha in p.stdout:
@@ -230,9 +238,14 @@ class Instalador(QObject):
     # -- tela 8 --------------------------------------------------------------------
     @Slot()
     def abrirNova(self) -> None:
-        """Liga a NOVA (o jarvis.sh, solto do instalador) e fecha o instalador."""
-        subprocess.Popen([str(self._app() / "jarvis.sh")], cwd=self._app(), start_new_session=True,
-                         stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        """Liga a NOVA (o jarvis.sh, ou o jarvis/ligar.py no Windows, solto do instalador)."""
+        if WINDOWS:
+            cmd = [str(passos.python_do(self._app() / ".venv", sem_janela=True)), "-m", "jarvis.ligar"]
+            solto = {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS}
+        else:
+            cmd, solto = [str(self._app() / "jarvis.sh")], {"start_new_session": True}
+        subprocess.Popen(cmd, cwd=self._app(), stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                         stderr=subprocess.DEVNULL, **solto)
 
     @Slot()
     def checar(self) -> None:
@@ -249,8 +262,10 @@ class Instalador(QObject):
 
     @Slot(str, result=str)
     def caminhoDe(self, url: str) -> str:
-        """A pasta que o seletor devolve (file:///...) como caminho."""
-        return QUrl(url).toLocalFile() or url
+        """A pasta que o seletor devolve (file:///...) como caminho do sistema (no Windows,
+        com \\), e uma pasta NOVA própria dentro dela, para não espalhar arquivos."""
+        pasta = Path(QUrl(url).toLocalFile() or url)
+        return str(pasta if pasta.name == "NOVA" else pasta / "NOVA")
 
     @Slot("QVariant")
     def guardarEscolhas(self, escolhas) -> None:

@@ -614,9 +614,7 @@ Window {
                 id: seletorPasta
                 title: "Onde instalar a NOVA?"
                 onAccepted: {
-                    var p = instalador.caminhoDe(selectedFolder.toString());
-                    // Uma pasta própria dentro da escolhida, para não espalhar arquivos.
-                    janela.pasta = p.endsWith("/NOVA") ? p : p + "/NOVA";
+                    janela.pasta = instalador.caminhoDe(selectedFolder.toString());
                 }
             }
         }
