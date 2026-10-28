@@ -58,6 +58,20 @@ object Icones {
     val fechar = traco("M7 7l10 10M17 7L7 17")
     val som = traco("M4 9v6h4l5 4V5L8 9H4zM16 9a4 4 0 0 1 0 6")
     val mudo = traco("M4 9v6h4l5 4V5L8 9H4zM16.5 9.5l5 5M21.5 9.5l-5 5")
+    // Os Ajustes (beta 0.17.0): as categorias e as conexões, os mesmos do Tema.qml.
+    val voltar = traco("M15 6l-6 6 6 6")
+    val geral = traco("M12 9a3 3 0 1 1 0 6a3 3 0 1 1 0-6M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1")
+    val sino = traco("M6 9a6 6 0 0 1 12 0c0 6.5 2.5 8 2.5 8h-17S6 15.5 6 9M10.3 20a1.9 1.9 0 0 0 3.4 0")
+    val uso = traco("M12 3a9 9 0 1 1 0 18a9 9 0 1 1 0-18M12 7.5V12l3 2")
+    val personas = traco("M9 4.8a3.2 3.2 0 1 1 0 6.4a3.2 3.2 0 1 1 0-6.4M3 20c0-3.3 2.7-5.5 6-5.5s6 2.2 6 5.5M17 6.5a2.5 2.5 0 1 1 0 5M16.5 14.6c2.6.3 4.5 2.2 4.5 4.9")
+    val conexoes = traco("M9 7H7a5 5 0 0 0 0 10h2M15 7h2a5 5 0 0 1 0 10h-2M8 12h8")
+    val sobre = traco("M12 3a9 9 0 1 1 0 18a9 9 0 1 1 0-18M12 11v5M12 8h.01")
+    val whats = traco("M4 20l1.3-4A8 8 0 1 1 8 18.7zM9 9.5c0 3 2.5 5.5 5.5 5.5l1-1.5-2-1-1 1a4 4 0 0 1-2-2l1-1-1-2z")
+    val grupo = traco("M8 6.4a2.6 2.6 0 1 1 0 5.2a2.6 2.6 0 1 1 0-5.2M16 6.4a2.6 2.6 0 1 1 0 5.2a2.6 2.6 0 1 1 0-5.2M3 19c0-2.8 2.2-4.5 5-4.5s5 1.7 5 4.5M11 19c0-2.8 2.2-4.5 5-4.5s5 1.7 5 4.5")
+    val globo = traco("M12 3a9 9 0 1 1 0 18a9 9 0 1 1 0-18M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z")
+    val escola = traco("M2 9l10-5 10 5-10 5zM6 11v5c3 2 9 2 12 0v-5")
+    val musica = traco("M9 18V5l11-2v13M6 15a3 3 0 1 1 0 6a3 3 0 1 1 0-6M17 13a3 3 0 1 1 0 6a3 3 0 1 1 0-6")
+    val raioTraco = traco("M13 2.5L5 13.5h6l-1 8 8-11h-6z")
 
     fun daOrigem(o: String): ImageVector = when (o) {
         "voz" -> voz

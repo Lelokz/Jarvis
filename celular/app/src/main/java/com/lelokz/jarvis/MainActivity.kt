@@ -9,6 +9,11 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.SwitchDefaults
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
+import androidx.compose.ui.graphics.vector.ImageVector
+import kotlin.math.roundToInt
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.material3.Switch
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -136,7 +141,7 @@ private val Azul: Color get() = if (personaAtiva.value == "friday") corDaFriday.
 private val Roxo = Color(0xFF9B7BFF)
 
 /** A versão da janela (a numeração do Léo, igual à do PC) e a do app. */
-const val VERSAO_JANELA = "beta 0.16.5"
+const val VERSAO_JANELA = "beta 0.17.0"
 
 // A Inter, a fonte da janela do PC (licença OFL). Variável: o peso funciona.
 @OptIn(ExperimentalTextApi::class)
@@ -283,6 +288,8 @@ fun Tela(modelo: Jarvis) {
             gaveta.isOpen -> escopo.launch { gaveta.close() }
             // Uma memória aberta: o voltar volta para a lista das Memórias.
             modelo.pagina.value == "memoria" && modelo.memoriaAberta.value != null -> modelo.pedirMemorias()
+            // Dentro de uma categoria dos Ajustes: o voltar volta para a lista delas.
+            modelo.pagina.value == "ajustes" && modelo.abaAjustes.value.isNotEmpty() -> modelo.abaAjustes.value = ""
             modelo.pagina.value != "chat" -> modelo.pagina.value = "chat"
             else -> modelo.abrir("")
         }
@@ -460,28 +467,35 @@ private fun Aviso(modelo: Jarvis, modifier: Modifier) {
     }
 }
 
+/** Liga e desliga o "sempre ouvindo" (o topo e os Ajustes): ligar pede o microfone e (Android 13+) a notificação. */
 @Composable
-private fun Topo(modelo: Jarvis, abrirGaveta: () -> Unit, abrirSeletores: () -> Unit) {
+private fun lembrarAlternarOuvido(modelo: Jarvis): () -> Unit {
     val contexto = LocalContext.current
-    // Ligar o "sempre ouvindo" pede o microfone e (Android 13+) a notificação.
     val pedirParaOuvir = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()) { r ->
         if (r[Manifest.permission.RECORD_AUDIO] == true) modelo.alternarSempreOuvindo(true)
     }
-    fun alternarOuvido() {
-        if (modelo.sempreOuvindo.value) { modelo.alternarSempreOuvindo(false); return }
-        val faltam = buildList {
-            add(Manifest.permission.RECORD_AUDIO)
-            if (android.os.Build.VERSION.SDK_INT >= 33) add(Manifest.permission.POST_NOTIFICATIONS)
-        }.filter { ContextCompat.checkSelfPermission(contexto, it) != PackageManager.PERMISSION_GRANTED }
-        if (faltam.isEmpty()) modelo.alternarSempreOuvindo(true) else pedirParaOuvir.launch(faltam.toTypedArray())
+    return {
+        if (modelo.sempreOuvindo.value) modelo.alternarSempreOuvindo(false)
+        else {
+            val faltam = buildList {
+                add(Manifest.permission.RECORD_AUDIO)
+                if (android.os.Build.VERSION.SDK_INT >= 33) add(Manifest.permission.POST_NOTIFICATIONS)
+            }.filter { ContextCompat.checkSelfPermission(contexto, it) != PackageManager.PERMISSION_GRANTED }
+            if (faltam.isEmpty()) modelo.alternarSempreOuvindo(true) else pedirParaOuvir.launch(faltam.toTypedArray())
+        }
     }
+}
+
+@Composable
+private fun Topo(modelo: Jarvis, abrirGaveta: () -> Unit, abrirSeletores: () -> Unit) {
+    val alternarOuvido = lembrarAlternarOuvido(modelo)
     val pagina = modelo.pagina.value
     val antiga = modelo.vendo.value.isNotEmpty()
     val vazio = !antiga && modelo.mensagens.isEmpty()
     val titulo = when {
         pagina == "memoria" -> "Memórias"
-        pagina == "ajustes" -> "Ajustes"
+        pagina == "ajustes" -> categoriasDosAjustes.flatMap { it.second }.firstOrNull { it.id == modelo.abaAjustes.value }?.nome ?: "Ajustes"
         else -> modelo.conversas.firstOrNull { it.id == (modelo.vendo.value.ifEmpty { modelo.conversaAtual.value }) }
             ?.titulo ?: "Chat novo"
     }
@@ -984,6 +998,7 @@ private fun Gaveta(modelo: Jarvis, fechar: () -> Unit) {
                     .clickable {
                         modelo.pagina.value = if (aqui) "chat" else pagina
                         if (pagina == "memoria") modelo.pedirMemoria()
+                        if (pagina == "ajustes") { modelo.abaAjustes.value = ""; modelo.pedirAjustes() }
                         fechar()
                     }.padding(horizontal = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -1217,60 +1232,130 @@ private fun MemoriaEditando(modelo: Jarvis, aberta: MemoriaAberta) {
     }
 }
 
+// -- os Ajustes (beta 0.17.0: categorias, como os da janela) --------------------------
+
+private data class Categoria(val id: String, val nome: String, val sub: String, val icone: ImageVector)
+
+private val categoriasDosAjustes = listOf(
+    "Preferências" to listOf(
+        Categoria("geral", "Geral", "Teu nome e este celular", Icones.geral),
+        Categoria("voz", "Voz e som", "Sempre ouvindo, volume da voz", Icones.voz),
+        Categoria("avisos", "Avisos", "O que ele avisa aqui", Icones.sino),
+        Categoria("uso", "Uso", "A assinatura do Claude", Icones.uso)),
+    "Personalização" to listOf(
+        Categoria("personas", "Personas", "Jarvis e Friday", Icones.personas),
+        Categoria("conexoes", "Conexões", "WhatsApp, celular, escola…", Icones.conexoes)),
+    "" to listOf(Categoria("sobre", "Sobre a NOVA", "Versão e cérebro", Icones.sobre)),
+)
+
+private data class InfoConexao(val id: String, val nome: String, val descricao: String, val icone: ImageVector)
+
+// O nome e a descrição de cada conexão (os mesmos da janela); o estado vem do PC.
+private val infoConexoes = listOf(
+    InfoConexao("whatsapp", "WhatsApp", "Ler e mandar mensagens, e avisar quem te escreveu.", Icones.whats),
+    InfoConexao("grupo", "Grupo do WhatsApp", "Responde no grupo da família quando chamam o Jarvis.", Icones.grupo),
+    InfoConexao("celular", "Celular", "O app NOVA: conversar e receber avisos pelo celular.", Icones.celular),
+    InfoConexao("relogio", "Relógio", "Falar pelo relógio. Precisa do celular conectado.", Icones.relogio),
+    InfoConexao("fora", "Fora de casa", "Usar o celular longe do Wi-Fi de casa (Tailscale).", Icones.globo),
+    InfoConexao("escola", "Escola", "Notas, tarefas e recados do Estudante Online (SC).", Icones.escola),
+    InfoConexao("musica", "Música", "Tocar música e vídeo do YouTube pelo PC.", Icones.musica),
+    InfoConexao("atalhos", "Atalhos", "Programas e pastas que ele abre pelo nome.", Icones.raioTraco),
+)
+
 @Composable
 private fun PaginaAjustes(modelo: Jarvis) {
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp)) {
-        Text("Ajustes", color = Texto, fontSize = 26.sp, fontWeight = FontWeight.SemiBold)
-        Spacer(Modifier.height(18.dp))
-        Grupo("Uso da assinatura")
-        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Lateral)
-            .border(1.dp, Traco, RoundedCornerShape(14.dp)).padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            if (modelo.usoCinco.value < 0 && modelo.usoSemana.value < 0)
-                Text("Aparece depois do primeiro pedido ao Claude.", color = Fraco, fontSize = 14.sp)
-            BarraDeUso("Últimas 5 horas", modelo.usoCinco.value, modelo.voltaCinco.value, false)
-            BarraDeUso("Esta semana", modelo.usoSemana.value, modelo.voltaSemana.value, true)
+    val aba = modelo.abaAjustes.value
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp)) {
+        when (aba) {
+            "" -> ListaDeCategorias(modelo)
+            "geral" -> AjustesGeral(modelo)
+            "voz" -> AjustesVoz(modelo)
+            "avisos" -> AjustesAvisos(modelo)
+            "uso" -> AjustesUso(modelo)
+            "personas" -> AjustesPersonas(modelo)
+            "conexoes" -> AjustesConexoes(modelo)
+            else -> AjustesSobre(modelo)
         }
-        if (modelo.temEscola.value || modelo.temGrupo.value) {
-        Spacer(Modifier.height(14.dp))
-        Grupo("Avisos")
-        }
-        if (modelo.temGrupo.value) {
-        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Lateral)
-            .border(1.dp, Traco, RoundedCornerShape(14.dp)).clickable { modelo.alternarGrupo() }
-            .padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text("Jarvis no grupo da família", color = TextoMedio, fontSize = 14.sp)
-                Text("Responde no WhatsApp quando chamam o Jarvis", color = Fraco, fontSize = 12.sp)
+        Spacer(Modifier.height(24.dp))
+    }
+}
+
+/** A lista das categorias: o toque entra em cada uma. */
+@Composable
+private fun ListaDeCategorias(modelo: Jarvis) {
+    for ((grupo, itens) in categoriasDosAjustes) {
+        if (grupo.isNotEmpty()) Text(grupo, color = MuitoFraco, fontSize = 12.5.sp,
+            modifier = Modifier.padding(start = 6.dp, top = 14.dp, bottom = 8.dp))
+        else Spacer(Modifier.height(14.dp))
+        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Lateral)
+            .border(1.dp, Traco, RoundedCornerShape(16.dp))) {
+            itens.forEachIndexed { i, c ->
+                if (i > 0) Box(Modifier.fillMaxWidth().height(1.dp).background(Traco))
+                Row(Modifier.fillMaxWidth().clickable { modelo.abaAjustes.value = c.id }
+                    .padding(horizontal = 14.dp, vertical = 11.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(34.dp).clip(RoundedCornerShape(10.dp)).background(Superficie2),
+                        contentAlignment = Alignment.Center) { Ic(c.icone, Azul, 18.dp) }
+                    Spacer(Modifier.width(14.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(c.nome, color = Texto, fontSize = 15.sp)
+                        Text(c.sub, color = Fraco, fontSize = 12.5.sp)
+                    }
+                    Ic(Icones.direita, MuitoFraco, 18.dp)
+                }
             }
-            Switch(checked = modelo.grupoLigado.value, onCheckedChange = { modelo.alternarGrupo() },
-                colors = SwitchDefaults.colors(checkedTrackColor = Azul, checkedThumbColor = Texto,
-                    uncheckedTrackColor = Superficie2, uncheckedThumbColor = Fraco, uncheckedBorderColor = Traco))
         }
-        if (modelo.temEscola.value) Spacer(Modifier.height(8.dp))
-        }
-        if (modelo.temEscola.value) {
-        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Lateral)
-            .border(1.dp, Traco, RoundedCornerShape(14.dp)).clickable { modelo.alternarNotificarEscola() }
-            .padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text("Notificações da escola", color = TextoMedio, fontSize = 14.sp)
-                Text("Avisa quando aparecer algo novo", color = Fraco, fontSize = 12.sp)
+    }
+}
+
+/** Um bloco com título (e uma linha explicando, se tiver). */
+@Composable
+private fun SecaoDosAjustes(titulo: String, dica: String = "", conteudo: @Composable () -> Unit) {
+    Text(titulo, color = Texto, fontSize = 15.sp, fontWeight = FontWeight.SemiBold,
+        modifier = Modifier.padding(top = 14.dp, bottom = if (dica.isEmpty()) 4.dp else 2.dp))
+    if (dica.isNotEmpty()) Text(dica, color = Fraco, fontSize = 13.sp, modifier = Modifier.padding(bottom = 8.dp))
+    conteudo()
+    Spacer(Modifier.height(12.dp))
+}
+
+/** Uma linha de ajuste: o nome (e a explicação) e o controle. `embaixo`: o controle vai na linha de baixo. */
+@Composable
+private fun LinhaDeAjuste(titulo: String, descricao: String = "", ultima: Boolean = false, embaixo: Boolean = false,
+                          controle: @Composable () -> Unit) {
+    Column(Modifier.fillMaxWidth()) {
+        if (embaixo) {
+            Column(Modifier.padding(vertical = 12.dp)) {
+                Text(titulo, color = Texto, fontSize = 14.sp)
+                if (descricao.isNotEmpty()) Text(descricao, color = Fraco, fontSize = 12.5.sp, modifier = Modifier.padding(top = 2.dp))
+                Spacer(Modifier.height(10.dp))
+                controle()
             }
-            Switch(checked = modelo.notificarEscola.value, onCheckedChange = { modelo.alternarNotificarEscola() },
-                colors = SwitchDefaults.colors(checkedTrackColor = Azul, checkedThumbColor = Texto,
-                    uncheckedTrackColor = Superficie2, uncheckedThumbColor = Fraco, uncheckedBorderColor = Traco))
+        } else Row(Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(titulo, color = Texto, fontSize = 14.sp)
+                if (descricao.isNotEmpty()) Text(descricao, color = Fraco, fontSize = 12.5.sp, modifier = Modifier.padding(top = 2.dp))
+            }
+            Spacer(Modifier.width(14.dp))
+            controle()
         }
-        }
-        Spacer(Modifier.height(14.dp))
-        Grupo("Aparência")
+        if (!ultima) Box(Modifier.fillMaxWidth().height(1.dp).background(Traco))
+    }
+}
+
+@Composable
+private fun Chave(ligado: Boolean, aoTrocar: () -> Unit) {
+    Switch(checked = ligado, onCheckedChange = { aoTrocar() },
+        colors = SwitchDefaults.colors(checkedTrackColor = Azul, checkedThumbColor = Color.White,
+            uncheckedTrackColor = Superficie2, uncheckedThumbColor = Fraco, uncheckedBorderColor = TracoForte))
+}
+
+@Composable
+private fun AjustesGeral(modelo: Jarvis) {
+    SecaoDosAjustes("Você") {
         var nome by remember(modelo.nomeUsuario.value) { mutableStateOf(modelo.nomeUsuario.value) }
-        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Lateral)
-            .border(1.dp, Traco, RoundedCornerShape(14.dp)).padding(horizontal = 16.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically) {
-            Text("Seu nome", color = TextoMedio, fontSize = 14.sp, modifier = Modifier.weight(1f))
-            Box(Modifier.width(170.dp).clip(RoundedCornerShape(9.dp)).background(Superficie)
-                .border(1.dp, Traco, RoundedCornerShape(9.dp)).padding(horizontal = 12.dp, vertical = 9.dp)) {
-                if (nome.isEmpty()) Text("Como o Jarvis te chama", color = MuitoFraco, fontSize = 14.sp, maxLines = 1)
+        LinhaDeAjuste("Seu nome", "Como o Jarvis e a Friday te chamam. É o mesmo da janela.", ultima = true, embaixo = true) {
+            Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(9.dp)).background(Superficie)
+                .border(1.dp, Traco, RoundedCornerShape(9.dp)).padding(horizontal = 12.dp, vertical = 11.dp)) {
+                if (nome.isEmpty()) Text("Como ele te chama", color = MuitoFraco, fontSize = 14.sp, maxLines = 1)
                 BasicTextField(nome, { nome = it.take(30) }, singleLine = true,
                     textStyle = TextStyle(color = Texto, fontSize = 14.sp, fontFamily = Inter),
                     cursorBrush = SolidColor(Azul),
@@ -1281,26 +1366,155 @@ private fun PaginaAjustes(modelo: Jarvis) {
                     modifier = Modifier.fillMaxWidth())
             }
         }
-        Spacer(Modifier.height(14.dp))
-        Grupo("Agora")
-        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Lateral)
-            .border(1.dp, Traco, RoundedCornerShape(14.dp))) {
-            for ((rotulo, valor) in listOf(
-                "Conexão" to (if (modelo.conectado.value) "Ligado" else modelo.motivo.value),
-                "Cérebro" to (nomesModelo[modelo.modelo.value] ?: modelo.modelo.value),
-                "Esforço" to (nomesEsforco[modelo.esforco.value] ?: modelo.esforco.value),
-                "Versão da janela" to VERSAO_JANELA,
-            )) Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 13.dp)) {
-                Text(rotulo, color = TextoMedio, fontSize = 14.sp)
-                Spacer(Modifier.weight(1f))
-                Text(valor, color = Texto, fontSize = 14.sp)
+    }
+    SecaoDosAjustes("Este celular") {
+        LinhaDeAjuste("Ligado ao PC", ultima = false) {
+            Text(modelo.nomePc.value.ifEmpty { "—" }, color = TextoMedio, fontSize = 14.sp)
+        }
+        LinhaDeAjuste("Trocar o link do PC", "Para ligar este celular a outro PC (ou colar o link de novo).", ultima = true) {
+            Text("Trocar", color = Perigo, fontSize = 14.sp,
+                modifier = Modifier.clip(RoundedCornerShape(9.dp)).border(1.dp, Color(0xFF5C2A2C), RoundedCornerShape(9.dp))
+                    .clickable { modelo.esquecer() }.padding(horizontal = 14.dp, vertical = 8.dp))
+        }
+    }
+}
+
+@Composable
+private fun AjustesVoz(modelo: Jarvis) {
+    val alternarOuvido = lembrarAlternarOuvido(modelo)
+    SecaoDosAjustes("Neste celular") {
+        LinhaDeAjuste("Sempre ouvindo", "O \"hey Jarvis\" funciona com o app fechado e a tela desligada (o mesmo botão do topo).",
+            ultima = true) { Chave(modelo.sempreOuvindo.value) { alternarOuvido() } }
+    }
+    SecaoDosAjustes("No PC") {
+        // 100% é o de sempre e é o teto: daqui só se abaixa (o volume já machucou o ouvido do Léo).
+        var volume by remember(modelo.volumeVoz.intValue) { mutableFloatStateOf(modelo.volumeVoz.intValue.toFloat()) }
+        LinhaDeAjuste("Volume da voz", "O volume do Jarvis e da Friday na caixa de som do PC.", ultima = true, embaixo = true) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Slider(volume, { volume = it }, valueRange = 0f..100f, steps = 19,
+                    onValueChangeFinished = { modelo.mudarVolumeVoz(volume.roundToInt()) },
+                    enabled = modelo.conectado.value, modifier = Modifier.weight(1f),
+                    colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = Azul,
+                        inactiveTrackColor = TracoForte, activeTickColor = Color.Transparent, inactiveTickColor = Color.Transparent))
+                Spacer(Modifier.width(12.dp))
+                Text("${volume.roundToInt()}%", color = TextoMedio, fontSize = 14.sp, modifier = Modifier.width(44.dp),
+                    textAlign = TextAlign.End)
             }
         }
-        Spacer(Modifier.height(20.dp))
-        // Antes era segurar o "JARVIS" do topo.
-        Text("Trocar o link do PC", color = Perigo, fontSize = 14.sp,
-            modifier = Modifier.clip(RoundedCornerShape(10.dp)).border(1.dp, Color(0xFF5C2A2C), RoundedCornerShape(10.dp))
-                .clickable { modelo.esquecer() }.padding(horizontal = 14.dp, vertical = 10.dp))
+    }
+}
+
+@Composable
+private fun AjustesAvisos(modelo: Jarvis) {
+    SecaoDosAjustes("Avisos neste celular",
+        if (modelo.temEscola.value) "" else "Nenhum aviso para ajustar ainda: eles aparecem aqui quando a conexão de cada um estiver ligada.") {
+        if (modelo.temEscola.value)
+            LinhaDeAjuste("Notificações da escola", "Avisa quando aparecer nota, tarefa ou recado novo.", ultima = true) {
+                Chave(modelo.notificarEscola.value) { modelo.alternarNotificarEscola() }
+            }
+    }
+}
+
+@Composable
+private fun AjustesUso(modelo: Jarvis) {
+    val semDados = modelo.usoCinco.value < 0 && modelo.usoSemana.value < 0
+    SecaoDosAjustes("Uso da assinatura",
+        if (semDados) "Aparece depois do primeiro pedido ao Claude." else "Quanto do limite do Claude já foi usado.") {
+        Column(Modifier.padding(top = 6.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+            BarraDeUso("Últimas 5 horas", modelo.usoCinco.value, modelo.voltaCinco.value, false)
+            BarraDeUso("Esta semana", modelo.usoSemana.value, modelo.voltaSemana.value, true)
+        }
+    }
+}
+
+@Composable
+private fun AjustesPersonas(modelo: Jarvis) {
+    SecaoDosAjustes("Personas", "Quem responde. As duas dividem a conversa, a memória e as ferramentas; muda o jeito de falar, a voz e a cor.") {
+        val lista = listOf(
+            Triple("jarvis", "Jarvis", "O mordomo de humor seco. Chamado com \"Hey Jarvis\"."),
+            Triple("friday", "Friday", "Carinhosa e animada. Chamada com \"Hey Friday\"."))
+        lista.forEachIndexed { i, (id, nome, descricao) ->
+            val ativa = personaAtiva.value == id
+            LinhaDeAjuste(nome, descricao, ultima = i == lista.lastIndex) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(20.dp).clip(CircleShape).background(if (id == "friday") corDaFriday.value else CorDoJarvis))
+                    Spacer(Modifier.width(12.dp))
+                    Text(if (ativa) "Ativa" else "Usar", color = if (ativa) Color(0xFF38D39F) else TextoMedio, fontSize = 13.sp,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.width(72.dp).clip(RoundedCornerShape(9.dp))
+                            .background(if (ativa) Color(0x2138D39F) else Color.Transparent)
+                            .then(if (ativa) Modifier else Modifier.border(1.dp, TracoForte, RoundedCornerShape(9.dp)))
+                            .clickable(enabled = !ativa && modelo.conectado.value) { modelo.escolherPersona(id) }
+                            .padding(vertical = 8.dp))
+                }
+            }
+        }
+    }
+}
+
+/** O estado de uma conexão: Conectado (verde), Pronto (a cor da persona), Desligado. */
+@Composable
+private fun EtiquetaDeEstado(estado: String) {
+    val (texto, cor) = when (estado) {
+        "conectado" -> "Conectado" to Color(0xFF38D39F)
+        "pronto" -> "Pronto" to Azul
+        "desligado" -> "Desligado" to Fraco
+        else -> "…" to Fraco
+    }
+    Text(texto, color = cor, fontSize = 12.sp, fontWeight = FontWeight.Medium,
+        modifier = Modifier.clip(RoundedCornerShape(10.dp))
+            .background(if (estado == "conectado" || estado == "pronto") cor.copy(alpha = 0.13f) else Superficie2)
+            .padding(horizontal = 9.dp, vertical = 3.dp))
+}
+
+@Composable
+private fun AjustesConexoes(modelo: Jarvis) {
+    val estados = modelo.conexoes.value
+    SecaoDosAjustes("O que eles usam", if (estados.isEmpty()) "Aparece quando o PC responder." else "O que o Jarvis e a Friday conseguem usar no PC.") {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            for (c in infoConexoes) {
+                val agora = estados.firstOrNull { it.id == c.id }
+                Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Superficie)
+                    .border(1.dp, Traco, RoundedCornerShape(14.dp)).padding(14.dp)) {
+                    Box(Modifier.size(38.dp).clip(RoundedCornerShape(11.dp)).background(Superficie2),
+                        contentAlignment = Alignment.Center) { Ic(c.icone, TextoMedio, 18.dp) }
+                    Spacer(Modifier.width(13.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(c.nome, color = Texto, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                        Text(c.descricao + (agora?.detalhe?.takeIf { it.isNotEmpty() }?.let { " ($it)" } ?: ""),
+                            color = Fraco, fontSize = 13.sp, modifier = Modifier.padding(top = 3.dp))
+                        Row(Modifier.fillMaxWidth().padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                            EtiquetaDeEstado(agora?.estado ?: "")
+                            Spacer(Modifier.weight(1f))
+                            // O grupo liga e desliga daqui (o mesmo interruptor de antes).
+                            if (c.id == "grupo" && modelo.temGrupo.value)
+                                Chave(modelo.grupoLigado.value) { modelo.alternarGrupo() }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AjustesSobre(modelo: Jarvis) {
+    val contexto = LocalContext.current
+    val versaoDoApp = remember {
+        runCatching { contexto.packageManager.getPackageInfo(contexto.packageName, 0).versionName }.getOrNull()
+            ?.substringBefore(" (") ?: "—"
+    }
+    SecaoDosAjustes("Sobre a NOVA") {
+        val linhas = listOf(
+            "Conexão" to (if (modelo.conectado.value) "Ligado" else modelo.motivo.value),
+            "Cérebro" to (nomesModelo[modelo.modelo.value] ?: modelo.modelo.value),
+            "Esforço" to (nomesEsforco[modelo.esforco.value] ?: modelo.esforco.value),
+            "Versão do app" to versaoDoApp,
+            "Versão da janela" to VERSAO_JANELA,
+        )
+        linhas.forEachIndexed { i, (rotulo, valor) ->
+            LinhaDeAjuste(rotulo, ultima = i == linhas.lastIndex) { Text(valor, color = TextoMedio, fontSize = 14.sp) }
+        }
     }
 }
 

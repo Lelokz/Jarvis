@@ -8,6 +8,7 @@ import android.util.Base64
 import android.util.Size
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import android.content.Intent
 import android.os.Build
@@ -40,6 +41,9 @@ data class Mensagem(
 
 /** Uma conversa da gaveta: uma sessão do Claude Code no PC. */
 /** Uma memória da lista (beta 0.14.5): a do Jarvis/Friday, um grupo, uma pessoa. */
+/** O estado de uma conexão (aba Conexões dos Ajustes; vem do PC, jarvis/conexoes.py). */
+data class EstadoConexao(val id: String, val estado: String, val detalhe: String)
+
 data class MemoriaItem(val id: String, val titulo: String, val tipo: String, val atualizado: String)
 
 /** A memória aberta para editar; `versao` é a que veio do PC (para o conflito). */
@@ -76,6 +80,7 @@ class Jarvis(private val app: Application) {
     val conversaAtual = mutableStateOf("")
     val vendo = mutableStateOf("")           // "" = a de agora; senão, o id da antiga
     val pagina = mutableStateOf("chat")      // "chat", "memoria", "ajustes"
+    val abaAjustes = mutableStateOf("")      // a categoria aberta nos Ajustes ("" = a lista)
     val modelo = mutableStateOf("auto")
     val esforco = mutableStateOf("medium")
     val memoriaTexto = mutableStateOf("")
@@ -111,6 +116,9 @@ class Jarvis(private val app: Application) {
     // O Jarvis no grupo da família (beta 0.13.0): configurado no PC? ligado?
     val temGrupo = mutableStateOf(prefs.getBoolean("tem_grupo", false))
     val grupoLigado = mutableStateOf(false)
+    // O volume da voz NO PC e o estado das conexões (do evento "ajustes"; beta 0.17.0).
+    val volumeVoz = mutableIntStateOf(100)
+    val conexoes = mutableStateOf<List<EstadoConexao>>(emptyList())
     // O pedido de alguém do grupo esperando o Sim: (id, quem, pedido).
     val pedidoGrupo = mutableStateOf<Triple<String, String, String>?>(null)
     val avisoAtualizacao = mutableStateOf(false)
@@ -228,6 +236,16 @@ class Jarvis(private val app: Application) {
                 }
             }
         }
+    }
+
+    /** Os ajustes de novo (o estado das conexões de agora). */
+    fun pedirAjustes() {
+        conexao?.enviar(JSONObject().put("pedir", "ajustes"))
+    }
+
+    fun mudarVolumeVoz(v: Int) {
+        volumeVoz.intValue = v
+        conexao?.enviar(JSONObject().put("pedir", "ajustes").put("volume_voz", v.coerceIn(0, 100)))
     }
 
     fun alternarGrupo() {
@@ -713,6 +731,12 @@ class Jarvis(private val app: Application) {
                 grupoLigado.value = ev.optBoolean("grupo_ligado", false)
                 prefs.edit().putBoolean("tem_grupo", temGrupo.value).apply()
                 nomePc.value = ev.optString("pc", "")
+                volumeVoz.intValue = ev.optInt("volume_voz", volumeVoz.intValue)
+                ev.optJSONArray("conexoes")?.let { lista ->
+                    conexoes.value = (0 until lista.length()).mapNotNull { i ->
+                        lista.optJSONObject(i)?.let { EstadoConexao(it.optString("id"), it.optString("estado"), it.optString("detalhe")) }
+                    }
+                }
                 prefs.edit().putBoolean("tem_escola", temEscola.value)
                     .putString("nome_usuario", nomeUsuario.value).putString("nome_pc", nomePc.value).apply()
             }
