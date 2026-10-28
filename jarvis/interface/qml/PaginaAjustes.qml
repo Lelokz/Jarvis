@@ -445,7 +445,7 @@ Item {
             width: pagina.width
             Secao {
                 titulo: "Aparelhos de som"
-                dica: raiz.som ? "" : (raiz.conectado ? "Procurando os aparelhos de som…" : "Aparece quando o Jarvis subir.")
+                dica: raiz.som ? "" : (raiz.conectado ? "Procurando os aparelhos de som…" : "Aparece quando a NOVA subir.")
                 Repeater {
                     model: raiz.som ? [
                         { tipo: "entrada", nome: "Microfone", lista: "entradas", padrao: "padrao_entrada" },
@@ -664,7 +664,7 @@ Item {
             Secao {
                 titulo: "Conexões"
                 dica: raiz.ajustes && raiz.ajustes.conexoes ? "O que o Jarvis e a Friday conseguem usar neste PC."
-                                                            : "Aparece quando o Jarvis subir."
+                                                            : "Aparece quando a NOVA subir."
                 Grid {
                     id: grade
                     width: parent.width
@@ -749,7 +749,7 @@ Item {
                 Repeater {
                     model: [
                         ["Versão", "beta 0.17.0"],
-                        ["Conexão", raiz.conectado ? "Ligado" : "Esperando o Jarvis subir"],
+                        ["Conexão", raiz.conectado ? "Ligado" : "Esperando a NOVA subir"],
                     ]
                     Linha {
                         required property var modelData

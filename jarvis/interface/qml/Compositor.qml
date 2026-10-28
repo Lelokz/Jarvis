@@ -49,7 +49,7 @@ Item {
         if (texto === "" && raiz.anexos.length === 0)
             return;
         if (!raiz.conectado) {
-            raiz.avisar("o Jarvis não está do outro lado — não foi enviado");
+            raiz.avisar("a NOVA não está do outro lado — não foi enviado");
             return;
         }
         if (raiz.anexos.length > 0)
@@ -80,7 +80,7 @@ Item {
 
     FileDialog {
         id: escolher
-        title: "Anexar ao Jarvis"
+        title: "Anexar à conversa"
         fileMode: FileDialog.OpenFiles
         onAccepted: {
             for (var i = 0; i < selectedFiles.length; i++)
@@ -223,10 +223,10 @@ Item {
                 }
                 Text {
                     visible: campo.text === "" && !campo.preeditText
-                    text: !raiz.conectado ? "Esperando o Jarvis…"
+                    text: !raiz.conectado ? "Esperando a NOVA…"
                         : raiz.estado === "escutando" ? "Te ouvindo…"
                         : raiz.anexos.length > 0 ? "Fala sobre o anexo, ou só envia"
-                        : "Fala ou escreve pro Jarvis…"
+                        : (raiz.persona === "friday" ? "Fala ou escreve pra Friday…" : "Fala ou escreve pro Jarvis…")
                     color: raiz.tema.muitoFraco
                     font.family: raiz.tema.familia
                     font.pixelSize: 15

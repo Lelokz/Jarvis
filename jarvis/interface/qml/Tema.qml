@@ -54,12 +54,12 @@ QtObject {
 
     function dicaDoEstado(estado) {
         switch (estado) {
-        case "dormindo":  return "Fala \"Hey Jarvis\" pra acordar";
+        case "dormindo":  return "Fala \"Hey Jarvis\" ou \"Hey Friday\"";
         case "ouvindo":   return "Pode falar, ou escreve";
         case "escutando": return "Tô te ouvindo…";
         case "pensando":  return "Trabalhando no pedido";
         case "falando":   return "Respondendo";
-        default:          return "Esperando o Jarvis subir";
+        default:          return "Esperando a NOVA subir";
         }
     }
 

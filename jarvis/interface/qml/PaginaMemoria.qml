@@ -55,7 +55,7 @@ Item {
     function rotuloDoTipo(tipo) {
         switch (tipo) {
         case "personas": return "O que o Jarvis e a Friday sabem de ti";
-        case "recados":  return "Recados marcados do Jarvis";
+        case "recados":  return "Recados marcados da NOVA";
         case "grupo":    return "Grupo de WhatsApp";
         case "pessoa":   return "Pessoa";
         default:         return "";
@@ -97,7 +97,7 @@ Item {
             Text {
                 width: parent.width
                 wrapMode: Text.WordWrap
-                text: "Tudo o que o Jarvis guarda. Toca numa pra ler, corrigir e salvar."
+                text: "Tudo o que a NOVA guarda. Toca numa pra ler, corrigir e salvar."
                 color: raiz.tema.textoFraco
                 font.family: raiz.tema.familia
                 font.pixelSize: 14
@@ -259,7 +259,7 @@ Item {
                 Text {
                     width: parent.width
                     wrapMode: Text.WordWrap
-                    text: "O Jarvis mudou esta memória enquanto tu editava. Nada foi salvo ainda: escolhe o que fica."
+                    text: "A NOVA mudou esta memória enquanto tu editava. Nada foi salvo ainda: escolhe o que fica."
                     color: raiz.tema.texto
                     font.family: raiz.tema.familia
                     font.pixelSize: 14
@@ -270,7 +270,7 @@ Item {
                         width: usarTxt.implicitWidth + 28; height: 32; radius: 9
                         color: usar.containsMouse ? raiz.tema.superficie2 : "transparent"
                         border.width: 1; border.color: raiz.tema.traco
-                        Text { id: usarTxt; anchors.centerIn: parent; text: "Usar a do Jarvis"; color: raiz.tema.textoMedio; font.family: raiz.tema.familia; font.pixelSize: 13 }
+                        Text { id: usarTxt; anchors.centerIn: parent; text: "Usar a da NOVA"; color: raiz.tema.textoMedio; font.family: raiz.tema.familia; font.pixelSize: 13 }
                         MouseArea {
                             id: usar; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
                             onClicked: raiz.abrir(raiz.aberta, raiz.titulo, raiz.textoDoJarvis, raiz.versaoDoJarvis)

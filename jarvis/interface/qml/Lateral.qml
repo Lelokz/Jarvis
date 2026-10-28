@@ -51,7 +51,7 @@ Rectangle {
             AtomoFixo { tamanho: 22; cor: raiz.tema.persona; corDeFundo: raiz.tema.lateral }
             Text {
                 anchors.verticalCenter: parent.verticalCenter
-                text: "JARVIS"
+                text: "NOVA"
                 color: raiz.tema.textoFraco
                 font.family: raiz.tema.familia
                 font.pixelSize: 13

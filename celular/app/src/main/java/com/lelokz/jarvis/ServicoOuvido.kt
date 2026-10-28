@@ -28,8 +28,8 @@ class ServicoOuvido : Service() {
         }
         val gerente = getSystemService(NotificationManager::class.java)
         gerente.createNotificationChannel(
-            NotificationChannel("ouvindo", "Jarvis ouvindo", NotificationManager.IMPORTANCE_LOW).apply {
-                description = "Aparece enquanto o Jarvis espera o \"hey Jarvis\""
+            NotificationChannel("ouvindo", "NOVA ouvindo", NotificationManager.IMPORTANCE_LOW).apply {
+                description = "Aparece enquanto a NOVA espera o \"hey Jarvis\""
                 setShowBadge(false)
             })
         val abrir = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java),
@@ -37,7 +37,7 @@ class ServicoOuvido : Service() {
         val parar = PendingIntent.getService(this, 1,
             Intent(this, ServicoOuvido::class.java).setAction("parar"), PendingIntent.FLAG_IMMUTABLE)
         val aviso = Notification.Builder(this, "ouvindo")
-            .setContentTitle("Jarvis está ouvindo")
+            .setContentTitle("NOVA está ouvindo")
             .setContentText("Diga \"hey Jarvis\"")
             .setSmallIcon(R.drawable.ic_notificacao)
             .setContentIntent(abrir)

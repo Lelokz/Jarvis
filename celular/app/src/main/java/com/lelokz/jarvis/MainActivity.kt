@@ -239,7 +239,7 @@ fun Entrada(modelo: Jarvis) {
             Text("JARVIS", color = Texto, fontSize = 22.sp, fontWeight = FontWeight.Bold, letterSpacing = 4.sp)
         }
         Spacer(Modifier.height(8.dp))
-        Text("Cola o link do Jarvis (o mesmo da página, com a chave).", color = Fraco, fontSize = 14.sp)
+        Text("Cola o link da NOVA (o mesmo da página, com a chave).", color = Fraco, fontSize = 14.sp)
         Spacer(Modifier.height(16.dp))
         OutlinedTextField(
             value = link, onValueChange = { link = it; erro = false },
@@ -440,7 +440,7 @@ private fun AvisoAtualizacao(modelo: Jarvis) {
                 Text("Atualização pendente", color = Texto, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
             }
             Spacer(Modifier.height(10.dp))
-            Text("Tem uma versão nova do Jarvis. Deseja atualizar agora?", color = TextoMedio,
+            Text("Tem uma versão nova do app. Deseja atualizar agora?", color = TextoMedio,
                 fontSize = 14.sp, lineHeight = 20.sp)
             Spacer(Modifier.height(20.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -1140,7 +1140,7 @@ private fun ListaDeMemorias(modelo: Jarvis) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp)) {
         Text("Memórias", color = Texto, fontSize = 26.sp, fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(4.dp))
-        Text("Tudo o que o Jarvis guarda. Toca numa pra ler, corrigir e salvar.", color = Fraco, fontSize = 14.sp)
+        Text("Tudo o que a NOVA guarda. Toca numa pra ler, corrigir e salvar.", color = Fraco, fontSize = 14.sp)
         Spacer(Modifier.height(18.dp))
         if (modelo.memorias.isEmpty())
             Text(if (modelo.memoriasCarregando.value) "Carregando…" else "Nenhuma memória ainda.", color = Fraco, fontSize = 15.sp)
@@ -1161,7 +1161,7 @@ private fun ListaDeMemorias(modelo: Jarvis) {
                         overflow = TextOverflow.Ellipsis)
                     Text(when (m.tipo) {
                         "personas" -> "O que o Jarvis e a Friday sabem de ti"
-                        "recados" -> "Recados marcados do Jarvis"
+                        "recados" -> "Recados marcados da NOVA"
                         "grupo" -> "Grupo de WhatsApp"
                         "pessoa" -> "Pessoa"
                         else -> ""
@@ -1199,13 +1199,13 @@ private fun MemoriaEditando(modelo: Jarvis, aberta: MemoriaAberta) {
             Spacer(Modifier.height(10.dp))
             Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Superficie)
                 .border(1.dp, Pergunta, RoundedCornerShape(12.dp)).padding(14.dp)) {
-                Text("O Jarvis mudou esta memória enquanto tu editava. Nada foi salvo ainda: escolhe o que fica.",
+                Text("A NOVA mudou esta memória enquanto tu editava. Nada foi salvo ainda: escolhe o que fica.",
                     color = Texto, fontSize = 14.sp)
                 Spacer(Modifier.height(10.dp))
                 Row {
                     Box(Modifier.clip(RoundedCornerShape(9.dp)).border(1.dp, Traco, RoundedCornerShape(9.dp))
                         .clickable { modelo.usarMemoriaDoJarvis() }.padding(horizontal = 12.dp, vertical = 7.dp)) {
-                        Text("Usar a do Jarvis", color = TextoMedio, fontSize = 13.sp)
+                        Text("Usar a da NOVA", color = TextoMedio, fontSize = 13.sp)
                     }
                     Spacer(Modifier.width(8.dp))
                     Box(Modifier.clip(RoundedCornerShape(9.dp)).background(Azul)

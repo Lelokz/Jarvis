@@ -21,7 +21,7 @@
 
     <application
         android:name=".App"
-        android:label="Jarvis"
+        android:label="NOVA"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher"
         android:theme="@style/Tema.Jarvis"

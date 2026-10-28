@@ -286,7 +286,7 @@ class Jarvis(private val app: Application) {
             val base = prefs.getString("base", "")?.trimEnd('/') ?: return
             // Primeira vez: o Android pede para liberar o Jarvis a instalar.
             if (!Atualizador.podeInstalar(app)) {
-                aviso.value = "Libera o Jarvis e toca em \"Atualização disponível\" de novo."
+                aviso.value = "Libera a NOVA e toca em \"Atualização disponível\" de novo."
                 return
             }
             atualizando.value = 0f

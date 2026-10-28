@@ -198,12 +198,12 @@ class ServicoPonte : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val gerente = getSystemService(NotificationManager::class.java)
         gerente.createNotificationChannel(
-            NotificationChannel("relogio", "Jarvis no relógio", NotificationManager.IMPORTANCE_LOW).apply {
-                description = "Aparece enquanto o relógio conversa com o Jarvis pelo celular"
+            NotificationChannel("relogio", "NOVA no relógio", NotificationManager.IMPORTANCE_LOW).apply {
+                description = "Aparece enquanto o relógio conversa com a NOVA pelo celular"
                 setShowBadge(false)
             })
         val aviso = Notification.Builder(this, "relogio")
-            .setContentTitle("Jarvis no relógio")
+            .setContentTitle("NOVA no relógio")
             .setContentText("Levando a conversa do relógio até o PC")
             .setSmallIcon(R.drawable.ic_notificacao)
             .setOngoing(true)

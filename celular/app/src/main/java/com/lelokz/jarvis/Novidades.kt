@@ -57,7 +57,7 @@ object Novidades {
             if (id <= ultima) continue
             maior = maxOf(maior, id)
             // Na primeira vez só marca o que já existia: nada de enxurrada.
-            if (!primeiraVez && (n.optString("tipo") == "grupo" || mostrarEscola)) mostrar(c, id, n.optString("titulo", "Jarvis"), n.optString("texto"))
+            if (!primeiraVez && (n.optString("tipo") == "grupo" || mostrarEscola)) mostrar(c, id, n.optString("titulo", "NOVA"), n.optString("texto"))
         }
         p.edit().putLong("novidade_ultima", maior).apply()
     }

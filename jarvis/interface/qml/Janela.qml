@@ -22,7 +22,7 @@ Window {
     visible: !comecarNaBandeja
     color: tema.fundo
     flags: Qt.Window | Qt.FramelessWindowHint
-    title: "Jarvis"
+    title: "NOVA"
 
     property alias estado: interno.estado
     property alias conectado: interno.conectado
@@ -150,7 +150,7 @@ Window {
         }
         vendo = "";
         if (typeof ponte === "undefined" || !ponte.novaConversa())
-            avisar("o Jarvis não está do outro lado");
+            avisar("a NOVA não está do outro lado");
         compositor.focar();
     }
 
@@ -162,14 +162,14 @@ Window {
             pendente = { texto: texto, arquivos: arquivos };
             if (!ponte.continuarConversa(vendo)) {
                 esperandoContinuar = ""; pendente = null;
-                avisar("não consegui enviar — o Jarvis não está do outro lado");
+                avisar("não consegui enviar — a NOVA não está do outro lado");
             }
             return;
         }
         var ok = arquivos && arquivos.length ? ponte.enviarComAnexos(texto, arquivos)
                                              : ponte.enviarTexto(texto);
         if (!ok)
-            avisar("não consegui enviar — o Jarvis não está do outro lado");
+            avisar("não consegui enviar — a NOVA não está do outro lado");
     }
 
     function avisar(texto) {
@@ -507,8 +507,8 @@ Window {
                 Item { width: 1; height: 8 }
                 Text {
                     anchors.horizontalCenter: parent.horizontalCenter
-                    text: janela.conectado ? "Fala \"Hey Jarvis\" ou escreve aqui embaixo."
-                                           : "Esperando o Jarvis subir…"
+                    text: janela.conectado ? "Fala \"Hey Jarvis\" ou \"Hey Friday\", ou escreve aqui embaixo."
+                                           : "Esperando a NOVA subir…"
                     color: tema.textoFraco
                     font.family: tema.familia
                     font.pixelSize: 15
@@ -702,7 +702,7 @@ Window {
             onPedirAbrir: function (id) { if (typeof ponte !== "undefined") ponte.lerMemoria(id) }
             onPedirSalvar: function (id, texto, versao) {
                 if (typeof ponte === "undefined" || !ponte.salvarMemoria(id, texto, versao))
-                    janela.avisar("Sem conexão com o Jarvis: não deu pra salvar")
+                    janela.avisar("Sem conexão com a NOVA: não deu pra salvar")
             }
             onAvisar: function (t) { janela.avisar(t) }
         }

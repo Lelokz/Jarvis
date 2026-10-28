@@ -70,9 +70,9 @@ class Bandeja(QObject):
         sem abrir a janela."""
         self._icone.setIcon(atomo_icone.icone(cor, conectado))
         if conectado:
-            self._icone.setToolTip(f"Jarvis — {_DICAS.get(estado, estado)}")
+            self._icone.setToolTip(f"NOVA — {_DICAS.get(estado, estado)}")
         else:
-            self._icone.setToolTip("Jarvis — sem conexão com o assistente")
+            self._icone.setToolTip("NOVA — sem conexão")
 
     def esconder(self) -> None:
         self._icone.hide()
