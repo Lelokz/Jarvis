@@ -432,11 +432,11 @@
           <span class="det">ubuntu 24.04+ · x86_64</span>
           <a class="botao cheio" href="#" data-login>Baixar instalador</a>
         </div>
-        <div class="plat vidro breve" data-so="windows">
+        <div class="plat vidro" data-so="windows">
           <svg class="logo" viewBox="0 0 24 24" fill="currentColor"><path d="M3 5.5l7.5-1v7H3v-6zm8.5-1.2L21 3v8.5h-9.5V4.3zM3 12.5h7.5v7L3 18.5v-6zm8.5 0H21V21l-9.5-1.3v-7.2z"/></svg>
           <h3>Windows</h3>
           <span class="det">10 e 11</span>
-          <span class="botao vazio">Em breve</span>
+          <a class="botao cheio" href="#" data-login>Baixar instalador</a>
         </div>
         <div class="plat vidro breve" data-so="android">
           <svg class="logo" viewBox="0 0 24 24" fill="currentColor"><path d="M7.2 3.3l1.2 2A7 7 0 005 11h14a7 7 0 00-3.4-5.7l1.2-2-.6-.4-1.3 2.1a7.2 7.2 0 00-5.8 0L7.8 2.9l-.6.4zM9 8a.9.9 0 110 1.8A.9.9 0 019 8zm6 0a.9.9 0 110 1.8A.9.9 0 0115 8zM5 12h14v7a1.5 1.5 0 01-1.5 1.5H16V23h-2v-2.5h-4V23H8v-2.5H6.5A1.5 1.5 0 015 19v-7zm-2.5 0a1.5 1.5 0 011.5 1.5v4a1.5 1.5 0 01-3 0v-4A1.5 1.5 0 012.5 12zm19 0a1.5 1.5 0 011.5 1.5v4a1.5 1.5 0 01-3 0v-4a1.5 1.5 0 011.5-1.5z"/></svg>
@@ -596,7 +596,7 @@ function sistema() {
 }
 const meu = P.get("so") || sistema();
 const NOMES_SO = { linux: "Linux x86_64", windows: "Windows", android: "Android" };
-document.querySelector(".texto-baixar").textContent = meu === "linux" ? "Baixar para Linux" : "Ver downloads";
+document.querySelector(".texto-baixar").textContent = meu === "android" ? "Ver downloads" : `Baixar para ${meu === "linux" ? "Linux" : "Windows"}`;
 document.querySelectorAll(".plat").forEach(c => {
   const e = c.dataset.so === meu;
   c.classList.toggle("seu", e);
@@ -621,7 +621,12 @@ function abrir(tela) {
   modal.classList.add("aberto");
 }
 // O login de verdade (o módulo do Firebase, no fim) troca por pedirDownload.
-document.querySelectorAll("[data-login]").forEach(b => b.addEventListener("click", e => { e.preventDefault(); (window.pedirDownload || (() => abrir("entrar")))(); }));
+// O instalador é o do cartão clicado (Linux ou Windows); o "Entrar" do topo, o do sistema de quem abriu.
+document.querySelectorAll("[data-login]").forEach(b => b.addEventListener("click", e => {
+  e.preventDefault();
+  window.soPedido = b.closest(".plat")?.dataset.so || meu;
+  (window.pedirDownload || (() => abrir("entrar")))();
+}));
 modal.addEventListener("click", e => { if (e.target === modal || e.target.dataset.fechar !== undefined) modal.classList.remove("aberto"); });
 
 // ---------------------------------------------------------------------------
@@ -727,8 +732,10 @@ async function conferir(u) {
   if (!convite) { abrir("bloqueado"); return; }
   const baixar = document.getElementById("baixar-agora");
   const texto = document.querySelector("[data-texto-liberado]");
-  if (convite.link) {
-    baixar.href = convite.link; baixar.hidden = false;
+  // convites/<email>: "link" é o instalador do Linux, "windows" o do Windows.
+  const link = window.soPedido === "windows" ? convite.windows : convite.link;
+  if (link) {
+    baixar.href = link; baixar.hidden = false;
     texto.textContent = "Baixe o instalador, abra e siga os passos.";
   } else {
     baixar.hidden = true;
