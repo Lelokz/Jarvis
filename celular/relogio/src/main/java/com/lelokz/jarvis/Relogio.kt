@@ -371,6 +371,8 @@ private val COMANDOS_DE_DORMIR = setOf(
     "dormir", "descansa", "vai descansar", "pode descansar",
     "tchau", "tchau jarvis", "valeu pode dormir", "obrigado pode dormir",
     "volta dormir", "volta pra dormir", "volta para dormir",
+    "dormi",  // o Whisper às vezes ouve o "dorme" assim (27/10/2026)
+    "dorme friday", "friday dorme", "vai dormir friday", "pode dormir friday", "tchau friday",
 )
 private val SUPERFLUAS = setOf("o", "a", "os", "as", "um", "uma", "de", "do", "da", "no", "na")
 
