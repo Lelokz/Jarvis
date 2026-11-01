@@ -11,6 +11,9 @@ Item {
     property bool conectado: false
     property string estado: "dormindo"
     property string modelo: "auto"
+    // O modo Local (o modelo do Ollama no PC): só aparece se o Ollama responder.
+    property bool localDisponivel: false
+    property string localNome: ""
     property string esforco: "medium"
     property string persona: "jarvis"
     property bool menusParaCima: true
@@ -69,7 +72,9 @@ Item {
         { valor: "haiku", nome: "Haiku", descricao: "O mais rápido" },
         { valor: "sonnet", nome: "Sonnet", descricao: "Equilibrado" },
         { valor: "opus", nome: "Opus", descricao: "O mais inteligente, mais lento" },
-    ]
+    ].concat(localDisponivel || modelo === "local"
+             ? [{ valor: "local", nome: "Local (" + localNome + ")", descricao: "No seu PC, sem internet; pergunta antes de agir" }]
+             : [])
     readonly property var opcoesEsforco: [
         { valor: "low", nome: "Baixo", descricao: "Responde rápido, pensa pouco" },
         { valor: "medium", nome: "Médio", descricao: "O padrão" },

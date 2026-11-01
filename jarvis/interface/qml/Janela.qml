@@ -72,6 +72,8 @@ Window {
     property bool ajustesAbertos: false  // o painel dos Ajustes, por cima de tudo (beta 0.17.0)
     property var listaDeConversas: []
     property string modelo: "auto"
+    property bool localDisponivel: false
+    property string localNome: ""
     property string esforco: "medium"
     property string persona: "jarvis"
     property string corPersona: ""
@@ -240,6 +242,7 @@ Window {
         function onMemoriasLista(lista) { memoria.lista = lista; memoria.carregando = false }
         function onMemoriaAberta(id, titulo, texto, versao) { memoria.abrir(id, titulo, texto, versao) }
         function onMemoriaSalva(id, ok, conflito, texto, versao) { memoria.salvou(id, ok, conflito, texto, versao) }
+        function onLocalMudou(disponivel, nome) { janela.localDisponivel = disponivel; janela.localNome = nome }
         function onCerebroMudou(modelo, esforco, persona, cor) {
             janela.modelo = modelo; janela.esforco = esforco; janela.persona = persona;
             if (cor !== "") janela.corPersona = cor;
@@ -656,6 +659,8 @@ Window {
                 conectado: janela.conectado
                 estado: janela.estado
                 modelo: janela.modelo
+                localDisponivel: janela.localDisponivel
+                localNome: janela.localNome
                 esforco: janela.esforco
                 persona: janela.persona
                 menusParaCima: !janela.boasVindas

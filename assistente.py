@@ -1126,7 +1126,8 @@ class Ciclo:
 
     def emitir_cerebro(self) -> None:
         cor = self.cfg.friday.cor if self.persona == "friday" and self.cfg.friday else ""
-        self.emissor.emitir("cerebro", persona=self.persona, cor_persona=cor, **self.agente.cerebro)
+        self.emissor.emitir("cerebro", persona=self.persona, cor_persona=cor, **self.agente.cerebro,
+                            local=self.agente.local_disponivel(), local_nome=self.cfg.agente.nome_local)
 
     def atender_pedido(self, pedido: Pedido) -> None:
         """Um pedido da ponte. Da janela (sem voz própria), é o texto

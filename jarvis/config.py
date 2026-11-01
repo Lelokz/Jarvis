@@ -113,6 +113,11 @@ class Agente:
     modo_permissao: str
     casa: str
     validade_pergunta_s: float
+    # O modo Local (nov/2026): um modelo do Ollama no próprio PC, pela API da Anthropic
+    # que o Ollama fala. Só aparece na janela e no app se o Ollama responder e tiver ele.
+    modelo_local: str = "huihui_ai/gemma-4-abliterated:12b"
+    nome_local: str = "Gemma 4 12b"
+    ollama: str = "http://localhost:11434"
 
 
 @dataclass(frozen=True)

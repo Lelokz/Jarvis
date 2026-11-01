@@ -131,7 +131,7 @@ Item {
     }
 
     readonly property var nomes: ({
-        auto: "Automático (Sonnet + Opus)", haiku: "Haiku", sonnet: "Sonnet", opus: "Opus",
+        auto: "Automático (Sonnet + Opus)", haiku: "Haiku", sonnet: "Sonnet", opus: "Opus", local: "Local",
         low: "Baixo", medium: "Médio", high: "Alto", xhigh: "Muito alto", max: "Máximo"
     })
 
@@ -1421,7 +1421,7 @@ Item {
                 titulo: "Sobre a NOVA"
                 Repeater {
                     model: [
-                        ["Versão", "beta 0.17.0"],
+                        ["Versão", "beta 0.17.5"],
                         ["Conexão", raiz.conectado ? "Ligado" : "Esperando a NOVA subir"],
                     ]
                     Linha {

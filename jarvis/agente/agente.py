@@ -46,6 +46,7 @@ import shutil
 import socket
 import threading
 import time
+import urllib.request
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -237,8 +238,14 @@ def _dono() -> str:
     return ajustes.nome_de_quem_usa() or "usuário"
 
 # O que dá para escolher na janela (out/2026). "auto" são os dois cérebros do
-# config: o rápido atende e passa o pesado para o Opus.
-MODELOS = ("auto", "haiku", "sonnet", "opus")
+# config: o rápido atende e passa o pesado para o Opus. "local" (nov/2026): o
+# modelo do Ollama do config ([agente] modelo_local), no próprio PC.
+MODELOS = ("auto", "haiku", "sonnet", "opus", "local")
+# No modo Local o que só lê e conversa vai direto; o resto (comando, escrever ou
+# apagar arquivo, mandar mensagem) o Jarvis pergunta antes. Não é filtro de
+# conteúdo: é que um modelo pequeno erra mais o formato das ferramentas e inventa.
+LEITURA_LOCAL = {"Read", "Glob", "Grep", "LS", "WebFetch", "WebSearch", "TodoWrite", "AskUserQuestion",
+                 "ToolSearch", "mcp__jarvis__mostrar"}
 ESFORCOS = ("low", "medium", "high", "xhigh", "max")
 SONNET = "claude-sonnet-5-5"
 
@@ -295,6 +302,8 @@ class Agente:
         self.sessao: str | None = None
         self._modelo_atual = ""
         self._esforco_atual = ""
+        self._local_atual = False    # a conversa aberta é a do Ollama
+        self._local_visto = (0.0, False)   # (quando, se o Ollama tinha o modelo)
         self._arquivo_cerebro = self.casa.parent / "cerebro.json"
         self.cerebro = self._ler_cerebro()
         self._trava: asyncio.Lock | None = None
@@ -353,11 +362,13 @@ class Agente:
         self._no_opus = False
         self._modelo_atual = self._modelo_desejado()
         self._esforco_atual = self.cerebro["esforco"]
+        self._local_atual = self.cerebro["modelo"] == "local"
         return ClaudeAgentOptions(
             cli_path=self.binario,
             cwd=str(self.casa),
             model=self._modelo_atual,
-            effort=self._esforco_atual,
+            effort=None if self._local_atual else self._esforco_atual,
+            env=self._env_local() if self._local_atual else {},
             # "user": os MCPs, skills e preferências do Léo, iguais ao VS Code.
             # "project": o CLAUDE.md da casa, que é a memória dele.
             setting_sources=["user", "project"],
@@ -381,6 +392,29 @@ class Agente:
             # celular ("JSON message exceeded maximum buffer size", 20/10/2026).
             max_buffer_size=64 * 1024 * 1024,
         )
+
+    def _env_local(self) -> dict[str, str]:
+        """O Claude Code falando com o Ollama (que fala a API da Anthropic). Os apelidos
+        haiku/sonnet/opus também vão para o modelo local: as chamadas internas do Claude
+        Code pedem esses nomes, e o Ollama não tem nenhum deles."""
+        m = self.cfg.modelo_local
+        return {"ANTHROPIC_BASE_URL": self.cfg.ollama, "ANTHROPIC_AUTH_TOKEN": "ollama", "ANTHROPIC_API_KEY": "",
+                "ANTHROPIC_DEFAULT_HAIKU_MODEL": m, "ANTHROPIC_DEFAULT_SONNET_MODEL": m,
+                "ANTHROPIC_DEFAULT_OPUS_MODEL": m, "CLAUDE_CODE_SUBAGENT_MODEL": m}
+
+    def local_disponivel(self) -> bool:
+        """O Ollama responde e tem o modelo local? (guardado por 30 s; nunca trava: 1 s)"""
+        quando, tinha = self._local_visto
+        if time.monotonic() - quando < 30:
+            return tinha
+        try:
+            with urllib.request.urlopen(f"{self.cfg.ollama}/api/tags", timeout=1) as r:
+                nomes = {m.get("name") for m in json.load(r).get("models", [])}
+            tinha = self.cfg.modelo_local in nomes
+        except (OSError, ValueError):
+            tinha = False
+        self._local_visto = (time.monotonic(), tinha)
+        return tinha
 
     def _instrucoes(self) -> str:
         from jarvis import memorias
@@ -482,7 +516,7 @@ class Agente:
         """O modelo e o esforço escolhidos na janela. Valem a partir do próximo
         pedido: o modelo troca na mesma conversa; o esforço reabre a conversa
         por baixo (o SDK só aceita esforço ao abrir), sem perder nada."""
-        if modelo in MODELOS:
+        if modelo in MODELOS and (modelo != "local" or self.local_disponivel()):
             self.cerebro["modelo"] = modelo
         if esforco in ESFORCOS:
             self.cerebro["esforco"] = esforco
@@ -499,6 +533,9 @@ class Agente:
             salvo = json.loads(self._arquivo_cerebro.read_text())
         except (OSError, ValueError):
             salvo = {}
+        # Local escolhido e o Ollama fora (desligado, ou o PC sem ele): volta ao padrão.
+        if salvo.get("modelo") == "local" and not self.local_disponivel():
+            salvo.pop("modelo")
         if salvo.get("modelo") in MODELOS:
             cerebro["modelo"] = salvo["modelo"]
         if salvo.get("esforco") in ESFORCOS:
@@ -510,6 +547,8 @@ class Agente:
     def _modelo_desejado(self) -> str:
         """O modelo que deve atender o PRÓXIMO pedido."""
         escolha = self.cerebro["modelo"]
+        if escolha == "local":
+            return self.cfg.modelo_local
         if escolha == "auto":
             return self.cfg.modelo_rapido or self.cfg.modelo
         return {"haiku": "claude-haiku-5-5",
@@ -578,6 +617,11 @@ class Agente:
                 if self._cliente is None:
                     # Caiu: reabre a mesma conversa, se tem uma.
                     await self._conectar(self.sessao)
+                elif self._local_atual != (self.cerebro["modelo"] == "local"):
+                    # Entrou ou saiu do modo Local: outro "servidor" (o Ollama ou a
+                    # Anthropic), então conversa nova (as duas não se misturam).
+                    await self._desconectar()
+                    await self._conectar()
                 elif self._esforco_atual != self.cerebro["esforco"]:
                     # O esforço mudou na janela: reabre a MESMA conversa com ele.
                     await self._desconectar()
@@ -808,20 +852,41 @@ class Agente:
                                             "desbloquear, pedir_desbloqueio (confirma no "
                                             "celular). Nunca comando direto."}}
         voz = self.voz
-        if voz is None or voz.quem == "leo":
-            return {}
-        o_que = travas.precisa_do_leo(str(entrada.get("tool_name") or ""),
-                                      entrada.get("tool_input") or {}, self.casa / "CLAUDE.md")
-        if o_que is None:
-            return {}
-        quem = ("a fala foi curta demais para reconhecer a voz" if voz.quem == "curta"
-                else f"a voz não é a do {_dono()} (nota {voz.nota:.2f})")
+        o_que = None
+        if voz is not None and voz.quem != "leo":
+            o_que = travas.precisa_do_leo(str(entrada.get("tool_name") or ""),
+                                          entrada.get("tool_input") or {}, self.casa / "CLAUDE.md")
+        if o_que is not None:
+            quem = ("a fala foi curta demais para reconhecer a voz" if voz.quem == "curta"
+                    else f"a voz não é a do {_dono()} (nota {voz.nota:.2f})")
+            return {"hookSpecificOutput": {
+                "hookEventName": "PreToolUse",
+                "permissionDecision": "deny",
+                "permissionDecisionReason": (
+                    f"Bloqueado pelas travas da voz: {quem}, e isso ({o_que}) só o "
+                    f"{_dono()} pode pedir. Diga isso em uma frase e não tente outro caminho."),
+            }}
+        if self._local_atual and str(entrada.get("tool_name") or "") not in LEITURA_LOCAL:
+            return await self._trava_local(str(entrada.get("tool_name") or ""), entrada.get("tool_input") or {})
+        return {}
+
+    async def _trava_local(self, nome: str, entrada: dict) -> dict:
+        """Modo Local: antes de agir (comando, arquivo, mensagem), pergunta pelos botões e
+        pela voz de sempre. O "Pode" deixa só esta vez."""
+        self.saidas.put(Saida("mostrar", f"```\n{json.dumps(entrada, ensure_ascii=False, indent=1)[:2000]}\n```",
+                              titulo=f"O modo Local quer usar: {nome}"))
+        o_que = str(entrada.get("description") or "").strip().rstrip(".")
+        if not o_que:
+            alvo = entrada.get("file_path") or entrada.get("notebook_path") or entrada.get("command") or ""
+            o_que = f"usar {nome}" + (f" em {str(alvo)[:60]}" if alvo else "")
+        falado = await self._perguntar(f"Modo local: posso {o_que[0].lower() + o_que[1:]}?", ["Pode", "Não"])
+        pode = bool(falado) and sim_ou_nao(falado) is True
         return {"hookSpecificOutput": {
             "hookEventName": "PreToolUse",
-            "permissionDecision": "deny",
-            "permissionDecisionReason": (
-                f"Bloqueado pelas travas da voz: {quem}, e isso ({o_que}) só o "
-                f"{_dono()} pode pedir. Diga isso em uma frase e não tente outro caminho."),
+            "permissionDecision": "allow" if pode else "deny",
+            "permissionDecisionReason": "O usuário deixou." if pode else (
+                "O usuário não deixou (ou não respondeu a tempo). Não faça; diga em uma frase "
+                "que deixou sem fazer."),
         }}
 
     def _bloquear_pc(self) -> str:

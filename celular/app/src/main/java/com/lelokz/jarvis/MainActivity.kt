@@ -170,7 +170,8 @@ private fun rotuloDoEstado(e: String) = when (e) {
     else -> "SEM CONEXÃO"
 }
 
-private val nomesModelo = mapOf("auto" to "Automático", "haiku" to "Haiku", "sonnet" to "Sonnet", "opus" to "Opus")
+private val nomesModelo = mapOf("auto" to "Automático", "haiku" to "Haiku", "sonnet" to "Sonnet", "opus" to "Opus",
+    "local" to "Local")
 private val nomesEsforco = mapOf("low" to "Baixo", "medium" to "Médio", "high" to "Alto",
     "xhigh" to "Muito alto", "max" to "Máximo")
 
@@ -1099,7 +1100,10 @@ private fun Seletores(modelo: Jarvis) {
             Triple("haiku", "Haiku", "O mais rápido"),
             Triple("sonnet", "Sonnet", "Equilibrado"),
             Triple("opus", "Opus", "O mais inteligente, mais lento"),
-        )) Opcao(n, d, modelo.modelo.value == v) { modelo.escolherModelo(v) }
+        ) + (if (modelo.localDisponivel.value || modelo.modelo.value == "local")
+                listOf(Triple("local", "Local (${modelo.localNome.value})", "No seu PC, sem internet; pergunta antes de agir"))
+             else emptyList())
+        ) Opcao(n, d, modelo.modelo.value == v) { modelo.escolherModelo(v) }
         Grupo("Esforço")
         for ((v, n, d) in listOf(
             Triple("low", "Baixo", "Responde rápido, pensa pouco"),

@@ -63,11 +63,13 @@ ASSISTENTE -> CLIENTES
         em markdown, para a página de memória da janela.
 
     (v3, a janela grande; o celular ignora todos estes)
-    {"ev":"cerebro", "modelo":"auto|haiku|sonnet|opus",
+    {"ev":"cerebro", "modelo":"auto|haiku|sonnet|opus|local",
      "esforco":"low|medium|high|xhigh|max", "persona":"jarvis|friday",
-     "cor_persona":"#rrggbb"}
+     "cor_persona":"#rrggbb", "local":true|false, "local_nome":"Gemma 4 12b"}
         O que está escolhido. Reenviado a quem diz "ola" e a cada mudança
         (também quando um "hey Friday"/"hey Jarvis" troca a persona).
+        `local` (nov/2026): o Ollama responde e tem o modelo local; só então
+        a janela e o app mostram a opção "Local (<local_nome>)"
     {"ev":"som", "saidas":[{"id","nome"}], "entradas":[...],
      "padrao_saida":"<nome>", "padrao_entrada":"<nome>",
      "saida":"<id ou ''>", "entrada":"<id ou ''>"}

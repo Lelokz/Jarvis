@@ -51,6 +51,7 @@ class PonteQt(QObject):
     memoriaSalva = Signal(str, bool, bool, str, str)    # id, ok, conflito, texto, versão
     # A janela grande (protocolo v3).
     cerebroMudou = Signal(str, str, str, str)   # modelo, esforço, persona, cor da persona ("" = a dos Ajustes)
+    localMudou = Signal(bool, str)               # o modo Local está disponível, e o nome do modelo
     conversaAtual = Signal(str, list, bool)  # id, falas, veio com as falas (troca)
     conversasRecebidas = Signal(list)      # a barra lateral
     conversaRecebida = Signal(str, list)   # uma conversa aberta só para ler
@@ -297,6 +298,7 @@ class PonteQt(QObject):
         elif tipo == "cerebro":
             self.cerebroMudou.emit(str(ev.get("modelo") or ""), str(ev.get("esforco") or ""),
                                    str(ev.get("persona") or "jarvis"), str(ev.get("cor_persona") or ""))
+            self.localMudou.emit(bool(ev.get("local")), str(ev.get("local_nome") or ""))
         elif tipo == "conversa_atual":
             self.conversaAtual.emit(str(ev.get("id") or ""), list(ev.get("falas") or []),
                                     "falas" in ev)

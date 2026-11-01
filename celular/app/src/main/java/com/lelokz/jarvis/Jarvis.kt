@@ -82,6 +82,9 @@ class Jarvis(private val app: Application) {
     val pagina = mutableStateOf("chat")      // "chat", "memoria", "ajustes"
     val abaAjustes = mutableStateOf("")      // a categoria aberta nos Ajustes ("" = a lista)
     val modelo = mutableStateOf("auto")
+    // O modo Local (o modelo do Ollama no PC, beta 0.18.0): só aparece se o PC disser que tem.
+    val localDisponivel = mutableStateOf(false)
+    val localNome = mutableStateOf("")
     val esforco = mutableStateOf("medium")
     val memoriaTexto = mutableStateOf("")
     // A aba Memórias (beta 0.14.5): a lista, a aberta, e o conflito (o Jarvis
@@ -722,6 +725,8 @@ class Jarvis(private val app: Application) {
             "cerebro" -> {
                 modelo.value = ev.optString("modelo", modelo.value)
                 esforco.value = ev.optString("esforco", esforco.value)
+                localDisponivel.value = ev.optBoolean("local", false)
+                localNome.value = ev.optString("local_nome", "")
                 // A persona ativa (beta 0.14.5): "hey Friday" no PC deixa o app rosa também.
                 personaAtiva.value = ev.optString("persona", "jarvis")
                 ev.optString("cor_persona").takeIf { it.length == 7 && it.startsWith("#") }?.let {

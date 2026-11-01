@@ -289,3 +289,8 @@ casa = "~/.local/share/jarvis/casa"
 # tantos segundos depois de ele terminar de perguntar. Passou, vale "não":
 # um "pode" de um vídeo minutos depois não aprova nada.
 validade_pergunta_s = 10.0
+# O modo Local: o modelo do Ollama que atende quando "Local" está escolhido (trocar
+# aqui é trocar em tudo), o nome que aparece na janela e no app, e onde o Ollama escuta.
+modelo_local = "huihui_ai/gemma-4-abliterated:12b"
+nome_local = "Gemma 4 12b"
+ollama = "http://localhost:11434"
