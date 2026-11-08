@@ -23,8 +23,8 @@ GRAVACOES = HD / "Estudio" / "Gravacoes"
 EDICAO = HD / "Estudio" / "Edicao"
 # Onde chega coisa nova. As gravações: só os vídeos soltos na raiz (os que já
 # estão em subpastas já foram organizados).
-VIGIADAS = [CASA / "Downloads", CASA / "Downloads" / "Screenshots", GRAVACOES]
-NAO_SAO_ITEM = {CASA / "Downloads" / "Screenshots"}
+VIGIADAS = [CASA / "Downloads", GRAVACOES]   # o Flameshot salva direto em Downloads (08/11)
+NAO_SAO_ITEM: set = set()
 VIDEO = (".mov", ".mkv", ".mp4", ".flv", ".webm")
 
 RAIZES = [CASA / "Imagens", CASA / "Documentos", CASA / "Estudos", CASA / "Vídeos", CASA / "Músicas",
