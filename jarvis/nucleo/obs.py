@@ -161,27 +161,15 @@ def parar() -> Resultado:
 
 
 def pausar() -> Resultado:
-    def f(c):
-        r = c.pedir("GetRecordStatus")
-        if not r.get("outputActive"):
-            return Resultado(False, "Não está gravando.")
-        if r.get("outputPaused"):
-            return Resultado(True, "Já está pausada.")
-        c.pedir("PauseRecord")
-        return Resultado(True, "Gravação pausada.")
-    return _com_obs(f)
+    """Pausar = parar (decisão do Léo, 08/11/2026): a saída FFmpeg do OBS
+    (MPEG-2 + PCM) não aceita pausa de verdade."""
+    return parar()
 
 
 def continuar() -> Resultado:
-    def f(c):
-        r = c.pedir("GetRecordStatus")
-        if not r.get("outputActive"):
-            return Resultado(False, "Não está gravando.")
-        if not r.get("outputPaused"):
-            return Resultado(True, "Já está gravando.")
-        c.pedir("ResumeRecord")
-        return Resultado(True, "Gravando de novo.")
-    return _com_obs(f)
+    """Continuar = gravar de novo (sai um arquivo novo, o seguinte)."""
+    r = gravar()
+    return Resultado(r.ok, "Gravando de novo." if r.mensagem == "Gravando." else r.mensagem)
 
 
 def mutar(qual: str, mudo: bool = True) -> Resultado:
