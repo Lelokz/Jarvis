@@ -18,19 +18,20 @@ from PySide6.QtCore import QObject, Signal
 from PySide6.QtNetwork import QLocalServer, QLocalSocket
 
 
-def caminho_do_cadeado() -> Path | str:
+def caminho_do_cadeado(nome: str = "jarvis-interface") -> Path | str:
+    """`nome`: cada janela tem o seu cadeado (a do Jarvis, a do Monitor do Sistema)."""
     if os.name == "nt":   # o QLocalServer do Windows quer um nome, não um caminho
-        return f"jarvis-interface-{os.environ.get('USERNAME', '')}"
+        return f"{nome}-{os.environ.get('USERNAME', '')}"
     base = os.environ.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}"
-    return Path(base) / "jarvis-interface.sock"
+    return Path(base) / f"{nome}.sock"
 
 
 class Instancia(QObject):
     mostrarPedido = Signal()
 
-    def __init__(self, parent: QObject | None = None) -> None:
+    def __init__(self, parent: QObject | None = None, nome: str = "jarvis-interface") -> None:
         super().__init__(parent)
-        self._nome = str(caminho_do_cadeado())
+        self._nome = str(caminho_do_cadeado(nome))
         self._servidor: QLocalServer | None = None
 
     def tomar(self) -> bool:
