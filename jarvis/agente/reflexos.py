@@ -14,7 +14,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-from jarvis.nucleo import midia, sistema
+from jarvis.nucleo import midia, obs, sistema
 from jarvis.nucleo.atalhos import normalizar
 
 
@@ -35,8 +35,57 @@ _VOLUME = re.compile(
 )
 
 
+# O OBS por voz (08/11/2026). Frase inteira, já normalizada ("Começa a gravar."
+# chega "comeca gravar"). O "pausa" do OBS precisa de "gravação": sozinho é a música.
+_V = "(?:muta|mutar|silencia|silenciar|desliga|desligar)"
+_DESV = "(?:desmuta|desmutar|ativa|ativar|liga|ligar)"
+_OBS = [
+    ("gravar", re.compile(r"^(?:(?:comeca|comecar|inicia|iniciar|liga|bora|pode) )?(?:gravar|gravacao|grava)"
+                          r"(?: (?:ai|agora|ja))?$")),
+    ("parar", re.compile(r"^(?:para|parar|termina|terminar|encerra|encerrar|finaliza|finalizar|desliga|corta) "
+                         r"(?:gravacao|gravar|de gravar)$")),
+    ("pausar", re.compile(r"^(?:pausa|pausar|pause) (?:gravacao|gravar)$")),
+    ("continuar", re.compile(r"^(?:continua|continuar|retoma|retomar|volta|voltar|despausa|despausar) "
+                             r"(?:gravacao|gravar|gravando|a gravar)$")),
+    ("mutar microfone", re.compile(rf"^{_V} (?:microfone|mic)(?: (?:do )?obs)?$")),
+    ("desmutar microfone", re.compile(rf"^{_DESV} (?:microfone|mic)(?: (?:do )?obs)?$")),
+    ("mutar desktop", re.compile(rf"^{_V} (?:som|audio)(?: do)? (?:pc|computador|desktop|jogo)$")),
+    ("desmutar desktop", re.compile(rf"^{_DESV} (?:som|audio)(?: do)? (?:pc|computador|desktop|jogo)$")),
+]
+_CENA = re.compile(r"^(?:troca|trocar|muda|mudar|vai|coloca|bota|poe)(?: (?:pra|para|na|pro))? cena (.+)$")
+
+
+def reflexo_obs(falado: str) -> Reflexo | None:
+    t = normalizar(falado)
+    m = _CENA.match(t)
+    if m:
+        if not obs.aberto():
+            return None
+        r = obs.cena(m.group(1))
+        return Reflexo(r.mensagem, "obs:cena" if r.ok else None)
+    for nome, padrao in _OBS:
+        if not padrao.match(t):
+            continue
+        if nome == "gravar":
+            r = obs.gravar()
+        elif nome in ("parar", "pausar", "continuar"):
+            r = getattr(obs, nome)()
+        else:
+            # "Muta o microfone" / "o som do PC" com o OBS fechado não é do OBS:
+            # vai para o Claude (o som do PC, o mudo do sistema).
+            if not obs.aberto():
+                return None
+            acao, qual = nome.split()
+            r = obs.mutar(qual, acao == "mutar")
+        return Reflexo(r.mensagem, f"obs:{nome.replace(' ', ':')}" if r.ok else None)
+    return None
+
+
 def reflexo(falado: str, limite_volume: int = 70, passo: int = 10) -> Reflexo | None:
     """A resposta pronta, ou None para mandar ao Claude."""
+    r = reflexo_obs(falado)
+    if r is not None:
+        return r
     cru = midia.comando_cru(falado)
     if cru is not None:
         r = midia.controlar(cru.acao, cru.qual)

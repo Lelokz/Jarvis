@@ -53,6 +53,7 @@ class PonteQt(QObject):
     cerebroMudou = Signal(str, str, str, str)   # modelo, esforço, persona, cor da persona ("" = a dos Ajustes)
     localMudou = Signal(bool, str)               # o modo Local está disponível, e o nome do modelo
     jogoMudou = Signal(str)                      # o modo jogo: o nome do jogo aberto ("" = não está jogando)
+    gravandoMudou = Signal(bool)                 # o modo gravação: o OBS está gravando (o Jarvis fica quieto)
     conversaAtual = Signal(str, list, bool)  # id, falas, veio com as falas (troca)
     conversasRecebidas = Signal(list)      # a barra lateral
     conversaRecebida = Signal(str, list)   # uma conversa aberta só para ler
@@ -301,6 +302,7 @@ class PonteQt(QObject):
                                    str(ev.get("persona") or "jarvis"), str(ev.get("cor_persona") or ""))
             self.localMudou.emit(bool(ev.get("local")), str(ev.get("local_nome") or ""))
             self.jogoMudou.emit(str(ev.get("jogo") or ""))
+            self.gravandoMudou.emit(bool(ev.get("gravando")))
         elif tipo == "conversa_atual":
             self.conversaAtual.emit(str(ev.get("id") or ""), list(ev.get("falas") or []),
                                     "falas" in ev)

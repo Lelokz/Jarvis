@@ -72,6 +72,8 @@ ASSISTENTE -> CLIENTES
         a janela e o app mostram a opção "Local (<local_nome>)"
         `jogo` (08/11/2026): o nome do jogo aberto ("" = não está jogando);
         a janela mostra "Modo jogo · <jogo>" embaixo do estado
+        `gravando` (08/11/2026): o OBS está gravando (e não pausado); o Jarvis
+        não fala e a janela mostra "Gravando · fico quieto"
     {"ev":"som", "saidas":[{"id","nome"}], "entradas":[...],
      "padrao_saida":"<nome>", "padrao_entrada":"<nome>",
      "saida":"<id ou ''>", "entrada":"<id ou ''>"}

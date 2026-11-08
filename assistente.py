@@ -261,6 +261,9 @@ class Ciclo:
         # mandou WhatsApp enquanto isso (nome → quantas), para o resumo no fim.
         self.jogo: str | None = None
         self._whats_no_jogo: dict[str, int] = {}
+        # O modo gravação (08/11/2026): com o OBS gravando (e não pausado), o Jarvis
+        # não fala nada (a voz sairia na faixa do som do PC). Tudo vai só pra janela.
+        self.gravando = False
         # Pergunta do Claude esperando a resposta falada: (a saída, até quando
         # a resposta pode COMEÇAR). Depois do prazo vale "não respondeu".
         self._pergunta: tuple[Saida, float] | None = None
@@ -453,6 +456,10 @@ class Ciclo:
         if self._corpo is not None:
             return self._falar_no_corpo(texto, acao=acao, perguntando=perguntando, extra=extra,
                                         mostrar=mostrar)
+        if self.gravando:
+            self.emissor.emitir("jarvis_disse", texto=mostrar, acao=acao, perguntando=perguntando, **extra)
+            return tts.TemposDaFala(primeiro_audio_s=0.0, sintese_total_s=0.0,
+                                    reproducao_s=0.0, duracao_audio_s=0.0)
         self.portao.fechar_portao()
 
         def ao_comecar() -> None:
@@ -772,6 +779,12 @@ class Ciclo:
         # 4. Reflexo: pausa, volta, volume. 0 s, sem o Claude.
         r = reflexo(texto, self.cfg.midia.limite_confirmacao, self.cfg.midia.passo_volume)
         if r is not None:
+            # OBS: o modo gravação muda ANTES da confirmação ("Gravando." não pode
+            # sair na gravação; "Gravação parada." já pode ser falado).
+            if r.acao in ("obs:gravar", "obs:continuar"):
+                self.definir_gravacao(True)
+            elif r.acao in ("obs:parar", "obs:pausar"):
+                self.definir_gravacao(False)
             self.acoes += 1 if r.acao else 0
             self.registrador.registrar_estado("decisao", resposta=r.fala, acao=r.acao,
                                               origem="reflexo", dito=texto)
@@ -1048,7 +1061,7 @@ class Ciclo:
             return
         # Jogando: nada de anunciar cada mensagem. Aparece na janela e entra no
         # resumo que ele ouve quando fechar o jogo.
-        if self.jogo:
+        if self.jogo or self.gravando:
             for fala, (nome, n) in zip(aviso.falar, aviso.nomes or []):
                 self._whats_no_jogo[nome] = self._whats_no_jogo.get(nome, 0) + n
                 self.registrador.registrar_estado("whatsapp_no_jogo", fala=fala)
@@ -1149,15 +1162,32 @@ class Ciclo:
         self.agente.jogo = nome
         self.registrador.registrar_estado("modo_jogo", jogo=nome or "")
         self.emitir_cerebro()   # a janela mostra "Modo jogo" embaixo do estado
-        if nome or not antes or not self._whats_no_jogo:
+        if nome or not antes or self.gravando:
+            return None
+        return self._resumo_do_whats("jogava")
+
+    def definir_gravacao(self, gravando: bool) -> str | None:
+        """O OBS começou ou parou de gravar (pausado conta como parado: dá pra falar).
+        Ao parar, devolve o resumo do WhatsApp que chegou enquanto isso, ou None."""
+        if gravando == self.gravando:
+            return None
+        self.gravando = gravando
+        self.registrador.registrar_estado("modo_gravacao", gravando=gravando)
+        self.emitir_cerebro()
+        if gravando or self.jogo:
+            return None
+        return self._resumo_do_whats("gravava")
+
+    def _resumo_do_whats(self, fazendo: str) -> str | None:
+        if not self._whats_no_jogo:
             return None
         quem, self._whats_no_jogo = self._whats_no_jogo, {}
         total = sum(quem.values())
         partes = [f"{n} de {nome}" for nome, n in sorted(quem.items(), key=lambda x: -x[1])]
         lista = partes[0] if len(partes) == 1 else ", ".join(partes[:-1]) + " e " + partes[-1]
         if total == 1:
-            return f"Enquanto você jogava, chegou uma mensagem no WhatsApp, de {next(iter(quem))}."
-        return f"Enquanto você jogava, chegaram {total} mensagens no WhatsApp: {lista}."
+            return f"Enquanto você {fazendo}, chegou uma mensagem no WhatsApp, de {next(iter(quem))}."
+        return f"Enquanto você {fazendo}, chegaram {total} mensagens no WhatsApp: {lista}."
 
     def alertar(self, fala: str) -> bool:
         """O alerta do Monitor do Sistema (jarvis/monitor/alerta.py): uma frase
@@ -1207,7 +1237,7 @@ class Ciclo:
     def emitir_cerebro(self) -> None:
         cor = self.cfg.friday.cor if self.persona == "friday" and self.cfg.friday else ""
         self.emissor.emitir("cerebro", persona=self.persona, cor_persona=cor, **self.agente.cerebro,
-                            jogo=self.jogo or "",
+                            jogo=self.jogo or "", gravando=self.gravando,
                             local=self.agente.local_disponivel(), local_nome=self.cfg.agente.nome_local)
 
     def atender_pedido(self, pedido: Pedido) -> None:
@@ -1712,6 +1742,16 @@ def conversar(cfg: config.Config) -> int:
                         print(f"  organizador: {e}", flush=True)
                     time.sleep(10)
             threading.Thread(target=_organizar_sempre, daemon=True, name="organizador").start()
+            # O modo gravação: pergunta ao OBS a cada 2 s se está gravando (fechado: não).
+            from jarvis.nucleo import obs as _obs
+            obs_gravando = [False]
+
+            def _olhar_obs() -> None:
+                while True:
+                    e = _obs.estado()
+                    obs_gravando[0] = e["gravando"] and not e["pausado"]
+                    time.sleep(2)
+            threading.Thread(target=_olhar_obs, daemon=True, name="obs").start()
             while True:
                 # O "Desligar NOVA" do Windows (lá não existe o SIGTERM): vira o ctrl+c de sempre.
                 if time.monotonic() >= proximo_desligar:
@@ -1729,6 +1769,9 @@ def conversar(cfg: config.Config) -> int:
                     ciclo.anunciar_whatsapp()
                     proximo_whats = time.monotonic() + cfg.whatsapp.intervalo_s
                 resumo = ciclo.definir_jogo(vigia.jogo)
+                if resumo:
+                    alertas.append(resumo)
+                resumo = ciclo.definir_gravacao(obs_gravando[0])
                 if resumo:
                     alertas.append(resumo)
                 novo = vigia.pegar()

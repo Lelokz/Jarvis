@@ -16,6 +16,7 @@ Rectangle {
     property string estado: "dormindo"
     property bool conectado: false
     property string jogo: ""          // modo jogo: aparece no lugar da dica do estado
+    property bool gravando: false     // modo gravação: idem (tem prioridade)
     property color corAtual: "#7387a8"
     property real nivel: 0
     property bool sendoVista: true
@@ -433,8 +434,9 @@ Rectangle {
                     Behavior on color { ColorAnimation { duration: raiz.tema.normal } }
                 }
                 Text {
-                    text: raiz.conectado && raiz.jogo ? "Modo jogo · " + raiz.jogo
-                                                      : raiz.tema.dicaDoEstado(raiz.conectado ? raiz.estado : "")
+                    text: raiz.conectado && raiz.gravando ? "Gravando · fico quieto"
+                        : raiz.conectado && raiz.jogo ? "Modo jogo · " + raiz.jogo
+                        : raiz.tema.dicaDoEstado(raiz.conectado ? raiz.estado : "")
                     color: raiz.tema.textoFraco
                     font.family: raiz.tema.familia
                     font.pixelSize: 12
