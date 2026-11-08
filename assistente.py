@@ -256,6 +256,10 @@ class Ciclo:
         self.cfg = cfg
         self.agente = agente
         self.avisos = avisos
+        # O modo jogo (jarvis/monitor/jogo.py): o nome do jogo aberto, e quem
+        # mandou WhatsApp enquanto isso (nome → quantas), para o resumo no fim.
+        self.jogo: str | None = None
+        self._whats_no_jogo: dict[str, int] = {}
         # Pergunta do Claude esperando a resposta falada: (a saída, até quando
         # a resposta pode COMEÇAR). Depois do prazo vale "não respondeu".
         self._pergunta: tuple[Saida, float] | None = None
@@ -1041,6 +1045,15 @@ class Ciclo:
                                 perguntando=False)
         if not aviso.falar:
             return
+        # Jogando: nada de anunciar cada mensagem. Aparece na janela e entra no
+        # resumo que ele ouve quando fechar o jogo.
+        if self.jogo:
+            for fala, (nome, n) in zip(aviso.falar, aviso.nomes or []):
+                self._whats_no_jogo[nome] = self._whats_no_jogo.get(nome, 0) + n
+                self.registrador.registrar_estado("whatsapp_no_jogo", fala=fala)
+                self.emissor.emitir("jarvis_disse", texto=fala.removesuffix(" " + self.avisos.persona.whats_oferta),
+                                    acao="whatsapp:silenciosa", perguntando=False)
+            return
         # O aviso é SEMPRE na caixa de som do PC, nunca no celular (decisão do
         # Léo: "imagina no meio da aula"; lá o próprio WhatsApp já notifica).
         # A conversa pelo celular continua depois, no celular.
@@ -1096,6 +1109,25 @@ class Ciclo:
         self._responder(f"[Chegou a hora de um recado que VOCÊ deixou para si mesmo: {recado}] "
                         "Faça o que anotou.", origem="recado")
 
+    def definir_jogo(self, nome: str | None) -> str | None:
+        """O que a vigia viu. Ao sair do jogo, devolve o resumo do WhatsApp que
+        chegou enquanto isso (para falar como um alerta), ou None."""
+        if nome == self.jogo:
+            return None
+        antes, self.jogo = self.jogo, nome
+        self.agente.jogo = nome
+        self.registrador.registrar_estado("modo_jogo", jogo=nome or "")
+        self.emitir_cerebro()   # a janela mostra "Modo jogo" embaixo do estado
+        if nome or not antes or not self._whats_no_jogo:
+            return None
+        quem, self._whats_no_jogo = self._whats_no_jogo, {}
+        total = sum(quem.values())
+        partes = [f"{n} de {nome}" for nome, n in sorted(quem.items(), key=lambda x: -x[1])]
+        lista = partes[0] if len(partes) == 1 else ", ".join(partes[:-1]) + " e " + partes[-1]
+        if total == 1:
+            return f"Enquanto você jogava, chegou uma mensagem no WhatsApp, de {next(iter(quem))}."
+        return f"Enquanto você jogava, chegaram {total} mensagens no WhatsApp: {lista}."
+
     def alertar(self, fala: str) -> bool:
         """O alerta do Monitor do Sistema (jarvis/monitor/alerta.py): uma frase
         pronta, falada direto, sem passar pelo Claude. False = agora não dá
@@ -1144,6 +1176,7 @@ class Ciclo:
     def emitir_cerebro(self) -> None:
         cor = self.cfg.friday.cor if self.persona == "friday" and self.cfg.friday else ""
         self.emissor.emitir("cerebro", persona=self.persona, cor_persona=cor, **self.agente.cerebro,
+                            jogo=self.jogo or "",
                             local=self.agente.local_disponivel(), local_nome=self.cfg.agente.nome_local)
 
     def atender_pedido(self, pedido: Pedido) -> None:
@@ -1632,7 +1665,7 @@ def conversar(cfg: config.Config) -> int:
             from jarvis.monitor.alerta import Vigia
             vigia = Vigia()
             vigia.start()
-            alerta_guardado: str | None = None
+            alertas: list[str] = []   # o que a vigia mandou falar e ainda não deu
             while True:
                 # O "Desligar NOVA" do Windows (lá não existe o SIGTERM): vira o ctrl+c de sempre.
                 if time.monotonic() >= proximo_desligar:
@@ -1649,10 +1682,14 @@ def conversar(cfg: config.Config) -> int:
                 if time.monotonic() >= proximo_whats and not ciclo.vad.falando:
                     ciclo.anunciar_whatsapp()
                     proximo_whats = time.monotonic() + cfg.whatsapp.intervalo_s
-                if not ciclo.vad.falando:
-                    alerta_guardado = alerta_guardado or vigia.pegar()
-                    if alerta_guardado and ciclo.alertar(alerta_guardado):
-                        alerta_guardado = None
+                resumo = ciclo.definir_jogo(vigia.jogo)
+                if resumo:
+                    alertas.append(resumo)
+                novo = vigia.pegar()
+                if novo:
+                    alertas.append(novo)
+                if alertas and not ciclo.vad.falando and ciclo.alertar(alertas[0]):
+                    alertas.pop(0)
                 do_grupo = grupo.pegar() if grupo is not None else None
                 if do_grupo is not None:
                     ciclo.do_grupo(*do_grupo)

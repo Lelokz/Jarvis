@@ -26,6 +26,8 @@ class Aviso:
     # O que vai junto da próxima fala do Léo para o Claude saber do que se
     # trata ("responde que eu chego às oito").
     contexto: str = ""
+    # Quem mandou cada fala de `falar` e quantas (o resumo do modo jogo).
+    nomes: list = None
 
 
 class AvisosWhatsApp:
@@ -56,7 +58,7 @@ class AvisosWhatsApp:
             por_pessoa.setdefault(self.whatsapp.pessoa(m.chat), []).append(m)
 
         p = self.persona
-        falar, mostrar, ultima = [], [], None
+        falar, mostrar, ultima, nomes = [], [], None, []
         for pessoa, msgs in por_pessoa.items():
             m = msgs[-1]
             texto = m.texto if len(m.texto) <= 220 else m.texto[:220] + "…"
@@ -69,6 +71,7 @@ class AvisosWhatsApp:
                 mostrar.append(fala)
             else:
                 falar.append(fala)
+                nomes.append((m.nome, len(msgs)))
                 ultima = m
         if ultima is None:
             return Aviso([], mostrar, False)
@@ -77,9 +80,9 @@ class AvisosWhatsApp:
                     f"«{ultima.texto[:300]}». Se o usuário pedir para responder, use "
                     f"whatsapp_mandar com esse jid.]")
         if midia.tem_algo_tocando():
-            return Aviso(falar, mostrar, False, contexto)
+            return Aviso(falar, mostrar, False, contexto, nomes)
         falar[-1] += " " + p.whats_oferta
-        return Aviso(falar, mostrar, True, contexto)
+        return Aviso(falar, mostrar, True, contexto, nomes)
 
     def _pelo_celular(self, chat: str, pessoa: str, agora: dt.datetime) -> bool:
         minhas = self.whatsapp.eu_mandei_desde(chat, agora - dt.timedelta(minutes=10))

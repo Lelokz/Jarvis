@@ -486,7 +486,9 @@ class Agente:
         quem = "" if voz is None else ", " + etiqueta_da_voz(voz)
         # A persona chamada (25/10/2026): sem marca, é o JARVIS.
         persona = ", FRIDAY" if self.persona == "friday" else ""
-        cabecalho = f"[{origem}, {relogio.data_curta(agora.date())}, {agora:%H:%M}{quem}{persona}]"
+        # O modo jogo (jarvis/monitor/jogo.py): ele está jogando, o pesado vai leve.
+        jogando = f", JOGANDO {self.jogo}" if getattr(self, "jogo", None) else ""
+        cabecalho = f"[{origem}, {relogio.data_curta(agora.date())}, {agora:%H:%M}{quem}{persona}{jogando}]"
         mensagem = "\n".join(p for p in (cabecalho, contexto, texto) if p)
         self._rodar(self._enviar(mensagem))
 

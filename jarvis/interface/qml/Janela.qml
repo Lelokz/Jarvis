@@ -28,6 +28,7 @@ Window {
     property alias conectado: interno.conectado
     property alias nivel: interno.nivel
     property bool jogoNaFrente: false
+    property string jogo: ""   // o modo jogo (o Jarvis viu um jogo aberto): o nome dele
     property bool demonstracao: false
     // Ligado pelo Python só quando existe bandeja: sem ícone no painel, uma
     // janela que se esconde ao fechar viraria um programa sem porta de volta.
@@ -243,6 +244,7 @@ Window {
         function onMemoriaAberta(id, titulo, texto, versao) { memoria.abrir(id, titulo, texto, versao) }
         function onMemoriaSalva(id, ok, conflito, texto, versao) { memoria.salvou(id, ok, conflito, texto, versao) }
         function onLocalMudou(disponivel, nome) { janela.localDisponivel = disponivel; janela.localNome = nome }
+        function onJogoMudou(nome) { janela.jogo = nome }
         function onCerebroMudou(modelo, esforco, persona, cor) {
             janela.modelo = modelo; janela.esforco = esforco; janela.persona = persona;
             if (cor !== "") janela.corPersona = cor;
@@ -306,6 +308,7 @@ Window {
         pagina: janela.pagina
         estado: janela.estado
         conectado: janela.conectado
+        jogo: janela.jogo
         corAtual: janela.corAtual
         nivel: janela.nivel
         sendoVista: janela.sendoVista

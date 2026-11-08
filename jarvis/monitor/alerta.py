@@ -22,6 +22,9 @@ import time
 from collections import defaultdict
 from pathlib import Path
 
+import os
+
+from jarvis.monitor import jogo
 from jarvis.monitor.leitura import Monitor
 
 INTERVALO = 5            # segundos entre leituras
@@ -30,6 +33,7 @@ GPU_QUENTE, CPU_QUENTE = 85, 90
 RAM_POUCA = 1.0          # GB disponíveis
 DISCO = (95, 98)         # % que avisam
 DISCO_REARMA = 93
+FIM_DO_JOGO = 30         # segundos sem o jogo até sair do modo jogo (reabrir não pisca)
 
 
 def _num(x: float) -> str:
@@ -91,6 +95,11 @@ class Vigia(threading.Thread):
         self._desde: dict[str, float] = {}        # há quanto tempo a condição está ligada
         self._avisado: dict[str, float] = {}      # quando avisou por último
         self._disco_nivel: dict[str, int] = {}    # 0, 95 ou 98 já avisados por disco
+        # O modo jogo: o nome do jogo aberto (None = não está jogando). O aviso de
+        # disco cheio espera o jogo fechar; os de calor e RAM não (é jogando que importam).
+        self.jogo: str | None = None
+        self._jogo_visto = 0.0
+        self._disco_guardado: list[str] = []
 
     def pegar(self) -> str | None:
         try:
@@ -102,10 +111,25 @@ class Vigia(threading.Thread):
         while True:
             time.sleep(INTERVALO)
             try:
+                self._olhar_jogo(time.monotonic())
                 for fala in self.conferir(self._monitor.ler(), time.monotonic()):
                     self._fila.put(fala)
             except Exception:
                 pass   # uma leitura que falhou não derruba a vigia
+
+    def _olhar_jogo(self, agora: float) -> None:
+        nome = jogo.jogando()
+        if nome:
+            self._jogo_visto = agora
+            self.jogo = nome
+            # Toda volta: o que o Jarvis abrir no meio do jogo também vai pros núcleos leves.
+            jogo.aliviar(os.getpid(), True)
+        elif self.jogo and agora - self._jogo_visto >= FIM_DO_JOGO:
+            self.jogo = None
+            jogo.aliviar(os.getpid(), False)
+            for fala in self._disco_guardado:
+                self._fila.put(fala)
+            self._disco_guardado = []
 
     # Separado do run para dar para testar com números inventados.
     def conferir(self, d: dict, agora: float) -> list[str]:
@@ -148,5 +172,9 @@ class Vigia(threading.Thread):
                     nome = "O " + k["titulo"]
                 livre = k["livre"]
                 sobra = f"{_num(livre)} gigas" if livre >= 1.5 else "menos de dois gigas"
-                falas.append(f"{nome} passou de {passou} por cento: só sobraram {sobra} livres.")
+                fala = f"{nome} passou de {passou} por cento: só sobraram {sobra} livres."
+                if self.jogo:
+                    self._disco_guardado.append(fala)
+                else:
+                    falas.append(fala)
         return falas
