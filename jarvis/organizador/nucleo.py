@@ -36,6 +36,7 @@ IGNORAR_FINAIS = (".crdownload", ".part", ".partial", ".tmp", ".download", ".opd
 ESPERA_S = 60            # parado há tanto tempo = terminou de baixar
 ESPERA_GRAVACAO_S = 180  # o OBS às vezes para de escrever um pouco no fim
 TENTAR_DE_NOVO_S = 600
+PAUSA_NO_LIMITE_S = 1800   # bateu o limite da assinatura: para tudo por meia hora
 
 CLAUDE = str(CASA / ".local/bin/claude")
 FFMPEG = str(CASA / ".local/share/lelokz-estudio/ffmpeg")
@@ -170,7 +171,9 @@ Pastas que já existem:
 Analise e responda com relatorio, certeza, pergunta (só sem certeza), pasta_destino
 (caminho absoluto), nome e regra (só se a pasta for nova)."""
     env = dict(os.environ, PATH=f"{FFMPEG}:{os.environ.get('PATH', '')}")
-    cmd = [CLAUDE, "-p", pedido, "--model", "claude-opus-5-5", "--effort", "high",
+    # Sonnet, esforço médio: a primeira arrumação com Opus no alto (08/11/2026)
+    # gastou o limite de 5 h inteiro em ~75 arquivos, e o Jarvis usa a mesma conta.
+    cmd = [CLAUDE, "-p", pedido, "--model", "claude-sonnet-5-5", "--effort", "medium",
            "--no-session-persistence", "--output-format", "json",
            "--json-schema", json.dumps(ESQUEMA),
            "--allowedTools", *FERRAMENTAS,
@@ -307,9 +310,12 @@ class Vigia:
         self._vistos: dict[Path, tuple] = {}
         self._falhou: dict[Path, float] = {}
         self._parados: set[Path] = set()   # gravação em edição: nunca mais olha
+        self._pausa_ate = 0.0                # limite da assinatura: espera em vez de insistir
 
     def uma_volta(self) -> None:
         agora = time.time()
+        if agora < self._pausa_ate:
+            return
         atuais = set(itens_novos()) - self._parados
         for p in list(self._vistos):
             if p not in atuais:
@@ -336,3 +342,6 @@ class Vigia:
             except Exception as e:
                 self._falhou[item] = agora
                 anotar(acao="falhou", origem=str(item), erro=str(e)[:500])
+                if "limit" in str(e).lower():
+                    self._pausa_ate = agora + PAUSA_NO_LIMITE_S
+                    return
