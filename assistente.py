@@ -1096,6 +1096,23 @@ class Ciclo:
         self._responder(f"[Chegou a hora de um recado que VOCÊ deixou para si mesmo: {recado}] "
                         "Faça o que anotou.", origem="recado")
 
+    def alertar(self, fala: str) -> bool:
+        """O alerta do Monitor do Sistema (jarvis/monitor/alerta.py): uma frase
+        pronta, falada direto, sem passar pelo Claude. False = agora não dá
+        (pergunta no ar ou resposta sendo falada): quem chamou tenta de novo."""
+        if self._pergunta is not None or self._locutor is not None:
+            return False
+        self.registrador.registrar_estado("alerta_do_monitor", fala=fala)
+        corpo, self._corpo = self._corpo, None   # sempre na caixa de som do PC, como o WhatsApp
+        try:
+            dormia = self.estado is Estado.DORMINDO
+            self._falar(fala, acao="monitor:alerta")
+            if dormia:
+                self._mudar_estado("dormindo")
+        finally:
+            self._corpo = corpo
+        return True
+
     def do_grupo(self, tipo: str, valor: str) -> None:
         """O que o Jarvis do grupo da família manda para cá (jarvis/grupo)."""
         if tipo == "notificar":
@@ -1611,6 +1628,11 @@ def conversar(cfg: config.Config) -> int:
                 grupo.start()
             proximo_whats = time.monotonic() + cfg.whatsapp.intervalo_s
             proximo_desligar = 0.0
+            # O alerta do Monitor do Sistema: lê o PC na thread dele e deixa as falas aqui.
+            from jarvis.monitor.alerta import Vigia
+            vigia = Vigia()
+            vigia.start()
+            alerta_guardado: str | None = None
             while True:
                 # O "Desligar NOVA" do Windows (lá não existe o SIGTERM): vira o ctrl+c de sempre.
                 if time.monotonic() >= proximo_desligar:
@@ -1627,6 +1649,10 @@ def conversar(cfg: config.Config) -> int:
                 if time.monotonic() >= proximo_whats and not ciclo.vad.falando:
                     ciclo.anunciar_whatsapp()
                     proximo_whats = time.monotonic() + cfg.whatsapp.intervalo_s
+                if not ciclo.vad.falando:
+                    alerta_guardado = alerta_guardado or vigia.pegar()
+                    if alerta_guardado and ciclo.alertar(alerta_guardado):
+                        alerta_guardado = None
                 do_grupo = grupo.pegar() if grupo is not None else None
                 if do_grupo is not None:
                     ciclo.do_grupo(*do_grupo)

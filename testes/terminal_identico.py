@@ -114,6 +114,9 @@ class AgenteRoteirizado:
         self.casa = Path(tempfile.mkdtemp(prefix="jarvis-casa-teste-"))
         (self.casa / ".ultimo-briefing").write_text(datetime.date.today().isoformat())
 
+    def local_disponivel(self) -> bool:   # o Modo Local (9868101): sem Ollama no teste
+        return False
+
     def pedir(self, texto, origem="voz", contexto="", voz=None):
         self.chamadas.append(texto)
         if self.resposta is not None:
