@@ -28,6 +28,7 @@ import math
 import queue
 import signal
 import sys
+import threading
 import time
 import tomllib
 from datetime import datetime
@@ -1109,6 +1110,36 @@ class Ciclo:
         self._responder(f"[Chegou a hora de um recado que VOCÊ deixou para si mesmo: {recado}] "
                         "Faça o que anotou.", origem="recado")
 
+    def do_organizador(self, tipo: str, dados: dict) -> bool:
+        """O que o organizador fez (jarvis/organizador). False = agora não dá
+        (jogando, de noite, Claude ocupado): quem chamou guarda e tenta depois.
+        Mover sempre aparece na janela; pasta nova e pergunta, ele fala."""
+        from pathlib import Path
+        hora = time.localtime().tm_hour
+        pode_falar = 8 <= hora < 23 and not self.jogo
+        if tipo == "movido":
+            m = dados["movido"]
+            destino = Path(m["destino"])
+            self.registrador.registrar_estado("organizador_moveu", destino=str(destino))
+            if m["pasta_nova"] and pode_falar:
+                if self._pergunta is not None or self._locutor is not None:
+                    return False
+                return self.alertar(f"Criei a pasta {destino.parent.name} e guardei lá: {destino.stem}.")
+            self.emissor.emitir("jarvis_disse", texto=f"Organizei: **{destino.name}** → {destino.parent}",
+                                acao="organizador:moveu", perguntando=False)
+            return True
+        # Pergunta: o Claude pergunta do jeito dele e, com a resposta, move e anota no mapa.
+        if not pode_falar or self.agente.ocupado or self._pergunta is not None or self._locutor is not None:
+            return False
+        item = dados["item"]
+        self._responder(
+            f"[O organizador de arquivos não soube onde guardar `{item}`. O que ele viu: {dados['relatorio']} "
+            f"A dúvida dele: {dados['pergunta']}] Pergunte ao Léo, curto. Com a resposta, mova com "
+            f"`cd ~/Projetos/Jarvis && .venv/bin/python -m jarvis.organizador mover '<item>' '<pasta absoluta>' "
+            f"'<nome sem extensão>'` e acrescente a linha `tipo de coisa → pasta` em organizador-mapa.md "
+            f"da tua casa. Sem resposta, deixe como está (fica pendente).", origem="organizador")
+        return True
+
     def definir_jogo(self, nome: str | None) -> str | None:
         """O que a vigia viu. Ao sair do jogo, devolve o resumo do WhatsApp que
         chegou enquanto isso (para falar como um alerta), ou None."""
@@ -1666,6 +1697,21 @@ def conversar(cfg: config.Config) -> int:
             vigia = Vigia()
             vigia.start()
             alertas: list[str] = []   # o que a vigia mandou falar e ainda não deu
+            # O organizador de arquivos: olha Downloads, prints e gravações numa thread.
+            import queue as _fila
+            from jarvis.organizador.nucleo import Vigia as VigiaDoOrganizador
+            do_organizador: _fila.Queue = _fila.Queue()
+            organizador_espera: list[tuple[str, dict]] = []
+
+            def _organizar_sempre() -> None:
+                vigia_org = VigiaDoOrganizador(lambda tipo, dados: do_organizador.put((tipo, dados)))
+                while True:
+                    try:
+                        vigia_org.uma_volta()
+                    except Exception as e:
+                        print(f"  organizador: {e}", flush=True)
+                    time.sleep(10)
+            threading.Thread(target=_organizar_sempre, daemon=True, name="organizador").start()
             while True:
                 # O "Desligar NOVA" do Windows (lá não existe o SIGTERM): vira o ctrl+c de sempre.
                 if time.monotonic() >= proximo_desligar:
@@ -1690,6 +1736,10 @@ def conversar(cfg: config.Config) -> int:
                     alertas.append(novo)
                 if alertas and not ciclo.vad.falando and ciclo.alertar(alertas[0]):
                     alertas.pop(0)
+                while not do_organizador.empty():
+                    organizador_espera.append(do_organizador.get_nowait())
+                if organizador_espera and not ciclo.vad.falando and ciclo.do_organizador(*organizador_espera[0]):
+                    organizador_espera.pop(0)
                 do_grupo = grupo.pegar() if grupo is not None else None
                 if do_grupo is not None:
                     ciclo.do_grupo(*do_grupo)
