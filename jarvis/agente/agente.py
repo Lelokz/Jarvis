@@ -51,6 +51,7 @@ import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from jarvis.nucleo import memoria_viva
 from claude_agent_sdk import (AssistantMessage, ClaudeAgentOptions, ClaudeSDKClient, HookMatcher,
                               PermissionResultAllow, PermissionResultDeny, RateLimitEvent,
                               ResultMessage, StreamEvent, TextBlock, ToolUseBlock)
@@ -419,7 +420,10 @@ class Agente:
     def _instrucoes(self) -> str:
         from jarvis import memorias
         from jarvis.nucleo import recados
+        from jarvis import personas
         friday = PERSONA.with_name("personalidade_friday.md").read_text().strip()
+        # As personas do Léo (09/11/2026) vêm logo depois da Friday e valem por cima.
+        friday += "\n\n" + personas.para_instrucoes()
         return PERSONA.read_text().replace("{personalidade_friday}", friday).replace("{nome}", self.nome) \
             .replace("{usuario}", _dono()).replace("{recados}", recados.COMO_USAR) \
             .replace("{memorias}", str(memorias.PASTA))
@@ -480,6 +484,8 @@ class Agente:
         if not self.ocupado:
             self._falas = []
         self._falas.append(texto)
+        # A memória viva (09/11/2026): tudo o que o Léo fala ou digita.
+        memoria_viva.gravar_depois("fala", texto, origem)
         self.ocupado = True
         self.voz = voz
         agora = dt.datetime.now()
@@ -488,7 +494,11 @@ class Agente:
         persona = ", FRIDAY" if self.persona == "friday" else ""
         # O modo jogo (jarvis/monitor/jogo.py): ele está jogando, o pesado vai leve.
         jogando = f", JOGANDO {self.jogo}" if getattr(self, "jogo", None) else ""
-        cabecalho = f"[{origem}, {relogio.data_curta(agora.date())}, {agora:%H:%M}{quem}{persona}{jogando}]"
+        # O modo das personas do Léo (09/11/2026): "modo senhor", "bêbado"...
+        from jarvis import personas
+        modo = personas.atual()
+        modo = "" if modo == personas.NORMAL else f", MODO {modo}"
+        cabecalho = f"[{origem}, {relogio.data_curta(agora.date())}, {agora:%H:%M}{quem}{persona}{jogando}{modo}]"
         mensagem = "\n".join(p for p in (cabecalho, contexto, texto) if p)
         self._rodar(self._enviar(mensagem))
 
@@ -763,6 +773,8 @@ class Agente:
                     else:
                         fala, janela = dividir(final)
                         self.saidas.put(Saida("fim", fala, janela=janela, resto=_resto(fala, ja)))
+                        # A memória viva (09/11/2026): o que ele respondeu.
+                        memoria_viva.gravar_depois("resposta", final, getattr(self, "persona", "jarvis"))
         except asyncio.CancelledError:
             raise
         except Exception as e:

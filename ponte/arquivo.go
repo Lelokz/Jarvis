@@ -1,6 +1,12 @@
 package main
 
-// Arquiva todo evento do whatsmeow, inclusive revoke e mídia que "some".
+// Jarvis (09/11/2026, feito pelo Léo, ajustado para a ponte): arquiva toda
+// mensagem que chega, inclusive as que depois são apagadas para todos
+// (revoke). O banco é o memoria_viva.db do Jarvis, tabela arquivo_mensagens
+// (a mesma do jarvis/nucleo/whatsapp_arquivo.py).
+//
+//	GET /api/arquivo?chat=<jid>   -> as últimas 300 do chat
+//	GET /api/arquivo?q=<termo>    -> procura em todos
 
 import (
 	"database/sql"
@@ -8,9 +14,9 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"time"
 
-	_ "modernc.org/sqlite"
+	"go.mau.fi/whatsmeow/proto/waE2E"
+	"go.mau.fi/whatsmeow/types/events"
 )
 
 var arq *sql.DB
@@ -19,7 +25,7 @@ func abrirArquivo() error {
 	pasta := filepath.Join(os.Getenv("HOME"), ".local/share/jarvis")
 	os.MkdirAll(pasta, 0o700)
 	var err error
-	arq, err = sql.Open("sqlite", filepath.Join(pasta, "memoria_viva.db"))
+	arq, err = sql.Open("sqlite3", "file:"+filepath.Join(pasta, "memoria_viva.db")+"?_journal_mode=WAL&_busy_timeout=5000")
 	if err != nil {
 		return err
 	}
@@ -29,44 +35,42 @@ func abrirArquivo() error {
 	return err
 }
 
-func arquivar(id, chat, autor, texto, midia, tipo string) {
-	if arq == nil {
+// arquivarMensagem: chamada no começo do handleMessage, para toda mensagem.
+func arquivarMensagem(msg *events.Message) {
+	if arq == nil || msg.Message == nil {
 		return
 	}
-	arq.Exec(`INSERT OR REPLACE INTO arquivo_mensagens
-		(id, chat, autor, ts, texto, midia, tipo) VALUES (?,?,?,?,?,?,?)`,
-		id, chat, autor, float64(time.Now().Unix()), texto, midia, tipo)
-}
-
-func marcarApagada(id string) {
-	if arq != nil {
-		arq.Exec(`UPDATE arquivo_mensagens SET apagada = 1 WHERE id = ?`, id)
-	}
-}
-
-// chamar de dentro do handler de eventos, no case de mensagem:
-func arquivarEvento(evt map[string]any) {
-	info, _ := evt["Info"].(map[string]any)
-	if info == nil {
+	// Apagada para todos: o celular manda um "revoke" com o id da original.
+	if p := msg.Message.GetProtocolMessage(); p != nil {
+		if p.GetType() == waE2E.ProtocolMessage_REVOKE && p.GetKey() != nil {
+			arq.Exec(`UPDATE arquivo_mensagens SET apagada = 1 WHERE id = ?`, p.GetKey().GetID())
+		}
 		return
 	}
-	id, _ := info["ID"].(string)
-	chat, _ := info["Chat"].(string)
-	autor, _ := info["Sender"].(string)
-	tipo, _ := info["Type"].(string)
-	switch {
-	case tipo == "revoke" || evt["Apagada"] == true:
-		marcarApagada(id)
-	case tipo == "media":
-		arquivar(id, chat, autor, "", extrairMidia(evt), "midia")
-	default:
-		texto, _ := evt["Texto"].(string)
-		arquivar(id, chat, autor, texto, "", "texto")
+	texto := extractTextContent(msg.Message)
+	midia, nome, _, _, _, _, _ := extractMediaInfo(msg.Message)
+	if texto == "" && midia == "" {
+		return
 	}
+	tipo := "texto"
+	if midia != "" {
+		tipo = "midia"
+		if nome != "" {
+			midia += ": " + nome
+		}
+	}
+	ts := float64(msg.Info.Timestamp.Unix())
+	// Mantém o "apagada" se ela já tinha sido marcada (a original chega uma vez só).
+	arq.Exec(`INSERT INTO arquivo_mensagens (id, chat, autor, ts, texto, midia, tipo) VALUES (?,?,?,?,?,?,?)
+		ON CONFLICT(id) DO UPDATE SET texto = excluded.texto, midia = excluded.midia`,
+		msg.Info.ID, msg.Info.Chat.String(), msg.Info.Sender.User, ts, texto, midia, tipo)
 }
 
-// GET /api/arquivo?chat=...&q=...
 func servirArquivo(w http.ResponseWriter, r *http.Request) {
+	if arq == nil {
+		http.Error(w, "arquivo fechado", 503)
+		return
+	}
 	chat, termo := r.URL.Query().Get("chat"), r.URL.Query().Get("q")
 	var linhas *sql.Rows
 	var err error
@@ -74,7 +78,7 @@ func servirArquivo(w http.ResponseWriter, r *http.Request) {
 		linhas, err = arq.Query(`SELECT chat, autor, ts, texto, apagada FROM arquivo_mensagens
 			WHERE texto LIKE ? ORDER BY ts DESC LIMIT 100`, "%"+termo+"%")
 	} else {
-		linhas, err = arq.Query(`SELECT autor, ts, texto, apagada FROM arquivo_mensagens
+		linhas, err = arq.Query(`SELECT chat, autor, ts, texto, apagada FROM arquivo_mensagens
 			WHERE chat = ? ORDER BY ts DESC LIMIT 300`, chat)
 	}
 	if err != nil {
@@ -84,21 +88,14 @@ func servirArquivo(w http.ResponseWriter, r *http.Request) {
 	defer linhas.Close()
 	saida := []map[string]any{}
 	for linhas.Next() {
-		linha := map[string]any{}
-		if termo != "" {
-			var c, a, t string
-			var ts float64
-			var ap int
-			linhas.Scan(&c, &a, &ts, &t, &ap)
-			linha = map[string]any{"chat": c, "autor": a, "ts": ts, "texto": t, "apagada": ap}
-		} else {
-			var a, t string
-			var ts float64
-			var ap int
-			linhas.Scan(&a, &ts, &t, &ap)
-			linha = map[string]any{"autor": a, "ts": ts, "texto": t, "apagada": ap}
+		var c, a string
+		var t sql.NullString
+		var ts float64
+		var ap int
+		if linhas.Scan(&c, &a, &ts, &t, &ap) != nil {
+			continue
 		}
-		saida = append(saida, linha)
+		saida = append(saida, map[string]any{"chat": c, "autor": a, "ts": ts, "texto": t.String, "apagada": ap})
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(saida)
