@@ -310,7 +310,16 @@ aceito pelo Léo (o padrasto dele usa algo assim há meses).
     (`Arquivo/Programas/go`, cache em `Arquivo/Programas/go-cache`):
     `GOPATH=.../go-cache GOMODCACHE=.../go-cache/pkg/mod GOCACHE=.../go-cache/build
     GOTOOLCHAIN=local .../go/bin/go build -o whatsapp-bridge.novo .` e trocar
-    com o Jarvis desligado ou reiniciando.
+    com `mv` (o `cp` por cima dá "texto ocupado" com a ponte rodando) e
+    reiniciar o Jarvis.
+  - `/api/history` (09/11/2026): pede ao celular as mensagens de antes da
+    mais antiga que temos (`{chat, id, from_me, timestamp, count≤50}`). A
+    resposta chega depois como HistorySync e vai para o banco. Quem usa é o
+    puxador dos grupos (`jarvis/grupo/historico.py`): um pedido por grupo a
+    cada 45 s, até 4 pedidos seguidos sem nada novo ("acabou"; confere de novo
+    um dia depois), e escreve `historico.txt` na pasta do grupo para o Jarvis
+    e a Friday procurarem. Binário anterior em `whatsapp-bridge.antes-historico`,
+    código em `main.go.antes-historico`.
 - **Sobe e desce com o Jarvis** (`jarvis.sh`), com `umask 077`: o banco e o
   log (`~/.local/share/jarvis/whatsapp-bridge.log`) só o Léo lê. Conectado por
   QR code em out/2026; a conexão fica salva (uma fonte diz que pode pedir QR

@@ -65,6 +65,14 @@ com `# Grupo: {grupo}`. O {usuario} lê e corrige essa memória pela aba
 "Memórias" da janela e do app, então escreva de um jeito que dê para ler:
 títulos curtos e listas.
 
+**O histórico inteiro deste grupo** está em `historico.txt`, na sua pasta:
+uma linha por mensagem (`[data hora] quem: texto`), da mais antiga para a
+mais nova, desde quando o celular do {usuario} ainda tem. Você recebe só as
+últimas mensagens; quando perguntarem de algo de antes ("quando a gente
+marcou a viagem?", "o que a Ana disse sobre..."), procure nele (grep por
+palavra, por nome, por data). Foto, áudio e vídeo aparecem só como "(foto)",
+"(áudio)"... Não mexa nesse arquivo: ele é reescrito sozinho.
+
 ## O que é do {usuario}: precisa dele
 
 O PC dele (abrir programa, mexer em arquivo ou pasta dele, tocar música no PC)

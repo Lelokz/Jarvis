@@ -39,6 +39,7 @@ from jarvis.agente import travas
 from jarvis.agente.agente import sim_ou_nao
 from jarvis.nucleo import aprovacoes, recados
 from jarvis.nucleo.atalhos import normalizar
+from jarvis.grupo import historico
 
 PREFIXO = "🤖 Jarvis:"
 # A Friday também responde nos grupos (09/11/2026), com o mesmo jeito de
@@ -157,6 +158,8 @@ class GrupoFamilia(threading.Thread):
         self._visto: dict[str, dt.datetime] = {}
         # (grupo, persona) -> {remetente: até quando a conversa com ele fica aberta}
         self._aberta: dict[tuple[str, str], dict[str, float]] = {}
+        # O histórico de cada grupo, puxado do celular e escrito em historico.txt.
+        self._puxador = historico.Puxador(whatsapp, self._quem, tuple(PREFIXOS.values()))
 
     def pegar(self) -> tuple[str, str] | None:
         try:
@@ -233,12 +236,24 @@ class GrupoFamilia(threading.Thread):
     # -- o laço -----------------------------------------------------------------
 
     def run(self) -> None:
+        threading.Thread(target=self._laco_historico, name="grupo-historico", daemon=True).start()
         while True:
             time.sleep(3)
             try:
                 self._uma_volta()
             except Exception:
                 pass  # banco ocupado, ponte fora: tenta na próxima
+
+    def _laco_historico(self) -> None:
+        """Devagar e à parte das respostas: um pedido por grupo a cada volta."""
+        while True:
+            time.sleep(15)
+            for jid in self._jids():
+                try:
+                    self._puxador.passo(jid)
+                    self._puxador.escrever(jid, self._nome(jid))
+                except Exception:
+                    pass  # ponte fora, banco ocupado: na próxima volta
 
     def _aprovacoes_pelo_whatsapp(self) -> None:
         """O pedido ao dono que o app não recebeu (app fechado, sem internet,
