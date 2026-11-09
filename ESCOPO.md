@@ -741,8 +741,14 @@ arquivo viram anexo; link e texto vão pra barra de escrever.
 
 ### O Jarvis no grupo da família (23/10/2026, janela beta 0.8.0, app beta 0.13.5)
 
-- O grupo "Nós 4 ♟️🩵" fica no `ajustes.json`: `grupo_jid` e `grupo_ligado`.
+- Os grupos ficam no `ajustes.json`: `grupos` (lista) e `grupo_ligado`.
   Tem botão liga/desliga nos Ajustes da janela e do app, e começa desligado.
+  **Vários grupos (09/11/2026, app beta 0.18.5):** antes era um só
+  (`grupo_jid`, que o `ajustes.ler()` ainda converte). Tocar num grupo marca
+  ou desmarca; cada grupo tem a própria leitura, conversa aberta, memória e
+  limite (50 respostas por hora POR grupo, decisão do Léo), e o pedido que
+  precisa do Sim guarda o `jid` e volta pro grupo de onde veio.
+  Teste: `testes/testar_varios_grupos.py`.
 - `jarvis/grupo/familia.py`, uma thread, olha o grupo a cada 3 s. Mensagem
   com "jarvis" em qualquer parte vai pra um Claude **à parte e trancado**:
   sem a memória do dono (`setting_sources=[]`, casa própria em
