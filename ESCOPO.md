@@ -302,6 +302,15 @@ aceito pelo Léo (o padrasto dele usa algo assim há meses).
     `whatsmeow` novo monta o endereço como servidor + caminho + `&hash=...`.
     Agora o caminho vai com eles (25/10/2026). O binário anterior ficou em
     `whatsapp-bridge.antes`.
+  - `/api/react` (09/11/2026): reação numa mensagem (`{chat, id, sender, emoji}`),
+    para o 👀 dos grupos. O banco guarda só o "user" de quem mandou; o
+    servidor (lid ou s.whatsapp.net) vem do modo de endereço do grupo.
+    Binário anterior em `whatsapp-bridge.antes-reacao`, código em
+    `main.go.antes-reacao`. **Compilar:** o Go mora no HD
+    (`Arquivo/Programas/go`, cache em `Arquivo/Programas/go-cache`):
+    `GOPATH=.../go-cache GOMODCACHE=.../go-cache/pkg/mod GOCACHE=.../go-cache/build
+    GOTOOLCHAIN=local .../go/bin/go build -o whatsapp-bridge.novo .` e trocar
+    com o Jarvis desligado ou reiniciando.
 - **Sobe e desce com o Jarvis** (`jarvis.sh`), com `umask 077`: o banco e o
   log (`~/.local/share/jarvis/whatsapp-bridge.log`) só o Léo lê. Conectado por
   QR code em out/2026; a conexão fica salva (uma fonte diz que pode pedir QR
@@ -749,6 +758,13 @@ arquivo viram anexo; link e texto vão pra barra de escrever.
   limite (50 respostas por hora POR grupo, decisão do Léo), e o pedido que
   precisa do Sim guarda o `jid` e volta pro grupo de onde veio.
   Teste: `testes/testar_varios_grupos.py`.
+  **Jarvis e Friday nos grupos, conversa por pessoa e 👀 (09/11/2026):**
+  quem chama "Friday" é atendido por ela (`💜 Friday:`), com as mesmas regras
+  (`persona_grupo.md`) e o jeito dela (`jeito_friday.md`: "chefinho" só pro
+  Léo). Depois de responder, só as mensagens de QUEM falou com ele chegam sem
+  o nome, por 2 min (antes era o grupo todo por 5 min, e ele se metia na
+  conversa dos outros). Mensagem que chama pelo nome ganha 👀 na hora, e o
+  👀 fica (decisão do Léo: dá pra ver o que ele respondeu).
 - `jarvis/grupo/familia.py`, uma thread, olha o grupo a cada 3 s. Mensagem
   com "jarvis" em qualquer parte vai pra um Claude **à parte e trancado**:
   sem a memória do dono (`setting_sources=[]`, casa própria em

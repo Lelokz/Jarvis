@@ -34,7 +34,9 @@ def checa(nome, cond, detalhe=""):
 class WhatsAppFalso:
     def __init__(self):
         self.mandadas: list[tuple[str, str]] = []
-        self.msgs: dict[str, list[tuple[str, int, str, dt.datetime]]] = {}
+        self.msgs: dict[str, list[tuple[str, int, str, dt.datetime, str]]] = {}
+        self.reacoes: list[tuple[str, str, str, str]] = []
+        self.n = 0
 
     def nome_de(self, jid):
         return {A: "Família", B: "Amigos", C: "Escola"}.get(jid, "?")
@@ -52,12 +54,21 @@ class WhatsAppFalso:
     def _quando(self, t):
         return t
 
+    def reagir(self, chat, id_msg, remetente, emoji):
+        self.reacoes.append((chat, id_msg, remetente, emoji))
+        return True
+
     def _consultar(self, _sql, args):
         jid, quantas = args
         return list(reversed(self.msgs.get(jid, [])))[:quantas]
 
-    def chega(self, jid, quem, texto):
-        self.msgs.setdefault(jid, []).append((quem, 0, texto, dt.datetime.now()))
+    def chega(self, jid, quem, texto, eu=False):
+        self.n += 1
+        self.msgs.setdefault(jid, []).append((quem, int(eu), texto, dt.datetime.now(), f"M{self.n}"))
+        return f"M{self.n}"
+
+    def bot_fala(self, jid, texto):  # o que o Jarvis mandou aparece como mensagem "minha"
+        self.chega(jid, "5500", texto, eu=True)
 
 
 def main() -> int:
@@ -101,9 +112,15 @@ def main() -> int:
     w = WhatsAppFalso()
     g = familia.GrupoFamilia(w, "claude", "sonnet", app_desde=lambda: None)
     atendidos: list[tuple[str, list]] = []
+    detalhes: list[tuple[str, str, list, list]] = []
+    responde = {"sim": True}
 
-    async def atender_falso(jid, chamadas, aberta=False, recados_da_hora=None):
-        atendidos.append((jid, [t for _, t, _ in chamadas]))
+    async def atender_falso(jid, persona, chamadas, seguidas=None, recados_da_hora=None):
+        seguidas = seguidas or []
+        atendidos.append((jid, [m.texto for m in chamadas + seguidas]))
+        detalhes.append((jid, persona, [m.texto for m in chamadas], [m.texto for m in seguidas]))
+        if responde["sim"]:  # como se ele tivesse usado o `responder`: abre a conversa com quem falou
+            g._abrir(jid, persona, chamadas + seguidas)
     g._atender = atender_falso
     w.chega(A, "Tia", "Jarvis, mensagem velha")
     g._uma_volta()  # primeira volta: marca onde começa, não responde o velho
@@ -114,6 +131,43 @@ def main() -> int:
     g._uma_volta()
     checa("respondeu nos dois grupos, cada um com a sua mensagem",
           sorted(atendidos) == [(A, ["Jarvis, que horas são?"]), (B, ["jarvis conta uma piada"])], atendidos)
+
+    print("-- V3b. conversa aberta só com quem ele respondeu --")
+    atendidos.clear(); detalhes.clear()
+    w.chega(A, "Chris", "e amanhã?")              # o Chris falou com ele: continua sem "Jarvis"
+    w.chega(A, "Tia", "alguém viu minha chave?")  # a Tia não: conversa do grupo, nem chega nele
+    g._uma_volta()
+    checa("a mensagem do Chris chega como continuação",
+          detalhes == [(A, "jarvis", [], ["e amanhã?"])], detalhes)
+    checa("a da Tia nem chega nele", all("chave" not in t for _, ts in atendidos for t in ts), atendidos)
+    checa("continuação não ganha 👀", all(r[1] != w.msgs[A][-2][4] for r in w.reacoes), w.reacoes)
+
+    print("-- V3c. o 👀 na mensagem de quem chamou --")
+    w.reacoes.clear()
+    mid = w.chega(A, "Tia", "Jarvis, me lembra do remédio às 20h")
+    g._uma_volta()
+    checa("reagiu com 👀 na mensagem certa", (A, mid, "Tia", "👀") in w.reacoes, w.reacoes)
+    w.reacoes.clear()
+    mid = w.chega(A, "5500", "Jarvis, testa aí", eu=True)
+    g._uma_volta()
+    checa("na mensagem do dono também (sem remetente: a ponte põe o dono)", (A, mid, "", "👀") in w.reacoes, w.reacoes)
+
+    print("-- V3d. a Friday no grupo --")
+    atendidos.clear(); detalhes.clear()
+    w.chega(B, "Pedro", "Friday, qual o melhor anime?")
+    w.chega(B, "Ana", "Jarvis e Friday, bom dia")
+    g._uma_volta()
+    checa("a Friday atende quem chamou ela",
+          (B, "friday", ["Friday, qual o melhor anime?"], []) in detalhes, detalhes)
+    checa("quem chama os dois vai pra quem foi chamado primeiro",
+          (B, "jarvis", ["Jarvis e Friday, bom dia"], []) in detalhes, detalhes)
+    w.bot_fala(B, "💜 Friday: Depende do que você curte!")
+    detalhes.clear()
+    w.chega(B, "Pedro", "curto ação")
+    g._uma_volta()
+    checa("a continuação do Pedro vai pra Friday, não pro Jarvis",
+          detalhes == [(B, "friday", [], ["curto ação"])], detalhes)
+    checa("o que a Friday mandou não volta como pedido", all("Depende" not in t for _, ts in atendidos for t in ts))
 
     print("-- V4. limite de 50 por hora em CADA grupo --")
     atendidos.clear()

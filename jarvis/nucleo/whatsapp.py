@@ -287,6 +287,16 @@ class WhatsApp:
         melhor = notas[0][0]
         return [c for n, c in notas if n >= melhor - 0.05]
 
+    def reagir(self, chat: str, id_msg: str, remetente: str, emoji: str) -> bool:
+        """Reação numa mensagem (o 👀 dos grupos, 09/11/2026). `remetente` é o
+        que o banco guarda (só o número/LID): a ponte descobre o resto."""
+        try:
+            r = requests.post(self.api.rsplit("/", 1)[0] + "/react", timeout=10,
+                              json={"chat": chat, "id": id_msg, "sender": remetente, "emoji": emoji})
+            return bool((r.json() if r.content else {}).get("success", r.ok))
+        except (requests.RequestException, ValueError):
+            return False
+
     def enviar(self, jid: str, texto: str, arquivo: str | None = None) -> tuple[bool, str]:
         """`arquivo`: caminho absoluto de um arquivo para mandar junto (o texto
         vira a legenda). A ponte lê o arquivo do disco (`media_path`)."""

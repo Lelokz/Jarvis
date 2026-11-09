@@ -32,6 +32,7 @@ import threading
 import time
 from collections import deque
 from pathlib import Path
+from typing import NamedTuple
 
 from jarvis import ajustes
 from jarvis.agente import travas
@@ -40,7 +41,14 @@ from jarvis.nucleo import aprovacoes, recados
 from jarvis.nucleo.atalhos import normalizar
 
 PREFIXO = "🤖 Jarvis:"
-PERSONA = Path(__file__).with_name("persona_grupo.md")
+# A Friday também responde nos grupos (09/11/2026), com o mesmo jeito de
+# trabalhar e o jeito de falar dela, ajustado para muita gente.
+PREFIXOS = {"jarvis": PREFIXO, "friday": "💜 Friday:"}
+NOMES = {"jarvis": "Jarvis", "friday": "Friday"}
+PERSONA = Path(__file__).with_name("persona_grupo.md")          # as regras, iguais para os dois
+JEITO = {p: Path(__file__).with_name(f"jeito_{p}.md") for p in PREFIXOS}   # o jeito de falar de cada um
+# O 👀 na mensagem de quem chamou, assim que ele lê (fica lá depois da resposta).
+OLHINHOS = "👀"
 # A pasta de cada grupo (memorias/grupos/<id>/): só o Jarvis daquele grupo
 # entra nela. A memória do grupo (anotações, lista, recados) é o memoria.md,
 # que o Léo vê e edita na aba "Memórias" da janela e do app.
@@ -51,11 +59,33 @@ NOVIDADES = Path.home() / ".local/share/jarvis/novidades.jsonl"
 # O limite do Claude é do dono: a família não pode gastar tudo. Por grupo
 # (decisão do Léo, 09/11/2026: 50 por grupo).
 MAX_POR_HORA = 50
-# Depois de cada resposta no grupo, as mensagens seguintes vão para o Claude
-# mesmo sem "Jarvis", e ele decide se são com ele.
-CONVERSA_ABERTA_S = 5 * 60
+# Depois de responder alguém, só as mensagens DESSA pessoa chegam sem chamar o
+# nome, por um tempo (09/11/2026: com a conversa aberta para o grupo todo, ele
+# se metia no papo dos outros).
+CONVERSA_ABERTA_S = 2 * 60
 # O pedido ao dono que o app não recebeu vai para o WhatsApp dele depois disto.
 ESPERA_DO_APP_S = 45
+
+
+class Msg(NamedTuple):
+    quem: str          # o nome para mostrar
+    texto: str
+    quando: dt.datetime
+    id: str = ""       # o id da mensagem no WhatsApp (para o 👀)
+    remetente: str = ""  # como o banco guarda quem mandou (número ou LID; o dono: o número dele)
+
+
+def chamou(texto: str) -> list[str]:
+    """Quem a mensagem chama pelo nome, na ordem: ["jarvis"], ["friday"], os dois ou nenhum."""
+    t = f" {normalizar(texto)} "
+    achados = [(t.find(p), p) for p in PREFIXOS if f"{p}" in t]
+    return [p for _, p in sorted(achados)]
+
+
+def de_bot(texto: str) -> bool:
+    return texto.startswith(tuple(PREFIXOS.values()))
+
+
 _MEXE_EM_ARQUIVO = {"criar ou editar arquivo", "apagar, mover ou mexer em arquivo", "apagar ou mexer em arquivo"}
 _CAMINHO_DE_FORA = re.compile(r"(^|[\s\"'=<>|;&(])/(?!dev/null\b)")
 _NUNCA = re.compile(r"\b(sudo|chmod|chown|dd|crontab|shred|truncate|git|ln)\b")
@@ -125,7 +155,8 @@ class GrupoFamilia(threading.Thread):
         # quando a conversa fica aberta.
         self._chamadas: dict[str, deque[float]] = {}
         self._visto: dict[str, dt.datetime] = {}
-        self._aberta_ate: dict[str, float] = {}
+        # (grupo, persona) -> {remetente: até quando a conversa com ele fica aberta}
+        self._aberta: dict[tuple[str, str], dict[str, float]] = {}
 
     def pegar(self) -> tuple[str, str] | None:
         try:
@@ -148,8 +179,8 @@ class GrupoFamilia(threading.Thread):
         return ajustes.nome_de_quem_usa() or "dono"
 
     def _quem(self, remetente: str, minha: bool, texto: str = "") -> str:
-        if minha and texto.startswith(PREFIXO):
-            return "Jarvis (você)"
+        if minha and de_bot(texto):
+            return next(NOMES[p] for p, pre in PREFIXOS.items() if texto.startswith(pre))
         if minha:
             return self._dono()
         try:
@@ -157,17 +188,34 @@ class GrupoFamilia(threading.Thread):
         except Exception:
             return "alguém"
 
-    def _mensagens(self, jid: str, quantas: int = 15) -> list[tuple[str, str, dt.datetime]]:
-        """[(quem, texto, quando)], mais antiga primeiro."""
+    def _mensagens(self, jid: str, quantas: int = 15) -> list[Msg]:
+        """Mais antiga primeiro."""
         linhas = self.whatsapp._consultar(
-            "SELECT sender, is_from_me, content, timestamp FROM messages WHERE chat_jid = ? "
+            "SELECT sender, is_from_me, content, timestamp, id FROM messages WHERE chat_jid = ? "
             "ORDER BY timestamp DESC LIMIT ?", (jid, quantas))
-        return [(self._quem(s or "", bool(eu), c or ""), c or "(mídia)", self.whatsapp._quando(t))
-                for s, eu, c, t in reversed(linhas)]
+        return [Msg(self._quem(s or "", bool(eu), c or ""), c or "(mídia)", self.whatsapp._quando(t),
+                    str(i or ""), "eu" if eu else (s or ""))
+                for s, eu, c, t, i in reversed(linhas)]
 
-    def _mandar(self, jid: str, texto: str) -> None:
-        self.whatsapp.enviar(jid, f"{PREFIXO} {texto.strip()}")
-        self._aberta_ate[jid] = time.time() + CONVERSA_ABERTA_S
+    def _mandar(self, jid: str, texto: str, persona: str = "jarvis") -> None:
+        self.whatsapp.enviar(jid, f"{PREFIXOS[persona]} {texto.strip()}")
+
+    def _abrir(self, jid: str, persona: str, msgs: list[Msg]) -> None:
+        """A conversa fica aberta só com quem falou com ele agora; se essa
+        pessoa estava conversando com o outro (Jarvis/Friday), passa a ser com este."""
+        for m in msgs:
+            for p in PREFIXOS:
+                self._aberta.setdefault((jid, p), {}).pop(m.remetente, None)
+            self._aberta[(jid, persona)][m.remetente] = time.time() + CONVERSA_ABERTA_S
+
+    def _olhar(self, jid: str, m: Msg) -> None:
+        """O 👀: "já li, estou pensando". Sem a ponte nova, só não aparece."""
+        if not m.id or not hasattr(self.whatsapp, "reagir"):
+            return
+        try:
+            self.whatsapp.reagir(jid, m.id, "" if m.remetente == "eu" else m.remetente, OLHINHOS)
+        except Exception:
+            pass
 
     def _notificar(self, texto: str, titulo: str = "Grupo do WhatsApp") -> None:
         """Para o dono: notificação no PC e no app (nada de WhatsApp)."""
@@ -281,34 +329,52 @@ class GrupoFamilia(threading.Thread):
         # dentro da memória do grupo.
         venceram = recados.vencidos(memorias.pasta_do_grupo(jid) / MEMORIA)
         if venceram:
-            asyncio.run(self._atender(jid, [], recados_da_hora=venceram))
-        novas = [m for m in self._mensagens(jid, 20) if m[2] > self._visto[jid]]
+            asyncio.run(self._atender(jid, "jarvis", [], recados_da_hora=venceram))
+        novas = [m for m in self._mensagens(jid, 20) if m.quando > self._visto[jid]]
         if not novas:
             return
-        self._visto[jid] = max(m[2] for m in novas)
-        novas = [m for m in novas if not m[1].startswith(PREFIXO)]
-        chamadas = [m for m in novas if "jarvis" in normalizar(m[1])]
-        aberta = time.time() < self._aberta_ate.get(jid, 0.0)
-        if aberta:
-            chamadas = novas  # pode ser a resposta ao que ele perguntou
-        if not chamadas:
-            return
+        self._visto[jid] = max(m.quando for m in novas)
         agora = time.time()
+        # Para cada um (Jarvis e Friday): quem chamou pelo nome, e quem estava
+        # conversando com ele e continuou (só essa pessoa, nunca o grupo todo).
+        trabalho: list[tuple[str, list[Msg], list[Msg]]] = []
+        for persona in PREFIXOS:
+            abertas = self._aberta.setdefault((jid, persona), {})
+            for r, ate in list(abertas.items()):
+                if ate < agora:
+                    del abertas[r]
+            chamadas, seguidas = [], []
+            for m in novas:
+                if de_bot(m.texto):
+                    continue
+                nomes = chamou(m.texto)
+                if nomes and nomes[0] == persona:
+                    chamadas.append(m)
+                elif not nomes and m.remetente in abertas:
+                    seguidas.append(m)
+            if chamadas or seguidas:
+                trabalho.append((persona, chamadas, seguidas))
+        if not trabalho:
+            return
         feitas = self._chamadas.setdefault(jid, deque())
         while feitas and feitas[0] < agora - 3600:
             feitas.popleft()
-        if len(feitas) >= MAX_POR_HORA:
-            if any("jarvis" in normalizar(m[1]) for m in chamadas):
-                # Direto, sem _mandar: não reabre a conversa.
-                self.whatsapp.enviar(jid, f"{PREFIXO} Por agora já conversei bastante; daqui a pouco eu volto.")
-            return
-        feitas.append(agora)
-        asyncio.run(self._atender(jid, chamadas, aberta))
+        for persona, chamadas, seguidas in trabalho:
+            if len(feitas) >= MAX_POR_HORA:
+                if chamadas:
+                    self._mandar(jid, "Por agora já conversei bastante; daqui a pouco eu volto.", persona)
+                continue
+            feitas.append(agora)
+            for m in chamadas:
+                self._olhar(jid, m)
+            asyncio.run(self._atender(jid, persona, chamadas, seguidas=seguidas))
 
     # -- o Claude, trancado --------------------------------------------------------
 
-    async def _atender(self, jid: str, chamadas: list[tuple[str, str, dt.datetime]],
-                       aberta: bool = False, recados_da_hora: list[str] | None = None) -> None:
+    async def _atender(self, jid: str, persona: str, chamadas: list[Msg], seguidas: list[Msg] | None = None,
+                       recados_da_hora: list[str] | None = None) -> None:
+        seguidas = seguidas or []
+        nome = NOMES[persona]
         from claude_agent_sdk import (ClaudeAgentOptions, HookMatcher, create_sdk_mcp_server, query,
                                       tool)
 
@@ -317,16 +383,17 @@ class GrupoFamilia(threading.Thread):
 
         mandadas: list[str] = []
 
-        @tool("responder", "Manda uma mensagem no grupo (o \"🤖 Jarvis:\" entra sozinho).", {"texto": str})
+        @tool("responder", f"Manda uma mensagem no grupo (o \"{PREFIXOS[persona]}\" entra sozinho).", {"texto": str})
         async def responder(args):
             mandadas.append(str(args.get("texto") or ""))
-            self._mandar(jid, mandadas[-1])
+            self._mandar(jid, mandadas[-1], persona)
+            self._abrir(jid, persona, chamadas + seguidas)
             return _t("Mandado no grupo.")
 
-        @tool("nao_era_comigo", "A mensagem só falava SOBRE o Jarvis: avisa o dono, sem responder no grupo.",
-              {"quem": str, "resumo": str})
+        @tool("nao_era_comigo", f"A mensagem só falava SOBRE {'o' if persona == 'jarvis' else 'a'} {nome}: "
+              "avisa o dono, sem responder no grupo.", {"quem": str, "resumo": str})
         async def nao_era_comigo(args):
-            self._notificar(f"{args.get('quem') or 'Alguém'} falou do Jarvis no grupo: {args.get('resumo') or ''}",
+            self._notificar(f"{args.get('quem') or 'Alguém'} falou de {nome} no grupo: {args.get('resumo') or ''}",
                             self._nome(jid))
             return _t("O dono foi avisado.")
 
@@ -352,7 +419,9 @@ class GrupoFamilia(threading.Thread):
 
         casa.mkdir(parents=True, exist_ok=True)
         nome_grupo = self._nome(jid)
-        instrucoes = PERSONA.read_text(encoding="utf-8").replace("{usuario}", self._dono()) \
+        outra = next(p for p in PREFIXOS if p != persona)
+        instrucoes = PERSONA.read_text(encoding="utf-8").replace("{jeito}", JEITO[persona].read_text(encoding="utf-8")) \
+            .replace("{nome}", nome).replace("{outra}", NOMES[outra]).replace("{usuario}", self._dono()) \
             .replace("{grupo}", nome_grupo).replace("{casa}", str(casa)).replace("{recados}", recados.como_usar(MEMORIA))
         opcoes = ClaudeAgentOptions(
             cli_path=self.binario, cwd=str(casa), model=self.modelo,
@@ -363,7 +432,7 @@ class GrupoFamilia(threading.Thread):
             hooks={"PreToolUse": [HookMatcher(matcher=None, hooks=[trancar])]},
             max_turns=20, stderr=lambda _linha: None,
         )
-        conversa = "\n".join(f"[{q:%H:%M}] {quem}: {texto}" for quem, texto, q in self._mensagens(jid, 15))
+        conversa = "\n".join(f"[{m.quando:%H:%M}] {m.quem}: {m.texto}" for m in self._mensagens(jid, 15))
         agora = dt.datetime.now().astimezone()
         if recados_da_hora:
             pedido = (f"Agora: {agora:%A, %d/%m/%Y %H:%M} (fuso UTC{agora:%z}).\n\n"
@@ -385,10 +454,14 @@ class GrupoFamilia(threading.Thread):
                 self._notificar("Não consegui entregar no grupo o recado: " + "; ".join(recados_da_hora), nome_grupo)
             return
         pedido = (f"Agora: {agora:%A, %d/%m/%Y %H:%M} (fuso UTC{agora:%z}).\n\n"
-                  "As últimas mensagens do grupo, para contexto:\n" + conversa +
-                  ("\n\nVocê acabou de falar no grupo. As NOVAS (podem ser com você mesmo sem "
-                   "\"Jarvis\", ou só conversa entre eles; trate cada uma):\n" if aberta else
-                   "\n\nAs NOVAS que mencionam o Jarvis (trate cada uma):\n") +
-                  "\n".join(f"- {quem}: {texto}" for quem, texto, _ in chamadas))
+                  "As últimas mensagens do grupo, para contexto:\n" + conversa)
+        if chamadas:
+            pedido += (f"\n\nAs NOVAS que chamam você ({nome}) pelo nome (trate cada uma; cada "
+                       "pessoa recebe a resposta dela):\n" + "\n".join(f"- {m.quem}: {m.texto}" for m in chamadas))
+        if seguidas:
+            pedido += ("\n\nNOVAS de quem estava conversando com você, sem chamar o seu nome. Pode ser a "
+                       "continuação da conversa com você, ou já outro assunto com o grupo. Só responda se "
+                       "for claramente com você; na dúvida, fique quieto (não chame ferramenta nenhuma):\n"
+                       + "\n".join(f"- {m.quem}: {m.texto}" for m in seguidas))
         async for _ in query(prompt=pedido, options=opcoes):
             pass
