@@ -60,7 +60,7 @@ class WhatsAppFalso:
 
     def _consultar(self, _sql, args):
         jid, quantas = args
-        return list(reversed(self.msgs.get(jid, [])))[:quantas]
+        return [m + ("",) for m in reversed(self.msgs.get(jid, []))][:quantas]  # + tipo de mídia
 
     def chega(self, jid, quem, texto, eu=False):
         self.n += 1

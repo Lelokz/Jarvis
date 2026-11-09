@@ -320,6 +320,22 @@ aceito pelo Léo (o padrasto dele usa algo assim há meses).
     um dia depois), e escreve `historico.txt` na pasta do grupo para o Jarvis
     e a Friday procurarem. Binário anterior em `whatsapp-bridge.antes-historico`,
     código em `main.go.antes-historico`.
+  - Áudios dos grupos (09/11/2026, `jarvis/grupo/audios.py`): baixados pelo
+    `/api/download`, transcritos com o Whisper do Jarvis
+    (`Transcritor.transcrever_mensagem`, VAD ligado, com trava para dividir o
+    modelo com o microfone) e apagados na hora. O texto fica em
+    `transcricoes.json` na pasta do grupo. Áudio novo é transcrito antes de
+    decidir quem atende ("Jarvis, ..." falado chama). Os antigos vão um por
+    volta, do mais novo para o mais velho. O que não baixa mais fica marcado
+    e não é tentado de novo. **Nunca** usar a transcrição do próprio WhatsApp
+    (o Léo acha ruim).
+  - Reenvio de mídia (09/11/2026, na ponte): o link da mídia no servidor do
+    WhatsApp vence (áudio de 2 semanas dava 403). No 403/404/410 o
+    `/api/download` pede ao celular para reenviar (`SendMediaRetryReceipt` +
+    `events.MediaRetry`, até 40 s), baixa pelo caminho novo e o guarda no
+    banco. Celular sem responder: o Jarvis tenta aquele áudio de novo 1 h
+    depois, sem marcar como perdido. Binário anterior em
+    `whatsapp-bridge.antes-reenvio`, código em `main.go.antes-reenvio`.
 - **Sobe e desce com o Jarvis** (`jarvis.sh`), com `umask 077`: o banco e o
   log (`~/.local/share/jarvis/whatsapp-bridge.log`) só o Léo lê. Conectado por
   QR code em out/2026; a conexão fica salva (uma fonte diz que pode pedir QR

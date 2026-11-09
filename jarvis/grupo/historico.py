@@ -52,11 +52,13 @@ def _guardar(jid: str, estado: dict) -> None:
 class Puxador:
     """Um passo por vez (chamado de uma thread própria do grupo)."""
 
-    def __init__(self, whatsapp, quem: Callable[[str, bool, str], str], prefixos: tuple[str, ...] = ()) -> None:
+    def __init__(self, whatsapp, quem: Callable[[str, bool, str], str], prefixos: tuple[str, ...] = (),
+                 audios=None) -> None:
+        self.audios = audios  # jarvis/grupo/audios.py: o texto dos áudios (ou None)
         self.whatsapp = whatsapp
         self.quem = quem  # (remetente, é meu, texto) -> nome, o mesmo do grupo
         self.prefixos = prefixos  # "🤖 Jarvis:"...: o nome já vai na frente da linha
-        self._escrito: dict[str, int] = {}  # jid -> quantas mensagens o arquivo tinha
+        self._escrito: dict[str, tuple[int, int]] = {}  # jid -> quantas mensagens o arquivo tinha
 
     def _mais_antiga(self, jid: str) -> tuple[str, bool, dt.datetime] | None:
         linhas = self.whatsapp._consultar(
@@ -102,15 +104,18 @@ class Puxador:
 
     def escrever(self, jid: str, nome_grupo: str) -> bool:
         """Reescreve o historico.txt quando o número de mensagens muda."""
-        total = self.whatsapp._consultar("SELECT COUNT(*) FROM messages WHERE chat_jid = ?", (jid,))[0][0]
+        feitos = self.audios.todas(jid) if self.audios else {}
+        # Muda quando chega mensagem ou quando mais um áudio vira texto.
+        total = (self.whatsapp._consultar("SELECT COUNT(*) FROM messages WHERE chat_jid = ?", (jid,))[0][0],
+                 len(feitos))
         if self._escrito.get(jid) == total and (memorias.pasta_do_grupo(jid) / ARQUIVO).exists():
             return False
         linhas = self.whatsapp._consultar(
-            "SELECT sender, is_from_me, content, timestamp, media_type FROM messages "
+            "SELECT sender, is_from_me, content, timestamp, media_type, id FROM messages "
             "WHERE chat_jid = ? ORDER BY timestamp ASC", (jid,))
         nomes: dict[tuple[str, bool], str] = {}
         saida = [f"# Histórico do grupo \"{nome_grupo}\" (uma linha por mensagem, a mais antiga primeiro)", ""]
-        for s, eu, c, t, midia in linhas:
+        for s, eu, c, t, midia, i in linhas:
             texto = (c or "").replace("\r", "").replace("\n", " / ").strip()
             chave = (s or "", bool(eu))
             if texto and eu:
@@ -122,7 +127,9 @@ class Puxador:
                 if chave not in nomes:
                     nomes[chave] = self.quem(s or "", bool(eu), "")
                 nome = nomes[chave]
-            if midia:
+            if midia == "audio" and self.audios:
+                texto = self.audios.como_texto(feitos.get(str(i or "")))
+            elif midia:
                 texto = f"{MIDIA.get(midia, '(mídia)')} {texto}".strip()
             quando = self.whatsapp._quando(t).strftime("%d/%m/%Y %H:%M")
             saida.append(f"[{quando}] {nome}: {texto}")

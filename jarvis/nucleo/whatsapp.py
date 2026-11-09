@@ -297,6 +297,22 @@ class WhatsApp:
         except (requests.RequestException, ValueError):
             return False
 
+    def baixar(self, chat: str, id_msg: str) -> str | None:
+        """Baixa a mídia de uma mensagem pela ponte (os áudios dos grupos,
+        09/11/2026). Devolve o caminho do arquivo, ou None se não deu."""
+        self.erro_do_download = ""
+        try:
+            # 100 s: se o link venceu, a ponte pede ao celular para reenviar (até 40 s).
+            r = requests.post(self.api.rsplit("/", 1)[0] + "/download", timeout=100,
+                              json={"message_id": id_msg, "chat_jid": chat})
+            dados = r.json() if r.content else {}
+            if dados.get("success") and dados.get("path"):
+                return dados["path"]
+            self.erro_do_download = str(dados.get("message") or "")
+        except (requests.RequestException, ValueError) as e:
+            self.erro_do_download = f"ponte fora: {e}"
+        return None
+
     def enviar(self, jid: str, texto: str, arquivo: str | None = None) -> tuple[bool, str]:
         """`arquivo`: caminho absoluto de um arquivo para mandar junto (o texto
         vira a legenda). A ponte lê o arquivo do disco (`media_path`)."""

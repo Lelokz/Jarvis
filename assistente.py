@@ -1718,7 +1718,8 @@ def conversar(cfg: config.Config) -> int:
                 from jarvis.grupo.familia import GrupoFamilia
                 # O pedido ao dono vai para o WhatsApp dele se o app não estiver conectado.
                 grupo = GrupoFamilia(agente.whatsapp, agente.binario, cfg.agente.modelo_rapido or "sonnet",
-                                     app_desde=ponte.app_desde if ponte is not None else None)
+                                     app_desde=ponte.app_desde if ponte is not None else None,
+                                     transcrever=transcritor.transcrever_mensagem)
                 grupo.start()
             proximo_whats = time.monotonic() + cfg.whatsapp.intervalo_s
             proximo_desligar = 0.0

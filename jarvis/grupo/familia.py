@@ -39,7 +39,7 @@ from jarvis.agente import travas
 from jarvis.agente.agente import sim_ou_nao
 from jarvis.nucleo import aprovacoes, recados
 from jarvis.nucleo.atalhos import normalizar
-from jarvis.grupo import historico
+from jarvis.grupo import audios, historico
 
 PREFIXO = "🤖 Jarvis:"
 # A Friday também responde nos grupos (09/11/2026), com o mesmo jeito de
@@ -74,6 +74,7 @@ class Msg(NamedTuple):
     quando: dt.datetime
     id: str = ""       # o id da mensagem no WhatsApp (para o 👀)
     remetente: str = ""  # como o banco guarda quem mandou (número ou LID; o dono: o número dele)
+    midia: str = ""    # "audio", "image"... (o áudio vira texto: jarvis/grupo/audios.py)
 
 
 def chamou(texto: str) -> list[str]:
@@ -138,7 +139,7 @@ def trava_do_grupo(ferramenta: str, entrada: dict, casa: Path | None = None) -> 
 
 
 class GrupoFamilia(threading.Thread):
-    def __init__(self, whatsapp, binario: str, modelo: str, app_desde=None) -> None:
+    def __init__(self, whatsapp, binario: str, modelo: str, app_desde=None, transcrever=None) -> None:
         super().__init__(name="grupo-familia", daemon=True)
         self.whatsapp = whatsapp
         self.binario = binario
@@ -159,7 +160,9 @@ class GrupoFamilia(threading.Thread):
         # (grupo, persona) -> {remetente: até quando a conversa com ele fica aberta}
         self._aberta: dict[tuple[str, str], dict[str, float]] = {}
         # O histórico de cada grupo, puxado do celular e escrito em historico.txt.
-        self._puxador = historico.Puxador(whatsapp, self._quem, tuple(PREFIXOS.values()))
+        # Os áudios viram texto com o Whisper do Jarvis (`transcrever`: áudio -> texto).
+        self._audios = audios.Audios(whatsapp, transcrever) if transcrever else None
+        self._puxador = historico.Puxador(whatsapp, self._quem, tuple(PREFIXOS.values()), self._audios)
 
     def pegar(self) -> tuple[str, str] | None:
         try:
@@ -194,11 +197,17 @@ class GrupoFamilia(threading.Thread):
     def _mensagens(self, jid: str, quantas: int = 15) -> list[Msg]:
         """Mais antiga primeiro."""
         linhas = self.whatsapp._consultar(
-            "SELECT sender, is_from_me, content, timestamp, id FROM messages WHERE chat_jid = ? "
+            "SELECT sender, is_from_me, content, timestamp, id, media_type FROM messages WHERE chat_jid = ? "
             "ORDER BY timestamp DESC LIMIT ?", (jid, quantas))
-        return [Msg(self._quem(s or "", bool(eu), c or ""), c or "(mídia)", self.whatsapp._quando(t),
-                    str(i or ""), "eu" if eu else (s or ""))
-                for s, eu, c, t, i in reversed(linhas)]
+        feitos = self._audios.todas(jid) if self._audios else {}
+        saida = []
+        for s, eu, c, t, i, midia in reversed(linhas):
+            texto = c or "(mídia)"
+            if midia == "audio":
+                texto = audios.Audios.como_texto(feitos.get(str(i or "")))
+            saida.append(Msg(self._quem(s or "", bool(eu), c or ""), texto, self.whatsapp._quando(t),
+                             str(i or ""), "eu" if eu else (s or ""), midia or ""))
+        return saida
 
     def _mandar(self, jid: str, texto: str, persona: str = "jarvis") -> None:
         self.whatsapp.enviar(jid, f"{PREFIXOS[persona]} {texto.strip()}")
@@ -251,6 +260,9 @@ class GrupoFamilia(threading.Thread):
             for jid in self._jids():
                 try:
                     self._puxador.passo(jid)
+                    if self._audios:  # os áudios antigos, um por volta (o mais novo primeiro)
+                        for id_msg in self._audios.pendentes(jid)[:1]:
+                            self._audios.transcrever(jid, id_msg)
                     self._puxador.escrever(jid, self._nome(jid))
                 except Exception:
                     pass  # ponte fora, banco ocupado: na próxima volta
@@ -349,6 +361,10 @@ class GrupoFamilia(threading.Thread):
         if not novas:
             return
         self._visto[jid] = max(m.quando for m in novas)
+        # Áudio novo vira texto antes de tudo: "Jarvis, ..." falado chama igual ao escrito.
+        if self._audios:
+            novas = [m._replace(texto=audios.Audios.como_texto(self._audios.transcrever(jid, m.id)))
+                     if m.midia == "audio" and m.texto == "(áudio)" else m for m in novas]
         agora = time.time()
         # Para cada um (Jarvis e Friday): quem chamou pelo nome, e quem estava
         # conversando com ele e continuou (só essa pessoa, nunca o grupo todo).

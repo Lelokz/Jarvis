@@ -7,6 +7,7 @@ momento do import.
 
 from __future__ import annotations
 
+import threading
 import time
 from dataclasses import dataclass
 
@@ -49,6 +50,7 @@ class Transcritor:
         self.segundos_de_carga = time.monotonic() - inicio
         self._vocabulario: str | None = None
         self._hotwords: str | None = None
+        self._trava = threading.Lock()
 
     # ----------------------------------------------------------------------
 
@@ -109,7 +111,24 @@ class Transcritor:
     def vocabulario(self) -> str | None:
         return self._vocabulario
 
+    def transcrever_mensagem(self, audio: np.ndarray) -> str:
+        """Um áudio do WhatsApp (09/11/2026, os grupos). Diferente do microfone:
+        pode ter silêncio no meio e minutos de fala, então o VAD do próprio
+        Whisper fica ligado, e o contexto é de conversa, não de comando."""
+        with self._trava:
+            segmentos, _info = self._modelo.transcribe(
+                audio, language=self.cfg.idioma, beam_size=self.cfg.beam_size,
+                initial_prompt="Mensagem de voz num grupo de WhatsApp. Nomes: Jarvis, Friday.",
+                hotwords="Jarvis, Friday", vad_filter=True, condition_on_previous_text=False)
+            return " ".join(s.text.strip() for s in segmentos).strip()
+
     def _rodar(self, audio: np.ndarray):
+        # A trava (09/11/2026): os áudios dos grupos usam o mesmo modelo, em outra
+        # thread. Um áudio por vez; o microfone espera no máximo o que estiver rodando.
+        with self._trava:
+            return self._rodar_sem_trava(audio)
+
+    def _rodar_sem_trava(self, audio: np.ndarray):
         segmentos, info = self._modelo.transcribe(
             audio,
             language=self.cfg.idioma,
