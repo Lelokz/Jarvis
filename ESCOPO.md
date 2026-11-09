@@ -855,6 +855,14 @@ jogos ele fica preso no meio) no HD, olha a imagem, responde em português e
 apaga (`olhar apagar`). Só quando o Léo pede; tela bloqueada = sem print. A
 instrução está no `CLAUDE.md` da casa.
 
+**Backup do mês (09/11/2026):** `python -m jarvis.monitor.backup` (timer
+`jarvis-backup`, dia 1º às 3h, Persistent). Junta só o que é do Léo (o que o
+Jarvis/Friday sabem, memórias do Claude Code, configurações do Mint, senhas e
+chaves), escreve o "Relatório - <mês>.md" pelo `claude -p` (pro Léo e pros
+dois), tranca (X25519 + AES-GCM; o PC só tem a chave pública, a privada vai
+pro Drive trancada com a senha dele) e manda pelo rclone pra "NOVA - Backup"
+(ficam 3). Restaurar: `docs/COMO RESTAURAR.md`. Teste: `testes/testar_backup.py`.
+
 Arquivos editáveis à mão: `config.toml` (frases, limites, modelo, esforço),
 `atalhos.toml` (vocabulário do Whisper e nomes que o Léo usa),
 `~/.local/share/jarvis/casa/CLAUDE.md` (o que o Jarvis sabe do Léo e da
