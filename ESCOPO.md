@@ -848,6 +848,13 @@ O que é do **corpo** e funciona sem o Claude:
 | (chegou mensagem no WhatsApp) | **avisa sozinho**: "Fulano mandou: tu vem jantar? Quer responder?", e fica ouvindo |
 | (o Claude perguntou algo) | a próxima fala é a resposta; em 10 s sem resposta, ele não faz |
 
+**Olhar a tela (09/11/2026):** "o que tá escrito aqui?", "traduz isso",
+"que erro é esse?". O Claude roda `python -m jarvis.nucleo.olhar`, que tira
+print da tela INTEIRA (todos os monitores, nunca só em volta do mouse: nos
+jogos ele fica preso no meio) no HD, olha a imagem, responde em português e
+apaga (`olhar apagar`). Só quando o Léo pede; tela bloqueada = sem print. A
+instrução está no `CLAUDE.md` da casa.
+
 Arquivos editáveis à mão: `config.toml` (frases, limites, modelo, esforço),
 `atalhos.toml` (vocabulário do Whisper e nomes que o Léo usa),
 `~/.local/share/jarvis/casa/CLAUDE.md` (o que o Jarvis sabe do Léo e da
