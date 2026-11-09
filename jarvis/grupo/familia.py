@@ -1,4 +1,6 @@
-"""O Jarvis no grupo da família do WhatsApp (23/10/2026, pedido do Léo).
+"""O Jarvis nos grupos do WhatsApp (23/10/2026, pedido do Léo; começou só
+no grupo da família e, desde 09/11/2026, vale para quantos grupos ele marcar
+nos Ajustes: cada um com a própria memória, conversa aberta e limite).
 
 Quem está no grupo conversa com o Jarvis escrevendo "Jarvis" em qualquer
 parte da mensagem; ele lê pelo contexto se é com ele. Depois que ele
@@ -46,8 +48,9 @@ from jarvis import memorias  # noqa: E402
 CASA = memorias.GRUPOS  # trocado por grupo em _atender (pasta_do_grupo)
 MEMORIA = "memoria.md"
 NOVIDADES = Path.home() / ".local/share/jarvis/novidades.jsonl"
-# O limite do Claude é do dono: a família não pode gastar tudo.
-MAX_POR_HORA = 30
+# O limite do Claude é do dono: a família não pode gastar tudo. Por grupo
+# (decisão do Léo, 09/11/2026: 50 por grupo).
+MAX_POR_HORA = 50
 # Depois de cada resposta no grupo, as mensagens seguintes vão para o Claude
 # mesmo sem "Jarvis", e ele decide se são com ele.
 CONVERSA_ABERTA_S = 5 * 60
@@ -118,9 +121,11 @@ class GrupoFamilia(threading.Thread):
         self._resposta_usada = dt.datetime.now()
         # Para o laço principal: ("executar", texto) e ("notificar", texto).
         self._saidas: queue.Queue[tuple[str, str]] = queue.Queue()
-        self._chamadas: deque[float] = deque()
-        self._visto = dt.datetime.now()
-        self._aberta_ate = 0.0
+        # Por grupo (jid): as respostas da última hora, até onde já leu e até
+        # quando a conversa fica aberta.
+        self._chamadas: dict[str, deque[float]] = {}
+        self._visto: dict[str, dt.datetime] = {}
+        self._aberta_ate: dict[str, float] = {}
 
     def pegar(self) -> tuple[str, str] | None:
         try:
@@ -130,9 +135,14 @@ class GrupoFamilia(threading.Thread):
 
     # -- o grupo ----------------------------------------------------------------
 
-    def _jid(self) -> str:
-        a = ajustes.ler()
-        return a["grupo_jid"] if a["grupo_ligado"] and a["grupo_jid"] else ""
+    def _jids(self) -> list[str]:
+        return ajustes.grupos_ativos()
+
+    def _nome(self, jid: str) -> str:
+        try:
+            return self.whatsapp.nome_de(jid) or "grupo"
+        except Exception:
+            return "grupo"
 
     def _dono(self) -> str:
         return ajustes.nome_de_quem_usa() or "dono"
@@ -157,18 +167,18 @@ class GrupoFamilia(threading.Thread):
 
     def _mandar(self, jid: str, texto: str) -> None:
         self.whatsapp.enviar(jid, f"{PREFIXO} {texto.strip()}")
-        self._aberta_ate = time.time() + CONVERSA_ABERTA_S
+        self._aberta_ate[jid] = time.time() + CONVERSA_ABERTA_S
 
-    def _notificar(self, texto: str) -> None:
+    def _notificar(self, texto: str, titulo: str = "Grupo do WhatsApp") -> None:
         """Para o dono: notificação no PC e no app (nada de WhatsApp)."""
         try:   # o aviso do PC (Linux); sem ele (Windows), o app e a janela avisam do mesmo jeito
-            subprocess.run(["notify-send", "-a", "Jarvis", "-i", "jarvis-atomo", "Grupo da família", texto],
+            subprocess.run(["notify-send", "-a", "Jarvis", "-i", "jarvis-atomo", titulo, texto],
                            check=False, timeout=10)
         except (OSError, subprocess.TimeoutExpired):
             pass
         NOVIDADES.touch(mode=0o600, exist_ok=True)
         with NOVIDADES.open("a", encoding="utf-8") as f:
-            f.write(json.dumps({"id": time.time_ns() // 1_000_000, "titulo": "Grupo da família",
+            f.write(json.dumps({"id": time.time_ns() // 1_000_000, "titulo": titulo,
                                 "texto": texto, "tipo": "grupo"}, ensure_ascii=False) + "\n")
         self._saidas.put(("notificar", texto))
 
@@ -204,7 +214,8 @@ class GrupoFamilia(threading.Thread):
             if not eu:
                 return
             ate = dt.datetime.fromtimestamp(a["expira_em"]).strftime("%H:%M")
-            ok, _ = self.whatsapp.enviar(eu, f"{PREFIXO} {a['quem']} pediu no grupo da família: "
+            onde = f"no grupo \"{self._nome(a['jid'])}\"" if a.get("jid") else "no grupo"
+            ok, _ = self.whatsapp.enviar(eu, f"{PREFIXO} {a['quem']} pediu {onde}: "
                                              f"\"{a['pedido']}\". O app não está conectado, então pergunto "
                                              f"aqui: responde *sim* para liberar ou *não* para recusar "
                                              f"(vale até {ate}).")
@@ -236,48 +247,62 @@ class GrupoFamilia(threading.Thread):
                 return
 
     def _uma_volta(self) -> None:
-        jid = self._jid()
+        jids = self._jids()
         self._aprovacoes_pelo_whatsapp()
         for a in aprovacoes.resolvidas("grupo"):
+            # O pedido volta para o grupo de onde veio (os antigos, sem jid: o primeiro).
+            jid = a.get("jid") or (jids[0] if jids else "")
             if not jid:
                 continue
+            nome = self._nome(jid)
             if a["estado"] == "aprovado":
                 self._saidas.put(("executar",
-                    f"[Pedido de {a['quem']} no grupo da família do WhatsApp, APROVADO pelo "
+                    f"[Pedido de {a['quem']} no grupo \"{nome}\" do WhatsApp, APROVADO pelo "
                     f"{self._dono()} no celular] {a['pedido']}\n"
                     f"Faça o pedido. Depois responda no grupo com a ferramenta whatsapp_mandar "
-                    f"(jid {jid}, nome \"grupo da família\"), começando o texto com \"{PREFIXO}\"."))
+                    f"(jid {jid}, nome \"{nome}\"), começando o texto com \"{PREFIXO}\"."))
             else:
                 motivo = "não liberou" if a["estado"] == "recusado" else "não respondeu a tempo"
                 self._mandar(jid, f"O {self._dono()} {motivo} o pedido de {a['quem']}.")
-        if not jid:
-            self._visto = dt.datetime.now()
+        for jid in jids:
+            try:
+                self._volta_do_grupo(jid)
+            except Exception:
+                pass  # um grupo com problema não trava os outros
+        # Grupo desmarcado esquece onde parou: se voltar, começa do zero (sem responder o velho).
+        for jid in set(self._visto) - set(jids):
+            self._visto.pop(jid, None)
+
+    def _volta_do_grupo(self, jid: str) -> None:
+        if jid not in self._visto:  # grupo novo (ou religado): só o que chegar daqui pra frente
+            self._visto[jid] = dt.datetime.now()
             return
         # O relógio interno: recados que ele deixou para si mesmo (jarvis/nucleo/recados.py),
         # dentro da memória do grupo.
         venceram = recados.vencidos(memorias.pasta_do_grupo(jid) / MEMORIA)
         if venceram:
             asyncio.run(self._atender(jid, [], recados_da_hora=venceram))
-        novas = [m for m in self._mensagens(jid, 20) if m[2] > self._visto]
+        novas = [m for m in self._mensagens(jid, 20) if m[2] > self._visto[jid]]
         if not novas:
             return
-        self._visto = max(m[2] for m in novas)
+        self._visto[jid] = max(m[2] for m in novas)
         novas = [m for m in novas if not m[1].startswith(PREFIXO)]
         chamadas = [m for m in novas if "jarvis" in normalizar(m[1])]
-        aberta = time.time() < self._aberta_ate
+        aberta = time.time() < self._aberta_ate.get(jid, 0.0)
         if aberta:
             chamadas = novas  # pode ser a resposta ao que ele perguntou
         if not chamadas:
             return
         agora = time.time()
-        while self._chamadas and self._chamadas[0] < agora - 3600:
-            self._chamadas.popleft()
-        if len(self._chamadas) >= MAX_POR_HORA:
+        feitas = self._chamadas.setdefault(jid, deque())
+        while feitas and feitas[0] < agora - 3600:
+            feitas.popleft()
+        if len(feitas) >= MAX_POR_HORA:
             if any("jarvis" in normalizar(m[1]) for m in chamadas):
                 # Direto, sem _mandar: não reabre a conversa.
                 self.whatsapp.enviar(jid, f"{PREFIXO} Por agora já conversei bastante; daqui a pouco eu volto.")
             return
-        self._chamadas.append(agora)
+        feitas.append(agora)
         asyncio.run(self._atender(jid, chamadas, aberta))
 
     # -- o Claude, trancado --------------------------------------------------------
@@ -301,13 +326,14 @@ class GrupoFamilia(threading.Thread):
         @tool("nao_era_comigo", "A mensagem só falava SOBRE o Jarvis: avisa o dono, sem responder no grupo.",
               {"quem": str, "resumo": str})
         async def nao_era_comigo(args):
-            self._notificar(f"{args.get('quem') or 'Alguém'} falou do Jarvis no grupo: {args.get('resumo') or ''}")
+            self._notificar(f"{args.get('quem') or 'Alguém'} falou do Jarvis no grupo: {args.get('resumo') or ''}",
+                            self._nome(jid))
             return _t("O dono foi avisado.")
 
         @tool("pedir_ao_dono", "Pede ao dono, no celular dele, para liberar um pedido que mexe no PC ou nas "
               "coisas dele. Se ele aprovar, o Jarvis do PC faz.", {"quem": str, "pedido": str})
         async def pedir_ao_dono(args):
-            a = aprovacoes.criar(str(args.get("quem") or "alguém"), str(args.get("pedido") or ""))
+            a = aprovacoes.criar(str(args.get("quem") or "alguém"), str(args.get("pedido") or ""), jid=jid)
             self._saidas.put(("aprovacao", a["id"]))
             return _t(f"Pedi para o {self._dono()} liberar (vale por 5 minutos). Avise no grupo.")
 
@@ -321,11 +347,11 @@ class GrupoFamilia(threading.Thread):
                 return {}
             return {"hookSpecificOutput": {
                 "hookEventName": "PreToolUse", "permissionDecision": "deny",
-                "permissionDecisionReason": f"No grupo da família você não pode {motivo}. Se a pessoa "
+                "permissionDecisionReason": f"Neste grupo você não pode {motivo}. Se a pessoa "
                                             "precisa disso, use pedir_ao_dono; senão, resolva de outro jeito."}}
 
         casa.mkdir(parents=True, exist_ok=True)
-        nome_grupo = self.whatsapp.nome_de(jid) if hasattr(self.whatsapp, "nome_de") else "grupo"
+        nome_grupo = self._nome(jid)
         instrucoes = PERSONA.read_text(encoding="utf-8").replace("{usuario}", self._dono()) \
             .replace("{grupo}", nome_grupo).replace("{casa}", str(casa)).replace("{recados}", recados.como_usar(MEMORIA))
         opcoes = ClaudeAgentOptions(
@@ -356,7 +382,7 @@ class GrupoFamilia(threading.Thread):
                                      "`responder` chega. Mande agora o recado com `responder`.", options=opcoes):
                     pass
             if not mandadas:
-                self._notificar("Não consegui entregar no grupo o recado: " + "; ".join(recados_da_hora))
+                self._notificar("Não consegui entregar no grupo o recado: " + "; ".join(recados_da_hora), nome_grupo)
             return
         pedido = (f"Agora: {agora:%A, %d/%m/%Y %H:%M} (fuso UTC{agora:%z}).\n\n"
                   "As últimas mensagens do grupo, para contexto:\n" + conversa +

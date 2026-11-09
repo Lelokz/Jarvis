@@ -152,7 +152,7 @@ def criar_servidor(mostrar: Callable[[str, str], None], whatsapp,
             # pergunta com o nome e o final do número (20/10/2026: foi para uma
             # "Cris" de grupo no lugar do "Chris" salvo, sem perguntar).
             from jarvis import ajustes
-            if not whatsapp.esta_salvo(jid) and jid != ajustes.ler()["grupo_jid"]:
+            if not whatsapp.esta_salvo(jid) and jid not in ajustes.ler()["grupos"]:
                 from jarvis.agente.agente import sim_ou_nao
                 # O sim tem que ser uma RESPOSTA, depois do pedido: o "manda pro
                 # Cris" do próprio pedido não conta como confirmação.

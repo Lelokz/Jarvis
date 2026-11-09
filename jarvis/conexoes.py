@@ -65,8 +65,8 @@ def estado(cfg: Config, ajustes: dict, conectados: set[str]) -> list[dict]:
     n = _atalhos()
     return [
         item("whatsapp", "conectado" if whats else "desligado"),
-        item("grupo", "conectado" if ajustes.get("grupo_jid") and ajustes.get("grupo_ligado")
-             else "pronto" if ajustes.get("grupo_jid") else "desligado"),
+        item("grupo", "conectado" if ajustes.get("grupos") and ajustes.get("grupo_ligado")
+             else "pronto" if ajustes.get("grupos") else "desligado"),
         item("celular", "conectado" if "celular-app" in conectados else "pronto" if remoto else "desligado"),
         item("relogio", "conectado" if "relogio" in conectados else "pronto" if remoto else "desligado"),
         item("fora", "conectado" if fora else "desligado"),

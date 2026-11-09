@@ -1,5 +1,5 @@
 """Os ajustes da janela (beta 0.6.5) que não são som: o volume da voz do
-Jarvis no PC, o nome de quem usa e o grupo da família. Ficam em
+Jarvis no PC, o nome de quem usa e os grupos do WhatsApp. Ficam em
 ~/.local/share/jarvis/ajustes.json; quem usa lê na hora (o grupo roda em
 outra thread).
 """
@@ -14,8 +14,9 @@ ARQUIVO = Path.home() / ".local/share/jarvis/ajustes.json"
 # 100 = o volume de sempre, que é o TETO: o volume já machucou o ouvido do
 # Léo uma vez (HISTORIA). Daqui só se abaixa.
 PADRAO: dict[str, Any] = {"volume_voz": 100, "nome": "",
-                          # O Jarvis no grupo da família do WhatsApp (jarvis/grupo).
-                          "grupo_jid": "", "grupo_ligado": False,
+                          # Os grupos do WhatsApp onde o Jarvis responde (jarvis/grupo); quantos
+                          # o Léo quiser (09/11/2026; antes era um só, o "grupo_jid").
+                          "grupos": [], "grupo_ligado": False,
                           # Onde o instalador pôs as vozes dubladas (jarvis/vozes.py).
                           "pasta_vozes": "",
                           # Os programas das vozes dubladas, quando foi o instalador que pôs.
@@ -34,18 +35,26 @@ def nome_de_quem_usa() -> str:
     return ler()["nome"]
 
 
+def grupos_ativos() -> list[str]:
+    """Os grupos onde o Jarvis responde agora (nenhum com a chave desligada)."""
+    a = ler()
+    return a["grupos"] if a["grupo_ligado"] else []
+
+
 def ler() -> dict[str, Any]:
     try:
         dados = json.loads(ARQUIVO.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         dados = {}
-    saida = dict(PADRAO)
+    saida = dict(PADRAO, grupos=[])
     if isinstance(dados, dict):
         volume = dados.get("volume_voz")
         if isinstance(volume, (int, float)) and not isinstance(volume, bool):
             saida["volume_voz"] = int(min(100, max(0, volume)))
-        if isinstance(dados.get("grupo_jid"), str) and (not dados["grupo_jid"] or dados["grupo_jid"].endswith("@g.us")):
-            saida["grupo_jid"] = dados["grupo_jid"]
+        grupos = dados.get("grupos")
+        if not isinstance(grupos, list):  # o arquivo antigo, de um grupo só
+            grupos = [dados["grupo_jid"]] if isinstance(dados.get("grupo_jid"), str) else []
+        saida["grupos"] = list(dict.fromkeys(g for g in grupos if isinstance(g, str) and g.endswith("@g.us")))
         if isinstance(dados.get("grupo_ligado"), bool):
             saida["grupo_ligado"] = dados["grupo_ligado"]
         if isinstance(dados.get("programas_vozes"), str):

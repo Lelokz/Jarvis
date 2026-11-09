@@ -85,7 +85,7 @@ Item {
     // `precisa`: a que tem que estar conectada antes (o cartão mostra "Precisa do…").
     readonly property var conexoes: [
         { id: "whatsapp", nome: "WhatsApp", icone: "whats", descricao: "Ler e mandar mensagens, e avisar quem te escreveu." },
-        { id: "grupo", nome: "Grupo do WhatsApp", icone: "grupo", precisa: "whatsapp", descricao: "Responde no grupo da família quando chamam o Jarvis." },
+        { id: "grupo", nome: "Grupos do WhatsApp", icone: "grupo", precisa: "whatsapp", descricao: "Responde nos grupos que você marcar quando chamam o Jarvis." },
         { id: "fora", nome: "Fora de casa", icone: "globo", descricao: "O celular falar com o PC, em casa ou na rua (Tailscale)." },
         { id: "celular", nome: "Celular", icone: "celular", precisa: "fora", descricao: "O app NOVA: conversar e receber avisos pelo celular." },
         { id: "relogio", nome: "Relógio", icone: "relogio", precisa: "celular", descricao: "Falar pelo relógio (Wear OS)." },
@@ -1298,7 +1298,7 @@ Item {
                     Text {
                         width: parent.width
                         wrapMode: Text.WordWrap
-                        text: "Escolhe o grupo onde o Jarvis responde quando alguém escreve \"Jarvis, …\"."
+                        text: "Marca os grupos onde o Jarvis responde quando alguém escreve \"Jarvis, …\". Quantos quiser."
                         color: raiz.tema.textoFraco; font.family: raiz.tema.familia; font.pixelSize: 13
                         bottomPadding: 8
                     }
@@ -1307,16 +1307,18 @@ Item {
                         Item {
                             required property var modelData
                             required property int index
-                            readonly property bool sim: modelData.jid === raiz.cp.escolhido
+                            // Vários grupos (09/11/2026): caixinha de marcar, não bolinha de escolher um.
+                            readonly property bool sim: (raiz.cp.escolhidos || []).indexOf(modelData.jid) >= 0
                             width: parent.width
                             height: 44
                             Rectangle {
                                 anchors.verticalCenter: parent.verticalCenter
-                                x: 4; width: 18; height: 18; radius: 9
-                                color: "transparent"
+                                x: 4; width: 18; height: 18; radius: 5
+                                color: sim ? raiz.tema.persona : "transparent"
                                 border.width: 2
                                 border.color: sim ? raiz.tema.persona : raiz.tema.tracoForte
-                                Rectangle { anchors.centerIn: parent; width: 8; height: 8; radius: 4; color: raiz.tema.persona; visible: sim }
+                                Text { anchors.centerIn: parent; text: "✓"; visible: sim; color: "white"
+                                       font.family: raiz.tema.familia; font.pixelSize: 12; font.bold: true }
                             }
                             Text {
                                 x: 34
@@ -1347,22 +1349,22 @@ Item {
                         x: 18
                         anchors.verticalCenter: parent.verticalCenter
                         spacing: 3
-                        Text { text: "Responder no grupo"; color: raiz.tema.texto; font.family: raiz.tema.familia; font.pixelSize: 14 }
-                        Text { text: raiz.cp.escolhido ? "Liga e desliga quando quiser." : "Escolhe um grupo primeiro."
+                        Text { text: "Responder nos grupos"; color: raiz.tema.texto; font.family: raiz.tema.familia; font.pixelSize: 14 }
+                        Text { text: (raiz.cp.escolhidos || []).length ? "Liga e desliga todos de uma vez." : "Marca um grupo primeiro."
                                color: raiz.tema.textoFraco; font.family: raiz.tema.familia; font.pixelSize: 12 }
                     }
                     Interruptor {
                         anchors.right: parent.right
                         anchors.rightMargin: 18
                         anchors.verticalCenter: parent.verticalCenter
-                        opacity: raiz.cp.escolhido ? 1 : 0.4
+                        opacity: (raiz.cp.escolhidos || []).length ? 1 : 0.4
                         ligado: !!raiz.cp.ligado
-                        onTrocou: if (raiz.cp.escolhido) { raiz.mudarGrupo(!ligado); raiz.pedirConexao("grupo", "estado", "") }
+                        onTrocou: if ((raiz.cp.escolhidos || []).length) { raiz.mudarGrupo(!ligado); raiz.pedirConexao("grupo", "estado", "") }
                     }
                 }
             }
             Nota { visible: raiz.cp.estado !== "falta"
-                   texto: "No grupo ele conversa, pesquisa e anota recados. O que mexe nas tuas coisas (arquivos, mensagens, o PC) só acontece com o teu Sim no celular." }
+                   texto: "Nos grupos ele conversa, pesquisa e anota recados (cada grupo com a própria memória, até 50 respostas por hora em cada um). O que mexe nas tuas coisas (arquivos, mensagens, o PC) só acontece com o teu Sim no celular." }
         }
     }
 

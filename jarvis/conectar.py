@@ -150,10 +150,15 @@ def _grupo(cfg: Config, acao: str, valor: str, _conectados) -> dict:
     banco = Path(cfg.whatsapp.banco).expanduser()
     if not banco.is_file():
         return {"estado": "falta", "detalhe": "Conecta o WhatsApp primeiro."}
+    # "escolher" marca ou desmarca um grupo: quantos o Léo quiser (09/11/2026).
+    # O primeiro marcado já liga; sem nenhum, desliga.
     if acao == "escolher" and valor.endswith("@g.us"):
-        ajustes.mudar(grupo_jid=valor, grupo_ligado=True)
+        grupos = ajustes.ler()["grupos"]
+        grupos = [g for g in grupos if g != valor] if valor in grupos else grupos + [valor]
+        ajustes.mudar(grupos=grupos, **({"grupo_ligado": True} if len(grupos) == 1 and valor in grupos
+                                       else {"grupo_ligado": False} if not grupos else {}))
     elif acao == "desconectar":
-        ajustes.mudar(grupo_jid="", grupo_ligado=False)
+        ajustes.mudar(grupos=[], grupo_ligado=False)
     con = sqlite3.connect(f"file:{banco}?mode=ro", uri=True, timeout=3)
     try:
         linhas = con.execute("SELECT jid, name FROM chats WHERE jid LIKE '%@g.us' AND name != '' "
@@ -161,10 +166,23 @@ def _grupo(cfg: Config, acao: str, valor: str, _conectados) -> dict:
     finally:
         con.close()
     dados = ajustes.ler()
-    return {"estado": "conectado" if dados["grupo_jid"] and dados["grupo_ligado"]
-            else "pronto" if dados["grupo_jid"] else "desligado",
+    escolhidos = dados["grupos"]
+    # Um grupo marcado que saiu dos 40 mais recentes continua aparecendo (senão não dava pra desmarcar).
+    faltam = [j for j in escolhidos if j not in {j for j, _ in linhas}]
+    if faltam:
+        con = sqlite3.connect(f"file:{banco}?mode=ro", uri=True, timeout=3)
+        try:
+            nomes = dict(con.execute(f"SELECT jid, name FROM chats WHERE jid IN ({','.join('?' * len(faltam))})",
+                                     faltam).fetchall())
+        finally:
+            con.close()
+        linhas = [(j, nomes.get(j) or "Grupo") for j in faltam] + list(linhas)
+    return {"estado": "conectado" if escolhidos and dados["grupo_ligado"]
+            else "pronto" if escolhidos else "desligado",
             "grupos": [{"jid": j, "nome": n} for j, n in linhas],
-            "escolhido": dados["grupo_jid"], "ligado": dados["grupo_ligado"]}
+            "escolhidos": escolhidos, "ligado": dados["grupo_ligado"],
+            # O app antigo (até a beta 0.18.0) só entende um.
+            "escolhido": escolhidos[0] if escolhidos else ""}
 
 
 # -- Fora de casa (Tailscale) e celular -----------------------------------------

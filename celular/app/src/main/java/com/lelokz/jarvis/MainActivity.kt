@@ -374,7 +374,7 @@ private fun RetanguloAtualizacao(modelo: Jarvis, modifier: Modifier) {
     }
 }
 
-/** O pedido de alguém do grupo da família que precisa do Sim (beta 0.13.0). */
+/** O pedido de alguém de um grupo do WhatsApp que precisa do Sim (beta 0.13.0). */
 @Composable
 private fun AvisoPedido(modelo: Jarvis, quem: String, pedido: String) {
     BackHandler { modelo.responderPedido(false) }
@@ -392,7 +392,7 @@ private fun AvisoPedido(modelo: Jarvis, quem: String, pedido: String) {
             Spacer(Modifier.height(10.dp))
             Text("\"$pedido\"", color = Texto, fontSize = 15.sp, lineHeight = 21.sp)
             Spacer(Modifier.height(6.dp))
-            Text("Veio do grupo da família. Se você liberar, o Jarvis do PC faz.",
+            Text("Veio de um grupo do WhatsApp. Se você liberar, o Jarvis do PC faz.",
                 color = TextoMedio, fontSize = 13.sp, lineHeight = 19.sp)
             Spacer(Modifier.height(20.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -1489,7 +1489,7 @@ private data class InfoConexao(val id: String, val nome: String, val descricao: 
 // `precisa`: a que tem que estar conectada antes (o cartão mostra "Precisa do…").
 private val infoConexoes = listOf(
     InfoConexao("whatsapp", "WhatsApp", "Ler e mandar mensagens, e avisar quem te escreveu.", Icones.whats),
-    InfoConexao("grupo", "Grupo do WhatsApp", "Responde no grupo da família quando chamam o Jarvis.", Icones.grupo, "whatsapp"),
+    InfoConexao("grupo", "Grupos do WhatsApp", "Responde nos grupos que você marcar quando chamam o Jarvis.", Icones.grupo, "whatsapp"),
     InfoConexao("fora", "Fora de casa", "O celular falar com o PC, em casa ou na rua (Tailscale).", Icones.globo),
     InfoConexao("celular", "Celular", "Este celular.", Icones.celular),
     InfoConexao("relogio", "Relógio", "Falar pelo relógio (Wear OS).", Icones.relogio, "celular"),
@@ -1766,16 +1766,19 @@ private fun PassoWhatsapp(modelo: Jarvis, e: org.json.JSONObject, estado: String
 
 @Composable
 private fun PassoGrupo(modelo: Jarvis, e: org.json.JSONObject) {
-    val escolhido = e.optString("escolhido")
+    // Vários grupos (beta 0.18.5): tocar marca ou desmarca, quantos quiser.
+    val marcados = e.optJSONArray("escolhidos")
+    val escolhidos = if (marcados != null) (0 until marcados.length()).map { marcados.optString(it) }.toSet()
+                     else setOf(e.optString("escolhido")).filter { it.isNotEmpty() }.toSet()  // PC antigo
     val ligado = e.optBoolean("ligado")
     val grupos = e.optJSONArray("grupos")
-    LinhaDeAjuste("Responder no grupo", if (escolhido.isEmpty()) "Escolhe um grupo primeiro." else "Liga e desliga quando quiser.",
+    LinhaDeAjuste("Responder nos grupos", if (escolhidos.isEmpty()) "Marca um grupo primeiro." else "Liga e desliga todos de uma vez.",
         ultima = true) {
-        Switch(checked = ligado, enabled = escolhido.isNotEmpty(), onCheckedChange = { modelo.ligarGrupo(it) },
+        Switch(checked = ligado, enabled = escolhidos.isNotEmpty(), onCheckedChange = { modelo.ligarGrupo(it) },
             colors = SwitchDefaults.colors(checkedTrackColor = Azul, checkedThumbColor = Color.White,
                 uncheckedTrackColor = Superficie2, uncheckedThumbColor = Fraco, uncheckedBorderColor = TracoForte))
     }
-    Text("Escolhe o grupo onde o Jarvis responde quando alguém escreve \"Jarvis, …\".", color = Fraco, fontSize = 13.sp,
+    Text("Marca os grupos onde o Jarvis responde quando alguém escreve \"Jarvis, …\". Quantos quiser.", color = Fraco, fontSize = 13.sp,
         modifier = Modifier.padding(top = 8.dp, bottom = 8.dp))
     if (grupos == null) { Espera("procurando os teus grupos…"); return }
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Superficie)
@@ -1783,13 +1786,14 @@ private fun PassoGrupo(modelo: Jarvis, e: org.json.JSONObject) {
         for (i in 0 until grupos.length()) {
             val g = grupos.optJSONObject(i) ?: continue
             val jid = g.optString("jid")
-            val sim = jid == escolhido
+            val sim = jid in escolhidos
             if (i > 0) Box(Modifier.fillMaxWidth().height(1.dp).background(Traco))
-            Row(Modifier.fillMaxWidth().clickable(enabled = !sim) { modelo.pedirConexao("grupo", "escolher", jid) }
+            Row(Modifier.fillMaxWidth().clickable { modelo.pedirConexao("grupo", "escolher", jid) }
                 .padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(18.dp).clip(CircleShape).border(2.dp, if (sim) Azul else TracoForte, CircleShape),
-                    contentAlignment = Alignment.Center) {
-                    if (sim) Box(Modifier.size(8.dp).clip(CircleShape).background(Azul))
+                val caixa = RoundedCornerShape(5.dp)
+                Box(Modifier.size(18.dp).clip(caixa).background(if (sim) Azul else Color.Transparent)
+                    .border(2.dp, if (sim) Azul else TracoForte, caixa), contentAlignment = Alignment.Center) {
+                    if (sim) Text("✓", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                 }
                 Spacer(Modifier.width(12.dp))
                 Text(g.optString("nome"), color = if (sim) Texto else TextoMedio, fontSize = 14.sp, maxLines = 1,
@@ -1797,11 +1801,12 @@ private fun PassoGrupo(modelo: Jarvis, e: org.json.JSONObject) {
             }
         }
     }
-    if (escolhido.isNotEmpty()) {
+    if (escolhidos.isNotEmpty()) {
         Spacer(Modifier.height(12.dp))
         BotaoDesconectar { modelo.pedirConexao("grupo", "desconectar") }
     }
-    NotaDaConexao("No grupo ele conversa, pesquisa e anota recados. O que mexe nas tuas coisas (arquivos, mensagens, " +
+    NotaDaConexao("Nos grupos ele conversa, pesquisa e anota recados (cada grupo com a própria memória, até 50 " +
+        "respostas por hora em cada um). O que mexe nas tuas coisas (arquivos, mensagens, " +
         "o PC) só acontece com o teu Sim neste celular.")
 }
 

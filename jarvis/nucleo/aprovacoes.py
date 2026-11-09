@@ -35,11 +35,12 @@ def _gravar(lista: list[dict]) -> None:
                        encoding="utf-8")
 
 
-def criar(quem: str, pedido: str, origem: str = "grupo") -> dict:
+def criar(quem: str, pedido: str, origem: str = "grupo", jid: str = "") -> dict:
+    """jid: o grupo de onde veio o pedido (a resposta volta para ele)."""
     with _trava:
         aprovacao = {"id": secrets.token_hex(8), "quem": quem[:60], "pedido": pedido[:500],
-                     "origem": origem, "criado": time.time(), "expira_em": time.time() + VALIDADE_S,
-                     "estado": "esperando"}
+                     "origem": origem, "jid": jid, "criado": time.time(),
+                     "expira_em": time.time() + VALIDADE_S, "estado": "esperando"}
         _gravar(_ler() + [aprovacao])
         return aprovacao
 
