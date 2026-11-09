@@ -855,6 +855,15 @@ jogos ele fica preso no meio) no HD, olha a imagem, responde em português e
 apaga (`olhar apagar`). Só quando o Léo pede; tela bloqueada = sem print. A
 instrução está no `CLAUDE.md` da casa.
 
+**Painel do Canal (09/11/2026, etapa 1 de 7):** `jarvis/canal/` (conta.py:
+OAuth do projeto Google do Léo, token só no PC; dados.py: canal, vídeos, dias e
+views dia a dia dos últimos 15 vídeos em `~/.local/share/jarvis/canal/canal.db`,
+timer `jarvis-canal` a cada 30 min). Por voz: `python -m jarvis.canal resumo` e
+`video <nome>`. Conectar: `docs/PAINEL - CONECTAR O YOUTUBE.md`. Próximas: janela
+(Início, Vídeos), Calendário/Produção, Comentários/Análises, postar e comunidade
+pelo Studio num navegador escondido (sem auditoria, decisão do Léo), Jarvis/Friday,
+app próprio "Painel do Canal" no celular (mesma conexão do app da NOVA).
+
 **Backup do mês (09/11/2026):** `python -m jarvis.monitor.backup` (timer
 `jarvis-backup`, dia 1º às 3h, Persistent). Junta só o que é do Léo (o que o
 Jarvis/Friday sabem, memórias do Claude Code, configurações do Mint, senhas e

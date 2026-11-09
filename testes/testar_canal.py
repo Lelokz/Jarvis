@@ -1,0 +1,148 @@
+"""Painel do Canal, etapa 1 (09/11/2026): sincronizar e responder "como tá
+o canal?" / "como foi o vídeo do Doors?". YouTube de mentira: nada sai do PC.
+"""
+from __future__ import annotations
+
+import datetime as dt
+import os
+import sys
+import tempfile
+from pathlib import Path
+
+RAIZ = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(RAIZ))
+os.environ["JARVIS_DADOS"] = tempfile.mkdtemp(prefix="jarvis-canal-")
+
+from jarvis.canal import conta, dados  # noqa: E402
+
+ok = falhou = 0
+HOJE = dt.date.today()
+
+
+def checa(nome, cond, detalhe=""):
+    global ok, falhou
+    if cond:
+        ok += 1
+        print(f"  PASSOU  {nome}", flush=True)
+    else:
+        falhou += 1
+        print(f"  FALHOU  {nome}  {detalhe}", flush=True)
+
+
+class Pedido:
+    def __init__(self, resposta):
+        self.resposta = resposta
+
+    def execute(self):
+        return self.resposta
+
+
+def iso(dias_atras: int, hora: int = 18) -> str:
+    return (dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=dias_atras)).replace(
+        hour=hora, minute=0, second=0, microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+# 20 vídeos: o mais novo (há 3 dias) é o "Doors", os outros um por semana.
+VIDEOS = [{"id": f"v{i}", "titulo": "DOORS: o hotel inteiro" if i == 0 else f"Minecraft 100% ep {i}",
+           "pub": 3 if i == 0 else 7 * i, "views": 900 if i == 0 else 2000 + i} for i in range(20)]
+VIDEOS.append({"id": "agend", "titulo": "Roblox novo", "pub": None, "views": 0})
+
+
+class YT:
+    def __init__(self):
+        self.paginas = 0
+
+    def channels(self):
+        return self
+
+    def playlistItems(self):
+        return self
+
+    def videos(self):
+        return self
+
+    def list(self, **kw):
+        if "mine" in kw:
+            return Pedido({"items": [{"id": "UC1", "snippet": {"title": "Lelokz", "thumbnails": {}},
+                                      "statistics": {"subscriberCount": "913", "viewCount": "50000", "videoCount": "21"},
+                                      "contentDetails": {"relatedPlaylists": {"uploads": "UU1"}}}]})
+        if "playlistId" in kw:
+            # Duas páginas, para provar que segue o nextPageToken.
+            self.paginas += 1
+            metade = VIDEOS[:12] if not kw.get("pageToken") else VIDEOS[12:]
+            r = {"items": [{"contentDetails": {"videoId": v["id"]}} for v in metade]}
+            if not kw.get("pageToken"):
+                r["nextPageToken"] = "p2"
+            return Pedido(r)
+        ids = kw["id"].split(",")
+        itens = []
+        for v in VIDEOS:
+            if v["id"] in ids:
+                status = {"privacyStatus": "public"} if v["pub"] is not None else \
+                    {"privacyStatus": "private", "publishAt": (dt.datetime.now(dt.timezone.utc) + dt.timedelta(days=2))
+                     .replace(hour=21, minute=0, second=0, microsecond=0).isoformat().replace("+00:00", "Z")}
+                itens.append({"id": v["id"], "snippet": {"title": v["titulo"], "publishedAt": iso(v["pub"]) if v["pub"] is not None else "",
+                                                          "tags": ["doors"], "thumbnails": {"high": {"url": "http://t"}}},
+                              "statistics": {"viewCount": str(v["views"]), "likeCount": "40", "commentCount": "7"},
+                              "status": status, "contentDetails": {"duration": "PT1H2M3S"}})
+        return Pedido({"items": itens})
+
+
+class AN:
+    def reports(self):
+        return self
+
+    def query(self, **kw):
+        if "filters" in kw:
+            vid = kw["filters"].split("==")[1]
+            v = next(x for x in VIDEOS if x["id"] == vid)
+            inicio = dt.date.fromisoformat(kw["startDate"])
+            fim = dt.date.fromisoformat(kw["endDate"])
+            por_dia = 300 if vid == "v0" else 200  # o Doors vai melhor por dia
+            n = (fim - inicio).days + 1
+            return Pedido({"rows": [[(inicio + dt.timedelta(days=d)).isoformat(), por_dia] for d in range(n)]})
+        return Pedido({"rows": [[(HOJE - dt.timedelta(days=d)).isoformat(), 100, 600, 2, 1, 5] for d in range(60)]})
+
+
+def main() -> int:
+    print("-- sem conexão --")
+    checa("sem token: não conectado", not conta.conectado())
+    checa("resumo avisa que falta conectar", "falta conectar" in dados.resumo())
+
+    print("-- sincronizar --")
+    yt = YT()
+    r = dados.sincronizar(yt, AN())
+    checa("leu o canal e os 21 vídeos", r == {"canal": "Lelokz", "videos": 21}, r)
+    checa("seguiu as duas páginas da lista de vídeos", yt.paginas == 2)
+    con = dados.abrir()
+    v = con.execute("SELECT * FROM videos WHERE id = 'v0'").fetchone()
+    checa("duração 1h02m03s", v["duracao_s"] == 3723)
+    checa("agendado guardado", con.execute("SELECT agendado FROM videos WHERE id = 'agend'").fetchone()[0] != "")
+    checa("os dias do canal", con.execute("SELECT COUNT(*) FROM dias").fetchone()[0] == 60)
+    con.close()
+    VIDEOS.pop(5)
+    dados.sincronizar(YT(), AN())
+    con = dados.abrir()
+    checa("vídeo apagado no YouTube sai daqui", con.execute("SELECT COUNT(*) FROM videos WHERE id = 'v5'").fetchone()[0] == 0)
+    con.close()
+
+    print("-- como tá o canal --")
+    s = dados.resumo()
+    print("   ", s)
+    checa("inscritos", "913 inscritos" in s)
+    checa("28 dias com comparação", "2.800 views (nos 28 antes: 2.800)" in s, s)
+    checa("último vídeo e quando", "\"DOORS: o hotel inteiro\" (há 3 dias)" in s, s)
+    checa("compara com a média", "acima da tua média" in s, s)
+    checa("o agendado", "Agendado: \"Roblox novo\"" in s, s)
+
+    print("-- como foi o vídeo do Doors --")
+    s = dados.sobre_video("como foi o vídeo do doors?")
+    checa("acha pelo nome falado", s.startswith("\"DOORS: o hotel inteiro\"") and "youtu.be/v0" in s, s)
+    checa("nome que não existe", dados.sobre_video("vídeo de culinária") == "Não achei nenhum vídeo com esse nome.")
+
+    print(f"\n{ok} passaram, {falhou} falharam")
+    return 1 if falhou else 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
