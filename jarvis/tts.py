@@ -294,6 +294,12 @@ def falar(
             stream.close()
 
 
+# Uma fala por vez (09/11/2026): o Locutor do PC e as respostas em áudio dos
+# grupos (jarvis/grupo/voz_no_whats.py) usam as mesmas vozes, em threads diferentes.
+import threading as _threading  # noqa: E402
+TRAVA_DAS_VOZES = _threading.Lock()
+
+
 class Locutor:
     """A fala em fluxo (25/10/2026): o texto chega aos pedaços, enquanto o
     Claude ainda escreve, e cada pedaço sai assim que a voz fica pronta; o
@@ -367,19 +373,20 @@ class Locutor:
                 texto, marca = item
                 primeiro = True
                 try:
-                    for trecho in self.voz.sintetizar(texto) if texto.strip() else ():
-                        if self._parar.is_set():
-                            break
-                        if no_pc:
-                            self._trechos.put((trecho, marca if primeiro else self._SEM_MARCA))
-                        else:
-                            if primeiro:
-                                self._avisos.put(("comecou", marca))
-                                if self.primeiro_som is None:
-                                    self.primeiro_som = time.monotonic()
-                            self.duracao_s += len(trecho.pcm) / 2 / trecho.taxa
-                            self._avisos.put(("trecho", trecho))
-                        primeiro = False
+                    with TRAVA_DAS_VOZES:  # streaming igual a antes, só um por vez
+                        for trecho in self.voz.sintetizar(texto) if texto.strip() else ():
+                            if self._parar.is_set():
+                                break
+                            if no_pc:
+                                self._trechos.put((trecho, marca if primeiro else self._SEM_MARCA))
+                            else:
+                                if primeiro:
+                                    self._avisos.put(("comecou", marca))
+                                    if self.primeiro_som is None:
+                                        self.primeiro_som = time.monotonic()
+                                self.duracao_s += len(trecho.pcm) / 2 / trecho.taxa
+                                self._avisos.put(("trecho", trecho))
+                            primeiro = False
                 except Exception as e:  # a voz caiu: o texto segue na tela, o resto também
                     print(f"  locutor: a voz falhou ({e.__class__.__name__}: {e})", flush=True)
                 if primeiro:  # não soou nada: o marcador sai mesmo assim

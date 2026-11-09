@@ -25,6 +25,7 @@ import numpy as np
 from jarvis import memorias
 
 ARQUIVO = "transcricoes.json"
+DOS_BOTS = "audios_dos_bots.json"   # id -> "Jarvis"/"Friday": os áudios que eles mesmos mandaram
 NAO_BAIXOU = ""          # marcado assim: não tenta de novo
 TEXTO_NAO_BAIXOU = "(áudio que não deu pra baixar)"
 MAX_S = 15 * 60          # áudio mais longo que isso: só os primeiros 15 minutos
@@ -68,6 +69,24 @@ class Audios:
             temp = c.with_suffix(".novo")
             temp.write_text(json.dumps(dados, ensure_ascii=False), encoding="utf-8")
             temp.replace(c)
+
+    def do_bot(self, jid: str) -> dict[str, str]:
+        try:
+            dados = json.loads((memorias.pasta_do_grupo(jid) / DOS_BOTS).read_text(encoding="utf-8"))
+            return dados if isinstance(dados, dict) else {}
+        except (OSError, ValueError):
+            return {}
+
+    def marcar_do_bot(self, jid: str, id_msg: str, nome: str, texto: str) -> None:
+        """O áudio que o Jarvis/Friday mandou: já tem o texto (nunca é
+        transcrito) e é dele (nunca é atendido como se fosse do Léo)."""
+        self._guardar(jid, id_msg, texto)
+        with self._trava:
+            dados = self.do_bot(jid)
+            dados[id_msg] = nome
+            c = memorias.pasta_do_grupo(jid) / DOS_BOTS
+            c.parent.mkdir(parents=True, exist_ok=True)
+            c.write_text(json.dumps(dados, ensure_ascii=False), encoding="utf-8")
 
     @staticmethod
     def como_texto(transcricao: str | None) -> str:

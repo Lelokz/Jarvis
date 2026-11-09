@@ -1716,10 +1716,14 @@ def conversar(cfg: config.Config) -> int:
             grupo = None
             if agente.whatsapp is not None:
                 from jarvis.grupo.familia import GrupoFamilia
+                from jarvis.grupo import voz_no_whats
                 # O pedido ao dono vai para o WhatsApp dele se o app não estiver conectado.
                 grupo = GrupoFamilia(agente.whatsapp, agente.binario, cfg.agente.modelo_rapido or "sonnet",
                                      app_desde=ponte.app_desde if ponte is not None else None,
-                                     transcrever=transcritor.transcrever_mensagem)
+                                     transcrever=transcritor.transcrever_mensagem,
+                                     # A resposta em áudio: a mesma voz do PC, de cada um.
+                                     falar=lambda p, t: voz_no_whats.gravar(
+                                         voz_friday if p == "friday" and voz_friday else voz, t))
                 grupo.start()
             proximo_whats = time.monotonic() + cfg.whatsapp.intervalo_s
             proximo_desligar = 0.0

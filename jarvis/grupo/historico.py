@@ -105,6 +105,7 @@ class Puxador:
     def escrever(self, jid: str, nome_grupo: str) -> bool:
         """Reescreve o historico.txt quando o número de mensagens muda."""
         feitos = self.audios.todas(jid) if self.audios else {}
+        dos_bots = self.audios.do_bot(jid) if self.audios else {}
         # Muda quando chega mensagem ou quando mais um áudio vira texto.
         total = (self.whatsapp._consultar("SELECT COUNT(*) FROM messages WHERE chat_jid = ?", (jid,))[0][0],
                  len(feitos))
@@ -129,6 +130,7 @@ class Puxador:
                 nome = nomes[chave]
             if midia == "audio" and self.audios:
                 texto = self.audios.como_texto(feitos.get(str(i or "")))
+                nome = dos_bots.get(str(i or ""), nome)  # o áudio que o Jarvis/Friday mandou
             elif midia:
                 texto = f"{MIDIA.get(midia, '(mídia)')} {texto}".strip()
             quando = self.whatsapp._quando(t).strftime("%d/%m/%Y %H:%M")

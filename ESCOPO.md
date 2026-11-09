@@ -336,6 +336,15 @@ aceito pelo Léo (o padrasto dele usa algo assim há meses).
     banco. Celular sem responder: o Jarvis tenta aquele áudio de novo 1 h
     depois, sem marcar como perdido. Binário anterior em
     `whatsapp-bridge.antes-reenvio`, código em `main.go.antes-reenvio`.
+  - Resposta em áudio (09/11/2026): quem mandou áudio recebe áudio. A
+    ferramenta `responder_em_audio` (falado + escrito opcional, para link ou
+    lista) fala com a mesma voz do PC (`jarvis/grupo/voz_no_whats.py`: .ogg
+    Opus no temporário do HD, apagado depois de mandar) e manda como mensagem
+    de voz. `tts.TRAVA_DAS_VOZES` faz uma fala por vez entre o Locutor do PC e
+    o grupo. O `/api/send` devolve o `id` da mensagem: o áudio fica anotado como
+    do Jarvis/Friday (`audios_dos_bots.json`), nunca é transcrito nem atendido
+    como se fosse do Léo. Binário anterior em `whatsapp-bridge.antes-voz`,
+    código em `main.go.antes-voz`.
 - **Sobe e desce com o Jarvis** (`jarvis.sh`), com `umask 077`: o banco e o
   log (`~/.local/share/jarvis/whatsapp-bridge.log`) só o Léo lê. Conectado por
   QR code em out/2026; a conexão fica salva (uma fonte diz que pode pedir QR

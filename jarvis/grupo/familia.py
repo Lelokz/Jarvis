@@ -139,7 +139,8 @@ def trava_do_grupo(ferramenta: str, entrada: dict, casa: Path | None = None) -> 
 
 
 class GrupoFamilia(threading.Thread):
-    def __init__(self, whatsapp, binario: str, modelo: str, app_desde=None, transcrever=None) -> None:
+    def __init__(self, whatsapp, binario: str, modelo: str, app_desde=None, transcrever=None,
+                 falar=None) -> None:
         super().__init__(name="grupo-familia", daemon=True)
         self.whatsapp = whatsapp
         self.binario = binario
@@ -162,6 +163,8 @@ class GrupoFamilia(threading.Thread):
         # O histórico de cada grupo, puxado do celular e escrito em historico.txt.
         # Os áudios viram texto com o Whisper do Jarvis (`transcrever`: áudio -> texto).
         self._audios = audios.Audios(whatsapp, transcrever) if transcrever else None
+        # A resposta em áudio: (persona, texto) -> caminho de um .ogg, ou None.
+        self._falar = falar
         self._puxador = historico.Puxador(whatsapp, self._quem, tuple(PREFIXOS.values()), self._audios)
 
     def pegar(self) -> tuple[str, str] | None:
@@ -200,17 +203,40 @@ class GrupoFamilia(threading.Thread):
             "SELECT sender, is_from_me, content, timestamp, id, media_type FROM messages WHERE chat_jid = ? "
             "ORDER BY timestamp DESC LIMIT ?", (jid, quantas))
         feitos = self._audios.todas(jid) if self._audios else {}
+        dos_bots = self._audios.do_bot(jid) if self._audios else {}
         saida = []
         for s, eu, c, t, i, midia in reversed(linhas):
             texto = c or "(mídia)"
             if midia == "audio":
                 texto = audios.Audios.como_texto(feitos.get(str(i or "")))
-            saida.append(Msg(self._quem(s or "", bool(eu), c or ""), texto, self.whatsapp._quando(t),
-                             str(i or ""), "eu" if eu else (s or ""), midia or ""))
+                bot = next((p for p, n in NOMES.items() if n == dos_bots.get(str(i or ""))), None)
+                if bot:  # o áudio que o Jarvis/Friday mandou conta como mensagem deles
+                    texto = f"{PREFIXOS[bot]} {texto}"
+            saida.append(Msg(self._quem(s or "", bool(eu), texto if eu else c or ""), texto,
+                             self.whatsapp._quando(t), str(i or ""), "eu" if eu else (s or ""), midia or ""))
         return saida
 
     def _mandar(self, jid: str, texto: str, persona: str = "jarvis") -> None:
         self.whatsapp.enviar(jid, f"{PREFIXOS[persona]} {texto.strip()}")
+
+    def _mandar_audio(self, jid: str, persona: str, texto: str) -> bool:
+        """Fala o texto na voz da persona e manda como mensagem de voz."""
+        if not self._falar:
+            return False
+        try:
+            caminho = self._falar(persona, texto)
+        except Exception:
+            caminho = None
+        if not caminho:
+            return False
+        try:
+            ok, _ = self.whatsapp.enviar(jid, "", arquivo=str(caminho))
+        finally:
+            Path(caminho).unlink(missing_ok=True)
+        id_msg = getattr(self.whatsapp, "ultimo_id", "")
+        if ok and id_msg and self._audios:
+            self._audios.marcar_do_bot(jid, id_msg, NOMES[persona], texto)
+        return ok
 
     def _abrir(self, jid: str, persona: str, msgs: list[Msg]) -> None:
         """A conversa fica aberta só com quem falou com ele agora; se essa
@@ -421,6 +447,22 @@ class GrupoFamilia(threading.Thread):
             self._abrir(jid, persona, chamadas + seguidas)
             return _t("Mandado no grupo.")
 
+        @tool("responder_em_audio", "Responde com um ÁUDIO na sua voz (para quem mandou áudio). "
+              "`falado`: o que você diz, como fala (sem link, lista ou emoji). `escrito`: opcional, "
+              "o que não dá para ouvir (link, lista, número) vai logo depois numa mensagem escrita; "
+              "senão deixe vazio.", {"falado": str, "escrito": str})
+        async def responder_em_audio(args):
+            falado = str(args.get("falado") or "").strip()
+            escrito = str(args.get("escrito") or "").strip()
+            foi = await asyncio.to_thread(self._mandar_audio, jid, persona, falado) if falado else False
+            if not foi and falado:  # sem voz (caiu, ponte fora): vai escrito mesmo
+                self._mandar(jid, falado, persona)
+            if escrito:
+                self._mandar(jid, escrito, persona)
+            mandadas.append(falado + ("\n" + escrito if escrito else ""))
+            self._abrir(jid, persona, chamadas + seguidas)
+            return _t("Áudio mandado no grupo." if foi else "A voz falhou: foi por escrito.")
+
         @tool("nao_era_comigo", f"A mensagem só falava SOBRE {'o' if persona == 'jarvis' else 'a'} {nome}: "
               "avisa o dono, sem responder no grupo.", {"quem": str, "resumo": str})
         async def nao_era_comigo(args):
@@ -435,7 +477,8 @@ class GrupoFamilia(threading.Thread):
             self._saidas.put(("aprovacao", a["id"]))
             return _t(f"Pedi para o {self._dono()} liberar (vale por 5 minutos). Avise no grupo.")
 
-        servidor = create_sdk_mcp_server("grupo", tools=[responder, nao_era_comigo, pedir_ao_dono])
+        servidor = create_sdk_mcp_server("grupo", tools=[responder, responder_em_audio, nao_era_comigo,
+                                                         pedir_ao_dono])
 
         casa = memorias.pasta_do_grupo(jid)
 

@@ -159,6 +159,59 @@ def main() -> int:
     g2 = familia.GrupoFamilia(w, "claude", "sonnet", app_desde=lambda: None)
     checa("áudio aparece só como (áudio)", any(m.texto == "(áudio)" for m in g2._mensagens(A, 10)))
 
+    print("-- A6. a resposta em áudio --")
+    from jarvis import tts
+    from jarvis.grupo import voz_no_whats
+    import numpy as np
+
+    class VozFalsa(tts.Voz):
+        nome = "falsa"
+        def sintetizar(self, texto):
+            onda = (np.sin(np.arange(22050) / 22050 * 2 * np.pi * 220) * 8000).astype(np.int16)
+            yield tts.Trecho(onda.tobytes(), 22050, 1)
+
+    checa("para_falar tira link, emoji e *", voz_no_whats.para_falar(
+        "*Pronto!* 😀 veja https://x.com/a ok") == "Pronto! veja ok", voz_no_whats.para_falar("*Pronto!* 😀 veja https://x.com/a ok"))
+    arq = voz_no_whats.gravar(VozFalsa(), "Bom dia, Ana.")
+    info = subprocess.run(["ffmpeg", "-nostdin", "-hide_banner", "-i", str(arq)],
+                          capture_output=True, text=True).stderr if arq else ""
+    checa("vira ogg opus mono 48 kHz", "Input #0, ogg" in info and "Audio: opus, 48000 Hz, mono" in info, info[-300:])
+    checa("temporário no HD", arq is not None and str(arq).startswith("/mnt/"), str(arq))
+    checa("só emoji não vira áudio", voz_no_whats.gravar(VozFalsa(), "😀") is None)
+    if arq:
+        arq.unlink()
+
+    enviados = []
+    def enviar(jid, texto, arquivo=None):
+        enviados.append((jid, texto, arquivo, Path(arquivo).exists() if arquivo else None))
+        w.ultimo_id = "BOT1" if arquivo else ""
+        if arquivo:  # como a ponte: o áudio do bot aparece no banco como mensagem minha
+            c = sqlite3.connect(caminho_db)
+            c.execute("INSERT INTO messages VALUES (?,?,?,?,?,1,?)", ("BOT1", A, "5500", "",
+                      dt.datetime.now().astimezone().isoformat(sep=" "), "audio"))
+            c.commit()
+            c.close()
+        return True, "ok"
+    w.enviar = enviar
+    g._falar = lambda persona, texto: voz_no_whats.gravar(VozFalsa(), texto)
+    atendidos.clear()
+    foi = g._mandar_audio(A, "friday", "Oi Ana, bom dia!")
+    checa("mandou como arquivo, sem texto", foi and enviados[-1][1] == "" and enviados[-1][3] is True, enviados)
+    checa("apagou o .ogg depois", not Path(enviados[-1][2]).exists())
+    checa("anotou como áudio da Friday", g._audios.do_bot(A).get("BOT1") == "Friday"
+          and g._audios.todas(A).get("BOT1") == "Oi Ana, bom dia!")
+    msgs = [m for m in g._mensagens(A, 30) if m.id == "BOT1"]
+    checa("na conversa é da Friday", msgs and msgs[0].quem == "Friday" and familia.de_bot(msgs[0].texto), msgs)
+    checa("não está pendente pra transcrever", "BOT1" not in g._audios.pendentes(A))
+    g._uma_volta()
+    checa("ela não responde o próprio áudio", atendidos == [], atendidos)
+    p.escrever(A, "Família")
+    checa("no histórico: Friday: (áudio) ...", "Friday: (áudio) Oi Ana, bom dia!" in
+          (memorias.pasta_do_grupo(A) / historico.ARQUIVO).read_text(encoding="utf-8"))
+    g._falar = lambda persona, texto: None
+    n = len(enviados)
+    checa("voz caída: avisa que não foi", g._mandar_audio(A, "jarvis", "teste") is False and len(enviados) == n)
+
     print(f"\n{ok} passaram, {falhou} falharam")
     return 1 if falhou else 0
 

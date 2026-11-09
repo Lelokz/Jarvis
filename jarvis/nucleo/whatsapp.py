@@ -325,4 +325,5 @@ class WhatsApp:
         except (requests.RequestException, ValueError) as e:
             return False, f"a ponte do WhatsApp não respondeu ({e.__class__.__name__})"
         ok = bool(dados.get("success", r.ok))
+        self.ultimo_id = str(dados.get("id") or "")  # o id da mensagem enviada (ponte de 09/11/2026)
         return ok, str(dados.get("message") or "")
