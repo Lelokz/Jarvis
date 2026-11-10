@@ -38,8 +38,9 @@ class Pedido:
 
 
 def iso(dias_atras: int, hora: int = 18) -> str:
-    return (dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=dias_atras)).replace(
-        hour=hora, minute=0, second=0, microsecond=0).isoformat().replace("+00:00", "Z")
+    # "há N dias" exato a qualquer hora do dia: N dias e 1 hora atrás.
+    return (dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=dias_atras, hours=1)).replace(
+        microsecond=0).isoformat().replace("+00:00", "Z")
 
 
 # 20 vídeos: o mais novo (há 3 dias) é o "Doors", os outros um por semana.
@@ -139,6 +140,51 @@ def main() -> int:
     s = dados.sobre_video("como foi o vídeo do doors?")
     checa("acha pelo nome falado", s.startswith("\"DOORS: o hotel inteiro\"") and "youtu.be/v0" in s, s)
     checa("nome que não existe", dados.sobre_video("vídeo de culinária") == "Não achei nenhum vídeo com esse nome.")
+
+    print("-- etapa 2: a janela e a edição --")
+    from jarvis.canal import editar
+    j = dados.para_janela()
+    checa("janela recebe canal, números, dias e vídeos", j["temDados"] and j["canal"]["inscritos"] == 913
+          and len(j["dias"]) >= 60 and len(j["videos"]) == 20, {k: j.get(k) for k in ("temDados",)})
+    checa("meta: 913 -> 1.000; 1.000 -> 2.500; 40 -> 100", (dados.meta(913), dados.meta(1000), dados.meta(40)) == (1000, 2500, 100))
+    checa("o agendado vem primeiro na lista", j["videos"][0]["id"] == "agend", j["videos"][0]["id"])
+    dados.baixar_thumbs([("v0", "http://t")], baixar=lambda url: b"jpg")
+    checa("thumb guardada no PC", dados.thumb_local("v0").read_bytes() == b"jpg")
+    checa("e a janela usa a do PC", dados.para_janela()["videos"][1]["thumb"].startswith("file://"))
+
+    class YTEdit:
+        enviado = None
+
+        def videos(self):
+            return self
+
+        def list(self, **kw):
+            return Pedido({"items": [{"snippet": {"title": "velho", "categoryId": "20", "defaultLanguage": "pt"},
+                                      "status": {"privacyStatus": "private", "publishAt": "2026-12-01T21:00:00Z",
+                                                 "selfDeclaredMadeForKids": False}}]})
+
+        def update(self, part, body):
+            YTEdit.enviado = body
+            return Pedido({})
+    yt = YTEdit()
+    editar.salvar_video("agend", "Roblox NOVO", "desc", ["roblox", " ", "lelokz"], "private", yt=yt)
+    e = YTEdit.enviado
+    checa("manda a categoria de volta (o YouTube exige)", e["snippet"]["categoryId"] == "20" and e["snippet"]["title"] == "Roblox NOVO")
+    checa("tags limpas", e["snippet"]["tags"] == ["roblox", "lelokz"])
+    checa("privado continua agendado", e["status"].get("publishAt") == "2026-12-01T21:00:00Z")
+    editar.salvar_video("agend", "Roblox NOVO", "desc", [], "public", yt=yt)
+    checa("público deixa de ser agendado", "publishAt" not in YTEdit.enviado["status"])
+    con = dados.abrir()
+    linha = con.execute("SELECT titulo, visibilidade, agendado FROM videos WHERE id = 'agend'").fetchone()
+    con.close()
+    checa("o banco do PC acompanha", tuple(linha) == ("Roblox NOVO", "public", ""), tuple(linha))
+    for nome, args in (("título vazio", ("", "", [], "public")), ("título com mais de 100", ("x" * 101, "", [], "public")),
+                       ("< no título", ("a <b>", "", [], "public")), ("tags demais", ("ok", "", ["x" * 60] * 10, "public"))):
+        try:
+            editar.conferir(*args)
+            checa(f"recusa {nome}", False)
+        except editar.Recusado:
+            checa(f"recusa {nome}", True)
 
     print(f"\n{ok} passaram, {falhou} falharam")
     return 1 if falhou else 0

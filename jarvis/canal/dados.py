@@ -118,8 +118,36 @@ def sincronizar(yt=None, an=None, hoje: dt.date | None = None) -> dict:
             for dia, views in r.get("rows", []):
                 con.execute("INSERT OR REPLACE INTO video_dias VALUES (?,?,?)", (v["id"], dia, int(views)))
     n = con.execute("SELECT COUNT(*) FROM videos").fetchone()[0]
+    thumbs = [(r["id"], r["thumb"]) for r in con.execute("SELECT id, thumb FROM videos")]
     con.close()
+    baixar_thumbs(thumbs)
     return {"canal": c["snippet"]["title"], "videos": n}
+
+
+THUMBS = conta.PASTA / "thumbs"
+
+
+def thumb_local(video: str) -> Path:
+    return THUMBS / f"{video}.jpg"
+
+
+def baixar_thumbs(lista: list[tuple[str, str]], baixar=None) -> int:
+    """Guarda as thumbs no PC (a janela e o app abrem sem internet). A thumb
+    trocada no YouTube mantém o mesmo endereço: renova uma vez por dia."""
+    import urllib.request
+    baixar = baixar or (lambda url: urllib.request.urlopen(url, timeout=20).read())
+    THUMBS.mkdir(parents=True, exist_ok=True)
+    n = 0
+    for vid, url in lista:
+        arq = thumb_local(vid)
+        if not url or (arq.exists() and time.time() - arq.stat().st_mtime < 86400):
+            continue
+        try:
+            arq.write_bytes(baixar(url))
+            n += 1
+        except Exception:  # noqa: BLE001 - sem a thumb a janela mostra o título
+            pass
+    return n
 
 
 # -- ler (janela, app, Jarvis) ----------------------------------------------------------------
@@ -236,3 +264,67 @@ def sobre_video(falado: str) -> str:
                       + (f", {comp}" if comp else "") + f". Link: https://youtu.be/{v['id']}")
     con.close()
     return "\n".join(linhas)
+
+
+# -- para a janela e o app ------------------------------------------------------------------
+
+def _numeros(con, hoje: dt.date) -> dict:
+    def soma(de: int, ate: int):
+        return con.execute("SELECT COALESCE(SUM(views),0) v, COALESCE(SUM(minutos),0) m, "
+                           "COALESCE(SUM(ganhos)-SUM(perdidos),0) s, COUNT(*) n FROM dias WHERE dia > ? AND dia <= ?",
+                           ((hoje - dt.timedelta(days=de)).isoformat(), (hoje - dt.timedelta(days=ate)).isoformat())).fetchone()
+    agora, antes = soma(28, 0), soma(56, 28)
+
+    def variacao(a, b):
+        return None if not b else round(100 * (a - b) / b)
+    return {"views28": agora["v"], "horas28": agora["m"] // 60, "inscritos28": agora["s"],
+            "views28_var": variacao(agora["v"], antes["v"]), "horas28_var": variacao(agora["m"], antes["m"]),
+            "inscritos28_antes": antes["s"]}
+
+
+def meta(inscritos: int) -> int:
+    """A próxima marca redonda: 100, 250, 500, 1.000, 2.500, 5.000, 10.000..."""
+    base = 100
+    while True:
+        for m in (1, 2.5, 5):
+            if inscritos < base * m:
+                return int(base * m)
+        base *= 10
+
+
+def para_janela(hoje: dt.date | None = None) -> dict:
+    hoje = hoje or dt.date.today()
+    if not BANCO.exists():
+        return {"conectado": conta.conectado(), "temDados": False}
+    con = abrir()
+    c = con.execute("SELECT * FROM canal").fetchone()
+    if not c:
+        con.close()
+        return {"conectado": conta.conectado(), "temDados": False}
+    videos = []
+    for v in con.execute("SELECT * FROM videos ORDER BY COALESCE(NULLIF(agendado,''), publicado) DESC"):
+        arq = thumb_local(v["id"])
+        videos.append({"id": v["id"], "titulo": v["titulo"], "descricao": v["descricao"], "publicado": v["publicado"],
+                       "duracao": v["duracao_s"], "views": v["views"], "likes": v["likes"],
+                       "comentarios": v["comentarios"], "visibilidade": v["visibilidade"], "agendado": v["agendado"],
+                       "tags": json.loads(v["tags"] or "[]"),
+                       "thumb": arq.as_uri() if arq.exists() else "",
+                       "comparacao": _comparacao(con, v) if v["visibilidade"] == "public" else ""})
+    dias = [dict(d) for d in con.execute("SELECT * FROM dias WHERE dia > ? ORDER BY dia",
+                                         ((hoje - dt.timedelta(days=90)).isoformat(),))]
+    r = {"conectado": conta.conectado(), "temDados": True, "atualizado": c["atualizado"],
+         "canal": {"titulo": c["titulo"], "inscritos": c["inscritos"], "views": c["views"], "videos": c["videos"],
+                   "meta": meta(c["inscritos"])},
+         "numeros": _numeros(con, hoje), "dias": dias, "videos": videos}
+    con.close()
+    return r
+
+
+def dias_do_video(video: str) -> list[dict]:
+    if not BANCO.exists():
+        return []
+    con = abrir()
+    r = [{"dia": d["dia"], "views": d["views"]} for d in
+         con.execute("SELECT dia, views FROM video_dias WHERE video = ? ORDER BY dia", (video,))]
+    con.close()
+    return r
