@@ -34,6 +34,14 @@ Window {
     readonly property var canal: d.canal || ({ titulo: "", inscritos: 0, views: 0, videos: 0, meta: 100 })
     readonly property var numeros: d.numeros || ({})
     readonly property var videos: d.videos || []
+    readonly property var cards: d.cards || []
+    property var cardAberto: null          // o card no editor ({} = novo)
+    property var confirmar: null           // { texto, sim: function }
+    property var arrasto: null             // { tipo: "agendado"|"card", id, titulo }
+    property point arrastoPos: Qt.point(0, 0)
+    property date mesVisto: new Date(new Date().getFullYear(), new Date().getMonth(), 1)
+    readonly property var colunas: [ { id: "ideia", t: "Ideia" }, { id: "gravando", t: "Gravando" }, { id: "editando", t: "Editando" },
+                                     { id: "pronto", t: "Pronto" }, { id: "agendado", t: "Agendado" }, { id: "postado", t: "Postado" } ]
     property string aba: abaInicial || "inicio"
     property var ficha: null
     property string avisoTexto: ""
@@ -76,6 +84,47 @@ Window {
     function ultimoPublico() { for (var i = 0; i < videos.length; i++) if (videos[i].visibilidade === "public" && !videos[i].agendado) return videos[i]; return null }
     function agendados() { return videos.filter(function (v) { return v.agendado }).reverse() }
     function abrirFicha(v) { ficha = v; avisoTexto = "" }
+    function isoDia(x) { return x.getFullYear() + "-" + ("0" + (x.getMonth() + 1)).slice(-2) + "-" + ("0" + x.getDate()).slice(-2) }
+    function diaDe(iso) { var x = dataDe(iso); return x ? isoDia(x) : "" }
+    function brParaIso(s) { var m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(s.trim()); return m ? m[3] + "-" + ("0" + m[2]).slice(-2) + "-" + ("0" + m[1]).slice(-2) : "" }
+    function isoParaBr(s) { return s ? s.slice(8, 10) + "/" + s.slice(5, 7) + "/" + s.slice(0, 4) : "" }
+    function nomeMes(x) { return ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"][x.getMonth()] }
+    function videoDe(id) { for (var i = 0; i < videos.length; i++) if (videos[i].id === id) return videos[i]; return null }
+    function nomeColuna(id) { for (var i = 0; i < colunas.length; i++) if (colunas[i].id === id) return colunas[i].t; return id }
+    function diasSemVideo() { var u = ultimoPublico(); return u ? Math.floor((Date.now() - dataDe(u.publicado).getTime()) / 86400000) : 0 }
+    function noDia(iso) {
+        var r = []
+        for (var i = 0; i < videos.length; i++) {
+            var v = videos[i]
+            if (v.agendado && diaDe(v.agendado) === iso) r.push({ tipo: "agendado", v: v })
+            else if (!v.agendado && v.visibilidade === "public" && diaDe(v.publicado) === iso) r.push({ tipo: "postado", v: v })
+        }
+        for (var k = 0; k < cards.length; k++)
+            if (cards[k].data === iso && cards[k].coluna !== "postado" && cards[k].coluna !== "agendado") r.push({ tipo: "card", c: cards[k] })
+        return r
+    }
+    function soltar() {
+        var a = arrasto; arrasto = null
+        if (!a) return
+        if (a.tipo === "agendado" && aba === "calendario") {
+            var p = gradeCal.mapFromItem(janela, arrastoPos.x, arrastoPos.y)
+            if (p.x < 0 || p.y < 0 || p.x >= gradeCal.width || p.y >= gradeCal.height) return
+            var i = Math.floor(p.y / (gradeCal.height / gradeCal.linhas)) * 7 + Math.floor(p.x / (gradeCal.width / 7))
+            var dia = gradeCal.dias[i]
+            var v = videoDe(a.id)
+            if (!v || isoDia(dia) === diaDe(v.agendado)) return
+            var hora = agendadoPara(v.agendado).split(" às ")[1]
+            if (dia.getTime() < new Date(new Date().toDateString()).getTime()) { avisoTexto = "Não dá pra agendar no passado."; avisoOk = false; return }
+            confirmar = { texto: "Mudar \"" + v.titulo + "\" para " + ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"][dia.getDay()] + ", " +
+                          ("0" + dia.getDate()).slice(-2) + "/" + ("0" + (dia.getMonth() + 1)).slice(-2) + " às " + hora + "?",
+                          sim: function () { painel.reagendarNoDia(a.id, isoDia(dia)) } }
+        } else if (a.tipo === "card" && aba === "producao") {
+            var q = quadro.mapFromItem(janela, arrastoPos.x, arrastoPos.y)
+            if (q.y < 0 || q.y > quadro.height) return
+            var c = Math.floor(q.x / (quadro.width / colunas.length))
+            if (c >= 0 && c < colunas.length) painel.moverCard(a.id, colunas[c].id)
+        }
+    }
 
     Connections {
         target: painel
@@ -188,8 +237,8 @@ Window {
         Column {
             y: 92; width: parent.width; spacing: 4
             Repeater {
-                model: [ { id: "inicio", nome: "Início", etapa: 0 }, { id: "calendario", nome: "Calendário", etapa: 3 },
-                         { id: "producao", nome: "Produção", etapa: 3 }, { id: "videos", nome: "Vídeos", etapa: 0 },
+                model: [ { id: "inicio", nome: "Início", etapa: 0 }, { id: "calendario", nome: "Calendário", etapa: 0 },
+                         { id: "producao", nome: "Produção", etapa: 0 }, { id: "videos", nome: "Vídeos", etapa: 0 },
                          { id: "comentarios", nome: "Comentários", etapa: 4 }, { id: "comunidade", nome: "Comunidade", etapa: 5 },
                          { id: "analises", nome: "Análises", etapa: 4 } ]
                 Rectangle {
@@ -411,6 +460,176 @@ Window {
                 }
             }
         }
+
+        // ================= CALENDÁRIO =================
+        Item {
+            anchors.fill: parent
+            visible: aba === "calendario"
+            Text { text: "Calendário"; color: texto; font { family: familia; pixelSize: 26; weight: Font.DemiBold } }
+            Text { y: 36; color: textoFraco; font { family: familia; pixelSize: 13 }
+                   text: "Faz " + diasSemVideo() + (diasSemVideo() === 1 ? " dia" : " dias") + " desde o último vídeo · " +
+                         videos.filter(function (v) { return !v.agendado && v.visibilidade === "public" && diaDe(v.publicado).slice(0, 7) === isoDia(mesVisto).slice(0, 7) }).length +
+                         " publicados em " + nomeMes(mesVisto) }
+            Row {
+                anchors.right: parent.right; spacing: 8
+                Botao { rotulo: "‹"; width: 38; onClicado: mesVisto = new Date(mesVisto.getFullYear(), mesVisto.getMonth() - 1, 1) }
+                Rectangle { width: 170; height: 38; radius: 10; color: superficie; border.color: traco
+                    Text { anchors.centerIn: parent; text: nomeMes(mesVisto).charAt(0).toUpperCase() + nomeMes(mesVisto).slice(1) + " " + mesVisto.getFullYear()
+                           color: texto; font { family: familia; pixelSize: 14; weight: Font.DemiBold } } }
+                Botao { rotulo: "›"; width: 38; onClicado: mesVisto = new Date(mesVisto.getFullYear(), mesVisto.getMonth() + 1, 1) }
+                Botao { rotulo: "Hoje"; onClicado: mesVisto = new Date(new Date().getFullYear(), new Date().getMonth(), 1) }
+            }
+            Row {
+                y: 74; width: parent.width
+                Repeater {
+                    model: ["DOM", "SEG", "TER", "QUA", "QUI", "SEX", "SÁB"]
+                    Text { width: parent.width / 7; horizontalAlignment: Text.AlignHCenter; text: modelData; color: textoFraco
+                           font { family: familia; pixelSize: 11; letterSpacing: 1.2; weight: Font.Medium } }
+                }
+            }
+            Item {
+                id: gradeCal
+                y: 98; width: parent.width; height: parent.height - y
+                // 5 ou 6 semanas, o que o mês precisar.
+                readonly property int linhas: Math.ceil((mesVisto.getDay() + new Date(mesVisto.getFullYear(), mesVisto.getMonth() + 1, 0).getDate()) / 7)
+                readonly property var dias: {
+                    var ini = new Date(mesVisto.getFullYear(), mesVisto.getMonth(), 1 - mesVisto.getDay()), r = []
+                    for (var i = 0; i < linhas * 7; i++) r.push(new Date(ini.getFullYear(), ini.getMonth(), ini.getDate() + i))
+                    return r
+                }
+                Repeater {
+                    model: gradeCal.linhas * 7
+                    Rectangle {
+                        readonly property date dia: gradeCal.dias[index]
+                        readonly property bool doMes: dia.getMonth() === mesVisto.getMonth()
+                        readonly property bool hoje: isoDia(dia) === isoDia(new Date())
+                        readonly property var itens: noDia(isoDia(dia))
+                        x: (index % 7) * gradeCal.width / 7; y: Math.floor(index / 7) * gradeCal.height / gradeCal.linhas
+                        width: gradeCal.width / 7 - 6; height: gradeCal.height / gradeCal.linhas - 6
+                        radius: 10; color: doMes ? superficie : "transparent"; border.color: hoje ? roxo : doMes ? traco : "transparent"
+                        opacity: doMes ? 1 : 0.4
+                        Rectangle { x: 6; y: 6; width: 24; height: 24; radius: 12; color: parent.hoje ? roxoForte : "transparent"
+                            Text { anchors.centerIn: parent; text: parent.parent.dia.getDate(); color: parent.parent.hoje ? "white" : textoMedio
+                                   font { family: familia; pixelSize: 12; weight: Font.DemiBold } } }
+                        Column {
+                            x: 6; y: 34; width: parent.width - 12; spacing: 4
+                            Repeater {
+                                model: parent.parent.itens.slice(0, Math.max(1, Math.floor((parent.parent.height - 38) / 26)))
+                                Rectangle {
+                                    width: parent.width; height: 22; radius: 6
+                                    color: modelData.tipo === "agendado" ? Qt.rgba(0.65, 0.55, 0.98, 0.22) : modelData.tipo === "postado" ? superficie2 : "transparent"
+                                    border.color: modelData.tipo === "card" ? "#4b4266" : "transparent"
+                                    opacity: arrasto && modelData.tipo === "agendado" && arrasto.id === modelData.v.id ? 0.35 : 1
+                                    Row {
+                                        x: 4; anchors.verticalCenter: parent.verticalCenter; spacing: 6
+                                        Thumb { visible: modelData.tipo === "postado"; width: 26; height: 15; radius: 3; fonte: modelData.v ? modelData.v.thumb : ""; rotulo: "" }
+                                        Text { width: parent.parent.width - (modelData.tipo === "postado" ? 40 : 8); elide: Text.ElideRight
+                                               color: modelData.tipo === "agendado" ? lilasTexto : modelData.tipo === "card" ? textoFraco : textoMedio
+                                               font { family: familia; pixelSize: 11; weight: modelData.tipo === "agendado" ? Font.DemiBold : Font.Normal }
+                                               readonly property color lilasTexto: "#d9ccff"
+                                               text: modelData.tipo === "agendado" ? agendadoPara(modelData.v.agendado).split(" às ")[1] + " " + modelData.v.titulo
+                                                   : modelData.tipo === "postado" ? modelData.v.titulo : nomeColuna(modelData.c.coluna) + ": " + modelData.c.titulo }
+                                    }
+                                    MouseArea {
+                                        anchors.fill: parent; cursorShape: modelData.tipo === "agendado" ? Qt.OpenHandCursor : Qt.PointingHandCursor
+                                        property point inicio
+                                        onPressed: function (m) { inicio = Qt.point(m.x, m.y) }
+                                        onPositionChanged: function (m) {
+                                            if (modelData.tipo !== "agendado") return
+                                            var g = mapToItem(janela, m.x, m.y)
+                                            if (!arrasto && Math.abs(m.x - inicio.x) + Math.abs(m.y - inicio.y) > 8)
+                                                arrasto = { tipo: "agendado", id: modelData.v.id, titulo: modelData.v.titulo }
+                                            if (arrasto) arrastoPos = g
+                                        }
+                                        onReleased: { if (arrasto) soltar() }
+                                        onClicked: { if (modelData.tipo === "card") cardAberto = modelData.c; else abrirFicha(modelData.v) }
+                                    }
+                                }
+                            }
+                            Text { visible: parent.parent.itens.length > Math.max(1, Math.floor((parent.parent.height - 38) / 26))
+                                   text: "+" + (parent.parent.itens.length - Math.max(1, Math.floor((parent.parent.height - 38) / 26))) + " mais"
+                                   color: textoFraco; font { family: familia; pixelSize: 10 } }
+                        }
+                    }
+                }
+            }
+        }
+
+        // ================= PRODUÇÃO =================
+        Item {
+            anchors.fill: parent
+            visible: aba === "producao"
+            Text { text: "Produção"; color: texto; font { family: familia; pixelSize: 26; weight: Font.DemiBold } }
+            Text { y: 36; text: "Arraste o card pra mudar de etapa. Vídeo que sai no canal vai pra Agendado/Postado sozinho."
+                   color: textoFraco; font { family: familia; pixelSize: 13 } }
+            Botao { anchors.right: parent.right; rotulo: "+ Nova ideia"; principal: true
+                    onClicado: cardAberto = { id: 0, titulo: "", jogo: "", coluna: "ideia", data: "", notas: "", arquivos: [], video: "" } }
+            Row {
+                id: quadro
+                y: 76; width: parent.width; height: parent.height - y
+                spacing: 12
+                Repeater {
+                    model: colunas
+                    Rectangle {
+                        id: col
+                        readonly property var lista: cards.filter(function (c) { return c.coluna === modelData.id })
+                        width: (quadro.width - quadro.spacing * 5) / 6; height: quadro.height
+                        radius: 14; color: "#100e17"
+                        border.color: arrasto && arrasto.tipo === "card" && quadro.mapFromItem(janela, arrastoPos.x, arrastoPos.y).x >= x
+                                      && quadro.mapFromItem(janela, arrastoPos.x, arrastoPos.y).x < x + width ? roxo : traco
+                        Text { x: 14; y: 14; text: modelData.t; color: texto; font { family: familia; pixelSize: 14; weight: Font.DemiBold } }
+                        Text { anchors { right: parent.right; rightMargin: 14 } y: 15; text: col.lista.length; color: textoFraco; font { family: familia; pixelSize: 13 } }
+                        Flickable {
+                            x: 8; y: 44; width: parent.width - 16; height: parent.height - 52
+                            contentHeight: pilha.height; clip: true; boundsBehavior: Flickable.StopAtBounds
+                            interactive: !arrasto
+                            Column {
+                                id: pilha
+                                width: parent.width; spacing: 8
+                                Repeater {
+                                    model: col.lista
+                                    Rectangle {
+                                        readonly property var vid: modelData.video ? videoDe(modelData.video) : null
+                                        width: pilha.width; height: corpo.height + 20; radius: 10
+                                        color: maCard.containsMouse ? superficie2 : superficie; border.color: traco
+                                        opacity: arrasto && arrasto.id === modelData.id ? 0.35 : 1
+                                        Column {
+                                            id: corpo
+                                            x: 10; y: 10; width: parent.width - 20; spacing: 6
+                                            Thumb { visible: parent.parent.vid !== null; width: parent.width; height: width * 9 / 16; radius: 6
+                                                    fonte: parent.parent.vid ? parent.parent.vid.thumb : ""; rotulo: "" }
+                                            Text { width: parent.width; text: modelData.titulo; wrapMode: Text.WordWrap; maximumLineCount: 3; elide: Text.ElideRight
+                                                   color: texto; font { family: familia; pixelSize: 13; weight: Font.Medium } }
+                                            Flow {
+                                                width: parent.width; spacing: 6
+                                                Etiqueta { visible: modelData.jogo !== ""; texto: modelData.jogo; cor: roxo }
+                                                Etiqueta { visible: modelData.data !== ""; texto: "dia " + isoParaBr(modelData.data).slice(0, 5); cor: amarelo }
+                                                Etiqueta { visible: modelData.arquivos.length > 0; cor: verde
+                                                           texto: modelData.arquivos.length + (modelData.arquivos.length === 1 ? " arquivo" : " arquivos") }
+                                            }
+                                        }
+                                        MouseArea {
+                                            id: maCard; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                                            property point inicio
+                                            onPressed: function (m) { inicio = Qt.point(m.x, m.y) }
+                                            onPositionChanged: function (m) {
+                                                if (!arrasto && Math.abs(m.x - inicio.x) + Math.abs(m.y - inicio.y) > 8)
+                                                    arrasto = { tipo: "card", id: modelData.id, titulo: modelData.titulo }
+                                                if (arrasto) arrastoPos = mapToItem(janela, m.x, m.y)
+                                            }
+                                            onReleased: { if (arrasto) soltar() }
+                                            onClicked: cardAberto = modelData
+                                        }
+                                    }
+                                }
+                                Text { visible: col.lista.length === 0; width: pilha.width; horizontalAlignment: Text.AlignHCenter; topPadding: 12
+                                       text: "vazio"; color: "#4d4760"; font { family: familia; pixelSize: 12 } }
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     // ================= A FICHA DO VÍDEO =================
@@ -432,6 +651,9 @@ Window {
             function carregar() {
                 campoTitulo.text = ficha.titulo; campoDesc.text = ficha.descricao
                 campoTags.text = (ficha.tags || []).join(", "); escolhaVis.valor = ficha.visibilidade
+                var ag = dataDe(ficha.agendado)
+                campoDia.text = ag ? ("0" + ag.getDate()).slice(-2) + "/" + ("0" + (ag.getMonth() + 1)).slice(-2) + "/" + ag.getFullYear() : ""
+                campoHora.text = ag ? ("0" + ag.getHours()).slice(-2) + ":" + ("0" + ag.getMinutes()).slice(-2) : ""
             }
             Connections { target: janela; function onFichaChanged() { if (ficha) cFicha.carregar() } }
 
@@ -490,7 +712,7 @@ Window {
                 Item { width: 1; height: 6 }
                 Text { text: "DESCRIÇÃO"; color: textoFraco; font { family: familia; pixelSize: 11; letterSpacing: 1.2; weight: Font.Medium } }
                 ScrollView {
-                    width: parent.width; height: Math.max(140, cFicha.height - 372)
+                    width: parent.width; height: Math.max(110, cFicha.height - 458)
                     background: Rectangle { radius: 10; color: superficie2; border.color: campoDesc.activeFocus ? roxo : traco }
                     TextArea {
                         id: campoDesc
@@ -531,6 +753,27 @@ Window {
                 Text { visible: ficha && ficha.agendado && escolhaVis.valor !== "private"; width: parent.width; wrapMode: Text.WordWrap
                        color: amarelo; font { family: familia; pixelSize: 12 }
                        text: "Mudando pra " + nomeVis(escolhaVis.valor) + ", ele sai AGORA e deixa de estar agendado." }
+                Item { width: 1; height: 6 }
+                Text { text: ficha && ficha.agendado ? "AGENDADO PARA" : "AGENDAR (vídeo privado sai sozinho no dia)"; color: textoFraco
+                       font { family: familia; pixelSize: 11; letterSpacing: 1.2; weight: Font.Medium } }
+                Row {
+                    spacing: 8
+                    enabled: ficha !== null && ficha.visibilidade === "private"
+                    opacity: enabled ? 1 : 0.4
+                    TextField { id: campoDia; width: 130; height: 38; placeholderText: "14/11/2026"; placeholderTextColor: "#5a536d"
+                                color: texto; font.family: familia; font.pixelSize: 13; leftPadding: 12; selectByMouse: true
+                                background: Rectangle { radius: 10; color: superficie2; border.color: campoDia.activeFocus ? roxo : traco } }
+                    TextField { id: campoHora; width: 84; height: 38; placeholderText: "18:00"; placeholderTextColor: "#5a536d"
+                                color: texto; font.family: familia; font.pixelSize: 13; leftPadding: 12; selectByMouse: true
+                                background: Rectangle { radius: 10; color: superficie2; border.color: campoHora.activeFocus ? roxo : traco } }
+                    Botao { rotulo: ficha && ficha.agendado ? "Mudar" : "Agendar"; ativo: !ocupado
+                            onClicado: painel.agendar(ficha.id, campoDia.text, campoHora.text) }
+                    Botao { visible: ficha !== null && ficha.agendado !== ""; rotulo: "Tirar do agendamento"; ativo: !ocupado
+                            onClicado: confirmar = { texto: "Tirar \"" + ficha.titulo + "\" do agendamento? Ele continua privado e não sai sozinho.",
+                                                     sim: function () { painel.desagendar(ficha.id) } } }
+                }
+                Text { visible: ficha !== null && ficha.visibilidade !== "private"; color: textoFraco; font { family: familia; pixelSize: 11 }
+                       text: "Este já saiu: só dá pra agendar vídeo privado." }
             }
 
             // embaixo: salvar
@@ -547,6 +790,161 @@ Window {
                 text: avisoTexto; color: avisoOk ? verde : vermelho; font { family: familia; pixelSize: 13; weight: Font.Medium }
             }
         }
+    }
+
+    // ================= O EDITOR DO CARD =================
+    Rectangle {
+        anchors.fill: parent
+        visible: cardAberto !== null
+        color: Qt.rgba(0.02, 0.01, 0.05, 0.72)
+        MouseArea { anchors.fill: parent; onClicked: cardAberto = null }
+        onVisibleChanged: if (visible) {
+            cTitulo.text = cardAberto.titulo; cJogo.text = cardAberto.jogo; cData.text = isoParaBr(cardAberto.data)
+            cNotas.text = cardAberto.notas; cColuna.valor = cardAberto.coluna; cArquivos.lista = cardAberto.arquivos.slice(); cApagar.certeza = false
+        }
+        Rectangle {
+            anchors.centerIn: parent
+            width: 640; height: Math.min(parent.height - 60, 640)
+            radius: 18; color: superficie; border.color: traco
+            MouseArea { anchors.fill: parent }
+            Column {
+                x: 28; y: 26; width: parent.width - 56; spacing: 8
+                Text { text: cardAberto && cardAberto.id ? "Card" : "Nova ideia"; color: texto; font { family: familia; pixelSize: 20; weight: Font.DemiBold } }
+                Item { width: 1; height: 4 }
+                Text { text: "TÍTULO"; color: textoFraco; font { family: familia; pixelSize: 11; letterSpacing: 1.2; weight: Font.Medium } }
+                TextField { id: cTitulo; width: parent.width; height: 42; color: texto; font.family: familia; font.pixelSize: 14; leftPadding: 12; selectByMouse: true
+                            placeholderText: "Do que é o vídeo?"; placeholderTextColor: "#5a536d"
+                            background: Rectangle { radius: 10; color: superficie2; border.color: cTitulo.activeFocus ? roxo : traco } }
+                Row {
+                    spacing: 12
+                    Column { spacing: 8
+                        Text { text: "JOGO"; color: textoFraco; font { family: familia; pixelSize: 11; letterSpacing: 1.2; weight: Font.Medium } }
+                        TextField { id: cJogo; width: 280; height: 40; color: texto; font.family: familia; font.pixelSize: 13; leftPadding: 12; selectByMouse: true
+                                    placeholderText: "Doors, Minecraft…"; placeholderTextColor: "#5a536d"
+                                    background: Rectangle { radius: 10; color: superficie2; border.color: cJogo.activeFocus ? roxo : traco } } }
+                    Column { spacing: 8
+                        Text { text: "DATA PLANEJADA"; color: textoFraco; font { family: familia; pixelSize: 11; letterSpacing: 1.2; weight: Font.Medium } }
+                        TextField { id: cData; width: 160; height: 40; color: texto; font.family: familia; font.pixelSize: 13; leftPadding: 12; selectByMouse: true
+                                    placeholderText: "14/11/2026"; placeholderTextColor: "#5a536d"
+                                    background: Rectangle { radius: 10; color: superficie2; border.color: cData.activeFocus ? roxo : (cData.text && !brParaIso(cData.text) ? vermelho : traco) } } }
+                }
+                Text { text: "ETAPA"; color: textoFraco; font { family: familia; pixelSize: 11; letterSpacing: 1.2; weight: Font.Medium } }
+                Flow {
+                    id: cColuna
+                    property string valor: "ideia"
+                    width: parent.width; spacing: 6
+                    Repeater {
+                        model: colunas
+                        Rectangle {
+                            height: 32; radius: 8; width: tc.implicitWidth + 22
+                            readonly property bool sel: cColuna.valor === modelData.id
+                            color: sel ? Qt.rgba(0.65, 0.55, 0.98, 0.18) : superficie2; border.color: sel ? roxo : traco
+                            Text { id: tc; anchors.centerIn: parent; text: modelData.t; color: parent.sel ? texto : textoMedio; font { family: familia; pixelSize: 12 } }
+                            MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: cColuna.valor = modelData.id }
+                        }
+                    }
+                }
+                Text { text: "NOTAS"; color: textoFraco; font { family: familia; pixelSize: 11; letterSpacing: 1.2; weight: Font.Medium } }
+                ScrollView {
+                    width: parent.width; height: 110
+                    background: Rectangle { radius: 10; color: superficie2; border.color: cNotas.activeFocus ? roxo : traco }
+                    TextArea { id: cNotas; color: texto; font.family: familia; font.pixelSize: 13; wrapMode: TextArea.Wrap; padding: 12; background: null; selectByMouse: true
+                               placeholderText: "Roteiro, ideias de thumb, o que gravar…"; placeholderTextColor: "#5a536d" }
+                }
+                Row {
+                    width: parent.width
+                    Text { width: parent.width - btArq.width; text: "ARQUIVOS (gravação, prévia da decupagem…)"; color: textoFraco; anchors.verticalCenter: parent.verticalCenter
+                           font { family: familia; pixelSize: 11; letterSpacing: 1.2; weight: Font.Medium } }
+                    Botao { id: btArq; rotulo: "Ligar arquivo"; height: 32; onClicado: escolherArquivo.open() }
+                }
+                Column {
+                    id: cArquivos
+                    property var lista: []
+                    width: parent.width; spacing: 4
+                    Repeater {
+                        model: cArquivos.lista
+                        Rectangle {
+                            width: cArquivos.width; height: 32; radius: 8; color: superficie2
+                            Text { x: 12; anchors.verticalCenter: parent.verticalCenter; width: parent.width - 120; elide: Text.ElideMiddle
+                                   text: modelData.split("/").pop(); color: textoMedio; font { family: familia; pixelSize: 12 } }
+                            Text { anchors { right: parent.right; rightMargin: 46; verticalCenter: parent.verticalCenter } text: "Abrir"; color: roxo
+                                   font { family: familia; pixelSize: 12; weight: Font.DemiBold }
+                                   MouseArea { anchors.fill: parent; anchors.margins: -6; cursorShape: Qt.PointingHandCursor; onClicked: painel.abrirArquivo(modelData) } }
+                            Text { anchors { right: parent.right; rightMargin: 14; verticalCenter: parent.verticalCenter } text: "✕"; color: textoFraco
+                                   font { family: familia; pixelSize: 12 }
+                                   MouseArea { anchors.fill: parent; anchors.margins: -6; cursorShape: Qt.PointingHandCursor
+                                               onClicked: { var l = cArquivos.lista.slice(); l.splice(index, 1); cArquivos.lista = l } } }
+                        }
+                    }
+                    Text { visible: cArquivos.lista.length === 0; text: "Nenhum arquivo ligado."; color: "#5a536d"; font { family: familia; pixelSize: 12 } }
+                }
+            }
+            Row {
+                anchors { left: parent.left; bottom: parent.bottom; margins: 24 }
+                Botao { id: cApagar; property bool certeza: false; visible: cardAberto !== null && cardAberto.id > 0
+                        rotulo: certeza ? "Clica de novo pra apagar" : "Apagar"
+                        onClicado: { if (!certeza) { certeza = true; return } painel.apagarCard(cardAberto.id); cardAberto = null } }
+            }
+            Row {
+                anchors { right: parent.right; bottom: parent.bottom; margins: 24 }
+                spacing: 10
+                Botao { rotulo: "Cancelar"; onClicado: cardAberto = null }
+                Botao { rotulo: "Salvar"; principal: true; ativo: cTitulo.text.trim() !== "" && (!cData.text || brParaIso(cData.text) !== "")
+                        onClicado: {
+                            var campos = { titulo: cTitulo.text, jogo: cJogo.text.trim(), data: brParaIso(cData.text), notas: cNotas.text,
+                                           coluna: cColuna.valor, arquivos: cArquivos.lista }
+                            if (cardAberto.id) painel.salvarCard(cardAberto.id, campos); else painel.criarCard(campos)
+                            cardAberto = null
+                        } }
+            }
+        }
+    }
+
+    FileDialog {
+        id: escolherArquivo
+        title: "Ligar um arquivo ao card"
+        currentFolder: "file:///mnt/cab1286d-6765-4c73-9c77-8d3119b4b644/Estudio/Gravacoes"
+        onAccepted: { var l = cArquivos.lista.slice(); l.push(painel.caminhoDe(selectedFile.toString())); cArquivos.lista = l }
+    }
+
+    // ================= CONFIRMAR =================
+    Rectangle {
+        anchors.fill: parent
+        visible: confirmar !== null
+        color: Qt.rgba(0.02, 0.01, 0.05, 0.72)
+        MouseArea { anchors.fill: parent; onClicked: confirmar = null }
+        Rectangle {
+            anchors.centerIn: parent; width: 460; height: txtConf.height + 110
+            radius: 16; color: superficie; border.color: traco
+            MouseArea { anchors.fill: parent }
+            Text { id: txtConf; x: 26; y: 26; width: parent.width - 52; wrapMode: Text.WordWrap; text: confirmar ? confirmar.texto : ""
+                   color: texto; font { family: familia; pixelSize: 15 } }
+            Row {
+                anchors { right: parent.right; bottom: parent.bottom; margins: 20 }
+                spacing: 10
+                Botao { rotulo: "Não"; onClicado: confirmar = null }
+                Botao { rotulo: "Sim"; principal: true; onClicado: { var f = confirmar.sim; confirmar = null; f() } }
+            }
+        }
+    }
+
+    // o que está sendo arrastado, seguindo o mouse
+    Rectangle {
+        visible: arrasto !== null
+        x: arrastoPos.x + 10; y: arrastoPos.y + 6
+        width: Math.min(260, ta.implicitWidth + 24); height: 30; radius: 8; color: roxoForte; opacity: 0.92
+        Text { id: ta; x: 12; anchors.verticalCenter: parent.verticalCenter; width: parent.width - 24; elide: Text.ElideRight
+               text: arrasto ? arrasto.titulo : ""; color: "white"; font { family: familia; pixelSize: 12; weight: Font.DemiBold } }
+    }
+
+    // aviso solto (fora da ficha: agendar pelo calendário, produção)
+    Rectangle {
+        visible: avisoTexto !== "" && ficha === null && cardAberto === null
+        anchors { horizontalCenter: conteudo.horizontalCenter; bottom: parent.bottom; bottomMargin: 20 }
+        height: 40; radius: 20; width: tav.implicitWidth + 40
+        color: avisoOk ? "#16301f" : "#3a1a1f"; border.color: avisoOk ? verde : vermelho
+        Text { id: tav; anchors.centerIn: parent; text: avisoTexto; color: avisoOk ? verde : vermelho; font { family: familia; pixelSize: 13; weight: Font.Medium } }
+        Timer { running: parent.visible; interval: 5000; onTriggered: avisoTexto = "" }
     }
 
     FileDialog {

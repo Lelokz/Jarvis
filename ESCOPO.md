@@ -855,7 +855,7 @@ jogos ele fica preso no meio) no HD, olha a imagem, responde em português e
 apaga (`olhar apagar`). Só quando o Léo pede; tela bloqueada = sem print. A
 instrução está no `CLAUDE.md` da casa.
 
-**Painel do Canal (09/11/2026, etapa 1 de 7):** `jarvis/canal/` (conta.py:
+**Painel do Canal (09/11/2026, etapas 1–3 de 7; janela `python -m jarvis.canal janela`, Painel.qml; Produção em producao.py, agendar em editar.py):** `jarvis/canal/` (conta.py:
 OAuth do projeto Google do Léo, token só no PC; dados.py: canal, vídeos, dias e
 views dia a dia dos últimos 15 vídeos em `~/.local/share/jarvis/canal/canal.db`,
 timer `jarvis-canal` a cada 30 min). Por voz: `python -m jarvis.canal resumo` e

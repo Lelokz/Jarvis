@@ -186,6 +186,75 @@ def main() -> int:
         except editar.Recusado:
             checa(f"recusa {nome}", True)
 
+    print("-- etapa 3: produção e agendar --")
+    from jarvis.canal import producao
+    i1 = producao.criar({"titulo": "  ideia   do Doors  ", "jogo": "Doors", "data": "2026-12-01"})
+    i2 = producao.criar({"titulo": "minecraft 100 ep 9", "coluna": "editando", "arquivos": ["/a.mov", "/a.mov", "/b.mp4"]})
+    l = {c["id"]: c for c in producao.listar()}
+    checa("cria com título limpo e começa em Ideia", l[i1]["titulo"] == "ideia do Doors" and l[i1]["coluna"] == "ideia")
+    checa("arquivo repetido entra uma vez", l[i2]["arquivos"] == ["/a.mov", "/b.mp4"])
+    producao.mover(i1, "gravando")
+    checa("mover de etapa", {c["id"]: c for c in producao.listar()}[i1]["coluna"] == "gravando")
+    for nome, campos in (("título vazio", {"titulo": "  "}), ("coluna que não existe", {"titulo": "x", "coluna": "lixo"}),
+                         ("data errada", {"titulo": "x", "data": "1/12"})):
+        try:
+            producao.criar(campos)
+            checa(f"recusa card com {nome}", False)
+        except ValueError:
+            checa(f"recusa card com {nome}", True)
+    checa("título parecido acha o vídeo", producao.parecidos("Doors hotel inteiro", "DOORS: o hotel inteiro"))
+    checa("título diferente não", not producao.parecidos("Minecraft ep 3", "DOORS: o hotel inteiro"))
+    i3 = producao.criar({"titulo": "doors o hotel inteiro", "coluna": "pronto"})
+    i4 = producao.criar({"titulo": "Roblox NOVO", "coluna": "pronto"})
+    producao.ligar_postados()
+    l = {c["id"]: c for c in producao.listar()}
+    checa("vídeo publicado: card vai pra Postado sozinho", l[i3]["coluna"] == "postado" and l[i3]["video"] == "v0", l[i3])
+    checa("e o card de vídeo público também", l[i4]["coluna"] == "postado" and l[i4]["video"] == "agend", l[i4])
+    producao.apagar(i4)
+    checa("apagar", i4 not in {c["id"] for c in producao.listar()})
+    checa("a janela recebe os cards", len(dados.para_janela()["cards"]) == 3)
+
+    import datetime as _dt
+    amanha = _dt.datetime.now() + _dt.timedelta(days=1)
+    q = editar.quando_de(f"{amanha:%d/%m/%Y}", "18:30")
+    checa("data e hora do Léo viram horário com fuso", q.hour == 18 and q.minute == 30 and q.tzinfo is not None)
+    for nome, args in (("passado", ("01/01/2020", "10:00")), ("formato errado", ("2026-12-01", "18h"))):
+        try:
+            editar.quando_de(*args)
+            checa(f"recusa agendar no {nome}", False)
+        except editar.Recusado:
+            checa(f"recusa agendar no {nome}", True)
+
+    class YTAg:
+        enviado = None
+        status = {"privacyStatus": "private", "selfDeclaredMadeForKids": False}
+
+        def videos(self):
+            return self
+
+        def list(self, **kw):
+            return Pedido({"items": [{"status": dict(YTAg.status)}]})
+
+        def update(self, part, body):
+            YTAg.enviado = (part, body)
+            return Pedido({})
+    editar.agendar("v1", q, yt=YTAg())
+    parte, corpo = YTAg.enviado
+    checa("agenda mandando só o status, em UTC", parte == "status" and corpo["status"]["publishAt"].endswith("Z")
+          and corpo["status"]["privacyStatus"] == "private", corpo)
+    con = dados.abrir()
+    checa("o banco do PC fica agendado", con.execute("SELECT agendado FROM videos WHERE id = 'v1'").fetchone()[0] != "")
+    con.close()
+    editar.desagendar("v1", yt=YTAg())
+    checa("tirar do agendamento: sem publishAt e continua privado", "publishAt" not in YTAg.enviado[1]["status"]
+          and YTAg.enviado[1]["status"]["privacyStatus"] == "private")
+    YTAg.status = {"privacyStatus": "public"}
+    try:
+        editar.agendar("v1", q, yt=YTAg())
+        checa("não agenda vídeo que já saiu", False)
+    except editar.Recusado:
+        checa("não agenda vídeo que já saiu", True)
+
     print(f"\n{ok} passaram, {falhou} falharam")
     return 1 if falhou else 0
 

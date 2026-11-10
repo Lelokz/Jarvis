@@ -56,6 +56,20 @@ def criar(fonte: Path | None = None) -> None:
                     (dia.isoformat(), v, v * 6, random.randint(0, 3), random.randint(0, 1), v // 20))
     con.commit()
     con.close()
+    from jarvis.canal import producao
+    em = lambda d: (hoje + dt.timedelta(days=d)).isoformat()  # noqa: E731
+    for campos in ({"titulo": "Minecraft 100% ep 7: o dragão", "jogo": "Minecraft", "coluna": "pronto"},
+                   {"titulo": "DOORS andar secreto", "jogo": "Doors", "coluna": "editando",
+                    "arquivos": ["/mnt/x/Gravacoes/2026-11-07 20-14-02.mov", "/mnt/x/Gravacoes/previa-doors.mp4"]},
+                   {"titulo": "Os 5 piores sustos de Doors", "jogo": "Doors", "coluna": "pronto"},
+                   {"titulo": "Dead Rails com o Lucas", "jogo": "Roblox", "coluna": "editando",
+                    "arquivos": ["/mnt/x/Gravacoes/2026-11-08 19-02-11.mov"]},
+                   {"titulo": "Pressure com o Lucas", "jogo": "Roblox", "coluna": "gravando", "data": em(9)},
+                   {"titulo": "A lore de Doors parte 2", "jogo": "Doors", "coluna": "ideia", "data": em(12), "notas": "narração separada"},
+                   {"titulo": "Minecraft 100% ep 8", "jogo": "Minecraft", "coluna": "ideia", "data": em(16)},
+                   {"titulo": "Testar 10 jogos de terror do Roblox", "jogo": "Roblox", "coluna": "ideia"},
+                   {"titulo": "DOORS: zerei o hotel", "jogo": "Doors", "coluna": "agendado"}):
+        producao.criar(campos)
     # Thumbs de mentira: um degradê com o título (o ffmpeg desenha).
     dados.THUMBS.mkdir(parents=True, exist_ok=True)
     for n, (vid, titulo, _, _) in enumerate(lista):

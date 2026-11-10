@@ -16,7 +16,7 @@ from PySide6.QtQml import QQmlApplicationEngine
 from PySide6.QtQuick import QQuickWindow
 import shiboken6
 
-from jarvis.canal import conta, dados, editar
+from jarvis.canal import conta, dados, editar, producao
 from jarvis.interface import atomo_icone
 from jarvis.interface.instancia import Instancia
 
@@ -93,6 +93,69 @@ class Painel(QObject):
     @Slot(str)
     def abrirLink(self, url: str) -> None:
         QDesktopServices.openUrl(QUrl(url))
+
+    # -- etapa 3: agendar ------------------------------------------------------------
+
+    @Slot(str, str, str)
+    def agendar(self, video: str, data: str, hora: str) -> None:
+        try:
+            quando = editar.quando_de(data, hora)
+        except editar.Recusado as e:
+            self.aviso.emit(f"Não deu: {e}.", False)
+            return
+        self._em_fundo(lambda: editar.agendar(video, quando), f"Agendado pra {quando:%d/%m às %H:%M}.")
+
+    @Slot(str, str)
+    def reagendarNoDia(self, video: str, dia_iso: str) -> None:
+        """O arrastar do calendário: mesmo horário, outro dia."""
+        import datetime as dt
+        atual = next((v for v in self._dados.get("videos", []) if v["id"] == video), None)
+        if not atual or not atual.get("agendado"):
+            return
+        antes = dt.datetime.fromisoformat(atual["agendado"].replace("Z", "+00:00")).astimezone()
+        dia = dt.date.fromisoformat(dia_iso)
+        self.agendar(video, f"{dia:%d/%m/%Y}", f"{antes:%H:%M}")
+
+    @Slot(str)
+    def desagendar(self, video: str) -> None:
+        self._em_fundo(lambda: editar.desagendar(video), "Tirado do agendamento (continua privado).")
+
+    # -- etapa 3: produção (só no PC, na hora) -----------------------------------------
+
+    def _no_pc(self, fazer, ok: str = "") -> None:
+        try:
+            fazer()
+            if ok:
+                self.aviso.emit(ok, True)
+        except ValueError as e:
+            self.aviso.emit(f"Não deu: {e}.", False)
+        self.recarregar()
+
+    @Slot("QVariantMap", result=int)
+    def criarCard(self, campos: dict) -> int:
+        novo = [0]
+        self._no_pc(lambda: novo.__setitem__(0, producao.criar(dict(campos))))
+        return novo[0]
+
+    @Slot(int, "QVariantMap")
+    def salvarCard(self, card: int, campos: dict) -> None:
+        self._no_pc(lambda: producao.atualizar(card, dict(campos)), "Card salvo.")
+
+    @Slot(int, str)
+    def moverCard(self, card: int, coluna: str) -> None:
+        self._no_pc(lambda: producao.mover(card, coluna))
+
+    @Slot(int)
+    def apagarCard(self, card: int) -> None:
+        self._no_pc(lambda: producao.apagar(card), "Card apagado.")
+
+    @Slot(str, result=str)
+    def caminhoDe(self, url: str) -> str:
+        return QUrl(url).toLocalFile() or url
+
+    @Slot(str)
+    def abrirArquivo(self, caminho: str) -> None:
+        QDesktopServices.openUrl(QUrl.fromLocalFile(caminho))
 
 
 def abrir(retrato: str | None = None, aba: str = "inicio", ficha: str = "") -> int:

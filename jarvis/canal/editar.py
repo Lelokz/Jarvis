@@ -73,3 +73,53 @@ def trocar_thumb(video: str, imagem: str, yt=None) -> None:
     yt.thumbnails().set(videoId=video, media_body=MediaFileUpload(str(caminho), mimetype=tipo)).execute()
     dados.THUMBS.mkdir(parents=True, exist_ok=True)
     dados.thumb_local(video).write_bytes(caminho.read_bytes())
+
+
+# -- agendar (etapa 3) ------------------------------------------------------------------
+
+def quando_de(data: str, hora: str):
+    """"14/11/2026" + "18:30" (hora do PC) -> datetime com fuso. Recusa passado."""
+    import datetime as dt
+    try:
+        d = dt.datetime.strptime(f"{data.strip()} {hora.strip()}", "%d/%m/%Y %H:%M").astimezone()
+    except ValueError:
+        raise Recusado("data ou hora no formato errado (use 14/11/2026 e 18:30)") from None
+    if d <= dt.datetime.now().astimezone() + dt.timedelta(minutes=5):
+        raise Recusado("o agendamento tem que ser pelo menos 5 minutos no futuro")
+    return d
+
+
+def agendar(video: str, quando, yt=None) -> None:
+    """Vídeo PRIVADO que já está no YouTube sai sozinho em `quando`."""
+    import datetime as dt
+    yt = yt or conta.youtube()
+    atual = yt.videos().list(part="status", id=video).execute().get("items", [])
+    if not atual:
+        raise Recusado("esse vídeo não existe mais no canal")
+    st = atual[0]["status"]
+    if st.get("privacyStatus") != "private":
+        raise Recusado("só dá pra agendar vídeo que está como Privado (este já saiu)")
+    utc = quando.astimezone(dt.timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    status = {k: st[k] for k in ("embeddable", "license", "publicStatsViewable", "selfDeclaredMadeForKids") if k in st}
+    status.update(privacyStatus="private", publishAt=utc)
+    yt.videos().update(part="status", body={"id": video, "status": status}).execute()
+    con = dados.abrir()
+    with con:
+        con.execute("UPDATE videos SET visibilidade = 'private', agendado = ? WHERE id = ?", (utc, video))
+    con.close()
+
+
+def desagendar(video: str, yt=None) -> None:
+    """Tira do agendamento: continua Privado e não sai sozinho."""
+    yt = yt or conta.youtube()
+    atual = yt.videos().list(part="status", id=video).execute().get("items", [])
+    if not atual:
+        raise Recusado("esse vídeo não existe mais no canal")
+    st = {k: v for k, v in atual[0]["status"].items()
+          if k in ("embeddable", "license", "publicStatsViewable", "selfDeclaredMadeForKids")}
+    st["privacyStatus"] = "private"
+    yt.videos().update(part="status", body={"id": video, "status": st}).execute()
+    con = dados.abrir()
+    with con:
+        con.execute("UPDATE videos SET agendado = '' WHERE id = ?", (video,))
+    con.close()

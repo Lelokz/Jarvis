@@ -317,6 +317,9 @@ def para_janela(hoje: dt.date | None = None) -> dict:
                    "meta": meta(c["inscritos"])},
          "numeros": _numeros(con, hoje), "dias": dias, "videos": videos}
     con.close()
+    from jarvis.canal import producao
+    producao.ligar_postados()
+    r["cards"] = producao.listar()
     return r
 
 
