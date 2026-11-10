@@ -460,9 +460,36 @@ class Ciclo:
         if falar:
             self._falar(f"Modo code no {proj.nome.removeprefix('Projeto ')}. Pode falar.")
 
-    def _modo_code(self, cmd: tuple[str, str], texto: str) -> bool:
-        """Entrar, trocar e sair do modo code. False = não era (segue pro Claude)."""
+    def criar_projeto(self, nome: str, falar: bool = True) -> str | None:
+        """Projeto novo na pasta Projetos do HD e já entra no modo code nele
+        (chat novo). Devolve o motivo se não deu."""
+        try:
+            proj = projetos.criar(nome)
+        except (projetos.NomeRuim, OSError) as e:
+            if falar:
+                self._falar(f"Não deu pra criar: {e}.")
+            return str(e)
+        self.registrador.registrar_estado("projeto_novo", nome=proj.nome, caminho=str(proj.caminho))
+        self._entrar_projeto(proj, falar=False)
+        if falar:
+            self._falar(f"Criei o projeto {proj.nome} no HD e entrei no modo code. Do que vai ser?")
+        return None
+
+    def _modo_code(self, cmd: tuple[str, str], texto: str, voz=None) -> bool:
+        """Entrar, trocar, criar e sair do modo code. False = não era (segue pro Claude)."""
         tipo, nome = cmd
+        if tipo == "novo":
+            self.registrador.registrar_estado("modo_code", pedido="novo", projeto=nome, dito=texto)
+            if voz is not None and voz.quem == "outra":
+                self._falar("Projeto novo só o dono pede.")
+            elif self.agente.ocupado:
+                self._falar("Tô no meio de uma coisa. Fala para antes, ou espera eu terminar.")
+            elif not nome:
+                self._falar("Qual o nome? Fala: cria um projeto novo chamado, e o nome.")
+            else:
+                self.criar_projeto(nome)
+            self._renovar("janela reiniciada")
+            return True
         if tipo == "trocar":
             achados = projetos.achar(nome)
             if not achados and not projetos.eh_o_da_nova(nome):
@@ -841,7 +868,7 @@ class Ciclo:
 
         # 2b. O modo code: entrar, trocar de projeto, sair (do corpo, não do Claude).
         cmd = comando_code(texto, getattr(self.agente, "code", None) is not None)
-        if cmd is not None and self._modo_code(cmd, texto):
+        if cmd is not None and self._modo_code(cmd, texto, voz):
             return
 
         # 3. Com o Claude trabalhando: "para" interrompe; o resto entra na
@@ -1353,6 +1380,15 @@ class Ciclo:
                 self.avisar_cliente(pedido.cliente, "Esse projeto não pode no modo code.")
                 return
             self._entrar_projeto(proj, falar=False)
+            return
+        if pedido.tipo == "novo_projeto":
+            # O "+ Novo projeto" da lista do Code (janela e app).
+            if self.agente.ocupado:
+                self.avisar_cliente(pedido.cliente, "Espera ele terminar (ou diz \"para\") pra criar o projeto.")
+                return
+            motivo = self.criar_projeto(pedido.valor, falar=False)
+            if motivo:
+                self.avisar_cliente(pedido.cliente, f"Não deu pra criar: {motivo}.")
             return
         if pedido.tipo == "git":
             # Os botões Commit e Push: o clique já é o OK do Léo.

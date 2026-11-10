@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Controls.Basic
 import QtQuick.Window
 
 // A janela grande do Jarvis (22/10/2026, protótipo aprovado pelo Léo): como
@@ -902,6 +903,51 @@ Window {
                     width: parent.width; spacing: 2
                     Text { text: "Programar pela voz em…"; color: tema.textoFraco; font.family: tema.familia; font.pixelSize: 12
                            bottomPadding: 6; leftPadding: 6 }
+                    // Projeto novo (10/11/2026): o nome vira a pasta em Projetos, no HD, e abre um chat novo nele.
+                    Rectangle {
+                        id: linhaNovo
+                        objectName: "linhaNovo"
+                        property bool escrevendo: false
+                        width: colProjetos.width; height: escrevendo ? 84 : 36; radius: 8
+                        color: escrevendo ? tema.superficie2 : maNovo.containsMouse ? tema.superficie2 : "transparent"
+                        Text { visible: !linhaNovo.escrevendo; x: 10; anchors.verticalCenter: parent.verticalCenter
+                               text: "+  Novo projeto"; color: tema.persona; font.family: tema.familia; font.pixelSize: 14; font.weight: Font.Medium }
+                        MouseArea { id: maNovo; anchors.fill: parent; visible: !linhaNovo.escrevendo; hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor; onClicked: { linhaNovo.escrevendo = true; campoNovo.forceActiveFocus() } }
+                        Column {
+                            visible: linhaNovo.escrevendo
+                            x: 8; y: 8; width: parent.width - 16; spacing: 8
+                            TextField {
+                                id: campoNovo
+                                width: parent.width; height: 34
+                                placeholderText: "Nome do projeto"; placeholderTextColor: tema.muitoFraco
+                                color: tema.texto; font.family: tema.familia; font.pixelSize: 14; leftPadding: 10
+                                background: Rectangle { radius: 8; color: tema.fundo; border.width: 1
+                                                        border.color: campoNovo.activeFocus ? tema.persona : tema.traco }
+                                onAccepted: criarNovo.criar()
+                                Keys.onEscapePressed: linhaNovo.escrevendo = false
+                            }
+                            Row {
+                                spacing: 8
+                                Rectangle {
+                                    id: criarNovo
+                                    function criar() {
+                                        if (!campoNovo.text.trim()) return;
+                                        if (typeof ponte !== "undefined") ponte.novoProjeto(campoNovo.text.trim());
+                                        campoNovo.text = ""; linhaNovo.escrevendo = false; janela.seletorCode = false;
+                                    }
+                                    height: 28; width: tcn.implicitWidth + 24; radius: 7
+                                    color: campoNovo.text.trim() ? tema.persona : tema.tracoForte
+                                    Text { id: tcn; anchors.centerIn: parent; text: "Criar e abrir"; color: "#0a0c10"
+                                           font.family: tema.familia; font.pixelSize: 12; font.weight: Font.DemiBold }
+                                    MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: criarNovo.criar() }
+                                }
+                                Text { anchors.verticalCenter: parent.verticalCenter; text: "na pasta Projetos do HD"
+                                       color: tema.muitoFraco; font.family: tema.familia; font.pixelSize: 11 }
+                            }
+                        }
+                    }
+                    Rectangle { width: colProjetos.width; height: 1; color: tema.traco }
                     Text { visible: janela.projetos.length === 0; text: "Procurando os projetos…"; color: tema.muitoFraco
                            font.family: tema.familia; font.pixelSize: 13; leftPadding: 6 }
                     Repeater {
@@ -932,7 +978,7 @@ Window {
                                     onClicked: { janela.seletorCode = false; if (typeof ponte !== "undefined") ponte.entrarCode("") } }
                     }
                     Text { width: colProjetos.width; wrapMode: Text.WordWrap; topPadding: 8; leftPadding: 6; rightPadding: 6
-                           text: "Pela voz: \"modo code no Loft\", \"troca pro Terror\", \"sai do modo code\"."
+                           text: "Pela voz: \"modo code no Loft\", \"troca pro Terror\", \"cria um projeto novo chamado…\", \"sai do modo code\"."
                            color: tema.muitoFraco; font.family: tema.familia; font.pixelSize: 12 }
                 }
             }

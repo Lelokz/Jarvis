@@ -109,6 +109,11 @@ _ENTRA = re.compile(rf"^(?:jarvis |friday )?(?:(?:entra|entrar|abre|abrir|liga|l
                     rf"modo {_CODE}(?: (?:em|pro|pra|para|n|d))?(?: projeto)? (?P<projeto>.+)$")
 _SAI = re.compile(rf"^(?:jarvis |friday )?(?:sai|sair|fecha|fechar|desliga|desligar|desativa|desativar|termina|encerra)"
                   rf"(?: d)? modo {_CODE}$")
+# Projeto novo (10/11/2026): "Jarvis, cria um projeto novo chamado Pressure",
+# "modo code num projeto novo chamado X", "novo projeto X".
+_NOVO = re.compile(rf"^(?:jarvis |friday )?(?:(?:cria|criar|crie|abre|abrir|faz|fazer|comeca|comecar|bora|quero)"
+                   rf"(?: (?:um|uma))? )?(?:modo {_CODE} (?:n|num|em|pro|pra|para) )?(?:projeto novo|novo projeto)"
+                   rf"(?: (?:chamado|que se chama|com nome|de nome|nome))?(?: (?P<nome>.+))?$")
 _TROCA = re.compile(r"^(?:jarvis |friday )?(?:troca|trocar|muda|mudar|vai)(?: (?:pro|pra|para|o|de))?(?: projeto)? (?P<projeto>.+)$")
 
 
@@ -119,6 +124,9 @@ def comando_code(falado: str, em_code: bool) -> tuple[str, str] | None:
     t = normalizar(falado)
     if _SAI.match(t):
         return ("sair", "")
+    m = _NOVO.match(t)
+    if m:
+        return ("novo", _nome_falado(falado) if m["nome"] else "")
     m = _ENTRA.match(t)
     if m:
         return ("entrar", m["projeto"])
@@ -126,3 +134,15 @@ def comando_code(falado: str, em_code: bool) -> tuple[str, str] | None:
     if m:
         return ("trocar", m["projeto"])
     return None
+
+
+def _nome_falado(falado: str) -> str:
+    """O nome do projeto como ele falou (com maiúscula e acento), depois de
+    "chamado"/"nome"/"novo"/"projeto"."""
+    texto = falado.strip().rstrip(".!?")
+    for marca in (r"\bque se chama\b", r"\bchamad[oa]\b", r"\bde nome\b", r"\bcom (?:o )?nome\b", r"\bnome\b",
+                  r"\bprojeto novo\b", r"\bnovo projeto\b"):
+        achou = list(re.finditer(marca, texto, re.IGNORECASE))
+        if achou:
+            return texto[achou[-1].end():].strip(" ,:;\"'")
+    return ""

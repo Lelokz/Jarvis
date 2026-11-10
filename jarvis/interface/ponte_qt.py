@@ -206,6 +206,10 @@ class PonteQt(QObject):
         return self._pedir({"pedir": "mudancas", "caminho": caminho})
 
     @Slot(str, result=bool)
+    def novoProjeto(self, nome: str) -> bool:
+        return self._pedir({"pedir": "novo_projeto", "nome": nome.strip()[:80]})
+
+    @Slot(str, result=bool)
     def git(self, acao: str) -> bool:
         return self._pedir({"pedir": "git", "acao": acao})
 

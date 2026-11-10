@@ -200,7 +200,7 @@ PEDIDOS = frozenset({"ola", "falar", "memoria", "ouvir",
                      "conversas", "abrir", "nova", "continuar", "cerebro", "parar",
                      "renomear", "apagar", "som", "ajustes", "fixar",
                      "memorias", "ler_memoria", "salvar_memoria", "conexao",
-                     "projetos", "code", "mudancas", "git"})
+                     "projetos", "code", "mudancas", "git", "novo_projeto"})
 
 # Uma linha maior que isto sem quebra é um cliente com defeito, não um pedido.
 MAX_LINHA = 64 * 1024
@@ -255,6 +255,11 @@ def ler_pedido(linha: bytes) -> tuple[str, dict[str, Any]]:
         if not isinstance(caminho, str) or len(caminho) > 500 or (tipo == "mudancas" and not caminho):
             raise ErroDeProtocolo(f"'{tipo}' sem um caminho válido")
         return tipo, {"caminho": caminho}
+    if tipo == "novo_projeto":
+        nome = objeto.get("nome")
+        if not isinstance(nome, str) or not nome.strip() or len(nome) > 80:
+            raise ErroDeProtocolo("'novo_projeto' sem um nome")
+        return tipo, {"nome": nome.strip()}
     if tipo == "git":
         if objeto.get("acao") not in ("commit", "push"):
             raise ErroDeProtocolo("'git' com acao commit ou push")

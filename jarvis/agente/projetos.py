@@ -16,6 +16,9 @@ from pathlib import Path
 CASA = Path.home()
 HD = Path("/mnt/cab1286d-6765-4c73-9c77-8d3119b4b644")
 PROIBIDO = (CASA / "Projetos" / "Jarvis").resolve()
+# Onde nascem os projetos novos (decisão do Léo, 10/11/2026: "na pasta de
+# projetos do meu HD"; o SSD não guarda projeto).
+NOVOS = HD / "Projetos"
 MARCAS = (".git", "project.godot", "package.json", "pyproject.toml")
 
 
@@ -31,9 +34,9 @@ def _eh_projeto(p: Path) -> bool:
 
 def listar() -> list[Projeto]:
     achados: list[Path] = []
-    pasta = CASA / "Projetos"
-    if pasta.is_dir():
-        achados += [p for p in pasta.iterdir() if p.is_dir() and not p.name.startswith(".")]
+    for pasta in (CASA / "Projetos", NOVOS):
+        if pasta.is_dir():
+            achados += [p for p in pasta.iterdir() if p.is_dir() and not p.name.startswith(".")]
     for raiz in (CASA / "Estudos" / "SENAI", HD / "Jogos"):
         if raiz.is_dir():
             achados += [p for p in raiz.iterdir() if p.is_dir() and _eh_projeto(p)]
@@ -109,3 +112,32 @@ def vocabulario(projeto: Projeto, quantos: int = 30) -> list[str]:
         if len(nomes) >= quantos:
             break
     return nomes
+
+
+class NomeRuim(ValueError):
+    pass
+
+
+def limpar_nome(nome: str) -> str:
+    """Letras, números, espaço, - e _ (o nome vira pasta). "pressure!!" -> "Pressure"."""
+    nome = re.sub(r"[^\w \-]", "", nome, flags=re.UNICODE)
+    nome = " ".join(nome.split())[:60].strip(" -_")
+    return nome[:1].upper() + nome[1:] if nome else ""
+
+
+def criar(nome: str) -> Projeto:
+    """A pasta nova em <HD>/Projetos/<nome>, com git. Não sobrescreve nada."""
+    limpo = limpar_nome(nome)
+    if not limpo:
+        raise NomeRuim("o nome ficou vazio")
+    if eh_o_da_nova(limpo):
+        raise NomeRuim("esse nome é o da NOVA")
+    if any(_palavras(p.nome) == _palavras(limpo) for p in listar()):
+        raise NomeRuim(f"já existe um projeto chamado {limpo}")
+    if not HD.is_dir():
+        raise NomeRuim("o HD não está montado")
+    pasta = NOVOS / limpo
+    pasta.mkdir(parents=True, exist_ok=False)
+    import subprocess
+    subprocess.run(["git", "-C", str(pasta), "init", "-q", "-b", "main"], capture_output=True, timeout=20)
+    return Projeto(limpo, pasta)

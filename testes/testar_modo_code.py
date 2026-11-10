@@ -129,7 +129,7 @@ def main() -> int:
     c._falar = lambda texto, **kw: falas.append(texto)
     c._renovar = lambda rotulo: renovou.append(rotulo)
     c._mudar_estado = lambda e: None
-    c.registrador = types.SimpleNamespace(registrar_estado=lambda nome, **kw: registros.append(nome))
+    c.registrador = types.SimpleNamespace(registrar_estado=lambda *a, **kw: registros.append(a[0]))
     c.cfg = types.SimpleNamespace(raiz=RAIZ, ciclo=types.SimpleNamespace(janela_s=30.0))
     vocab = []
     c.transcritor = types.SimpleNamespace(usar_vocabulario=lambda n: vocab.append(list(n)))
@@ -213,6 +213,40 @@ def main() -> int:
     d = git_code.diff_da_ferramenta("Edit", {"old_string": "a\nb", "new_string": "c"})
     checa("antes/depois do Edit em ```diff", d == "```diff\n-a\n-b\n+c\n```", d)
     checa("ferramenta que não edita não mostra diff", git_code.diff_da_ferramenta("Read", {}) is None)
+
+    print("-- projeto novo --")
+    checa("frase: cria um projeto novo chamado X", comando_code("Jarvis, cria um projeto novo chamado Jogo da Cobrinha.", False)
+          == ("novo", "Jogo da Cobrinha"))
+    checa("frase: modo code num projeto novo", comando_code("Friday, modo code num projeto novo chamado Pressure", True)
+          == ("novo", "Pressure"))
+    checa("frase sem nome", comando_code("cria um projeto novo", False) == ("novo", ""))
+    checa("nome vira pasta limpa", projetos.limpar_nome("  ônibus   sc!!/../ ") == "Ônibus sc")
+    hd_antes, novos_antes = projetos.HD, projetos.NOVOS
+    projetos.HD, projetos.NOVOS = tmp, tmp / "Projetos"
+    try:
+        novo = projetos.criar("calculadora de notas")
+        checa("cria a pasta em Projetos do HD, com git", novo.caminho == tmp / "Projetos" / "Calculadora de notas"
+              and (novo.caminho / ".git").is_dir())
+        checa("e ela entra na lista do modo code", "Calculadora de notas" in [p.nome for p in projetos.listar()])
+        for nome, n in (("repetido", "Calculadora de Notas"), ("vazio", "!!!"), ("da NOVA", "Nova")):
+            try:
+                projetos.criar(n)
+                checa(f"recusa nome {nome}", False)
+            except projetos.NomeRuim:
+                checa(f"recusa nome {nome}", True)
+        falas.clear()
+        c.agente = types.SimpleNamespace(code=None, ocupado=False, entrar_code=lambda p: entrou.append(p))
+        c._modo_code(("novo", "Jogo da Cobrinha"), "x")
+        checa("pela voz: cria, entra e pergunta do que é", entrou[-1].nome == "Jogo da Cobrinha"
+              and falas[-1] == "Criei o projeto Jogo da Cobrinha no HD e entrei no modo code. Do que vai ser?", falas)
+        c._modo_code(("novo", ""), "x")
+        checa("sem nome: pede o nome", falas[-1].startswith("Qual o nome?"))
+        c._modo_code(("novo", "Outro"), "x", Voz("outra", 0.1, 3.0))
+        checa("outra voz não cria projeto", falas[-1] == "Projeto novo só o dono pede." and not (tmp / "Projetos" / "Outro").exists())
+        checa("pela janela: não fala, devolve o motivo se não deu", c.criar_projeto("Jogo da Cobrinha", falar=False).startswith("já existe"))
+    finally:
+        projetos.HD, projetos.NOVOS = hd_antes, novos_antes
+    checa("pedido da janela", lp({"pedir": "novo_projeto", "nome": " Pressure "}) == ("novo_projeto", {"nome": "Pressure"}))
 
     print(f"\n{ok} passaram, {falhou} falharam")
     return 1 if falhou else 0
