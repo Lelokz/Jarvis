@@ -194,12 +194,13 @@ VERSAO = 3
 PUBLICOS = frozenset({"sessao", "estado", "nivel", "voce_disse", "jarvis_disse", "aviso",
                       "mostrar", "atividade", "voz", "cerebro", "conversa_atual", "uso",
                       "escrevendo", "som", "ajustes", "desbloqueio",
-                      "aprovacao", "notificacao"})
+                      "aprovacao", "notificacao", "projetos", "mudancas"})
 ESTADOS = ("dormindo", "ouvindo", "escutando", "pensando", "falando")
 PEDIDOS = frozenset({"ola", "falar", "memoria", "ouvir",
                      "conversas", "abrir", "nova", "continuar", "cerebro", "parar",
                      "renomear", "apagar", "som", "ajustes", "fixar",
-                     "memorias", "ler_memoria", "salvar_memoria", "conexao"})
+                     "memorias", "ler_memoria", "salvar_memoria", "conexao",
+                     "projetos", "code", "mudancas", "git"})
 
 # Uma linha maior que isto sem quebra é um cliente com defeito, não um pedido.
 MAX_LINHA = 64 * 1024
@@ -244,8 +245,20 @@ def ler_pedido(linha: bytes) -> tuple[str, dict[str, Any]]:
             raise ErroDeProtocolo(f"texto com mais de {MAX_TEXTO} caracteres")
         return tipo, {"texto": texto, "anexos": _anexos(objeto), "mudo": _mudo(objeto)}
 
-    if tipo in ("memoria", "conversas", "nova", "parar", "memorias"):
+    if tipo in ("memoria", "conversas", "nova", "parar", "memorias", "projetos"):
         return tipo, {}
+
+    # O modo code (10/11/2026): entrar num projeto ("" = sair), ver as mudanças
+    # dele e os botões Commit/Push (que viram pedido pro Jarvis, já com o OK).
+    if tipo in ("code", "mudancas"):
+        caminho = objeto.get("caminho", "")
+        if not isinstance(caminho, str) or len(caminho) > 500 or (tipo == "mudancas" and not caminho):
+            raise ErroDeProtocolo(f"'{tipo}' sem um caminho válido")
+        return tipo, {"caminho": caminho}
+    if tipo == "git":
+        if objeto.get("acao") not in ("commit", "push"):
+            raise ErroDeProtocolo("'git' com acao commit ou push")
+        return tipo, {"acao": objeto["acao"]}
 
     if tipo in ("ler_memoria", "salvar_memoria"):
         ident = objeto.get("id")
@@ -320,6 +333,20 @@ def ler_pedido(linha: bytes) -> tuple[str, dict[str, Any]]:
             if not isinstance(nome, str) or len(nome) > 60:
                 raise ErroDeProtocolo("'nome' inválido")
             dados["nome"] = nome
+        # O modo code (10/11/2026): quanto ele narra, quanto tempo o microfone
+        # fica aberto e quem programa.
+        for campo, validos in (("code_narracao", ("pouca", "normal", "muita")),
+                               ("code_persona", ("atual", "jarvis", "friday"))):
+            valor = objeto.get(campo)
+            if valor is not None:
+                if valor not in validos:
+                    raise ErroDeProtocolo(f"'{campo}' inválido")
+                dados[campo] = valor
+        janela = objeto.get("code_janela_s")
+        if janela is not None:
+            if janela not in (60, 120, 180, 300):
+                raise ErroDeProtocolo("'code_janela_s' tem que ser 60, 120, 180 ou 300")
+            dados["code_janela_s"] = janela
         return tipo, dados
 
     if tipo == "conexao":

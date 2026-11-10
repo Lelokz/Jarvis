@@ -22,7 +22,9 @@ PADRAO: dict[str, Any] = {"volume_voz": 100, "nome": "",
                           # Os programas das vozes dubladas, quando foi o instalador que pôs.
                           "programas_vozes": "",
                           # Quem atende quando a NOVA liga (o instalador pergunta).
-                          "persona_inicial": "jarvis"}
+                          "persona_inicial": "jarvis",
+                          # O modo code (10/11/2026): narração, microfone aberto e quem programa.
+                          "code_narracao": "normal", "code_janela_s": 120, "code_persona": "atual"}
 
 
 def limpar_nome(nome: str) -> str:
@@ -65,6 +67,12 @@ def ler() -> dict[str, Any]:
             saida["persona_inicial"] = dados["persona_inicial"]
         if isinstance(dados.get("nome"), str):
             saida["nome"] = limpar_nome(dados["nome"])
+        if dados.get("code_narracao") in ("pouca", "normal", "muita"):
+            saida["code_narracao"] = dados["code_narracao"]
+        if dados.get("code_janela_s") in (60, 120, 180, 300):
+            saida["code_janela_s"] = dados["code_janela_s"]
+        if dados.get("code_persona") in ("atual", "jarvis", "friday"):
+            saida["code_persona"] = dados["code_persona"]
     return saida
 
 

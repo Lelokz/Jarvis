@@ -437,8 +437,28 @@ class Ciclo:
 
     def _janela_s(self) -> float:
         if getattr(self.agente, "code", None) is not None:
-            return max(self.cfg.ciclo.janela_s, getattr(self, "janela_code_s", self.JANELA_CODE_S))
+            try:
+                escolhida = float(ajustes.ler()["code_janela_s"])
+            except Exception:
+                escolhida = self.JANELA_CODE_S
+            return max(self.cfg.ciclo.janela_s, escolhida)
         return self.cfg.ciclo.janela_s
+
+    def _entrar_projeto(self, proj, falar: bool = True) -> None:
+        """Entra no modo code nesse projeto, com os ajustes do Léo (narração e
+        quem programa) e o vocabulário do projeto no Whisper."""
+        try:
+            escolhas = ajustes.ler()
+        except Exception:
+            escolhas = {}
+        self.agente.narracao = escolhas.get("code_narracao", "normal")
+        if escolhas.get("code_persona") in ("jarvis", "friday") and hasattr(self, "trocar_persona"):
+            self.trocar_persona(escolhas["code_persona"])
+        self.agente.entrar_code(proj)
+        base = _nomes_do_vocabulario(self.cfg.raiz / "atalhos.toml")
+        self.transcritor.usar_vocabulario(base + ["modo code"] + projetos.vocabulario(proj))
+        if falar:
+            self._falar(f"Modo code no {proj.nome.removeprefix('Projeto ')}. Pode falar.")
 
     def _modo_code(self, cmd: tuple[str, str], texto: str) -> bool:
         """Entrar, trocar e sair do modo code. False = não era (segue pro Claude)."""
@@ -475,11 +495,7 @@ class Ciclo:
             nomes = [p.nome for p in achados[:3]]
             self._falar(f"Qual deles: {', '.join(nomes[:-1])} ou {nomes[-1]}?")
         else:
-            proj = achados[0]
-            self.agente.entrar_code(proj)
-            base = _nomes_do_vocabulario(self.cfg.raiz / "atalhos.toml")
-            self.transcritor.usar_vocabulario(base + ["modo code"] + projetos.vocabulario(proj))
-            self._falar(f"Modo code no {proj.nome.removeprefix('Projeto ')}. Pode falar.")
+            self._entrar_projeto(achados[0])
         self._renovar("janela reiniciada")
         return True
 
@@ -956,9 +972,9 @@ class Ciclo:
             self._fim_da_escrita()
             self.atualizar_aviso()
         elif s.tipo == "code":
-            # Entrou/saiu do modo code: a janela e o app mostram o projeto.
+            # Entrou/saiu do modo code: a janela e o app mostram o projeto (no "cerebro").
             self.registrador.registrar_estado("modo_code_ativo", projeto=s.texto)
-            self.emissor.emitir("modo_code", projeto=s.texto)
+            self.emitir_cerebro()
         elif s.tipo == "sessao":
             # Chat novo ou retomado: a janela troca a conversa que mostra.
             falas = []
@@ -1307,6 +1323,8 @@ class Ciclo:
         cor = self.cfg.friday.cor if self.persona == "friday" and self.cfg.friday else ""
         self.emissor.emitir("cerebro", persona=self.persona, cor_persona=cor, **self.agente.cerebro,
                             jogo=self.jogo or "", gravando=self.gravando,
+                            code=self.agente.code.nome if getattr(self.agente, "code", None) else "",
+                            code_caminho=str(self.agente.code.caminho) if getattr(self.agente, "code", None) else "",
                             local=self.agente.local_disponivel(), local_nome=self.cfg.agente.nome_local)
 
     def atender_pedido(self, pedido: Pedido) -> None:
@@ -1319,6 +1337,33 @@ class Ciclo:
             if not ok:
                 self.avisar_cliente(pedido.cliente, "Espera ele terminar o pedido (ou diz "
                                                     "\"para\") pra trocar de conversa.")
+            return
+        if pedido.tipo == "code":
+            # A janela/app escolheu um projeto ("" = sair do modo code).
+            if self.agente.ocupado:
+                self.avisar_cliente(pedido.cliente, "Espera ele terminar (ou diz \"para\") pra trocar de projeto.")
+                return
+            if not pedido.valor:
+                if self.agente.code is not None:
+                    self.agente.entrar_code(None)
+                    self.transcritor.usar_vocabulario(_nomes_do_vocabulario(self.cfg.raiz / "atalhos.toml"))
+                return
+            proj = next((p for p in projetos.listar() if str(p.caminho) == pedido.valor), None)
+            if proj is None:
+                self.avisar_cliente(pedido.cliente, "Esse projeto não pode no modo code.")
+                return
+            self._entrar_projeto(proj, falar=False)
+            return
+        if pedido.tipo == "git":
+            # Os botões Commit e Push: o clique já é o OK do Léo.
+            if self.agente.code is None:
+                self.avisar_cliente(pedido.cliente, "Só no modo code.")
+                return
+            texto = ("Faz o commit das mudanças agora (o Léo apertou o botão Commit: já está aprovado). "
+                     "Mensagem curta em português, sem linhas de assinatura. Conta em uma frase.") \
+                if pedido.valor == "commit" else \
+                ("Faz o push agora (o Léo apertou o botão Push: já está aprovado). Conta em uma frase.")
+            self._responder(texto, origem="texto")
             return
         if pedido.tipo == "parar":
             # O botão Parar da janela e do app: cala e interrompe na hora.

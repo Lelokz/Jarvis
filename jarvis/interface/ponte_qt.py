@@ -63,6 +63,10 @@ class PonteQt(QObject):
     conexaoMudou = Signal("QVariant")      # o passo a passo de uma conexão (Ajustes → Conexões)
     somMudou = Signal("QVariant")          # aparelhos de som: o evento "som" inteiro (Ajustes)
     ajustesMudou = Signal("QVariant")      # volume da voz, nome, grupo e conexões (Ajustes)
+    # O modo code (beta 0.18.0, 10/11/2026).
+    codeMudou = Signal(str, str)           # nome do projeto, caminho ("" = fora do modo code)
+    projetosRecebidos = Signal("QVariant") # [{nome, caminho}]
+    mudancasRecebidas = Signal("QVariant") # {caminho, git, arquivos, diff, ramo, a_frente, remoto}
 
     def __init__(self, caminho: Path, parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -186,6 +190,31 @@ class PonteQt(QObject):
     def mudarNome(self, nome: str) -> bool:
         return self._pedir({"pedir": "ajustes", "nome": nome.strip()[:60]})
 
+    # -- o modo code (beta 0.18.0) -------------------------------------------
+
+    @Slot(result=bool)
+    def pedirProjetos(self) -> bool:
+        return self._pedir({"pedir": "projetos"})
+
+    @Slot(str, result=bool)
+    def entrarCode(self, caminho: str) -> bool:
+        """"" = sair do modo code."""
+        return self._pedir({"pedir": "code", "caminho": caminho})
+
+    @Slot(str, result=bool)
+    def pedirMudancas(self, caminho: str) -> bool:
+        return self._pedir({"pedir": "mudancas", "caminho": caminho})
+
+    @Slot(str, result=bool)
+    def git(self, acao: str) -> bool:
+        return self._pedir({"pedir": "git", "acao": acao})
+
+    @Slot(str, "QVariant", result=bool)
+    def mudarAjusteCode(self, chave: str, valor) -> bool:
+        if chave not in ("code_narracao", "code_janela_s", "code_persona"):
+            return False
+        return self._pedir({"pedir": "ajustes", chave: int(valor) if chave == "code_janela_s" else str(valor)})
+
     @Slot(str, str, result=bool)
     def escolherSom(self, tipo: str, aparelho: str) -> bool:
         """tipo = "saida" ou "entrada"; aparelho "" = o padrão do sistema."""
@@ -303,6 +332,7 @@ class PonteQt(QObject):
             self.localMudou.emit(bool(ev.get("local")), str(ev.get("local_nome") or ""))
             self.jogoMudou.emit(str(ev.get("jogo") or ""))
             self.gravandoMudou.emit(bool(ev.get("gravando")))
+            self.codeMudou.emit(str(ev.get("code") or ""), str(ev.get("code_caminho") or ""))
         elif tipo == "conversa_atual":
             self.conversaAtual.emit(str(ev.get("id") or ""), list(ev.get("falas") or []),
                                     "falas" in ev)
@@ -314,6 +344,10 @@ class PonteQt(QObject):
             self.somMudou.emit({k: v for k, v in ev.items() if k != "ev"})
         elif tipo == "ajustes":
             self.ajustesMudou.emit({k: v for k, v in ev.items() if k != "ev"})
+        elif tipo == "projetos":
+            self.projetosRecebidos.emit(list(ev.get("lista") or []))
+        elif tipo == "mudancas":
+            self.mudancasRecebidas.emit({k: v for k, v in ev.items() if k != "ev"})
         elif tipo == "conversa":
             self.conversaRecebida.emit(str(ev.get("id") or ""), list(ev.get("falas") or []))
         elif tipo == "erro":

@@ -506,6 +506,20 @@ class Servidor:
                 self._direto(cliente, {"ev": "erro", "motivo": f"não deu ({e})"})
                 return
             self._direto(cliente, {"ev": "conversas", "lista": lista})
+        elif tipo == "projetos":
+            from jarvis.agente import projetos
+            self._direto(cliente, {"ev": "projetos", "lista": [
+                {"nome": p.nome, "caminho": str(p.caminho)} for p in projetos.listar()]})
+        elif tipo == "mudancas":
+            from jarvis.agente import git_code, projetos
+            if dados["caminho"] not in {str(p.caminho) for p in projetos.listar()}:
+                self._direto(cliente, {"ev": "erro", "motivo": "esse não é um projeto do modo code"})
+                return
+            self._direto(cliente, {"ev": "mudancas", "caminho": dados["caminho"],
+                                   **git_code.mudancas(Path(dados["caminho"]))})
+        elif tipo in ("code", "git"):
+            valor = dados.get("caminho", "") if tipo == "code" else dados["acao"]
+            self._pedidos.put(Pedido(tipo, valor, cliente.id, cliente.quer_voz))
         elif tipo in ("nova", "continuar", "cerebro", "parar", "som", "ajustes"):
             if tipo == "parar":
                 self._botao_parar.set()

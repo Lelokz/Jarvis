@@ -164,6 +164,56 @@ def main() -> int:
     c._responder("apaga o arquivo de login", origem="voz", voz=Voz("outra", 0.2, 3.0))
     checa("outra voz é ignorada (nem chega ao Claude)", pedidos == [] and registros[-1] == "code_outra_voz_ignorada", registros[-3:])
 
+    print("-- a janela: protocolo, ajustes e as mudanças --")
+    from jarvis import ajustes
+    from jarvis.agente import git_code
+    from jarvis.ponte import protocolo
+    import subprocess
+    lp = lambda o: protocolo.ler_pedido(json.dumps(o).encode())  # noqa: E731
+    checa("pedir a lista de projetos", lp({"pedir": "projetos"}) == ("projetos", {}))
+    checa("entrar e sair pelo caminho", lp({"pedir": "code", "caminho": "/x/Loft"}) == ("code", {"caminho": "/x/Loft"})
+          and lp({"pedir": "code", "caminho": ""}) == ("code", {"caminho": ""}))
+    checa("botões commit e push", lp({"pedir": "git", "acao": "push"}) == ("git", {"acao": "push"}))
+    for nome, o in (("git com ação errada", {"pedir": "git", "acao": "reset"}),
+                    ("mudanças sem caminho", {"pedir": "mudancas"}),
+                    ("narração inválida", {"pedir": "ajustes", "code_narracao": "gritando"}),
+                    ("microfone de 7 s", {"pedir": "ajustes", "code_janela_s": 7})):
+        try:
+            lp(o)
+            checa(f"recusa {nome}", False)
+        except protocolo.ErroDeProtocolo:
+            checa(f"recusa {nome}", True)
+    checa("ajustes do modo code passam", lp({"pedir": "ajustes", "code_narracao": "pouca", "code_janela_s": 180,
+                                              "code_persona": "friday"})[1] == {"code_narracao": "pouca", "code_janela_s": 180,
+                                                                                 "code_persona": "friday"})
+    ajustes.ARQUIVO = tmp / "ajustes.json"
+    checa("padrões: normal, 2 min, quem estiver", (ajustes.ler()["code_narracao"], ajustes.ler()["code_janela_s"],
+                                                     ajustes.ler()["code_persona"]) == ("normal", 120, "atual"))
+    ajustes.mudar(code_janela_s=300, code_narracao="muita")
+    checa("guarda a escolha", ajustes.ler()["code_janela_s"] == 300 and ajustes.ler()["code_narracao"] == "muita")
+    c.agente = types.SimpleNamespace(code=loft)
+    assistente.ajustes.ARQUIVO = ajustes.ARQUIVO
+    checa("o microfone aberto segue o ajuste (5 min)", c._janela_s() == 300.0)
+
+    repo = tmp / "repo"
+    repo.mkdir()
+    g = lambda *a: subprocess.run(["git", "-C", str(repo), *a], capture_output=True)  # noqa: E731
+    g("init", "-q"); g("config", "user.email", "t@t"); g("config", "user.name", "t")
+    (repo / "a.py").write_text("um\ndois\n")
+    g("add", "."); g("commit", "-qm", "x")
+    (repo / "a.py").write_text("um\nDOIS\ntres\n")
+    (repo / "novo.py").write_text("oi\n")
+    m = git_code.mudancas(repo)
+    arq = {x["arquivo"]: x for x in m["arquivos"]}
+    checa("mudanças: o arquivo mexido com + e −", arq.get("a.py", {}).get("mais") == 2 and arq["a.py"]["menos"] == 1, m["arquivos"])
+    checa("mudanças: o arquivo novo", arq.get("novo.py", {}).get("estado") == "novo" and arq["novo.py"]["mais"] == 1)
+    checa("o diff tem os dois", "-dois" in m["diff"] and "+DOIS" in m["diff"] and "+oi" in m["diff"])
+    checa("sem remoto, sem push", m["remoto"] is False and m["a_frente"] == 0)
+    checa("pasta sem git", git_code.mudancas(tmp / "casa")["git"] is False)
+    d = git_code.diff_da_ferramenta("Edit", {"old_string": "a\nb", "new_string": "c"})
+    checa("antes/depois do Edit em ```diff", d == "```diff\n-a\n-b\n+c\n```", d)
+    checa("ferramenta que não edita não mostra diff", git_code.diff_da_ferramenta("Read", {}) is None)
+
     print(f"\n{ok} passaram, {falhou} falharam")
     return 1 if falhou else 0
 

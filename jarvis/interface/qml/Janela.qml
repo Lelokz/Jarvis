@@ -86,6 +86,12 @@ Window {
     property real voltaSemana: 0
     property var som: null           // o evento "som" (os Ajustes, beta 0.6.0)
     property var ajustes: null       // o evento "ajustes" (volume da voz, notificações; beta 0.6.5)
+    // O modo code (beta 0.18.0): o projeto aberto, a lista pra escolher e as mudanças.
+    property string codeNome: ""
+    property string codeCaminho: ""
+    property var projetos: []
+    property var mudancas: null
+    property bool seletorCode: false
     // Escreveu numa conversa antiga: primeiro o Jarvis volta pra ela, depois
     // a mensagem vai (quando a "conversa_atual" chegar com este id).
     property string esperandoContinuar: ""
@@ -207,6 +213,14 @@ Window {
         onTriggered: esvaziar()
     }
 
+    // Modo code: depois que ele mexe em algo, o painel Mudanças se atualiza
+    // (espera 1,5 s: uma rajada de edições vira um pedido só).
+    function mudouAlgo() { if (janela.codeCaminho) relerMudancas.restart() }
+    Timer {
+        id: relerMudancas
+        interval: 1500
+        onTriggered: if (janela.codeCaminho && typeof ponte !== "undefined") ponte.pedirMudancas(janela.codeCaminho)
+    }
     Timer { // a lista da barra lateral, sem pedir a cada fala
         id: atualizarLista
         interval: 1500
@@ -232,8 +246,9 @@ Window {
             atualizarLista.restart();
         }
         function onHistoricoRecebido(falas) { falasAtual.preencher(falas) }
-        function onMostrar(titulo, texto) { escrita.esvaziar(); falasAtual.mostrar(titulo, texto) }
+        function onMostrar(titulo, texto) { escrita.esvaziar(); falasAtual.mostrar(titulo, texto); janela.mudouAlgo() }
         function onAtividade(texto) {
+            janela.mudouAlgo();
             falasAtual.atividade(texto);
             janela.textoPensando = texto.split(" — ")[0] === "Pensando com calma"
                 ? "Pensando com calma…" : "Pensando…";
@@ -247,6 +262,13 @@ Window {
         function onLocalMudou(disponivel, nome) { janela.localDisponivel = disponivel; janela.localNome = nome }
         function onJogoMudou(nome) { janela.jogo = nome }
         function onGravandoMudou(sim) { janela.gravando = sim }
+        function onCodeMudou(nome, caminho) {
+            if (caminho !== janela.codeCaminho) janela.mudancas = null;
+            janela.codeNome = nome; janela.codeCaminho = caminho;
+            if (caminho) ponte.pedirMudancas(caminho);
+        }
+        function onProjetosRecebidos(lista) { janela.projetos = lista }
+        function onMudancasRecebidas(d) { if (d.caminho === janela.codeCaminho) janela.mudancas = d }
         function onCerebroMudou(modelo, esforco, persona, cor) {
             janela.modelo = modelo; janela.esforco = esforco; janela.persona = persona;
             if (cor !== "") janela.corPersona = cor;
@@ -398,7 +420,36 @@ Window {
                 }
             }
 
+            Rectangle {
+                id: botaoCode
+                anchors.verticalCenter: parent.verticalCenter
+                anchors.right: botoesJanela.left
+                anchors.rightMargin: 10
+                height: 30; radius: 15
+                width: textoCode.implicitWidth + 30
+                color: janela.codeNome ? Qt.rgba(tema.persona.r, tema.persona.g, tema.persona.b, 0.18)
+                     : areaCode.containsMouse ? tema.superficie2 : "transparent"
+                border.width: 1
+                border.color: janela.codeNome ? tema.persona : tema.traco
+                Text {
+                    id: textoCode
+                    anchors.centerIn: parent
+                    text: janela.codeNome ? "</>  Code · " + janela.codeNome.replace(/^Projeto /, "") : "</>  Code"
+                    color: janela.codeNome ? tema.texto : tema.textoMedio
+                    font.family: tema.familia; font.pixelSize: 13; font.weight: Font.Medium
+                }
+                MouseArea {
+                    id: areaCode
+                    anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                    onClicked: {
+                        janela.seletorCode = !janela.seletorCode;
+                        if (janela.seletorCode && typeof ponte !== "undefined") ponte.pedirProjetos();
+                    }
+                }
+            }
+
             Row {
+                id: botoesJanela
                 anchors.verticalCenter: parent.verticalCenter
                 anchors.right: parent.right
                 anchors.rightMargin: 10
@@ -443,9 +494,26 @@ Window {
         }
 
         // -- o chat ----------------------------------------------------------------
+        CodePainel {
+            id: painelCode
+            anchors { top: topo.bottom; right: parent.right; bottom: parent.bottom }
+            width: visible ? Math.min(440, Math.max(340, principal.width * 0.36)) : 0
+            visible: janela.codeCaminho !== "" && janela.pagina === "chat" && janela.vendo === ""
+            tema: tema
+            nome: janela.codeNome
+            caminho: janela.codeCaminho
+            mudancas: janela.mudancas
+            ocupado: janela.estado === "pensando"
+            onAtualizar: if (typeof ponte !== "undefined") ponte.pedirMudancas(janela.codeCaminho)
+            onCommit: if (typeof ponte !== "undefined") ponte.git("commit")
+            onPush: if (typeof ponte !== "undefined") ponte.git("push")
+            onSair: if (typeof ponte !== "undefined") ponte.entrarCode("")
+            onTrocar: { janela.seletorCode = true; if (typeof ponte !== "undefined") ponte.pedirProjetos(); }
+        }
+
         Item {
             id: areaDoChat
-            anchors { top: topo.bottom; left: parent.left; right: parent.right; bottom: parent.bottom }
+            anchors { top: topo.bottom; left: parent.left; right: painelCode.visible ? painelCode.left : parent.right; bottom: parent.bottom }
             visible: janela.pagina === "chat"
             readonly property real largura: Math.min(780, width - 64)
 
@@ -810,6 +878,67 @@ Window {
     }
 
     // Os Ajustes: um painel por cima da janela inteira (lateral junto).
+    // -- o modo code: escolher o projeto -------------------------------------------
+    MouseArea {
+        anchors.fill: parent
+        visible: janela.seletorCode
+        z: 40
+        onClicked: janela.seletorCode = false
+        Rectangle {
+            id: listaCode
+            x: principal.x + principal.width - width - 60
+            y: 50
+            width: 300
+            height: Math.min(colProjetos.height + 24, janela.height - 80)
+            radius: 12
+            color: tema.superficie
+            border.width: 1; border.color: tema.tracoForte
+            MouseArea { anchors.fill: parent }   // clique dentro não fecha
+            Flickable {
+                anchors { fill: parent; margins: 12 }
+                contentHeight: colProjetos.height; clip: true; boundsBehavior: Flickable.StopAtBounds
+                Column {
+                    id: colProjetos
+                    width: parent.width; spacing: 2
+                    Text { text: "Programar pela voz em…"; color: tema.textoFraco; font.family: tema.familia; font.pixelSize: 12
+                           bottomPadding: 6; leftPadding: 6 }
+                    Text { visible: janela.projetos.length === 0; text: "Procurando os projetos…"; color: tema.muitoFraco
+                           font.family: tema.familia; font.pixelSize: 13; leftPadding: 6 }
+                    Repeater {
+                        model: janela.projetos
+                        Rectangle {
+                            required property var modelData
+                            readonly property bool atual: modelData.caminho === janela.codeCaminho
+                            width: colProjetos.width; height: 36; radius: 8
+                            color: atual ? tema.realce : maProj.containsMouse ? tema.superficie2 : "transparent"
+                            Text { x: 10; anchors.verticalCenter: parent.verticalCenter; width: parent.width - 40; elide: Text.ElideRight
+                                   text: modelData.nome.replace(/^Projeto /, ""); color: tema.texto; font.family: tema.familia; font.pixelSize: 14 }
+                            Text { anchors { right: parent.right; rightMargin: 10; verticalCenter: parent.verticalCenter }
+                                   visible: parent.atual; text: "aberto"; color: tema.persona; font.family: tema.familia; font.pixelSize: 11 }
+                            MouseArea {
+                                id: maProj; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                                onClicked: { janela.seletorCode = false; if (!parent.atual && typeof ponte !== "undefined") ponte.entrarCode(modelData.caminho) }
+                            }
+                        }
+                    }
+                    Rectangle { visible: janela.codeNome !== ""; width: colProjetos.width; height: 1; color: tema.traco }
+                    Rectangle {
+                        visible: janela.codeNome !== ""
+                        width: colProjetos.width; height: 36; radius: 8
+                        color: maSair.containsMouse ? tema.superficie2 : "transparent"
+                        Text { x: 10; anchors.verticalCenter: parent.verticalCenter; text: "Sair do modo code"
+                               color: tema.textoMedio; font.family: tema.familia; font.pixelSize: 14 }
+                        MouseArea { id: maSair; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                                    onClicked: { janela.seletorCode = false; if (typeof ponte !== "undefined") ponte.entrarCode("") } }
+                    }
+                    Text { width: colProjetos.width; wrapMode: Text.WordWrap; topPadding: 8; leftPadding: 6; rightPadding: 6
+                           text: "Pela voz: \"modo code no Loft\", \"troca pro Terror\", \"sai do modo code\"."
+                           color: tema.muitoFraco; font.family: tema.familia; font.pixelSize: 12 }
+                }
+            }
+        }
+    }
+
     PaginaAjustes {
         id: paginaAjustes
         anchors.fill: parent
@@ -835,6 +964,7 @@ Window {
         }
         onMudarVolume: (volume) => { if (typeof ponte !== "undefined") ponte.mudarVolumeVoz(volume) }
         onMudarNome: (nome) => { if (typeof ponte !== "undefined") ponte.mudarNome(nome) }
+        onMudarCode: (chave, valor) => { if (typeof ponte !== "undefined") ponte.mudarAjusteCode(chave, valor) }
         onMudarGrupo: (ligado) => { if (typeof ponte !== "undefined") ponte.mudarGrupo(ligado) }
         onEscolherSom: (tipo, aparelho) => { if (typeof ponte !== "undefined") ponte.escolherSom(tipo, aparelho) }
         onPedirConexao: (id, acao, valor) => { if (typeof ponte !== "undefined") ponte.conexao(id, acao, valor) }

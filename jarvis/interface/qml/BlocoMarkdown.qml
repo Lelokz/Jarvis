@@ -5,6 +5,20 @@ import QtQuick
 // própria, com a linguagem e o botão de copiar, como no app do Claude.
 Column {
     id: raiz
+
+    // O diff em HTML: cada linha com a cor dela (o texto escapado, os espaços mantidos).
+    function diffColorido(texto) {
+        var linhas = texto.split("\n"), saida = [];
+        for (var i = 0; i < linhas.length; i++) {
+            var l = linhas[i], cor = "#c9d1dd";
+            if (l.charAt(0) === "+") cor = "#4ade80";
+            else if (l.charAt(0) === "-") cor = "#f87171";
+            else if (l.indexOf("@@") === 0 || l.indexOf("diff ") === 0) cor = "#a78bfa";
+            var e = l.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/ /g, "&nbsp;");
+            saida.push("<span style=\"color:" + cor + "\">" + (e || "&nbsp;") + "</span>");
+        }
+        return saida.join("<br>");
+    }
     property var tema
     property string texto: ""
     property real tamanhoDaFonte: 15
@@ -133,7 +147,10 @@ Column {
                 anchors.topMargin: 14
                 x: 16
                 width: parent.width - 32
-                text: caixa.parte.conteudo
+                // Diff (modo code, beta 0.18.0): verde entrou, vermelho saiu.
+                readonly property bool ehDiff: caixa.parte.lingua === "diff"
+                text: ehDiff ? raiz.diffColorido(caixa.parte.conteudo) : caixa.parte.conteudo
+                textFormat: ehDiff ? TextEdit.RichText : TextEdit.PlainText
                 readOnly: true
                 selectByMouse: true
                 wrapMode: TextEdit.WrapAnywhere

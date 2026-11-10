@@ -32,6 +32,7 @@ Item {
     property var ajustes: null
     signal mudarVolume(int volume)
     signal mudarNome(string nome)
+    signal mudarCode(string chave, var valor)   // o modo code (beta 0.18.0)
     signal mudarGrupo(bool ligado)
 
     property string aba: "geral"
@@ -768,6 +769,44 @@ Item {
                 }
             }
             Secao {
+                titulo: "Modo code"
+                dica: "Programar pela voz: \"modo code no Loft\". Valem na janela e no app."
+                Repeater {
+                    model: [
+                        { chave: "code_narracao", nome: "Quanto ele conta", desc: "O que ele fala enquanto trabalha.",
+                          opcoes: [ { valor: "pouca", nome: "Pouco", descricao: "Só quando terminar ou travar" },
+                                    { valor: "normal", nome: "Normal", descricao: "Os marcos: achou, vai mudar, testando, pronto" },
+                                    { valor: "muita", nome: "Muito", descricao: "Também o que está lendo e testando" } ] },
+                        { chave: "code_janela_s", nome: "Microfone aberto", desc: "Quanto tempo ele ouve depois de cada resposta, sem \"hey Jarvis\".",
+                          opcoes: [ { valor: "60", nome: "1 minuto", descricao: "" }, { valor: "120", nome: "2 minutos", descricao: "" },
+                                    { valor: "180", nome: "3 minutos", descricao: "" }, { valor: "300", nome: "5 minutos", descricao: "" } ] },
+                        { chave: "code_persona", nome: "Quem programa", desc: "Quem atende quando entra no modo code.",
+                          opcoes: [ { valor: "atual", nome: "Quem estiver", descricao: "Não troca" },
+                                    { valor: "jarvis", nome: "Jarvis", descricao: "" },
+                                    { valor: "friday", nome: "Friday", descricao: "" } ] },
+                    ]
+                    Linha {
+                        required property var modelData
+                        required property int index
+                        titulo: modelData.nome
+                        descricao: modelData.desc
+                        ultima: index === 2
+                        z: 3 - index
+                        enabled: !!raiz.ajustes
+                        opacity: enabled ? 1 : 0.5
+                        Seletor {
+                            tema: raiz.tema
+                            paraCima: false
+                            alinharDireita: true
+                            rotulo: modelData.nome
+                            opcoes: modelData.opcoes
+                            valor: raiz.ajustes ? String(raiz.ajustes[modelData.chave]) : ""
+                            onEscolhido: (valor) => raiz.mudarCode(modelData.chave, modelData.chave === "code_janela_s" ? parseInt(valor) : valor)
+                        }
+                    }
+                }
+            }
+            Secao {
                 titulo: "Quem fala"
                 visible: !!raiz.ajustes && raiz.ajustes.reconhece_voz !== undefined
                 Linha {
@@ -1423,7 +1462,7 @@ Item {
                 titulo: "Sobre a NOVA"
                 Repeater {
                     model: [
-                        ["Versão", "beta 0.17.5"],
+                        ["Versão", "beta 0.18.0"],
                         ["Conexão", raiz.conectado ? "Ligado" : "Esperando a NOVA subir"],
                     ]
                     Linha {

@@ -804,6 +804,14 @@ class Agente:
                             pendente = None
                             if b.name != "AskUserQuestion":
                                 self.saidas.put(Saida("atividade", _resumo_de_ferramenta(b)))
+                            # Modo code: cada arquivo mudado aparece na tela com o antes/depois.
+                            if getattr(self, "code", None) is not None and b.name in ("Edit", "MultiEdit", "Write"):
+                                from jarvis.agente import git_code
+                                diff = git_code.diff_da_ferramenta(b.name, b.input or {})
+                                if diff:
+                                    alvo = str((b.input or {}).get("file_path") or "")
+                                    rel = alvo.removeprefix(str(self.code.caminho)).lstrip("/") or alvo
+                                    self.saidas.put(Saida("mostrar", diff, f"{'Criou' if b.name == 'Write' else 'Mudou'} {rel}"))
                 elif isinstance(m, RateLimitEvent):
                     info = m.rate_limit_info
                     self.limite = Limite(info.status, info.resets_at, info.utilization)
