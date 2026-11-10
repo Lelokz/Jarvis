@@ -855,6 +855,15 @@ jogos ele fica preso no meio) no HD, olha a imagem, responde em português e
 apaga (`olhar apagar`). Só quando o Léo pede; tela bloqueada = sem print. A
 instrução está no `CLAUDE.md` da casa.
 
+**Modo code (10/11/2026, etapas 1 e 2 de 4: voz):** "modo code no <projeto>" troca a conversa
+do Claude por baixo para uma sessão DENTRO do projeto (cwd = projeto; cada projeto guarda a sua em
+`code-sessoes.json`; ao sair volta a de voz). Frases em `reflexos.comando_code`, projetos achados em
+`jarvis/agente/projetos.py` (o da NOVA fica fora e uma trava barra editar `~/Projetos/Jarvis`),
+instruções de voz em `jarvis/agente/modo_code.md` (essencial na voz, código na tela, frase na hora,
+marcos, plano falado, print do "esse erro aqui", git com OK). No ciclo: janela de 2 min, só a voz
+do Léo, vocabulário do projeto no Whisper. Teste: `testes/testar_modo_code.py`. Faltam: janela
+(beta 0.18.0) e app (beta 0.19.0), com os ajustes de narração/tempo/quem programa.
+
 **Painel do Canal (09/11/2026, etapas 1–4 e 6 de 7; avisos.py e comandos.py (voz); comentarios.py e analises.py; janela `python -m jarvis.youtube janela`, Painel.qml; Produção em producao.py, agendar em editar.py):** `jarvis/youtube/` (o nome `jarvis/canal.py` já era a ponte do celular; conta.py:
 OAuth do projeto Google do Léo, token só no PC; dados.py: canal, vídeos, dias e
 views dia a dia dos últimos 15 vídeos em `~/.local/share/jarvis/canal/canal.db`,

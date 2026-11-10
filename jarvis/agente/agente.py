@@ -60,9 +60,11 @@ from jarvis.agente import travas
 from jarvis.nucleo import relogio
 from jarvis.nucleo.atalhos import normalizar
 
-from . import ferramentas
+from . import ferramentas, projetos
 
 PERSONA = Path(__file__).with_name("persona.md")
+MODO_CODE = Path(__file__).with_name("modo_code.md")
+_EDITA = {"Edit", "Write", "MultiEdit", "NotebookEdit"}
 CALADO = "[calado]"
 
 # Resposta falada a uma pergunta dele. "Não" vem primeiro: "não pode" tem "pode".
@@ -314,6 +316,13 @@ class Agente:
         self._thread = threading.Thread(target=self._loop.run_forever, daemon=True,
                                         name="agente")
         self._marca = self.casa / ".ultimo-uso"
+        # O modo code (10/11/2026): o projeto em que ele programa com o Léo pela
+        # voz (None = o Jarvis de sempre). Cada projeto tem a sua conversa, que
+        # volta quando ele entra de novo; ao sair, volta a conversa de voz.
+        self.code: projetos.Projeto | None = None
+        self.narracao = "normal"
+        self._sessao_voz: str | None = None
+        self._arquivo_code = self.casa.parent / "code-sessoes.json"
 
     # -- ciclo de vida -----------------------------------------------------
 
@@ -366,7 +375,7 @@ class Agente:
         self._local_atual = self.cerebro["modelo"] == "local"
         return ClaudeAgentOptions(
             cli_path=self.binario,
-            cwd=str(self.casa),
+            cwd=str(self.code.caminho if self.code else self.casa),
             model=self._modelo_atual,
             effort=None if self._local_atual else self._esforco_atual,
             env=self._env_local() if self._local_atual else {},
@@ -379,7 +388,7 @@ class Agente:
             # modo auto (o can_use_tool quase nunca é chamado nele).
             hooks={"PreToolUse": [HookMatcher(matcher=None, hooks=[self._trava_da_voz])]},
             system_prompt={"type": "preset", "preset": "claude_code",
-                           "append": self._instrucoes()},
+                           "append": self._instrucoes() + self._instrucoes_code()},
             mcp_servers={"jarvis": servidor},
             # O texto em pedaços, enquanto ele escreve (a janela mostra; beta 0.5).
             include_partial_messages=True,
@@ -427,6 +436,67 @@ class Agente:
         return PERSONA.read_text().replace("{personalidade_friday}", friday).replace("{nome}", self.nome) \
             .replace("{usuario}", _dono()).replace("{recados}", recados.COMO_USAR) \
             .replace("{memorias}", str(memorias.PASTA))
+
+    def _instrucoes_code(self) -> str:
+        if self.code is None:
+            return ""
+        jeito = {"pouca": "pouca narração: só quando terminar ou travar",
+                 "muita": "narração ampla: pode contar também o que está lendo e testando",
+                 }.get(self.narracao, "narração normal: só os marcos")
+        return "\n\n" + MODO_CODE.read_text(encoding="utf-8").replace("{projeto}", self.code.nome) \
+            .replace("{caminho}", str(self.code.caminho)).replace("{narracao}", jeito).replace("{usuario}", _dono())
+
+    # -- o modo code ---------------------------------------------------------
+
+    def _sessoes_code(self) -> dict[str, str]:
+        try:
+            return json.loads(self._arquivo_code.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return {}
+
+    def _guardar_sessao_code(self) -> None:
+        if self.code is None or not self.sessao:
+            return
+        s = self._sessoes_code()
+        s[str(self.code.caminho)] = self.sessao
+        self._arquivo_code.write_text(json.dumps(s, ensure_ascii=False, indent=1), encoding="utf-8")
+
+    def entrar_code(self, projeto: projetos.Projeto | None):
+        """Entra no modo code nesse projeto (None = sai). Devolve o future: o
+        ciclo não espera (a troca leva 2-3 s e a fala de confirmação já sai)."""
+        if projeto is not None and projeto.caminho.resolve() == projetos.PROIBIDO:
+            raise ValueError("o projeto da NOVA não entra no modo code")
+        return self._rodar(self._trocar_code(projeto))
+
+    async def _trocar_code(self, projeto: projetos.Projeto | None) -> None:
+        async with self._travar():
+            try:
+                if self.code is None:
+                    self._sessao_voz = self.sessao
+                else:
+                    self._guardar_sessao_code()
+                await self._desconectar()
+                self.code = projeto
+                retomar = self._sessoes_code().get(str(projeto.caminho)) if projeto else self._sessao_voz
+                await self._conectar(retomar)
+                self._guardar_sessao_code()
+                self.saidas.put(Saida("code", projeto.nome if projeto else ""))
+            except Exception as e:
+                self._falhou(e)
+
+    def _mexe_na_nova(self, ferramenta: str, entrada: dict) -> bool:
+        """No modo code, nada escreve no projeto da NOVA (Regra nº 1, 10/11/2026)."""
+        alvo = str(entrada.get("file_path") or entrada.get("notebook_path") or "")
+        if ferramenta in _EDITA and alvo:
+            try:
+                return Path(alvo).expanduser().resolve().is_relative_to(projetos.PROIBIDO)
+            except (OSError, ValueError):
+                return False
+        if ferramenta in travas.TERMINAIS:
+            comando = str(entrada.get("command") or "")
+            if "Projetos/Jarvis" in comando or str(projetos.PROIBIDO) in comando:
+                return travas.precisa_do_leo(ferramenta, entrada, Path("/nao/existe")) is not None
+        return False
 
     async def _conectar(self, retomar: str | None = None) -> None:
         """Abre o Claude Code numa conversa nova, ou na `retomar` (um id)."""
@@ -494,6 +564,8 @@ class Agente:
         persona = ", FRIDAY" if self.persona == "friday" else ""
         # O modo jogo (jarvis/monitor/jogo.py): ele está jogando, o pesado vai leve.
         jogando = f", JOGANDO {self.jogo}" if getattr(self, "jogo", None) else ""
+        if getattr(self, "code", None) is not None:
+            jogando += f", MODO CODE em {self.code.nome}"
         # O modo das personas do Léo (09/11/2026): "modo senhor", "bêbado"...
         from jarvis import personas
         modo = personas.atual()
@@ -865,6 +937,12 @@ class Agente:
                 "permissionDecisionReason": "Para bloquear use a ferramenta bloquear_pc; para "
                                             "desbloquear, pedir_desbloqueio (confirma no "
                                             "celular). Nunca comando direto."}}
+        if self.code is not None and self._mexe_na_nova(str(entrada.get("tool_name") or ""),
+                                                        entrada.get("tool_input") or {}):
+            return {"hookSpecificOutput": {
+                "hookEventName": "PreToolUse", "permissionDecision": "deny",
+                "permissionDecisionReason": "Modo code: o projeto da NOVA (~/Projetos/Jarvis) não se mexe "
+                                            "(regra do Léo). Diga isso em uma frase e não tente outro caminho."}}
         voz = self.voz
         o_que = None
         if voz is not None and voz.quem != "leo":

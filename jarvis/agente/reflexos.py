@@ -98,3 +98,31 @@ def reflexo(falado: str, limite_volume: int = 70, passo: int = 10) -> Reflexo | 
         r = sistema.aplicar_volume(plano.novo)
         return Reflexo(r.mensagem, f"midia:volume:{plano.novo}" if r.ok else None)
     return None
+
+
+# O modo code (10/11/2026): entrar, trocar de projeto e sair são do CORPO (a
+# conversa do Claude troca por baixo), nunca do Claude. Frase inteira,
+# normalizada ("Jarvis, modo code no Loft." chega "jarvis modo code loft").
+# O Whisper às vezes escreve "code" como "código", "cold", "cod", "coude".
+_CODE = r"(?:code|codigo|cod|cold|coud|coude|codi|kode|coud)"
+_ENTRA = re.compile(rf"^(?:jarvis |friday )?(?:(?:entra|entrar|abre|abrir|liga|ligar|ativa|ativar|bora)(?: (?:pro|pra|para|em|n))? )?"
+                    rf"modo {_CODE}(?: (?:em|pro|pra|para|n|d))?(?: projeto)? (?P<projeto>.+)$")
+_SAI = re.compile(rf"^(?:jarvis |friday )?(?:sai|sair|fecha|fechar|desliga|desligar|desativa|desativar|termina|encerra)"
+                  rf"(?: d)? modo {_CODE}$")
+_TROCA = re.compile(r"^(?:jarvis |friday )?(?:troca|trocar|muda|mudar|vai)(?: (?:pro|pra|para|o|de))?(?: projeto)? (?P<projeto>.+)$")
+
+
+def comando_code(falado: str, em_code: bool) -> tuple[str, str] | None:
+    """("entrar", projeto) | ("trocar", projeto) | ("sair", "") | None.
+    "Troca pro X" só vale dentro do modo code, e só se X for um projeto: quem
+    chama confere ("troca a música" não é projeto e segue pro Claude)."""
+    t = normalizar(falado)
+    if _SAI.match(t):
+        return ("sair", "")
+    m = _ENTRA.match(t)
+    if m:
+        return ("entrar", m["projeto"])
+    m = _TROCA.match(t) if em_code else None
+    if m:
+        return ("trocar", m["projeto"])
+    return None

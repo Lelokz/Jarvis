@@ -41,7 +41,8 @@ from jarvis import ajustes, config, cronometro, eventos, ligar, microfone, som, 
 from jarvis.agente import sessoes
 from jarvis.agente.agente import Agente, ErroDoAgente, Saida
 from jarvis.agente.avisos import AvisosWhatsApp
-from jarvis.agente.reflexos import reflexo
+from jarvis.agente import projetos
+from jarvis.agente.reflexos import comando_code, reflexo
 from jarvis.cronometro import Tempos
 from jarvis.nucleo import recados, relogio
 from jarvis.nucleo.atalhos import normalizar
@@ -424,10 +425,63 @@ class Ciclo:
             # pode estar fora, com outras pessoas em casa).
             self._mudar_estado("dormindo")
             return
-        self.prazo = time.monotonic() + self.cfg.ciclo.janela_s
-        self.emissor.emitir("janela", rotulo=rotulo, janela_s=self.cfg.ciclo.janela_s)
-        self.registrador.registrar_estado(rotulo, janela_s=self.cfg.ciclo.janela_s)
+        janela = self._janela_s()
+        self.prazo = time.monotonic() + janela
+        self.emissor.emitir("janela", rotulo=rotulo, janela_s=janela)
+        self.registrador.registrar_estado(rotulo, janela_s=janela)
         self._mudar_estado("ouvindo")
+
+    # O modo code (10/11/2026): conversa contínua (o microfone fica aberto mais
+    # tempo depois de cada resposta, sem "hey Jarvis") e só a voz do Léo entra.
+    JANELA_CODE_S = 120.0
+
+    def _janela_s(self) -> float:
+        if getattr(self.agente, "code", None) is not None:
+            return max(self.cfg.ciclo.janela_s, getattr(self, "janela_code_s", self.JANELA_CODE_S))
+        return self.cfg.ciclo.janela_s
+
+    def _modo_code(self, cmd: tuple[str, str], texto: str) -> bool:
+        """Entrar, trocar e sair do modo code. False = não era (segue pro Claude)."""
+        tipo, nome = cmd
+        if tipo == "trocar":
+            achados = projetos.achar(nome)
+            if not achados and not projetos.eh_o_da_nova(nome):
+                return False   # "troca a música": não é projeto
+            tipo = "entrar"
+        self.registrador.registrar_estado("modo_code", pedido=tipo, projeto=nome, dito=texto)
+        if self.agente.ocupado:
+            self._falar("Tô no meio de uma coisa. Fala para antes, ou espera eu terminar.")
+            self._renovar("janela reiniciada")
+            return True
+        if tipo == "sair":
+            if self.agente.code is None:
+                self._falar("Não tô no modo code.")
+            else:
+                self.agente.entrar_code(None)
+                self.transcritor.usar_vocabulario(_nomes_do_vocabulario(self.cfg.raiz / "atalhos.toml"))
+                self._falar("Saí do modo code.")
+            self._renovar("janela reiniciada")
+            return True
+        if projetos.eh_o_da_nova(nome):
+            self._falar("Esse não. O projeto da NOVA eu não mexo, é regra tua.")
+            self._renovar("janela reiniciada")
+            return True
+        achados = projetos.achar(nome)
+        if not achados:
+            todos = [p.nome.removeprefix("Projeto ") for p in projetos.listar()]
+            self._falar(f"Não achei esse projeto. Tenho: {', '.join(todos[:-1])} e {todos[-1]}." if len(todos) > 1
+                        else "Não achei esse projeto.")
+        elif len(achados) > 1:
+            nomes = [p.nome for p in achados[:3]]
+            self._falar(f"Qual deles: {', '.join(nomes[:-1])} ou {nomes[-1]}?")
+        else:
+            proj = achados[0]
+            self.agente.entrar_code(proj)
+            base = _nomes_do_vocabulario(self.cfg.raiz / "atalhos.toml")
+            self.transcritor.usar_vocabulario(base + ["modo code"] + projetos.vocabulario(proj))
+            self._falar(f"Modo code no {proj.nome.removeprefix('Projeto ')}. Pode falar.")
+        self._renovar("janela reiniciada")
+        return True
 
     def _falar(
         self, texto: str, *, acao: str | None = None, perguntando: bool = False,
@@ -734,6 +788,12 @@ class Ciclo:
         microfone tem que continuar ouvindo ("para", a resposta da pergunta).
         O que o Claude devolve chega por `atender_agente()`.
         """
+        # Modo code: só a voz do Léo entra (decisão dele, 10/11/2026). A TV, um
+        # vídeo ou outra pessoa do lado são ignorados, sem gastar nada.
+        if getattr(self.agente, "code", None) is not None and voz is not None and voz.quem == "outra":
+            self.registrador.registrar_estado("code_outra_voz_ignorada", texto=texto, nota=round(voz.nota, 3))
+            self._mudar_estado("ouvindo")
+            return
         # Tela bloqueada: só o Léo (decisão dele, 23/10/2026). Outra voz nem
         # chega ao Claude. Digitado (voz None) vale como ele.
         if voz is not None and voz.quem != "leo":
@@ -761,6 +821,11 @@ class Ciclo:
             self.registrador.registrar_estado("pediu_para_dormir", texto=texto)
             self._falar(self.persona_cfg.indo_dormir)
             self.dormir("você pediu")
+            return
+
+        # 2b. O modo code: entrar, trocar de projeto, sair (do corpo, não do Claude).
+        cmd = comando_code(texto, getattr(self.agente, "code", None) is not None)
+        if cmd is not None and self._modo_code(cmd, texto):
             return
 
         # 3. Com o Claude trabalhando: "para" interrompe; o resto entra na
@@ -890,6 +955,10 @@ class Ciclo:
             # como texto normal na janela.
             self._fim_da_escrita()
             self.atualizar_aviso()
+        elif s.tipo == "code":
+            # Entrou/saiu do modo code: a janela e o app mostram o projeto.
+            self.registrador.registrar_estado("modo_code_ativo", projeto=s.texto)
+            self.emissor.emitir("modo_code", projeto=s.texto)
         elif s.tipo == "sessao":
             # Chat novo ou retomado: a janela troca a conversa que mostra.
             falas = []
