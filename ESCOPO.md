@@ -855,7 +855,7 @@ jogos ele fica preso no meio) no HD, olha a imagem, responde em português e
 apaga (`olhar apagar`). Só quando o Léo pede; tela bloqueada = sem print. A
 instrução está no `CLAUDE.md` da casa.
 
-**Modo code (10/11/2026, etapas 1–3 de 4: voz e janela beta 0.18.0 — botão "Code", lista de projetos, painel Mudanças em CodePainel.qml, diff colorido, Commit/Push, ajustes de narração/microfone/quem programa; git_code.py; pedidos projetos/code/mudancas/git):** "modo code no <projeto>" troca a conversa
+**Modo code (10/11/2026, as 4 etapas: voz, janela beta 0.18.0 e app beta 0.19.0 (botão Code, Novo projeto, página Mudanças, Ajustes → Modo code) — botão "Code", lista de projetos, painel Mudanças em CodePainel.qml, diff colorido, Commit/Push, ajustes de narração/microfone/quem programa; git_code.py; pedidos projetos/code/mudancas/git):** "modo code no <projeto>" troca a conversa
 do Claude por baixo para uma sessão DENTRO do projeto (cwd = projeto; cada projeto guarda a sua em
 `code-sessoes.json`; ao sair volta a de voz). Frases em `reflexos.comando_code`, projetos achados em
 `jarvis/agente/projetos.py` (o da NOVA fica fora e uma trava barra editar `~/Projetos/Jarvis`),
