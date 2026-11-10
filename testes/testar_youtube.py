@@ -13,7 +13,7 @@ RAIZ = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(RAIZ))
 os.environ["JARVIS_DADOS"] = tempfile.mkdtemp(prefix="jarvis-canal-")
 
-from jarvis.canal import conta, dados  # noqa: E402
+from jarvis.youtube import conta, dados  # noqa: E402
 
 ok = falhou = 0
 HOJE = dt.date.today()
@@ -142,7 +142,7 @@ def main() -> int:
     checa("nome que não existe", dados.sobre_video("vídeo de culinária") == "Não achei nenhum vídeo com esse nome.")
 
     print("-- etapa 2: a janela e a edição --")
-    from jarvis.canal import editar
+    from jarvis.youtube import editar
     j = dados.para_janela()
     checa("janela recebe canal, números, dias e vídeos", j["temDados"] and j["canal"]["inscritos"] == 913
           and len(j["dias"]) >= 60 and len(j["videos"]) == 20, {k: j.get(k) for k in ("temDados",)})
@@ -187,7 +187,7 @@ def main() -> int:
             checa(f"recusa {nome}", True)
 
     print("-- etapa 3: produção e agendar --")
-    from jarvis.canal import producao
+    from jarvis.youtube import producao
     i1 = producao.criar({"titulo": "  ideia   do Doors  ", "jogo": "Doors", "data": "2026-12-01"})
     i2 = producao.criar({"titulo": "minecraft 100 ep 9", "coluna": "editando", "arquivos": ["/a.mov", "/a.mov", "/b.mp4"]})
     l = {c["id"]: c for c in producao.listar()}
@@ -256,7 +256,7 @@ def main() -> int:
         checa("não agenda vídeo que já saiu", True)
 
     print("-- etapa 4: comentários e análises --")
-    from jarvis.canal import analises, comentarios
+    from jarvis.youtube import analises, comentarios
 
     def th(i, autor_canal, texto, horas, respostas=()):
         quando = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=horas)).isoformat().replace("+00:00", "Z")
@@ -335,6 +335,64 @@ def main() -> int:
     checa("não pergunta de novo antes de 6 h", ANA.pedidos == n)
     j = dados.para_janela()
     checa("a janela recebe comentários, novos e análises", len(j["comentarios"]) == 4 and j["naoLidos"] == 0 and "origens" in j["analises"])
+
+    print("-- etapa 6: Jarvis e Friday --")
+    from jarvis.youtube import avisos, comandos
+    checa("degraus dos marcos", avisos.degraus(1200) == [100, 250, 500, 1000])
+    avisos.ARQUIVO.unlink(missing_ok=True)
+    con = dados.abrir()
+    con.executescript(avisos.ESQUEMA)
+    with con:
+        con.execute("DELETE FROM marcos")
+    con.close()
+    checa("primeira vez: guarda os marcos sem falar", avisos.conferir(True, [{"autor": "@a", "video_titulo": "x", "texto": "?"}]) == [])
+    con = dados.abrir()
+    with con:
+        con.execute("UPDATE videos SET views = 2600 WHERE id = 'v3'")   # 2.003 -> 2.600
+        con.execute("UPDATE canal SET inscritos = 1003")
+    con.close()
+    f = avisos.conferir(False, [{"autor": "@ana.joga", "video_titulo": "DOORS", "texto": "quando sai a parte 2?"}])
+    checa("canal passou de mil inscritos", "O canal acabou de passar de mil inscritos!" in f, f)
+    checa("vídeo passou de 2,5 mil views (só o degrau novo)", any("passou de 2,5 mil views" in x for x in f) and not any("passou de mil views" in x for x in f), f)
+    checa("a pergunta nova com o nome e o texto", any(x.startswith("ana.joga perguntou no vídeo \"DOORS\"") for x in f), f)
+    checa("não repete o mesmo marco", avisos.conferir(False, []) == [])
+    noite = dt.datetime.now().replace(hour=2)
+    checa("de madrugada não fala (e guarda)", avisos.pegar(noite) == [] and avisos.ARQUIVO.exists())
+    checa("jogando ou gravando não fala (e guarda)", avisos.pegar(dt.datetime.now().replace(hour=15), ocupado=True) == [] and avisos.ARQUIVO.exists())
+    tarde = dt.datetime.now().replace(hour=15)
+    checa("de tarde fala tudo e esvazia", len(avisos.pegar(tarde)) == 3 and not avisos.ARQUIVO.exists())
+    avisos._guardar(["velho"])
+    checa("aviso de mais de 12 h não é falado", avisos.pegar(tarde + dt.timedelta(hours=13)) == [])
+
+    checa("acha vídeo pelo nome", comandos.achar("doors")["id"] == "v0")
+    try:
+        comandos.achar("minecraft")
+        checa("nome com vários vídeos pergunta qual", False)
+    except comandos.Ambiguo as e:
+        checa("nome com vários vídeos pergunta qual", "Qual?" in str(e))
+    s = comandos.nova_ideia(["lore", "de", "Doors", "parte", "2", "jogo=Doors", "data=5/1/2027"])
+    c = comandos.achar_card("lore doors")
+    checa("cria ideia com jogo e data", c["jogo"] == "Doors" and c["data"] == "2027-01-05" and "nº" in s, (s, c))
+    checa("mover pelo nome falado", comandos.mover("lore de doors", "editando").endswith("foi pra Editando.")
+          and comandos.achar_card("lore doors")["coluna"] == "editando")
+    try:
+        comandos.mover("lore de doors", "lixeira")
+        checa("etapa que não existe", False)
+    except ValueError:
+        checa("etapa que não existe", True)
+    checa("lista os cards por etapa", "Editando: " in comandos.lista_cards())
+    chamado = {}
+    editar.salvar_video = lambda vid, ti, de, ta, vi, yt=None: chamado.update(vid=vid, ti=ti, vi=vi)
+    comandos.editar_campo("v0", "titulo", "DOORS: novo título")
+    checa("muda o título mantendo o resto", chamado == {"vid": "v0", "ti": "DOORS: novo título", "vi": "public"}, chamado)
+    comandos.editar_campo("v0", "visibilidade", "nao-listado")
+    checa("visibilidade falada em português", chamado["vi"] == "unlisted")
+    comentarios.marcar_lido(None)
+    checa("sem comentário novo", comandos.lista_comentarios("novos") == "Nenhum comentário novo.")
+    checa("lista todos com o id pra responder", "[t1]" in comandos.lista_comentarios("todos"))
+    s = comandos.resumo_analises()
+    checa("análises em uma frase falável", "Vídeos sugeridos 66%" in s and "Brasil" in s and "13–17" in s, s)
+    checa("comando desconhecido devolve None", comandos.rodar(["dança"]) is None)
 
     print(f"\n{ok} passaram, {falhou} falharam")
     return 1 if falhou else 0

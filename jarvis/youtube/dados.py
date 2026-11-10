@@ -15,7 +15,7 @@ import statistics
 import time
 import unicodedata
 
-from jarvis.canal import conta
+from jarvis.youtube import conta
 
 BANCO = conta.PASTA / "canal.db"
 DIAS_DE_HISTORICO = 365
@@ -70,6 +70,7 @@ def sincronizar(yt=None, an=None, hoje: dt.date | None = None) -> dict:
     c = yt.channels().list(part="snippet,statistics,contentDetails", mine=True).execute()["items"][0]
     uploads = c["contentDetails"]["relatedPlaylists"]["uploads"]
     con = abrir()
+    primeira = con.execute("SELECT COUNT(*) FROM canal").fetchone()[0] == 0
     with con:
         con.execute("INSERT OR REPLACE INTO canal VALUES (?,?,?,?,?,?,?,?)", (
             c["id"], c["snippet"]["title"], int(c["statistics"].get("subscriberCount", 0)),
@@ -122,12 +123,16 @@ def sincronizar(yt=None, an=None, hoje: dt.date | None = None) -> dict:
     con.close()
     baixar_thumbs(thumbs)
     # Etapa 4: comentários (sempre) e análises (a cada 6 h). Um falhar não derruba o resto.
-    from jarvis.canal import analises, comentarios
+    from jarvis.youtube import analises, avisos, comentarios
+    antes = {x["id"] for x in comentarios.listar(100000)}
     for parte, fazer in (("comentários", lambda: comentarios.sincronizar(yt)), ("análises", lambda: analises.sincronizar(an))):
         try:
             fazer()
         except Exception as e:  # noqa: BLE001
             print(f"  painel: {parte}: {e}", flush=True)
+    # Etapa 6: o que o Jarvis fala sozinho (perguntas novas e marcos).
+    perguntas = [x for x in comentarios.listar(200) if x["id"] not in antes and x["pergunta"] and not x["lido"]]
+    avisos.conferir(primeira, perguntas)
     return {"canal": c["snippet"]["title"], "videos": n}
 
 
@@ -324,7 +329,7 @@ def para_janela(hoje: dt.date | None = None) -> dict:
                    "meta": meta(c["inscritos"])},
          "numeros": _numeros(con, hoje), "dias": dias, "videos": videos}
     con.close()
-    from jarvis.canal import analises, comentarios, producao
+    from jarvis.youtube import analises, comentarios, producao
     producao.ligar_postados()
     r["cards"] = producao.listar()
     r["comentarios"] = comentarios.listar()

@@ -13,7 +13,7 @@ import re
 import time
 import unicodedata
 
-from jarvis.canal import dados
+from jarvis.youtube import dados
 
 COLUNAS = ("ideia", "gravando", "editando", "pronto", "agendado", "postado")
 

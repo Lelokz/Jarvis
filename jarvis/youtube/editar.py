@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import json
 
-from jarvis.canal import conta, dados
+from jarvis.youtube import conta, dados
 
 VISIBILIDADES = ("public", "unlisted", "private")
 LIMITE_TITULO = 100        # regras do YouTube

@@ -11,7 +11,7 @@ import subprocess
 import time
 from pathlib import Path
 
-from jarvis.canal import dados
+from jarvis.youtube import dados
 
 TITULOS = ["DOORS: zerei o HOTEL+ sem morrer?", "Minecraft 100% #6: o Wither apareceu", "A HISTÓRIA COMPLETA de Doors",
            "Minecraft 100% #5: fomos pro End", "Roblox mais difícil que já joguei", "Minecraft 100% #4: a vila tava amaldiçoada",
@@ -56,7 +56,7 @@ def criar(fonte: Path | None = None) -> None:
                     (dia.isoformat(), v, v * 6, random.randint(0, 3), random.randint(0, 1), v // 20))
     con.commit()
     con.close()
-    from jarvis.canal import producao
+    from jarvis.youtube import producao
     em = lambda d: (hoje + dt.timedelta(days=d)).isoformat()  # noqa: E731
     for campos in ({"titulo": "Minecraft 100% ep 7: o dragão", "jogo": "Minecraft", "coluna": "pronto"},
                    {"titulo": "DOORS andar secreto", "jogo": "Doors", "coluna": "editando",
@@ -70,7 +70,7 @@ def criar(fonte: Path | None = None) -> None:
                    {"titulo": "Testar 10 jogos de terror do Roblox", "jogo": "Roblox", "coluna": "ideia"},
                    {"titulo": "DOORS: zerei o hotel", "jogo": "Doors", "coluna": "agendado"}):
         producao.criar(campos)
-    from jarvis.canal import analises, comentarios
+    from jarvis.youtube import analises, comentarios
     falas = [("@gamerzinho_br", "v0", "mano o Seek do final me deu um susto real KKKKK", 0, 0, 2),
              ("@ana.joga", "v0", "quando sai a parte 2??", 0, 0, 5),
              ("@pedrinhoplays", "v1", "tu vai matar o wither com que armadura?", 0, 0, 9),

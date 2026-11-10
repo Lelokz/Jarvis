@@ -11,7 +11,7 @@ import datetime as dt
 import re
 import time
 
-from jarvis.canal import conta, dados
+from jarvis.youtube import conta, dados
 
 ESQUEMA = """
 CREATE TABLE IF NOT EXISTS comentarios (id TEXT PRIMARY KEY, video TEXT, autor TEXT, foto TEXT, autor_canal TEXT,
@@ -119,7 +119,7 @@ def marcar_lido(ids: list[str] | None = None) -> None:
 
 
 def responder(comentario: str, texto: str, yt=None) -> None:
-    from jarvis.canal.editar import Recusado
+    from jarvis.youtube.editar import Recusado
     texto = texto.strip()
     if not texto:
         raise Recusado("a resposta está vazia")

@@ -855,10 +855,10 @@ jogos ele fica preso no meio) no HD, olha a imagem, responde em português e
 apaga (`olhar apagar`). Só quando o Léo pede; tela bloqueada = sem print. A
 instrução está no `CLAUDE.md` da casa.
 
-**Painel do Canal (09/11/2026, etapas 1–4 de 7; comentarios.py e analises.py; janela `python -m jarvis.canal janela`, Painel.qml; Produção em producao.py, agendar em editar.py):** `jarvis/canal/` (conta.py:
+**Painel do Canal (09/11/2026, etapas 1–4 e 6 de 7; avisos.py e comandos.py (voz); comentarios.py e analises.py; janela `python -m jarvis.youtube janela`, Painel.qml; Produção em producao.py, agendar em editar.py):** `jarvis/youtube/` (o nome `jarvis/canal.py` já era a ponte do celular; conta.py:
 OAuth do projeto Google do Léo, token só no PC; dados.py: canal, vídeos, dias e
 views dia a dia dos últimos 15 vídeos em `~/.local/share/jarvis/canal/canal.db`,
-timer `jarvis-canal` a cada 30 min). Por voz: `python -m jarvis.canal resumo` e
+timer `jarvis-canal` a cada 30 min). Por voz: `python -m jarvis.youtube resumo` e
 `video <nome>`. Conectar: `docs/PAINEL - CONECTAR O YOUTUBE.md`. Próximas: janela
 (Início, Vídeos), Calendário/Produção, Comentários/Análises, postar e comunidade
 pelo Studio num navegador escondido (sem auditoria, decisão do Léo), Jarvis/Friday,

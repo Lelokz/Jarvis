@@ -10,7 +10,7 @@ import datetime as dt
 import json
 import time
 
-from jarvis.canal import conta, dados
+from jarvis.youtube import conta, dados
 
 ESQUEMA = "CREATE TABLE IF NOT EXISTS analises (chave TEXT PRIMARY KEY, dados TEXT, atualizado REAL);"
 A_CADA_S = 6 * 3600

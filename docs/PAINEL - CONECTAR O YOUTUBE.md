@@ -34,7 +34,7 @@ canal. É de graça.
 ## 5. Autorizar
 No terminal:
 
-    cd ~/Projetos/Jarvis && .venv/bin/python -m jarvis.canal conectar
+    cd ~/Projetos/Jarvis && .venv/bin/python -m jarvis.youtube conectar
 
 Abre o navegador:
 1. Escolha a conta do canal.

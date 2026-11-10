@@ -1769,6 +1769,13 @@ def conversar(cfg: config.Config) -> int:
                     # O relógio interno: recados que ele deixou para si mesmo.
                     for recado in recados.vencidos(agente.casa / recados.NOME):
                         ciclo.do_recado(recado)
+                    # Os avisos do Painel do Canal (comentário com pergunta, marcos):
+                    # pela fila do alerta; jogando ou gravando, esperam.
+                    try:
+                        from jarvis.youtube import avisos as avisos_do_canal
+                        alertas.extend(avisos_do_canal.pegar(ocupado=bool(vigia.jogo) or obs_gravando[0]))
+                    except Exception as e:  # noqa: BLE001 - o canal nunca derruba o Jarvis
+                        print(f"  canal: {e}", flush=True)
                 # Nunca no meio de você falando: espera a frase acabar.
                 if time.monotonic() >= proximo_whats and not ciclo.vad.falando:
                     ciclo.anunciar_whatsapp()

@@ -1,7 +1,7 @@
 """A janela do Painel do Canal (PySide6 + QML, no estilo da NOVA, em roxo).
 
-    python -m jarvis.canal janela
-    python -m jarvis.canal retrato <arquivo.png> [inicio|videos] [id do vídeo]   (foto sem tela)
+    python -m jarvis.youtube janela
+    python -m jarvis.youtube retrato <arquivo.png> [inicio|videos] [id do vídeo]   (foto sem tela)
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ from PySide6.QtQml import QQmlApplicationEngine
 from PySide6.QtQuick import QQuickWindow
 import shiboken6
 
-from jarvis.canal import comentarios, conta, dados, editar, producao
+from jarvis.youtube import comentarios, conta, dados, editar, producao
 from jarvis.interface import atomo_icone
 from jarvis.interface.instancia import Instancia
 
