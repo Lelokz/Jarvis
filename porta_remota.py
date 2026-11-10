@@ -71,7 +71,8 @@ LIMITE_LINHA_PONTE = 32 * 1024 * 1024
 PEDIDOS_DO_CELULAR = {"falar", "memoria", "conversas", "abrir", "nova", "continuar", "cerebro",
                       "parar", "renomear", "apagar", "fixar", "ajustes",
                       "memorias", "ler_memoria", "salvar_memoria",  # a aba Memórias (25/10/2026)
-                      "conexao"}  # o Conectar de Ajustes → Conexões (beta 0.17)
+                      "conexao",  # o Conectar de Ajustes → Conexões (beta 0.17)
+                      "projetos", "code", "mudancas", "git", "novo_projeto"}  # o modo code (app beta 0.19.0)
 # Foto, vídeo ou arquivo mandado pelo clipe do app. Vídeo de celular passa
 # disso fácil; por enquanto é o teto (o WebSocket guarda tudo na memória).
 MAX_ANEXO_BYTES = 64 * 1024 * 1024

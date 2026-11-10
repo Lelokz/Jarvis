@@ -275,6 +275,7 @@ fun Tela(modelo: Jarvis) {
     val gaveta = rememberDrawerState(DrawerValue.Closed)
     val escopo = rememberCoroutineScope()
     var seletores by remember { mutableStateOf(false) }
+    var folhaCode by remember { mutableStateOf(false) }   // o modo code: escolher o projeto (beta 0.19.0)
     val contexto = LocalContext.current
 
     // As notificações (avisos do PC, pedidos do grupo) precisam da permissão (Android 13+): pede uma
@@ -318,10 +319,12 @@ fun Tela(modelo: Jarvis) {
     ) {
         Box(Modifier.fillMaxSize().background(Fundo).safeDrawingPadding()) {
             Column(Modifier.fillMaxSize().imePadding()) {
-                Topo(modelo, abrirGaveta = { escopo.launch { gaveta.open() } }, abrirSeletores = { seletores = true })
+                Topo(modelo, abrirGaveta = { escopo.launch { gaveta.open() } }, abrirSeletores = { seletores = true },
+                    abrirCode = { folhaCode = true; modelo.pedirProjetos() })
                 when (modelo.pagina.value) {
                     "memoria" -> PaginaMemoria(modelo)
                     "ajustes" -> PaginaAjustes(modelo)
+                    "mudancas" -> PaginaMudancas(modelo)
                     else -> Chat(modelo) { seletores = true }
                 }
             }
@@ -334,6 +337,14 @@ fun Tela(modelo: Jarvis) {
     if (modelo.avisoAtualizacao.value) AvisoAtualizacao(modelo)
     if (modelo.desbloqueio.value.isNotEmpty()) AvisoDesbloqueio(modelo)
     modelo.pedidoGrupo.value?.let { AvisoPedido(modelo, it.second, it.third) }
+
+    if (folhaCode) {
+        ModalBottomSheet(
+            onDismissRequest = { folhaCode = false },
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+            containerColor = Superficie2,
+        ) { FolhaCode(modelo) { folhaCode = false } }
+    }
 
     if (seletores) {
         ModalBottomSheet(
@@ -498,13 +509,14 @@ private fun lembrarAlternarOuvido(modelo: Jarvis): () -> Unit {
 }
 
 @Composable
-private fun Topo(modelo: Jarvis, abrirGaveta: () -> Unit, abrirSeletores: () -> Unit) {
+private fun Topo(modelo: Jarvis, abrirGaveta: () -> Unit, abrirSeletores: () -> Unit, abrirCode: () -> Unit) {
     val alternarOuvido = lembrarAlternarOuvido(modelo)
     val pagina = modelo.pagina.value
     val antiga = modelo.vendo.value.isNotEmpty()
     val vazio = !antiga && modelo.mensagens.isEmpty()
     val titulo = when {
         pagina == "memoria" -> "Memórias"
+        pagina == "mudancas" -> "Mudanças · " + modelo.codeNome.value.removePrefix("Projeto ")
         pagina == "ajustes" -> categoriasDosAjustes.flatMap { it.second }.firstOrNull { it.id == modelo.abaAjustes.value }?.nome ?: "Ajustes"
         else -> modelo.conversas.firstOrNull { it.id == (modelo.vendo.value.ifEmpty { modelo.conversaAtual.value }) }
             ?.titulo ?: "Chat novo"
@@ -525,11 +537,19 @@ private fun Topo(modelo: Jarvis, abrirGaveta: () -> Unit, abrirSeletores: () -> 
                 when {
                     !modelo.conectado.value -> Text(modelo.motivo.value, color = Fraco, fontSize = 11.sp, maxLines = 1)
                     antiga -> Text("Conversa antiga", color = Pergunta, fontSize = 11.sp)
+                    modelo.codeNome.value.isNotEmpty() -> Text("Modo code · " + modelo.codeNome.value.removePrefix("Projeto ") +
+                        (modelo.mudancas.value?.optJSONArray("arquivos")?.length()?.takeIf { it > 0 }
+                            ?.let { " · $it mudado" + (if (it > 1) "s" else "") } ?: ""),
+                        color = Azul, fontSize = 11.sp, maxLines = 1)
                     else -> Text("${nomesModelo[modelo.modelo.value] ?: modelo.modelo.value} · esforço " +
                         (nomesEsforco[modelo.esforco.value] ?: modelo.esforco.value).lowercase(),
                         color = Fraco, fontSize = 11.sp, maxLines = 1)
                 }
             }
+        }
+        // O modo code (beta 0.19.0): aceso = programando num projeto.
+        Box(Modifier.size(42.dp).clip(CircleShape).clickable { abrirCode() }, contentAlignment = Alignment.Center) {
+            Ic(Icones.codigo, if (modelo.codeNome.value.isNotEmpty()) Azul else TextoMedio, 21.dp)
         }
         // "Sempre ouvindo": aceso = o "hey Jarvis" funciona com a tela desligada.
         Box(Modifier.size(42.dp).clip(CircleShape).clickable { alternarOuvido() }, contentAlignment = Alignment.Center) {
@@ -1261,6 +1281,7 @@ private val categoriasDosAjustes = listOf(
         Categoria("uso", "Uso", "A assinatura do Claude", Icones.uso)),
     "Personalização" to listOf(
         Categoria("personas", "Personas", "Jarvis e Friday", Icones.personas),
+        Categoria("code", "Modo code", "Programar pela voz", Icones.codigo),
         Categoria("conexoes", "Conexões", "WhatsApp, celular, relógio…", Icones.conexoes)),
     "" to listOf(Categoria("sobre", "Sobre a NOVA", "Versão e o que é a NOVA", Icones.sobre)),
 )
@@ -1276,6 +1297,7 @@ private fun PaginaAjustes(modelo: Jarvis) {
             "avisos" -> AjustesAvisos(modelo)
             "uso" -> AjustesUso(modelo)
             "personas" -> AjustesPersonas(modelo)
+            "code" -> AjustesCode(modelo)
             "conexoes" -> if (modelo.passoConexao.value.isEmpty()) AjustesConexoes(modelo) else PassoDaConexao(modelo)
             else -> AjustesSobre(modelo)
         }
@@ -1895,4 +1917,140 @@ private fun BarraDeUso(nome: String, uso: Double, volta: Double, comDia: Boolean
         }
         Text(renova, color = Fraco, fontSize = 12.sp)
     }
+}
+
+
+// -- o modo code (beta 0.19.0, 10/11/2026) --------------------------------------------
+
+/** A folha do botão Code: projeto novo, os projetos do PC, ver as mudanças e sair. */
+@Composable
+private fun FolhaCode(modelo: Jarvis, fechar: () -> Unit) {
+    var escrevendo by remember { mutableStateOf(false) }
+    var nome by remember { mutableStateOf("") }
+    val emCode = modelo.codeCaminho.value.isNotEmpty()
+    Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 28.dp)) {
+        Text("Programar pela voz em…", color = Fraco, fontSize = 13.sp, modifier = Modifier.padding(start = 12.dp, bottom = 6.dp))
+        if (emCode) {
+            Opcao("Ver as mudanças", "O que ele mexeu em " + modelo.codeNome.value.removePrefix("Projeto ") +
+                ", com Commit e Push", false) { modelo.pagina.value = "mudancas"; modelo.pedirMudancas(); fechar() }
+        }
+        if (!escrevendo) {
+            Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable { escrevendo = true }
+                .padding(horizontal = 12.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                Ic(Icones.mais, Azul, 16.dp)
+                Spacer(Modifier.width(10.dp))
+                Text("Novo projeto", color = Azul, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+            }
+        } else {
+            Column(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp)) {
+                OutlinedTextField(
+                    value = nome, onValueChange = { nome = it.take(60) },
+                    modifier = Modifier.fillMaxWidth(), singleLine = true,
+                    placeholder = { Text("Nome do projeto") },
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Texto, unfocusedTextColor = Texto,
+                        focusedBorderColor = Azul, unfocusedBorderColor = Traco, cursorColor = Azul),
+                )
+                Spacer(Modifier.height(8.dp))
+                Button(
+                    onClick = { modelo.novoProjeto(nome); fechar() }, enabled = nome.isNotBlank(),
+                    colors = ButtonDefaults.buttonColors(containerColor = Azul, contentColor = Fundo),
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("Criar e abrir (na pasta Projetos do HD)") }
+            }
+        }
+        Grupo("Projetos")
+        if (modelo.projetos.isEmpty()) Text("Procurando os projetos…", color = MuitoFraco, fontSize = 13.sp,
+            modifier = Modifier.padding(start = 12.dp, bottom = 8.dp))
+        for ((n, caminho) in modelo.projetos) {
+            val aberto = caminho == modelo.codeCaminho.value
+            Opcao(n.removePrefix("Projeto "), if (aberto) "Aberto agora" else "", aberto) {
+                if (!aberto) modelo.entrarCode(caminho); fechar()
+            }
+        }
+        if (emCode) {
+            Grupo("")
+            Opcao("Sair do modo code", "Volta pro Jarvis de sempre", false) { modelo.entrarCode(""); fechar() }
+        }
+        Text("Pela voz: \"modo code no Loft\", \"troca pro Terror\", \"cria um projeto novo chamado…\", \"sai do modo code\".",
+            color = MuitoFraco, fontSize = 12.sp, modifier = Modifier.padding(start = 12.dp, top = 12.dp, end = 12.dp))
+    }
+}
+
+/** As Mudanças do projeto: os arquivos mexidos, o diff colorido e os botões Commit e Push. */
+@Composable
+private fun PaginaMudancas(modelo: Jarvis) {
+    val m = modelo.mudancas.value
+    var escolhido by remember(modelo.codeCaminho.value) { mutableStateOf("") }
+    val arquivos = m?.optJSONArray("arquivos")?.let { a -> List(a.length()) { a.getJSONObject(it) } } ?: emptyList()
+    val diff = m?.optString("diff").orEmpty()
+    val trecho = if (escolhido.isEmpty()) diff else diff.split(Regex("\n(?=diff --git )")).firstOrNull { it.contains(" b/$escolhido") } ?: ""
+    val ocupado = modelo.estado.value == "pensando"
+    Column(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
+        Text(when {
+            m == null -> "Lendo o projeto…"
+            !m.optBoolean("git") -> "Sem git: as mudanças aparecem só na conversa."
+            else -> (m.optString("ramo").takeIf { it.isNotEmpty() }?.let { "ramo $it · " } ?: "") +
+                (if (arquivos.isEmpty()) "nada mudado" else "${arquivos.size} arquivo" + (if (arquivos.size > 1) "s" else "")) +
+                (m.optInt("a_frente").takeIf { it > 0 }?.let { " · $it commit" + (if (it > 1) "s" else "") + " esperando push" } ?: "")
+        }, color = Fraco, fontSize = 13.sp, modifier = Modifier.padding(vertical = 6.dp))
+        Column(Modifier.fillMaxWidth().heightIn(max = 220.dp).verticalScroll(rememberScrollState())) {
+            for (a in arquivos) {
+                val nome = a.optString("arquivo")
+                val sel = escolhido == nome
+                Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(if (sel) Realce else Color.Transparent)
+                    .clickable { escolhido = if (sel) "" else nome }.padding(horizontal = 10.dp, vertical = 9.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(7.dp).clip(CircleShape).background(when (a.optString("estado")) {
+                        "novo" -> Color(0xFF4ADE80); "apagado" -> Color(0xFFF87171); else -> Color(0xFFFBBF24) }))
+                    Spacer(Modifier.width(10.dp))
+                    Text(nome, color = TextoMedio, fontSize = 13.sp, fontFamily = FontFamily.Monospace, maxLines = 1,
+                        overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                    Text("+${a.optInt("mais")}", color = Color(0xFF4ADE80), fontSize = 12.sp, fontFamily = FontFamily.Monospace)
+                    Spacer(Modifier.width(6.dp))
+                    Text("−${a.optInt("menos")}", color = Color(0xFFF87171), fontSize = 12.sp, fontFamily = FontFamily.Monospace)
+                }
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+        Box(Modifier.weight(1f).fillMaxWidth().clip(RoundedCornerShape(11.dp)).border(1.dp, Traco, RoundedCornerShape(11.dp))
+            .background(Color(0xFF0C0F15))) {
+            if (arquivos.isEmpty()) Text("Quando ele mexer em algo, aparece aqui.", color = MuitoFraco, fontSize = 13.sp,
+                modifier = Modifier.align(Alignment.Center))
+            else Text(diffColorido(trecho.lines().take(3000).joinToString("\n")), fontSize = 11.5.sp,
+                fontFamily = FontFamily.Monospace, lineHeight = 16.sp,
+                modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())
+                    .horizontalScroll(rememberScrollState()).padding(12.dp))
+        }
+        Row(Modifier.fillMaxWidth().padding(vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(onClick = { modelo.pedirMudancas() }) { Text("Atualizar", color = Texto) }
+            Button(onClick = { modelo.git("commit") }, enabled = !ocupado && arquivos.isNotEmpty(),
+                colors = ButtonDefaults.buttonColors(containerColor = Azul, contentColor = Fundo)) { Text("Commit") }
+            OutlinedButton(onClick = { modelo.git("push") },
+                enabled = !ocupado && m?.optBoolean("remoto") == true && (m.optInt("a_frente")) > 0) { Text("Push", color = Texto) }
+        }
+    }
+}
+
+@Composable
+private fun AjustesCode(modelo: Jarvis) {
+    SecaoDosAjustes("Modo code", "Programar pela voz: \"modo code no Loft\". Os mesmos ajustes da janela do PC.") {}
+    Grupo("Quanto ele conta")
+    for ((v, n, d) in listOf(
+        Triple("pouca", "Pouco", "Só quando terminar ou travar"),
+        Triple("normal", "Normal", "Os marcos: achou, vai mudar, testando, pronto"),
+        Triple("muita", "Muito", "Também o que está lendo e testando"),
+    )) Opcao(n, d, modelo.codeNarracao.value == v, modelo.conectado.value) {
+        modelo.codeNarracao.value = v; modelo.mudarAjusteCode("code_narracao", v) }
+    Grupo("Microfone aberto")
+    for ((s, n) in listOf(60 to "1 minuto", 120 to "2 minutos", 180 to "3 minutos", 300 to "5 minutos"))
+        Opcao(n, "Ouve sem \"hey Jarvis\" depois de cada resposta", modelo.codeJanela.intValue == s, modelo.conectado.value) {
+            modelo.codeJanela.intValue = s; modelo.mudarAjusteCode("code_janela_s", s) }
+    Grupo("Quem programa")
+    for ((v, n, d) in listOf(
+        Triple("atual", "Quem estiver", "Não troca"),
+        Triple("jarvis", "Jarvis", "Sempre ele no modo code"),
+        Triple("friday", "Friday", "Sempre ela no modo code"),
+    )) Opcao(n, d, modelo.codePersona.value == v, modelo.conectado.value) {
+        modelo.codePersona.value = v; modelo.mudarAjusteCode("code_persona", v) }
 }

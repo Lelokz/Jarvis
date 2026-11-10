@@ -128,6 +128,15 @@ class Jarvis(private val app: Application) {
     // O pedido de alguém do grupo esperando o Sim: (id, quem, pedido).
     val pedidoGrupo = mutableStateOf<Triple<String, String, String>?>(null)
     val avisoAtualizacao = mutableStateOf(false)
+    // O modo code (beta 0.19.0, 10/11/2026): programar pela voz num projeto do PC.
+    val codeNome = mutableStateOf("")
+    val codeCaminho = mutableStateOf("")
+    val projetos = mutableStateListOf<Pair<String, String>>()   // (nome, caminho)
+    val mudancas = mutableStateOf<JSONObject?>(null)
+    val codeNarracao = mutableStateOf("normal")
+    val codeJanela = mutableIntStateOf(120)
+    val codePersona = mutableStateOf("atual")
+    private var releitura: kotlinx.coroutines.Job? = null
     val aviso = mutableStateOf("")           // recado rápido (erro, "mandada pra lixeira")
     val estado = mutableStateOf("dormindo")     // o do PC: pensando, falando...
     val conectado = mutableStateOf(false)
@@ -345,6 +354,37 @@ class Jarvis(private val app: Application) {
     }
 
     /** O mesmo "Seu nome" da janela: o nome é um só, guardado no PC. */
+    // -- o modo code (beta 0.19.0) ---------------------------------------------
+
+    fun pedirProjetos() { conexao?.enviar(JSONObject().put("pedir", "projetos")) }
+
+    /** "" = sair do modo code. */
+    fun entrarCode(caminho: String) { conexao?.enviar(JSONObject().put("pedir", "code").put("caminho", caminho)) }
+
+    fun novoProjeto(nome: String) {
+        if (nome.isBlank()) return
+        conexao?.enviar(JSONObject().put("pedir", "novo_projeto").put("nome", nome.trim().take(80)))
+    }
+
+    fun pedirMudancas() {
+        val c = codeCaminho.value
+        if (c.isNotEmpty()) conexao?.enviar(JSONObject().put("pedir", "mudancas").put("caminho", c))
+    }
+
+    /** Depois que ele mexe em algo, as Mudanças se atualizam (1,5 s: uma rajada vira um pedido só). */
+    private fun relerMudancas() {
+        if (codeCaminho.value.isEmpty()) return
+        releitura?.cancel()
+        releitura = viewModelScope.launch { kotlinx.coroutines.delay(1500); pedirMudancas() }
+    }
+
+    /** Os botões Commit e Push: o toque já é o OK. */
+    fun git(acao: String) { conexao?.enviar(JSONObject().put("pedir", "git").put("acao", acao)) }
+
+    fun mudarAjusteCode(chave: String, valor: Any) {
+        conexao?.enviar(JSONObject().put("pedir", "ajustes").put(chave, valor))
+    }
+
     fun mudarNome(nome: String) {
         conexao?.enviar(JSONObject().put("pedir", "ajustes").put("nome", nome.trim().take(30)))
     }
@@ -732,7 +772,22 @@ class Jarvis(private val app: Application) {
                 ev.optString("cor_persona").takeIf { it.length == 7 && it.startsWith("#") }?.let {
                     runCatching { corDaFriday.value = androidx.compose.ui.graphics.Color(android.graphics.Color.parseColor(it)) }
                 }
+                val caminho = ev.optString("code_caminho", "")
+                if (caminho != codeCaminho.value) mudancas.value = null
+                codeNome.value = ev.optString("code", "")
+                codeCaminho.value = caminho
+                if (caminho.isEmpty() && pagina.value == "mudancas") pagina.value = "chat"
+                if (caminho.isNotEmpty()) pedirMudancas()
             }
+            "projetos" -> {
+                val lista = ev.optJSONArray("lista")
+                projetos.clear()
+                for (i in 0 until (lista?.length() ?: 0)) {
+                    val p = lista!!.getJSONObject(i)
+                    projetos.add(p.optString("nome") to p.optString("caminho"))
+                }
+            }
+            "mudancas" -> if (ev.optString("caminho") == codeCaminho.value) mudancas.value = ev
             "memorias" -> {
                 memoriasCarregando.value = false
                 memorias.clear()
@@ -778,6 +833,9 @@ class Jarvis(private val app: Application) {
                     }
                 }
                 ev.optJSONArray("conectores")?.let { lista -> conectores.value = List(lista.length()) { lista.optString(it) } }
+                codeNarracao.value = ev.optString("code_narracao", codeNarracao.value)
+                codeJanela.intValue = ev.optInt("code_janela_s", codeJanela.intValue)
+                codePersona.value = ev.optString("code_persona", codePersona.value)
                 prefs.edit().putString("nome_usuario", nomeUsuario.value).putString("nome_pc", nomePc.value).apply()
             }
             "conexao" -> if (ev.optString("id") == passoConexao.value) estadoPasso.value = ev
@@ -802,8 +860,9 @@ class Jarvis(private val app: Application) {
                 val opcoes = ev.optJSONArray("opcoes")?.let { a -> List(a.length()) { a.getString(it) } } ?: emptyList()
                 falaDele(ev.optString("texto"), ev.optBoolean("perguntando"), opcoes)
             }
-            "mostrar" -> painel(ev.optString("titulo"), ev.optString("texto"))
+            "mostrar" -> { painel(ev.optString("titulo"), ev.optString("texto")); relerMudancas() }
             "atividade" -> {
+                relerMudancas()
                 val t = ev.optString("texto")
                 val i = mensagens.lastIndex
                 if (i >= 0 && mensagens[i].quem == Quem.ATIVIDADE) {

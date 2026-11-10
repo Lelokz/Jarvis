@@ -140,7 +140,24 @@ private fun CaixaDeCodigo(lingua: String, conteudo: String) {
                 Text(if (copiado) "Copiado" else "Copiar", color = Color(0xFF7E879B), fontSize = 11.sp)
             }
         }
-        Text(conteudo, color = Color(0xFFC9D1DD), fontSize = 12.sp, fontFamily = FontFamily.Monospace,
+        // Diff (modo code, beta 0.19.0): verde entrou, vermelho saiu.
+        Text(if (lingua == "diff") diffColorido(conteudo) else AnnotatedString(conteudo), color = Color(0xFFC9D1DD),
+            fontSize = 12.sp, fontFamily = FontFamily.Monospace,
             lineHeight = 17.sp, modifier = Modifier.horizontalScroll(rememberScrollState()).padding(12.dp))
+    }
+}
+
+/** O diff linha por linha, com a cor de cada uma (o mesmo do PC). */
+fun diffColorido(texto: String): AnnotatedString = androidx.compose.ui.text.buildAnnotatedString {
+    texto.lines().forEachIndexed { i, l ->
+        val cor = when {
+            l.startsWith("+++") || l.startsWith("---") || l.startsWith("index ") -> Color(0xFF5F687C)
+            l.startsWith("+") -> Color(0xFF4ADE80)
+            l.startsWith("-") -> Color(0xFFF87171)
+            l.startsWith("@@") || l.startsWith("diff ") -> Color(0xFFA78BFA)
+            else -> Color(0xFF9AA3B5)
+        }
+        withStyle(SpanStyle(color = cor)) { append(l) }
+        if (i < texto.lines().lastIndex) append("\n")
     }
 }

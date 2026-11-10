@@ -39,6 +39,7 @@ object Icones {
         }.build()
 
     val menu = traco("M4 7h16M4 12h16M4 17h16", 2f)
+    val codigo = traco("M8 7.5L3.5 12 8 16.5M16 7.5l4.5 4.5-4.5 4.5M13.5 5.5l-3 13", 1.9f)
     val mais = traco("M12 5v14M5 12h14", 2.6f)
     val lupa = traco("M11 4a7 7 0 1 0 0 14a7 7 0 1 0 0-14M20 20l-3.5-3.5", 2f)
     val voz = traco("M9 6a3 3 0 0 1 6 0v5a3 3 0 0 1-6 0zM5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21")
