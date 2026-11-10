@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import os
 import sys
 import threading
 from pathlib import Path
@@ -16,7 +17,7 @@ from PySide6.QtQml import QQmlApplicationEngine
 from PySide6.QtQuick import QQuickWindow
 import shiboken6
 
-from jarvis.canal import conta, dados, editar, producao
+from jarvis.canal import comentarios, conta, dados, editar, producao
 from jarvis.interface import atomo_icone
 from jarvis.interface.instancia import Instancia
 
@@ -120,6 +121,22 @@ class Painel(QObject):
     def desagendar(self, video: str) -> None:
         self._em_fundo(lambda: editar.desagendar(video), "Tirado do agendamento (continua privado).")
 
+    # -- etapa 4: comentários --------------------------------------------------------------
+
+    @Slot(str, str)
+    def responder(self, comentario: str, texto: str) -> None:
+        self._em_fundo(lambda: comentarios.responder(comentario, texto), "Resposta publicada.")
+
+    @Slot(str)
+    def marcarLido(self, comentario: str) -> None:
+        comentarios.marcar_lido([comentario])
+        self.recarregar()
+
+    @Slot()
+    def marcarTodosLidos(self) -> None:
+        comentarios.marcar_lido(None)
+        self.recarregar()
+
     # -- etapa 3: produção (só no PC, na hora) -----------------------------------------
 
     def _no_pc(self, fazer, ok: str = "") -> None:
@@ -178,6 +195,7 @@ def abrir(retrato: str | None = None, aba: str = "inicio", ficha: str = "") -> i
     engine.rootContext().setContextProperty("painel", painel)
     engine.rootContext().setContextProperty("abaInicial", aba)
     engine.rootContext().setContextProperty("fichaInicial", ficha)
+    engine.rootContext().setContextProperty("rolarInicial", int(os.environ.get("PAINEL_ROLAR", "0")))
     engine.load(QUrl.fromLocalFile(str(AQUI / "Painel.qml")))
     if not engine.rootObjects():
         return 1

@@ -255,6 +255,87 @@ def main() -> int:
     except editar.Recusado:
         checa("não agenda vídeo que já saiu", True)
 
+    print("-- etapa 4: comentários e análises --")
+    from jarvis.canal import analises, comentarios
+
+    def th(i, autor_canal, texto, horas, respostas=()):
+        quando = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=horas)).isoformat().replace("+00:00", "Z")
+        return {"id": f"t{i}", "snippet": {"videoId": "v0", "totalReplyCount": len(respostas), "topLevelComment": {"snippet": {
+                    "authorDisplayName": f"@pessoa{i}", "authorChannelId": {"value": autor_canal}, "textOriginal": texto,
+                    "publishedAt": quando, "likeCount": 3}}},
+                "replies": {"comments": [{"snippet": {"authorChannelId": {"value": c}}} for c in respostas]}}
+    paginas = [[th(1, "X", "quando sai a parte 2?", 2), th(2, "Y", "muito bom", 5, respostas=("UC1",)),
+                th(3, "UC1", "valeu galera", 6)], [th(4, "Z", "conteúdo antigo", 24 * 30)]]
+
+    class YTC:
+        pedidos = 0
+
+        def commentThreads(self):
+            return self
+
+        def list(self, **kw):
+            YTC.pedidos += 1
+            i = 1 if kw.get("pageToken") else 0
+            r = {"items": paginas[i]}
+            if i == 0:
+                r["nextPageToken"] = "p2"
+            return Pedido(r)
+
+        def comments(self):
+            return self
+
+        def insert(self, part, body):
+            YTC.resposta = body
+            return Pedido({})
+    novos = comentarios.sincronizar(YTC())
+    c = {x["id"]: x for x in comentarios.listar()}
+    checa("leu as duas páginas (4 comentários)", novos == 4 and len(c) == 4, novos)
+    checa("pergunta marcada", c["t1"]["pergunta"] == 1 and c["t2"]["pergunta"] == 0)
+    checa("respondido pelo canal", c["t2"]["respondido"] == 1 and c["t1"]["respondido"] == 0)
+    checa("comentário do próprio Lelokz já entra lido", c["t3"]["lido"] == 1)
+    checa("na primeira vez, o de 1 mês atrás entra lido", c["t4"]["lido"] == 1 and c["t1"]["lido"] == 0)
+    checa("novos = os não lidos", comentarios.nao_lidos() == 2)
+    checa("tem o título do vídeo", c["t1"]["video_titulo"] == "DOORS: o hotel inteiro")
+    comentarios.marcar_lido(["t1"])
+    comentarios.sincronizar(YTC())
+    checa("lido continua lido depois de sincronizar de novo", {x["id"]: x for x in comentarios.listar()}["t1"]["lido"] == 1)
+    comentarios.responder("t2", "  valeu!  ", yt=YTC())
+    checa("responder manda o texto e o comentário certo", YTC.resposta == {"snippet": {"parentId": "t2", "textOriginal": "valeu!"}})
+    try:
+        comentarios.responder("t2", "   ", yt=YTC())
+        checa("não manda resposta vazia", False)
+    except editar.Recusado:
+        checa("não manda resposta vazia", True)
+    comentarios.marcar_lido(None)
+    checa("marcar todos como lidos", comentarios.nao_lidos() == 0)
+
+    class ANA:
+        pedidos = 0
+
+        def reports(self):
+            return self
+
+        def query(self, **kw):
+            ANA.pedidos += 1
+            dim = kw["dimensions"]
+            return Pedido({"rows": {"video": [["v0", 900, 12, 3000]],
+                                    "insightTrafficSourceType": [["YT_SEARCH", 300], ["SUGGESTED_VIDEO", 500], ["RELATED_VIDEO", 100], ["XYZ_NOVO", 5]],
+                                    "country": [["BR", 800], ["PT", 50]],
+                                    "ageGroup": [["age13-17", 40.0], ["age65-", 1.5]],
+                                    "deviceType": [["MOBILE", 700], ["DESKTOP", 200]]}[dim]})
+    analises.sincronizar(ANA())
+    a = analises.para_janela()
+    checa("origens em português e somadas (sugeridos 500+100)", a["origens"][0] == {"nome": "Vídeos sugeridos", "valor": 600}, a["origens"])
+    checa("origem desconhecida não some", any(o["nome"] == "Xyz Novo" for o in a["origens"]))
+    checa("países e aparelhos em português", a["paises"][0]["nome"] == "Brasil" and a["aparelhos"][0]["nome"] == "Celular")
+    checa("idades 13–17 e 65+", [x["nome"] for x in a["idades"]] == ["13–17", "65+"])
+    checa("os vídeos que mais trouxeram views", a["top"][0] == {"video": "v0", "views": 900, "inscritos": 12, "minutos": 3000})
+    n = ANA.pedidos
+    analises.sincronizar(ANA())
+    checa("não pergunta de novo antes de 6 h", ANA.pedidos == n)
+    j = dados.para_janela()
+    checa("a janela recebe comentários, novos e análises", len(j["comentarios"]) == 4 and j["naoLidos"] == 0 and "origens" in j["analises"])
+
     print(f"\n{ok} passaram, {falhou} falharam")
     return 1 if falhou else 0
 

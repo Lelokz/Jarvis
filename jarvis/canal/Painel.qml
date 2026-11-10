@@ -35,6 +35,8 @@ Window {
     readonly property var numeros: d.numeros || ({})
     readonly property var videos: d.videos || []
     readonly property var cards: d.cards || []
+    readonly property var comentarios: d.comentarios || []
+    readonly property var analises: d.analises || ({})
     property var cardAberto: null          // o card no editor ({} = novo)
     property var confirmar: null           // { texto, sim: function }
     property var arrasto: null             // { tipo: "agendado"|"card", id, titulo }
@@ -224,6 +226,60 @@ Window {
         }
     }
 
+    component Barras: Cartao {
+        id: bs
+        property var itens: []
+        property string sufixo: ""
+        property bool porcento: false
+        readonly property real total: itens.reduce(function (a, x) { return a + x.valor }, 0) || 1
+        readonly property real maior: Math.max.apply(null, itens.map(function (x) { return x.valor }).concat([1]))
+        height: 60 + Math.max(1, Math.min(7, itens.length)) * 35
+        Text { x: 20; y: 46; visible: bs.itens.length === 0; text: "Sem dados ainda."; color: textoFraco; font { family: familia; pixelSize: 13 } }
+        Column {
+            x: 20; y: 44; width: bs.width - 40; spacing: 10
+            Repeater {
+                model: bs.itens.slice(0, 7)
+                Column {
+                    width: parent.width; spacing: 4
+                    Row {
+                        width: parent.width
+                        Text { width: parent.width - pv.width; text: modelData.nome; elide: Text.ElideRight; color: textoMedio; font { family: familia; pixelSize: 12 } }
+                        Text { id: pv; color: texto; font { family: familia; pixelSize: 12; weight: Font.DemiBold }
+                               text: bs.porcento ? String(modelData.valor).replace(".", ",") + "%" : Math.round(100 * modelData.valor / bs.total) + "%" }
+                    }
+                    Rectangle { width: parent.width; height: 6; radius: 3; color: trilho
+                        Rectangle { width: parent.width * modelData.valor / bs.maior; height: 6; radius: 3; color: roxo } }
+                }
+            }
+        }
+    }
+
+    component GraficoInscritos: Canvas {
+        id: gi
+        property var dias: []
+        onDiasChanged: requestPaint()
+        onWidthChanged: requestPaint()
+        onPaint: {
+            var c = getContext("2d"); c.reset()
+            var n = dias.length; if (!n) return
+            var maxV = 1
+            for (var i = 0; i < n; i++) maxV = Math.max(maxV, dias[i].ganhos, dias[i].perdidos)
+            var b = 22, meio = (height - b) * 0.66, w = width / n
+            c.strokeStyle = trilho; c.beginPath(); c.moveTo(0, meio); c.lineTo(width, meio); c.stroke()
+            for (var k = 0; k < n; k++) {
+                var hg = (meio - 6) * dias[k].ganhos / maxV, hp = (height - b - meio - 4) * dias[k].perdidos / maxV
+                c.fillStyle = verde; c.fillRect(k * w + 1, meio - hg, Math.max(1, w - 2), hg)
+                c.fillStyle = vermelho; c.fillRect(k * w + 1, meio + 1, Math.max(1, w - 2), hp)
+            }
+            c.fillStyle = textoFraco; c.font = "11px '" + familia + "'"
+            for (var q = 0; q < 5; q++) {
+                var idx = Math.round(q * (n - 1) / 4), dd = dias[idx].dia
+                c.textAlign = q === 0 ? "left" : q === 4 ? "right" : "center"
+                c.fillText(dd.slice(8, 10) + "/" + dd.slice(5, 7), q === 0 ? 0 : q === 4 ? width : idx * w + w / 2, height - 4)
+            }
+        }
+    }
+
     // ---- barra da esquerda ----
     Rectangle {
         id: lado
@@ -239,8 +295,8 @@ Window {
             Repeater {
                 model: [ { id: "inicio", nome: "Início", etapa: 0 }, { id: "calendario", nome: "Calendário", etapa: 0 },
                          { id: "producao", nome: "Produção", etapa: 0 }, { id: "videos", nome: "Vídeos", etapa: 0 },
-                         { id: "comentarios", nome: "Comentários", etapa: 4 }, { id: "comunidade", nome: "Comunidade", etapa: 5 },
-                         { id: "analises", nome: "Análises", etapa: 4 } ]
+                         { id: "comentarios", nome: "Comentários", etapa: 0 }, { id: "comunidade", nome: "Comunidade", etapa: 5 },
+                         { id: "analises", nome: "Análises", etapa: 0 } ]
                 Rectangle {
                     x: 12; width: lado.width - 24; height: 40; radius: 10
                     readonly property bool atual: aba === modelData.id
@@ -252,6 +308,11 @@ Window {
                            font { family: familia; pixelSize: 14; weight: parent.atual ? Font.DemiBold : Font.Normal } }
                     Text { anchors { right: parent.right; rightMargin: 12; verticalCenter: parent.verticalCenter }
                            visible: !parent.pronta; text: "etapa " + modelData.etapa; color: "#4d4760"; font { family: familia; pixelSize: 11 } }
+                    Rectangle { anchors { right: parent.right; rightMargin: 12; verticalCenter: parent.verticalCenter }
+                                visible: modelData.id === "comentarios" && (d.naoLidos || 0) > 0
+                                height: 20; radius: 10; width: Math.max(20, tnl.implicitWidth + 12); color: roxoForte
+                                Text { id: tnl; anchors.centerIn: parent; text: d.naoLidos > 99 ? "99+" : (d.naoLidos || 0); color: "white"
+                                       font { family: familia; pixelSize: 11; weight: Font.DemiBold } } }
                     MouseArea { id: maNav; anchors.fill: parent; hoverEnabled: true; enabled: parent.pronta
                                 cursorShape: Qt.PointingHandCursor; onClicked: { aba = modelData.id; ficha = null } }
                 }
@@ -627,6 +688,171 @@ Window {
                             }
                         }
                     }
+                }
+            }
+        }
+
+        // ================= COMENTÁRIOS =================
+        Item {
+            id: abaComent
+            anchors.fill: parent
+            visible: aba === "comentarios"
+            property string filtro: "todos"
+            property string respondendo: ""
+            readonly property var lista: comentarios.filter(function (c) {
+                return filtro === "naoLidos" ? !c.lido : filtro === "semResposta" ? !c.respondido : filtro === "perguntas" ? c.pergunta : true })
+            Text { text: "Comentários"; color: texto; font { family: familia; pixelSize: 26; weight: Font.DemiBold } }
+            Text { y: 36; color: textoFraco; font { family: familia; pixelSize: 13 }
+                   text: (d.naoLidos || 0) + ((d.naoLidos || 0) === 1 ? " novo" : " novos") + " · " + comentarios.filter(function (c) { return !c.respondido && c.pergunta }).length + " perguntas sem resposta" }
+            Botao { anchors.right: parent.right; rotulo: "Marcar todos como lidos"; ativo: (d.naoLidos || 0) > 0; onClicado: painel.marcarTodosLidos() }
+            Row {
+                y: 72; spacing: 8
+                Repeater {
+                    model: [ { id: "todos", t: "Todos" }, { id: "naoLidos", t: "Novos" }, { id: "semResposta", t: "Sem resposta" }, { id: "perguntas", t: "Perguntas" } ]
+                    Rectangle {
+                        height: 38; radius: 19; width: tfc.implicitWidth + 28
+                        readonly property bool sel: abaComent.filtro === modelData.id
+                        color: sel ? Qt.rgba(0.65, 0.55, 0.98, 0.18) : superficie; border.color: sel ? roxo : traco
+                        Text { id: tfc; anchors.centerIn: parent; text: modelData.t; color: parent.sel ? texto : textoMedio
+                               font { family: familia; pixelSize: 13; weight: parent.sel ? Font.DemiBold : Font.Normal } }
+                        MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: abaComent.filtro = modelData.id }
+                    }
+                }
+            }
+            ListView {
+                id: listaComent
+                y: 126; width: parent.width; height: parent.height - y
+                clip: true; spacing: 10; model: abaComent.lista
+                boundsBehavior: Flickable.StopAtBounds
+                ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+                Text { visible: abaComent.lista.length === 0; anchors.horizontalCenter: parent.horizontalCenter; y: 40
+                       text: "Nada por aqui."; color: textoFraco; font { family: familia; pixelSize: 14 } }
+                delegate: Rectangle {
+                    width: listaComent.width - 14; height: corpoC.height + 28; radius: 14
+                    color: modelData.lido ? superficie : "#1a1628"; border.color: modelData.lido ? traco : "#3b3060"
+                    Rectangle { visible: !modelData.lido; x: 0; y: 16; width: 3; height: 22; radius: 2; color: roxo }
+                    Rectangle {
+                        id: foto; x: 18; y: 16; width: 40; height: 40; radius: 20; color: "#2a2440"; clip: true
+                        Text { anchors.centerIn: parent; text: (modelData.autor || "?").replace("@", "").charAt(0).toUpperCase(); color: lilas
+                               readonly property color lilas: "#c4b5fd"; font { family: familia; pixelSize: 16; weight: Font.DemiBold } }
+                        Image { anchors.fill: parent; source: modelData.foto; fillMode: Image.PreserveAspectCrop; visible: status === Image.Ready; asynchronous: true }
+                    }
+                    Column {
+                        id: corpoC
+                        x: 72; y: 14; width: parent.width - 72 - 18; spacing: 6
+                        Row {
+                            spacing: 8
+                            Text { text: modelData.autor; color: texto; font { family: familia; pixelSize: 13; weight: Font.DemiBold } }
+                            Text { text: haQuanto(modelData.quando); color: textoFraco; font { family: familia; pixelSize: 12 } }
+                            Text { text: "em"; color: textoFraco; font { family: familia; pixelSize: 12 } }
+                            Text { text: modelData.video_titulo || "vídeo"; color: roxo; font { family: familia; pixelSize: 12; weight: Font.Medium }
+                                   width: Math.min(implicitWidth, corpoC.width * 0.45); elide: Text.ElideRight
+                                   MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: { var v = videoDe(modelData.video); if (v) abrirFicha(v) } } }
+                            Etiqueta { visible: !!modelData.pergunta && !modelData.respondido; texto: "Pergunta"; cor: amarelo }
+                            Etiqueta { visible: !!modelData.respondido; texto: "Respondido"; cor: verde }
+                        }
+                        Text { width: parent.width; text: modelData.texto; wrapMode: Text.Wrap; color: textoMedio; font { family: familia; pixelSize: 13 }
+                               maximumLineCount: 8; elide: Text.ElideRight; lineHeight: 1.15 }
+                        Row {
+                            spacing: 18
+                            Text { text: modelData.likes + (modelData.likes === 1 ? " like" : " likes"); color: textoFraco; font { family: familia; pixelSize: 12 } }
+                            Text { text: modelData.respostas + (modelData.respostas === 1 ? " resposta" : " respostas"); color: textoFraco; font { family: familia; pixelSize: 12 } }
+                            Text { text: "Responder"; color: roxo; font { family: familia; pixelSize: 12; weight: Font.DemiBold }
+                                   MouseArea { anchors.fill: parent; anchors.margins: -6; cursorShape: Qt.PointingHandCursor
+                                               onClicked: { abaComent.respondendo = abaComent.respondendo === modelData.id ? "" : modelData.id; avisoTexto = "" } } }
+                            Text { visible: !modelData.lido; text: "Marcar como lido"; color: textoMedio; font { family: familia; pixelSize: 12 }
+                                   MouseArea { anchors.fill: parent; anchors.margins: -6; cursorShape: Qt.PointingHandCursor; onClicked: painel.marcarLido(modelData.id) } }
+                            Text { text: "Abrir no YouTube"; color: textoMedio; font { family: familia; pixelSize: 12 }
+                                   MouseArea { anchors.fill: parent; anchors.margins: -6; cursorShape: Qt.PointingHandCursor
+                                               onClicked: painel.abrirLink("https://www.youtube.com/watch?v=" + modelData.video + "&lc=" + modelData.id) } }
+                        }
+                        Column {
+                            visible: abaComent.respondendo === modelData.id
+                            width: parent.width; spacing: 8
+                            ScrollView {
+                                width: parent.width; height: 80
+                                background: Rectangle { radius: 10; color: superficie2; border.color: campoResp.activeFocus ? roxo : traco }
+                                TextArea { id: campoResp; color: texto; font.family: familia; font.pixelSize: 13; wrapMode: TextArea.Wrap; padding: 12
+                                           background: null; selectByMouse: true; placeholderText: "Responder como Lelokz…"; placeholderTextColor: "#5a536d" }
+                            }
+                            Row {
+                                spacing: 8
+                                Botao { rotulo: ocupado ? "Enviando…" : "Responder"; principal: true; ativo: !ocupado && campoResp.text.trim() !== ""
+                                        onClicado: { painel.responder(modelData.id, campoResp.text); campoResp.text = ""; abaComent.respondendo = "" } }
+                                Botao { rotulo: "Cancelar"; onClicado: abaComent.respondendo = "" }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // ================= ANÁLISES =================
+        Flickable {
+            anchors.fill: parent
+            visible: aba === "analises"
+            Component.onCompleted: if (typeof rolarInicial !== "undefined" && rolarInicial > 0) contentY = rolarInicial
+            contentHeight: colAn.height; clip: true; boundsBehavior: Flickable.StopAtBounds
+            ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+            Column {
+                id: colAn
+                width: parent.width - 14; spacing: 16
+                Column {
+                    spacing: 6
+                    Text { text: "Análises"; color: texto; font { family: familia; pixelSize: 26; weight: Font.DemiBold } }
+                    Text { text: "Últimos 28 dias. O YouTube entrega estes números com uns 2 dias de atraso."; color: textoFraco; font { family: familia; pixelSize: 13 } }
+                }
+                Row {
+                    id: linhaAn
+                    width: parent.width; height: 120; spacing: 16
+                    readonly property var d28: (d.dias || []).slice(-28)
+                    readonly property int ganhos: d28.reduce(function (a, x) { return a + x.ganhos }, 0)
+                    readonly property int perdidos: d28.reduce(function (a, x) { return a + x.perdidos }, 0)
+                    readonly property int likes: d28.reduce(function (a, x) { return a + x.likes }, 0)
+                    Numero { width: (parent.width - 48) / 4; height: parent.height; titulo: "Inscritos ganhos"; valor: "+" + mil(linhaAn.ganhos); detalhe: "pessoas que se inscreveram"; corDetalhe: verde }
+                    Numero { width: (parent.width - 48) / 4; height: parent.height; titulo: "Inscritos perdidos"; valor: "−" + mil(linhaAn.perdidos); detalhe: "saíram do canal"; corDetalhe: vermelho }
+                    Numero { width: (parent.width - 48) / 4; height: parent.height; titulo: "Saldo"; valor: (linhaAn.ganhos - linhaAn.perdidos >= 0 ? "+" : "−") + mil(Math.abs(linhaAn.ganhos - linhaAn.perdidos))
+                             detalhe: "ganhos menos perdidos" }
+                    Numero { width: (parent.width - 48) / 4; height: parent.height; titulo: "Likes"; valor: mil(linhaAn.likes); detalhe: "em todos os vídeos" }
+                }
+                Cartao {
+                    width: parent.width; height: 230; titulo: "Inscritos por dia · 90 dias (verde ganhou, vermelho perdeu)"
+                    GraficoInscritos { anchors { fill: parent; topMargin: 46; leftMargin: 20; rightMargin: 20; bottomMargin: 12 } dias: d.dias || [] }
+                }
+                Cartao {
+                    id: cTop
+                    width: parent.width; height: 70 + Math.max(1, (analises.top || []).length) * 54; titulo: "Os vídeos que mais trouxeram views"
+                    Text { x: 20; y: 46; visible: !(analises.top || []).length; text: "Sem dados ainda."; color: textoFraco; font { family: familia; pixelSize: 13 } }
+                    Column {
+                        x: 20; y: 44; width: parent.width - 40; spacing: 8
+                        Repeater {
+                            model: analises.top || []
+                            Rectangle {
+                                readonly property var v: videoDe(modelData.video)
+                                width: parent.width; height: 46; radius: 8; color: maTop.containsMouse ? superficie2 : "transparent"
+                                Text { x: 6; anchors.verticalCenter: parent.verticalCenter; text: index + 1; color: textoFraco; width: 18
+                                       font { family: familia; pixelSize: 13; weight: Font.DemiBold } }
+                                Thumb { x: 30; anchors.verticalCenter: parent.verticalCenter; width: 64; height: 36; radius: 5; fonte: parent.v ? parent.v.thumb : ""; rotulo: "" }
+                                Text { x: 108; anchors.verticalCenter: parent.verticalCenter; width: parent.width - 108 - 330; elide: Text.ElideRight
+                                       text: parent.v ? parent.v.titulo : modelData.video; color: texto; font { family: familia; pixelSize: 13 } }
+                                Row {
+                                    anchors { right: parent.right; rightMargin: 10; verticalCenter: parent.verticalCenter }
+                                    Text { width: 110; horizontalAlignment: Text.AlignRight; text: mil(modelData.views) + " views"; color: texto; font { family: familia; pixelSize: 13; weight: Font.DemiBold } }
+                                    Text { width: 120; horizontalAlignment: Text.AlignRight; text: "+" + mil(modelData.inscritos) + " inscritos"; color: verde; font { family: familia; pixelSize: 13 } }
+                                    Text { width: 90; horizontalAlignment: Text.AlignRight; text: mil(modelData.minutos / 60) + " h"; color: textoFraco; font { family: familia; pixelSize: 13 } }
+                                }
+                                MouseArea { id: maTop; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: if (parent.v) abrirFicha(parent.v) }
+                            }
+                        }
+                    }
+                }
+                Grid {
+                    width: parent.width; columns: 2; spacing: 16
+                    readonly property real larg: (width - spacing) / 2
+                    Barras { width: parent.larg; titulo: "De onde vem o público"; itens: analises.origens || [] }
+                    Barras { width: parent.larg; titulo: "Países"; itens: analises.paises || [] }
+                    Barras { width: parent.larg; titulo: "Idade de quem assiste"; itens: analises.idades || []; porcento: true }
+                    Barras { width: parent.larg; titulo: "Aparelhos"; itens: analises.aparelhos || [] }
                 }
             }
         }

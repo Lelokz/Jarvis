@@ -121,6 +121,13 @@ def sincronizar(yt=None, an=None, hoje: dt.date | None = None) -> dict:
     thumbs = [(r["id"], r["thumb"]) for r in con.execute("SELECT id, thumb FROM videos")]
     con.close()
     baixar_thumbs(thumbs)
+    # Etapa 4: comentários (sempre) e análises (a cada 6 h). Um falhar não derruba o resto.
+    from jarvis.canal import analises, comentarios
+    for parte, fazer in (("comentários", lambda: comentarios.sincronizar(yt)), ("análises", lambda: analises.sincronizar(an))):
+        try:
+            fazer()
+        except Exception as e:  # noqa: BLE001
+            print(f"  painel: {parte}: {e}", flush=True)
     return {"canal": c["snippet"]["title"], "videos": n}
 
 
@@ -317,9 +324,12 @@ def para_janela(hoje: dt.date | None = None) -> dict:
                    "meta": meta(c["inscritos"])},
          "numeros": _numeros(con, hoje), "dias": dias, "videos": videos}
     con.close()
-    from jarvis.canal import producao
+    from jarvis.canal import analises, comentarios, producao
     producao.ligar_postados()
     r["cards"] = producao.listar()
+    r["comentarios"] = comentarios.listar()
+    r["naoLidos"] = comentarios.nao_lidos()
+    r["analises"] = analises.para_janela()
     return r
 
 

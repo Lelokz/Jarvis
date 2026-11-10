@@ -70,6 +70,36 @@ def criar(fonte: Path | None = None) -> None:
                    {"titulo": "Testar 10 jogos de terror do Roblox", "jogo": "Roblox", "coluna": "ideia"},
                    {"titulo": "DOORS: zerei o hotel", "jogo": "Doors", "coluna": "agendado"}):
         producao.criar(campos)
+    from jarvis.canal import analises, comentarios
+    falas = [("@gamerzinho_br", "v0", "mano o Seek do final me deu um susto real KKKKK", 0, 0, 2),
+             ("@ana.joga", "v0", "quando sai a parte 2??", 0, 0, 5),
+             ("@pedrinhoplays", "v1", "tu vai matar o wither com que armadura?", 0, 0, 9),
+             ("@lucasofc", "v1", "esse episódio ficou insano, a edição tá muito boa", 1, 0, 26),
+             ("@noobmaster", "v2", "explica melhor a parte do Jeff, não entendi", 1, 0, 40),
+             ("@doorsfan99", "v0", "melhor canal de Doors br", 1, 1, 60),
+             ("@julia_s", "v2", "a lore ficou muito bem explicada, parabéns", 1, 1, 80),
+             ("@kaio", "v3", "qual shader tu usa?", 1, 1, 110)]
+    con = comentarios._abrir()
+    with con:
+        for n, (autor, vid, texto, lido, resp, horas) in enumerate(falas):
+            quando = (agora - dt.timedelta(hours=horas)).isoformat().replace("+00:00", "Z")
+            con.execute("INSERT OR REPLACE INTO comentarios VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                        (f"c{n}", vid, autor, "", "", texto, quando, random.randint(0, 40), resp,
+                         resp, lido, 1 if comentarios.eh_pergunta(texto) else 0, time.time()))
+    con.close()
+    exemplo_an = {
+        "top": [{"video": f"v{i}", "views": v, "inscritos": s, "minutos": v * 7} for i, v, s in
+                ((2, 3120, 41), (0, 1480, 22), (1, 1210, 9), (4, 980, 6), (6, 720, 4))],
+        "origens": [{"nome": n, "valor": v} for n, v in (("Vídeos sugeridos", 4100), ("Busca do YouTube", 2300),
+                    ("Página inicial e Inscrições", 1900), ("Shorts", 600), ("Sites e apps de fora", 240), ("Direto ou desconhecido", 120))],
+        "paises": [{"nome": n, "valor": v} for n, v in (("Brasil", 8300), ("Portugal", 420), ("Estados Unidos", 150), ("Angola", 60))],
+        "idades": [{"nome": n, "valor": v} for n, v in (("13–17", 38.5), ("18–24", 33.1), ("25–34", 18.2), ("35–44", 7.4), ("45–54", 2.8))],
+        "aparelhos": [{"nome": n, "valor": v} for n, v in (("Celular", 6200), ("Computador", 2100), ("TV", 900), ("Tablet", 260))]}
+    con = analises._abrir()
+    with con:
+        for k, v in exemplo_an.items():
+            con.execute("INSERT OR REPLACE INTO analises VALUES (?,?,?)", (k, json.dumps(v, ensure_ascii=False), time.time()))
+    con.close()
     # Thumbs de mentira: um degradê com o título (o ffmpeg desenha).
     dados.THUMBS.mkdir(parents=True, exist_ok=True)
     for n, (vid, titulo, _, _) in enumerate(lista):
