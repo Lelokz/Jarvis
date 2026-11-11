@@ -194,14 +194,16 @@ VERSAO = 3
 PUBLICOS = frozenset({"sessao", "estado", "nivel", "voce_disse", "jarvis_disse", "aviso",
                       "mostrar", "atividade", "voz", "cerebro", "conversa_atual", "uso",
                       "escrevendo", "som", "ajustes", "desbloqueio",
-                      "aprovacao", "notificacao", "projetos", "mudancas"})
+                      "aprovacao", "notificacao", "projetos", "mudancas",
+                      # O modo code refeito (etapa 3 do tchan, 11/11/2026).
+                      "alteracoes", "desfeito", "terminal", "plano", "contexto"})
 ESTADOS = ("dormindo", "ouvindo", "escutando", "pensando", "falando")
 PEDIDOS = frozenset({"ola", "falar", "memoria", "ouvir",
                      "conversas", "abrir", "nova", "continuar", "cerebro", "parar",
                      "renomear", "apagar", "som", "ajustes", "fixar",
                      "memorias", "ler_memoria", "salvar_memoria", "conexao",
                      "projetos", "code", "mudancas", "git", "novo_projeto",
-                     "repetir", "avaliar"})
+                     "repetir", "avaliar", "desfazer", "desfazer_git"})
 
 # Uma linha maior que isto sem quebra é um cliente com defeito, não um pedido.
 MAX_LINHA = 64 * 1024
@@ -265,6 +267,22 @@ def ler_pedido(linha: bytes) -> tuple[str, dict[str, Any]]:
         if objeto.get("acao") not in ("commit", "push"):
             raise ErroDeProtocolo("'git' com acao commit ou push")
         return tipo, {"acao": objeto["acao"]}
+    # O Desfazer do modo code (11/11/2026): o cartão de uma resposta ("id"; ""
+    # = a última do projeto), um arquivo só ou todos; e o "Desfazer arquivo" do
+    # painel Mudanças, contra o último commit ("desfazer_git").
+    if tipo == "desfazer":
+        ident, arquivo = objeto.get("id", ""), objeto.get("arquivo", "")
+        if not isinstance(ident, str) or not re.fullmatch(r"[0-9a-f]{0,32}", ident):
+            raise ErroDeProtocolo("'desfazer' com id inválido")
+        if not isinstance(arquivo, str) or len(arquivo) > 500:
+            raise ErroDeProtocolo("'desfazer' com arquivo inválido")
+        return tipo, {"id": ident, "arquivo": arquivo}
+    if tipo == "desfazer_git":
+        caminho, arquivo = objeto.get("caminho"), objeto.get("arquivo")
+        if not isinstance(caminho, str) or not caminho or len(caminho) > 500 \
+                or not isinstance(arquivo, str) or not arquivo or len(arquivo) > 500:
+            raise ErroDeProtocolo("'desfazer_git' sem caminho e arquivo")
+        return tipo, {"caminho": caminho, "arquivo": arquivo}
     # Os botões embaixo da resposta (11/11/2026): "ouvir de novo" e gostei/não gostei.
     if tipo in ("repetir", "avaliar"):
         texto = objeto.get("texto")
@@ -353,6 +371,7 @@ def ler_pedido(linha: bytes) -> tuple[str, dict[str, Any]]:
         # fica aberto e quem programa.
         for campo, validos in (("code_narracao", ("pouca", "normal", "muita")),
                                ("code_persona", ("atual", "jarvis", "friday")),
+                               ("code_permissao", ("auto", "perguntar", "plano", "olhar")),
                                ("tema", ("escuro", "claro"))):
             valor = objeto.get(campo)
             if valor is not None:

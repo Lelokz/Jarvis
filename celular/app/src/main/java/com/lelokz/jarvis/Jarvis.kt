@@ -37,7 +37,14 @@ data class Mensagem(
     val passos: List<String> = emptyList(),   // ATIVIDADE: o que ele fez, em ordem
     val escrevendo: Boolean = false,          // o texto ainda está chegando
     val bloco: Int = 0,
+    // O cartão "Alterou N arquivos" do modo code (app beta 0.20.0), dentro da
+    // resposta que mexeu: {id, arquivos: [{arquivo, estado, mais, menos}], mais, menos, desfeito}.
+    val alteracoes: JSONObject? = null,
 )
+
+/** Um comando do painel Terminal do modo code (app beta 0.20.0). */
+data class LinhaTerminal(val id: String, val cmd: String, val saida: String = "", val erro: Boolean = false,
+                         val pronto: Boolean = false)
 
 /** Uma conversa da gaveta: uma sessão do Claude Code no PC. */
 /** Uma memória da lista (beta 0.14.5): a do Jarvis/Friday, um grupo, uma pessoa. */
@@ -137,6 +144,15 @@ class Jarvis(private val app: Application) {
     val codeNarracao = mutableStateOf("normal")
     val codeJanela = mutableIntStateOf(120)
     val codePersona = mutableStateOf("atual")
+    // O modo code refeito (app beta 0.20.0, etapa 3 do tchan): quanto ele faz
+    // sozinho, o Plano, o Terminal, o Contexto e a folha dos painéis aberta
+    // ("" = fechada; senão "mudancas", "terminal" ou "plano").
+    val codePermissao = mutableStateOf("auto")
+    val plano = mutableStateOf<List<Pair<String, String>>>(emptyList())   // (texto, estado)
+    val terminal = mutableStateListOf<LinhaTerminal>()
+    val contextoPct = mutableIntStateOf(-1)
+    val folhaPaineis = mutableStateOf("")
+    val arquivoEscolhido = mutableStateOf("")
     private var releitura: kotlinx.coroutines.Job? = null
     val aviso = mutableStateOf("")           // recado rápido (erro, "mandada pra lixeira")
     val estado = mutableStateOf("dormindo")     // o do PC: pensando, falando...
@@ -394,6 +410,45 @@ class Jarvis(private val app: Application) {
     fun mudarTema(claro: Boolean) {
         temaClaro.value = claro
         conexao?.enviar(JSONObject().put("pedir", "ajustes").put("tema", if (claro) "claro" else "escuro"))
+    }
+
+    /** O Desfazer do cartão: os arquivos daquela resposta voltam como estavam ("" = todos). */
+    fun desfazer(id: String, arquivo: String = "") {
+        conexao?.enviar(JSONObject().put("pedir", "desfazer").put("id", id).put("arquivo", arquivo))
+    }
+
+    /** O Desfazer da folha Mudanças: o arquivo volta ao último commit. */
+    fun desfazerGit(arquivo: String) {
+        val c = codeCaminho.value
+        if (c.isNotEmpty() && arquivo.isNotEmpty())
+            conexao?.enviar(JSONObject().put("pedir", "desfazer_git").put("caminho", c).put("arquivo", arquivo))
+    }
+
+    fun mudarPermissao(modo: String) {
+        codePermissao.value = modo
+        mudarAjusteCode("code_permissao", modo)
+    }
+
+    /** Abre a folha dos painéis (o "Ver tudo" do cartão, a folha do Code). */
+    fun abrirPaineis(aba: String = "mudancas", arquivo: String = "") {
+        if (arquivo.isNotEmpty()) arquivoEscolhido.value = arquivo
+        folhaPaineis.value = aba
+        pedirMudancas()
+    }
+
+    /** O cartão vai DENTRO da resposta que mexeu (a última dele antes de uma fala minha). */
+    private fun anexarAlteracoes(lista: MutableList<Mensagem>, d: JSONObject) {
+        var i = lista.lastIndex
+        while (i >= 0 && lista[i].quem != Quem.JARVIS && lista[i].quem != Quem.PAINEL && lista[i].quem != Quem.VOCE) i--
+        if (i >= 0 && lista[i].quem != Quem.VOCE) lista[i] = lista[i].copy(alteracoes = d)
+        else lista.add(Mensagem(Quem.JARVIS, "", alteracoes = d, quando = d.optDouble("quando", agora())))
+    }
+
+    private fun marcarDesfeito(lista: MutableList<Mensagem>, d: JSONObject) {
+        val i = lista.indexOfLast { it.alteracoes?.optString("id") == d.optString("id") }
+        if (i < 0) return
+        val novo = JSONObject(lista[i].alteracoes.toString()).put("desfeito", d.optJSONArray("desfeito") ?: org.json.JSONArray())
+        lista[i] = lista[i].copy(alteracoes = novo)
     }
 
     /** Os botões Commit e Push: o toque já é o OK. */
@@ -799,7 +854,8 @@ class Jarvis(private val app: Application) {
                     runCatching { corDaFriday.value = androidx.compose.ui.graphics.Color(android.graphics.Color.parseColor(it)) }
                 }
                 val caminho = ev.optString("code_caminho", "")
-                if (caminho != codeCaminho.value) mudancas.value = null
+                if (caminho != codeCaminho.value) { mudancas.value = null; contextoPct.intValue = -1 }
+                if (caminho.isEmpty()) folhaPaineis.value = ""
                 codeNome.value = ev.optString("code", "")
                 codeCaminho.value = caminho
                 if (caminho.isEmpty() && pagina.value == "mudancas") pagina.value = "chat"
@@ -814,6 +870,27 @@ class Jarvis(private val app: Application) {
                 }
             }
             "mudancas" -> if (ev.optString("caminho") == codeCaminho.value) mudancas.value = ev
+            "alteracoes" -> { anexarAlteracoes(mensagens, ev); relerMudancas() }
+            "desfeito" -> {
+                if (ev.optString("id").isNotEmpty()) { marcarDesfeito(mensagens, ev); marcarDesfeito(mensagensVendo, ev) }
+                val n = ev.optJSONArray("voltaram")?.length() ?: 0
+                aviso.value = if (n == 1) "Desfeito: " + ev.optJSONArray("voltaram")!!.optString(0) + " voltou" else "Desfeito: $n arquivos voltaram"
+                relerMudancas()
+            }
+            "terminal" -> when {
+                ev.optBoolean("limpar") -> terminal.clear()
+                ev.has("cmd") -> {
+                    terminal.add(LinhaTerminal(ev.optString("id"), ev.optString("cmd")))
+                    while (terminal.size > 60) terminal.removeAt(0)
+                }
+                else -> {
+                    val i = terminal.indexOfLast { it.id == ev.optString("id") }
+                    if (i >= 0) terminal[i] = terminal[i].copy(saida = ev.optString("saida"), erro = ev.optBoolean("erro"), pronto = true)
+                }
+            }
+            "plano" -> plano.value = ev.optJSONArray("itens")?.let { a ->
+                List(a.length()) { a.getJSONObject(it).let { p -> p.optString("texto") to p.optString("estado") } } } ?: emptyList()
+            "contexto" -> contextoPct.intValue = ev.optInt("pct", -1)
             "memorias" -> {
                 memoriasCarregando.value = false
                 memorias.clear()
@@ -862,6 +939,7 @@ class Jarvis(private val app: Application) {
                 codeNarracao.value = ev.optString("code_narracao", codeNarracao.value)
                 codeJanela.intValue = ev.optInt("code_janela_s", codeJanela.intValue)
                 codePersona.value = ev.optString("code_persona", codePersona.value)
+                codePermissao.value = ev.optString("code_permissao", codePermissao.value)
                 // O tema (beta 0.19.5): o mesmo da janela; guardado pra abrir já certo.
                 temaClaro.value = ev.optString("tema", "escuro") == "claro"
                 prefs.edit().putString("nome_usuario", nomeUsuario.value).putString("nome_pc", nomePc.value)
@@ -996,6 +1074,7 @@ class Jarvis(private val app: Application) {
             val texto = f.optString("texto")
             when (f.optString("quem")) {
                 "voce" -> lista.add(Mensagem(Quem.VOCE, texto, origem = f.optString("origem"), quando = quando))
+                "alteracoes" -> anexarAlteracoes(lista, f)
                 "atividade" -> {
                     val ultima = lista.lastOrNull()
                     if (ultima?.quem == Quem.ATIVIDADE) lista[lista.lastIndex] = ultima.copy(texto = texto, passos = ultima.passos + texto)

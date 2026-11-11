@@ -141,3 +141,36 @@ def criar(nome: str) -> Projeto:
     import subprocess
     subprocess.run(["git", "-C", str(pasta), "init", "-q", "-b", "main"], capture_output=True, timeout=20)
     return Projeto(limpo, pasta)
+
+
+# A seção "Programando" da barra lateral (etapa 3 do tchan, 11/11/2026): os
+# projetos que já têm conversa no modo code, do mais novo pro mais velho, com
+# quando foi e quantos arquivos estão mudados sem commit ("pra revisar").
+SESSOES = Path.home() / ".local/share/jarvis/code-sessoes.json"
+
+
+def programando(arquivo: Path = SESSOES, limite: int = 6) -> list[dict]:
+    import json
+    import subprocess
+    try:
+        sessoes = json.loads(arquivo.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    saida = []
+    for caminho, sessao in sessoes.items():
+        p = Path(caminho)
+        if not p.is_dir() or p.resolve() == PROIBIDO:
+            continue
+        quando = 0.0
+        for j in (CASA / ".claude" / "projects").glob(f"*/{sessao}.jsonl"):
+            quando = max(quando, j.stat().st_mtime)
+        pendentes = 0
+        if (p / ".git").exists():
+            try:
+                r = subprocess.run(["git", "-C", str(p), "status", "--porcelain"], capture_output=True,
+                                   text=True, timeout=5)
+                pendentes = len([l for l in r.stdout.splitlines() if l.strip()])
+            except (OSError, subprocess.SubprocessError):
+                pass
+        saida.append({"nome": p.name, "caminho": caminho, "quando": quando, "pendentes": pendentes})
+    return sorted(saida, key=lambda x: x["quando"], reverse=True)[:limite]

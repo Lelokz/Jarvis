@@ -54,13 +54,14 @@ from pathlib import Path
 from jarvis.nucleo import memoria_viva
 from claude_agent_sdk import (AssistantMessage, ClaudeAgentOptions, ClaudeSDKClient, HookMatcher,
                               PermissionResultAllow, PermissionResultDeny, RateLimitEvent,
-                              ResultMessage, StreamEvent, TextBlock, ToolUseBlock)
+                              ResultMessage, StreamEvent, TextBlock, ToolResultBlock, ToolUseBlock,
+                              UserMessage)
 
 from jarvis.agente import travas
 from jarvis.nucleo import relogio
 from jarvis.nucleo.atalhos import normalizar
 
-from . import ferramentas, projetos
+from . import desfazer, ferramentas, projetos
 
 PERSONA = Path(__file__).with_name("persona.md")
 MODO_CODE = Path(__file__).with_name("modo_code.md")
@@ -215,6 +216,40 @@ def _resumo_de_ferramenta(b: ToolUseBlock) -> str:
     return f"{nome} — {str(detalhe)[:160]}" if detalhe else nome
 
 
+# O botão "quanto ele faz sozinho" do modo code (ajustes "code_permissao").
+MODOS_CODE = {"auto": "Automático", "perguntar": "Perguntar antes", "plano": "Plano primeiro",
+              "olhar": "Só olhar"}
+
+
+def permissao_code() -> str:
+    try:
+        from jarvis import ajustes
+        modo = ajustes.ler().get("code_permissao", "auto")
+    except Exception:
+        modo = "auto"
+    return modo if modo in MODOS_CODE else "auto"
+
+
+# Comandos que só leem (modo Só olhar): o resto é barrado.
+_SO_LE = re.compile(r"^\s*(?:cd\s+\S+\s*&&\s*)?(?:cd|ls|cat|head|tail|grep|rg|find|wc|pwd|tree|file|stat|du|"
+                    r"which|echo|git\s+(?:status|log|diff|show|branch|remote|blame))\b")
+
+
+def so_le(comando: str) -> bool:
+    if re.search(r"[>]|\brm\b|\bmv\b|-delete\b|-exec\b|\bsed\s+-i", comando):
+        return False
+    partes = re.split(r"\s*(?:&&|\|\||;|\|)\s*", comando.strip())
+    return all(_SO_LE.match(p) or re.match(r"^\s*(?:sort|uniq|head|tail|wc|grep|cut)\b", p) for p in partes if p)
+
+
+def _texto_do_resultado(conteudo) -> str:
+    if isinstance(conteudo, str):
+        return conteudo
+    if isinstance(conteudo, list):
+        return "\n".join(str(c.get("text") or "") for c in conteudo if isinstance(c, dict))
+    return ""
+
+
 def _casar_opcao(falado: str, opcoes: list[str]) -> str:
     """A opção que ele disse, ou a fala inteira (resposta livre)."""
     alvo = normalizar(falado)
@@ -323,6 +358,12 @@ class Agente:
         self.narracao = "normal"
         self._sessao_voz: str | None = None
         self._arquivo_code = self.casa.parent / "code-sessoes.json"
+        # A etapa 3 do tchan (11/11/2026): os arquivos de cada resposta (o
+        # Desfazer), o "pode" do plano, os comandos do Terminal e o Plano.
+        self._turno: desfazer.Turno | None = None
+        self._plano_ok = False
+        self._bash: dict[str, str] = {}
+        self._tarefas: list[dict] = []
 
     # -- ciclo de vida -----------------------------------------------------
 
@@ -386,7 +427,8 @@ class Agente:
             can_use_tool=self._pode,
             # As travas da voz rodam antes de TODA ferramenta, inclusive no
             # modo auto (o can_use_tool quase nunca é chamado nele).
-            hooks={"PreToolUse": [HookMatcher(matcher=None, hooks=[self._trava_da_voz])]},
+            # 180 s: o "Perguntar antes" e o modo Local esperam a resposta falada aqui.
+            hooks={"PreToolUse": [HookMatcher(matcher=None, hooks=[self._trava_da_voz], timeout=180)]},
             system_prompt={"type": "preset", "preset": "claude_code",
                            "append": self._instrucoes() + self._instrucoes_code()},
             mcp_servers={"jarvis": servidor},
@@ -553,6 +595,7 @@ class Agente:
         `voz`: quem falou (`quem_fala.Voz`); None = digitado, vale como o Léo."""
         if not self.ocupado:
             self._falas = []
+            self._plano_ok = False
         self._falas.append(texto)
         # A memória viva (09/11/2026): tudo o que o Léo fala ou digita.
         memoria_viva.gravar_depois("fala", texto, origem)
@@ -565,7 +608,7 @@ class Agente:
         # O modo jogo (jarvis/monitor/jogo.py): ele está jogando, o pesado vai leve.
         jogando = f", JOGANDO {self.jogo}" if getattr(self, "jogo", None) else ""
         if getattr(self, "code", None) is not None:
-            jogando += f", MODO CODE em {self.code.nome}"
+            jogando += f", MODO CODE em {self.code.nome}, permissão: {MODOS_CODE[permissao_code()]}"
         # O modo das personas do Léo (09/11/2026): "modo senhor", "bêbado"...
         from jarvis import personas
         modo = personas.atual()
@@ -812,6 +855,22 @@ class Agente:
                                     alvo = str((b.input or {}).get("file_path") or "")
                                     rel = alvo.removeprefix(str(self.code.caminho)).lstrip("/") or alvo
                                     self.saidas.put(Saida("mostrar", diff, f"{'Criou' if b.name == 'Write' else 'Mudou'} {rel}"))
+                            if getattr(self, "code", None) is not None:
+                                self._painel_code(b)
+                elif isinstance(m, UserMessage):
+                    # O que o comando respondeu: vai para o Terminal (modo code).
+                    if m.parent_tool_use_id or not isinstance(m.content, list):
+                        continue
+                    for b in m.content:
+                        if isinstance(b, ToolResultBlock) and b.tool_use_id in self._bash:
+                            self._bash.pop(b.tool_use_id)
+                            self.saidas.put(Saida("terminal", json.dumps({
+                                "id": b.tool_use_id, "saida": _texto_do_resultado(b.content)[-6000:],
+                                "erro": bool(b.is_error)}, ensure_ascii=False)))
+                        elif isinstance(b, ToolResultBlock) and self._tarefas:
+                            achou = re.search(r"Task #(\d+) created", _texto_do_resultado(b.content))
+                            if achou and not self._tarefas[-1].get("id"):
+                                self._tarefas[-1]["id"] = achou.group(1)
                 elif isinstance(m, RateLimitEvent):
                     info = m.rate_limit_info
                     self.limite = Limite(info.status, info.resets_at, info.utilization)
@@ -855,12 +914,105 @@ class Agente:
                         self.saidas.put(Saida("fim", fala, janela=janela, resto=_resto(fala, ja)))
                         # A memória viva (09/11/2026): o que ele respondeu.
                         memoria_viva.gravar_depois("resposta", final, getattr(self, "persona", "jarvis"))
+                    if getattr(self, "code", None) is not None:
+                        # O cartão "Alterou N arquivos" (depois da resposta) e o
+                        # quanto da conversa já foi usado (painel Contexto).
+                        self._fechar_turno_code()
+                        asyncio.create_task(self._medir_contexto(cliente))
         except asyncio.CancelledError:
             raise
         except Exception as e:
             # O Claude Code caiu: o próximo pedido sobe outro.
             self._cliente = None
             self._falhou(e)
+
+    # -- os painéis do modo code (etapa 3 do tchan, 11/11/2026) ---------------
+
+    def _painel_code(self, b: ToolUseBlock) -> None:
+        """Terminal (o comando) e Plano (a lista de tarefas dele)."""
+        entrada = b.input or {}
+        if b.name in travas.TERMINAIS:
+            comando = str(entrada.get("command") or "")
+            self._bash[b.id] = comando
+            self.saidas.put(Saida("terminal", json.dumps({"id": b.id, "cmd": comando[:2000],
+                                                          "pasta": str(self.code.caminho)}, ensure_ascii=False)))
+        elif b.name == "TodoWrite":
+            self._tarefas = [{"texto": str(t.get("content") or ""), "estado": str(t.get("status") or "pending")}
+                             for t in entrada.get("todos") or [] if isinstance(t, dict)]
+            self.saidas.put(Saida("plano", json.dumps(self._tarefas, ensure_ascii=False)))
+        elif b.name == "TaskCreate":
+            self._tarefas.append({"texto": str(entrada.get("subject") or entrada.get("description") or ""),
+                                  "estado": "pending", "id": ""})
+            self.saidas.put(Saida("plano", json.dumps(self._tarefas, ensure_ascii=False)))
+        elif b.name == "TaskUpdate":
+            alvo = str(entrada.get("taskId") or entrada.get("id") or "")
+            for t in self._tarefas:
+                if t.get("id") == alvo and entrada.get("status"):
+                    t["estado"] = "completed" if entrada["status"] == "deleted" else str(entrada["status"])
+            self.saidas.put(Saida("plano", json.dumps(self._tarefas, ensure_ascii=False)))
+
+    def _turno_code(self) -> desfazer.Turno:
+        if self._turno is None or self._turno.projeto != self.code.caminho:
+            self._turno = desfazer.Turno(self.code.caminho)
+        return self._turno
+
+    def _fechar_turno_code(self) -> None:
+        if self._turno is None:
+            return
+        try:
+            resumo = self._turno.fechar(self.sessao or "")
+        except OSError:
+            resumo = None
+        if resumo:
+            self.saidas.put(Saida("alteracoes", json.dumps(resumo, ensure_ascii=False)))
+
+    async def _medir_contexto(self, cliente: ClaudeSDKClient) -> None:
+        try:
+            u = await cliente.get_context_usage()
+        except Exception:
+            return
+        self.saidas.put(Saida("contexto", json.dumps({
+            "pct": round(float(u.get("percentage") or 0)), "usados": int(u.get("totalTokens") or 0),
+            "max": int(u.get("maxTokens") or 0)})))
+
+    async def _regra_code(self, nome: str, entrada: dict) -> dict:
+        """O botão "quanto ele faz sozinho" (Automático, Perguntar antes, Plano
+        primeiro, Só olhar) e a foto dos arquivos antes de mexer (Desfazer)."""
+        modo = permissao_code()
+        def nao(motivo: str) -> dict:
+            return {"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny",
+                                           "permissionDecisionReason": motivo}}
+        alvo = str(entrada.get("file_path") or entrada.get("notebook_path") or "")
+        if modo == "olhar":
+            if nome in _EDITA or (nome in travas.TERMINAIS and not so_le(str(entrada.get("command") or ""))):
+                return nao("Modo SÓ OLHAR (escolha do usuário): leia, procure e explique, mas não mude nada "
+                           "nem rode comando que muda algo. Diga em uma frase o que mudaria e que ele pode "
+                           "trocar o modo (\"pode fazer sozinho\").")
+            return {}
+        if nome in _EDITA and modo == "plano" and not self._plano_ok:
+            return nao("Modo PLANO PRIMEIRO (escolha do usuário): antes de mexer em qualquer arquivo, conte "
+                       "o plano em até 3 frases e pergunte \"pode?\" com o AskUserQuestion (opções Pode e "
+                       "Não). Só mexa depois do Pode.")
+        if nome in _EDITA and modo == "perguntar":
+            rel = alvo.removeprefix(str(self.code.caminho)).lstrip("/") or alvo
+            falado = await self._perguntar(f"Posso mudar o {Path(rel).name}?", ["Pode", "Não"])
+            if not (falado and sim_ou_nao(falado)):
+                return nao("O usuário não deixou mudar esse arquivo (modo Perguntar antes). Pare e "
+                           "pergunte em uma frase o que ele quer.")
+        if nome in _EDITA:
+            self._turno_code().guardar(alvo)
+        return {}
+
+    def desfazer(self, ident: str = "", arquivo: str = "") -> dict:
+        """O botão Desfazer do cartão ("" = a última mudança do projeto)."""
+        if not ident:
+            if self.code is None:
+                raise ValueError("só no modo code")
+            ultima = desfazer.ultima(self.code.caminho)
+            if ultima is None:
+                raise ValueError("não tem mudança pra desfazer")
+            ident = ultima["id"]
+        return desfazer.desfazer(ident, arquivo)
 
     def _pedir_o_opus(self, motivo: str) -> str:
         if self.cerebro["modelo"] != "auto":
@@ -909,6 +1061,8 @@ class Agente:
                 if not falado:
                     return PermissionResultDeny(message=sem_resposta)
                 respostas[q.get("question")] = _casar_opcao(falado, opcoes)
+                if sim_ou_nao(falado) or respostas[q.get("question")].lower().startswith("pode"):
+                    self._plano_ok = True   # o "pode" do modo Plano primeiro
             return PermissionResultAllow(updated_input={**entrada, "answers": respostas})
 
         # Permissão comum (o modo auto quase não pede, mas pode).
@@ -951,6 +1105,10 @@ class Agente:
                 "hookEventName": "PreToolUse", "permissionDecision": "deny",
                 "permissionDecisionReason": "Modo code: o projeto da NOVA (~/Projetos/Jarvis) não se mexe "
                                             "(regra do Léo). Diga isso em uma frase e não tente outro caminho."}}
+        if self.code is not None:
+            barrado = await self._regra_code(str(entrada.get("tool_name") or ""), entrada.get("tool_input") or {})
+            if barrado:
+                return barrado
         voz = self.voz
         o_que = None
         if voz is not None and voz.quem != "leo":

@@ -112,6 +112,9 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.foundation.layout.ColumnScope
+import org.json.JSONObject
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontVariation
@@ -342,7 +345,6 @@ fun Tela(modelo: Jarvis) {
                 when (modelo.pagina.value) {
                     "memoria" -> PaginaMemoria(modelo)
                     "ajustes" -> PaginaAjustes(modelo)
-                    "mudancas" -> PaginaMudancas(modelo)
                     else -> Chat(modelo) { seletores = true }
                 }
             }
@@ -362,6 +364,14 @@ fun Tela(modelo: Jarvis) {
             sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
             containerColor = Superficie2,
         ) { FolhaCode(modelo) { folhaCode = false } }
+    }
+
+    if (modelo.folhaPaineis.value.isNotEmpty() && modelo.codeCaminho.value.isNotEmpty()) {
+        ModalBottomSheet(
+            onDismissRequest = { modelo.folhaPaineis.value = "" },
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+            containerColor = Superficie2,
+        ) { FolhaPaineis(modelo) }
     }
 
     if (seletores) {
@@ -534,7 +544,9 @@ private fun Topo(modelo: Jarvis, abrirGaveta: () -> Unit, abrirSeletores: () -> 
     val vazio = !antiga && modelo.mensagens.isEmpty()
     val titulo = when {
         pagina == "memoria" -> "Memórias"
-        pagina == "mudancas" -> "Mudanças · " + modelo.codeNome.value.removePrefix("Projeto ")
+        // O modo code (app beta 0.20.0): o nome do projeto no título.
+        pagina == "chat" && modelo.codeNome.value.isNotEmpty() && modelo.vendo.value.isEmpty() ->
+            modelo.codeNome.value.removePrefix("Projeto ")
         pagina == "ajustes" -> categoriasDosAjustes.flatMap { it.second }.firstOrNull { it.id == modelo.abaAjustes.value }?.nome ?: "Ajustes"
         else -> modelo.conversas.firstOrNull { it.id == (modelo.vendo.value.ifEmpty { modelo.conversaAtual.value }) }
             ?.titulo ?: "Chat novo"
@@ -555,10 +567,12 @@ private fun Topo(modelo: Jarvis, abrirGaveta: () -> Unit, abrirSeletores: () -> 
                 when {
                     !modelo.conectado.value -> Text(modelo.motivo.value, color = Fraco, fontSize = 11.sp, maxLines = 1)
                     antiga -> Text("Conversa antiga", color = Pergunta, fontSize = 11.sp)
-                    modelo.codeNome.value.isNotEmpty() -> Text("Modo code · " + modelo.codeNome.value.removePrefix("Projeto ") +
+                    modelo.codeNome.value.isNotEmpty() -> Text("</> modo code" +
+                        (modelo.mudancas.value?.takeIf { it.optBoolean("git") }?.optString("ramo")?.takeIf { it.isNotEmpty() }
+                            ?.let { " · ⎇ $it" } ?: "") +
                         (modelo.mudancas.value?.optJSONArray("arquivos")?.length()?.takeIf { it > 0 }
                             ?.let { " · $it mudado" + (if (it > 1) "s" else "") } ?: ""),
-                        color = Azul, fontSize = 11.sp, maxLines = 1)
+                        color = Azul, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
         }
@@ -717,7 +731,9 @@ private fun Chat(modelo: Jarvis, abrirSeletores: () -> Unit) {
                     Item(m, ultima = i == ultimaResposta, responder = { r -> enviar(r) },
                         ouvir = { modelo.repetir(it) },
                         refazer = { falas.subList(0, i).lastOrNull { it.quem == Quem.VOCE }?.let { enviar(it.texto) } },
-                        avaliar = { t, n -> modelo.avaliar(t, n) })
+                        avaliar = { t, n -> modelo.avaliar(t, n) },
+                        desfazer = { id, a -> modelo.desfazer(id, a) },
+                        verArquivo = { a -> modelo.abrirPaineis("mudancas", a) })
                 }
                 if (pensando) item {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -753,11 +769,14 @@ private fun Chat(modelo: Jarvis, abrirSeletores: () -> Unit) {
         // Os seletores sempre à mão, em cima do campo (o topo não repete mais;
         // pedido do Léo, 11/11/2026). Escondidos com a voz ativa.
         if (!antiga) {
-            Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp).padding(bottom = 8.dp),
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 14.dp).padding(bottom = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Pilula(null, if (personaAtiva.value == "friday") "Friday" else "Jarvis", Azul, abrirSeletores)
                 Pilula(Icones.raio, nomesModelo[modelo.modelo.value] ?: modelo.modelo.value, null, abrirSeletores)
                 Pilula(Icones.barras, nomesEsforco[modelo.esforco.value] ?: modelo.esforco.value, null, abrirSeletores)
+                // Quanto ele faz sozinho (modo code, app beta 0.20.0): âmbar, como na janela.
+                if (modelo.codeCaminho.value.isNotEmpty())
+                    Pilula(Icones.escudo, nomesPermissao[modelo.codePermissao.value] ?: "Automático", null, abrirSeletores, Pergunta)
             }
         }
 
@@ -826,14 +845,15 @@ private fun CartaoRecente(c: Conversa, indice: Int, abrir: () -> Unit) {
 }
 
 @Composable
-private fun Pilula(icone: androidx.compose.ui.graphics.vector.ImageVector?, nome: String, bola: Color?, aoClicar: () -> Unit) {
-    Row(Modifier.height(32.dp).clip(RoundedCornerShape(9.dp)).background(Lateral)
-        .border(1.dp, Traco, RoundedCornerShape(9.dp)).clickable { aoClicar() }.padding(horizontal = 10.dp),
+private fun Pilula(icone: androidx.compose.ui.graphics.vector.ImageVector?, nome: String, bola: Color?, aoClicar: () -> Unit,
+                   destaque: Color? = null) {
+    Row(Modifier.height(32.dp).clip(RoundedCornerShape(9.dp)).background(destaque?.copy(alpha = 0.08f) ?: Lateral)
+        .border(1.dp, destaque?.copy(alpha = 0.55f) ?: Traco, RoundedCornerShape(9.dp)).clickable { aoClicar() }.padding(horizontal = 10.dp),
         verticalAlignment = Alignment.CenterVertically) {
         if (bola != null) Box(Modifier.size(7.dp).clip(CircleShape).background(bola))
-        if (icone != null) Ic(icone, TextoMedio, 13.dp)
+        if (icone != null) Ic(icone, destaque ?: TextoMedio, 13.dp)
         Spacer(Modifier.width(6.dp))
-        Text(nome, color = TextoMedio, fontSize = 13.sp)
+        Text(nome, color = destaque ?: TextoMedio, fontSize = 13.sp)
         Spacer(Modifier.width(4.dp))
         Ic(Icones.seta, MuitoFraco, 12.dp)
     }
@@ -918,6 +938,7 @@ private fun BarraDeEscrever(modelo: Jarvis, texto: String, mudar: (String) -> Un
 fun Item(
     m: Mensagem, ultima: Boolean = false, responder: (String) -> Unit,
     ouvir: (String) -> Unit = {}, refazer: () -> Unit = {}, avaliar: (String, String) -> Unit = { _, _ -> },
+    desfazer: (String, String) -> Unit = { _, _ -> }, verArquivo: (String) -> Unit = {},
 ) {
     val area = LocalClipboardManager.current
     // Os botões da resposta: sempre na última; nas outras, tocando nela.
@@ -985,11 +1006,13 @@ fun Item(
                         Text(m.titulo, color = Texto, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                         Spacer(Modifier.height(8.dp))
                     }
+                    if (m.texto.isNotEmpty() || m.escrevendo)
                     Markdown(if (m.escrevendo) m.texto + " ▍" else m.texto, TextoResposta,
                         Modifier.combinedClickableCopiar(aoTocar = { mostrarBotoes = !mostrarBotoes }) {
                             area.setText(AnnotatedString(m.texto))
                         })
                 }
+                m.alteracoes?.let { CartaoAlteracoes(it, desfazer, verArquivo) }
                 if (!m.escrevendo && (ultima || mostrarBotoes)) {
                     var copiou by remember { mutableStateOf(false) }
                     LaunchedEffect(copiou) { if (copiou) { delay(1400); copiou = false } }
@@ -1283,8 +1306,22 @@ private fun Seletores(modelo: Jarvis) {
             Triple("xhigh", "Muito alto", "Para coisa difícil"),
             Triple("max", "Máximo", "Tudo o que ele tem (mais lento)"),
         )) Opcao(n, d, modelo.esforco.value == v) { modelo.escolherEsforco(v) }
+        if (modelo.codeCaminho.value.isNotEmpty()) {
+            Grupo("Quanto ele faz sozinho")
+            for ((v, d) in listOf(
+                "auto" to "Faz e te conta",
+                "perguntar" to "Pede teu “pode” antes de mudar cada arquivo",
+                "plano" to "Conta o plano, espera o OK e só então mexe",
+                "olhar" to "Lê e explica, não muda nada",
+            )) Opcao(nomesPermissao[v]!!, d, modelo.codePermissao.value == v, modelo.conectado.value) { modelo.mudarPermissao(v) }
+            Text("Pela voz: “modo plano”, “pergunta antes”, “pode fazer sozinho”, “só olhar”.",
+                color = MuitoFraco, fontSize = 12.sp, modifier = Modifier.padding(start = 12.dp, top = 8.dp, end = 12.dp))
+        }
     }
 }
+
+private val nomesPermissao = mapOf("auto" to "Automático", "perguntar" to "Perguntar antes",
+    "plano" to "Plano primeiro", "olhar" to "Só olhar")
 
 @Composable
 private fun Grupo(nome: String) {
@@ -2087,7 +2124,7 @@ private fun FolhaCode(modelo: Jarvis, fechar: () -> Unit) {
         Text("Programar pela voz em…", color = Fraco, fontSize = 13.sp, modifier = Modifier.padding(start = 12.dp, bottom = 6.dp))
         if (emCode) {
             Opcao("Ver as mudanças", "O que ele mexeu em " + modelo.codeNome.value.removePrefix("Projeto ") +
-                ", com Commit e Push", false) { modelo.pagina.value = "mudancas"; modelo.pedirMudancas(); fechar() }
+                ", o Terminal e o Plano", false) { modelo.abrirPaineis(); fechar() }
         }
         if (!escrevendo) {
             Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable { escrevendo = true }
@@ -2132,57 +2169,254 @@ private fun FolhaCode(modelo: Jarvis, fechar: () -> Unit) {
     }
 }
 
-/** As Mudanças do projeto: os arquivos mexidos, o diff colorido e os botões Commit e Push. */
+/** O cartão "Alterou N arquivos" dentro da resposta que mexeu no projeto (app
+ *  beta 0.20.0, igual ao da janela): os arquivos com o +/−, "Ver tudo" (abre
+ *  a folha das Mudanças) e o Desfazer, que confirma antes. */
 @Composable
-private fun PaginaMudancas(modelo: Jarvis) {
-    val m = modelo.mudancas.value
-    var escolhido by remember(modelo.codeCaminho.value) { mutableStateOf("") }
-    val arquivos = m?.optJSONArray("arquivos")?.let { a -> List(a.length()) { a.getJSONObject(it) } } ?: emptyList()
-    val diff = m?.optString("diff").orEmpty()
-    val trecho = if (escolhido.isEmpty()) diff else diff.split(Regex("\n(?=diff --git )")).firstOrNull { it.contains(" b/$escolhido") } ?: ""
-    val ocupado = modelo.estado.value == "pensando"
-    Column(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
-        Text(when {
-            m == null -> "Lendo o projeto…"
-            !m.optBoolean("git") -> "Sem git: as mudanças aparecem só na conversa."
-            else -> (m.optString("ramo").takeIf { it.isNotEmpty() }?.let { "ramo $it · " } ?: "") +
-                (if (arquivos.isEmpty()) "nada mudado" else "${arquivos.size} arquivo" + (if (arquivos.size > 1) "s" else "")) +
-                (m.optInt("a_frente").takeIf { it > 0 }?.let { " · $it commit" + (if (it > 1) "s" else "") + " esperando push" } ?: "")
-        }, color = Fraco, fontSize = 13.sp, modifier = Modifier.padding(vertical = 6.dp))
-        Column(Modifier.fillMaxWidth().heightIn(max = 220.dp).verticalScroll(rememberScrollState())) {
-            for (a in arquivos) {
-                val nome = a.optString("arquivo")
-                val sel = escolhido == nome
-                Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(if (sel) Realce else Color.Transparent)
-                    .clickable { escolhido = if (sel) "" else nome }.padding(horizontal = 10.dp, vertical = 9.dp),
-                    verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(7.dp).clip(CircleShape).background(when (a.optString("estado")) {
-                        "novo" -> Color(0xFF4ADE80); "apagado" -> Color(0xFFF87171); else -> Color(0xFFFBBF24) }))
-                    Spacer(Modifier.width(10.dp))
-                    Text(nome, color = TextoMedio, fontSize = 13.sp, fontFamily = FontFamily.Monospace, maxLines = 1,
-                        overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                    Text("+${a.optInt("mais")}", color = Color(0xFF4ADE80), fontSize = 12.sp, fontFamily = FontFamily.Monospace)
-                    Spacer(Modifier.width(6.dp))
-                    Text("−${a.optInt("menos")}", color = Color(0xFFF87171), fontSize = 12.sp, fontFamily = FontFamily.Monospace)
+private fun CartaoAlteracoes(d: JSONObject, desfazer: (String, String) -> Unit, verArquivo: (String) -> Unit) {
+    val arquivos = d.optJSONArray("arquivos")?.let { a -> List(a.length()) { a.getJSONObject(it) } } ?: emptyList()
+    val desfeitos = d.optJSONArray("desfeito")?.let { a -> List(a.length()) { a.optString(it) } } ?: emptyList()
+    val tudoDesfeito = arquivos.isNotEmpty() && desfeitos.size >= arquivos.size
+    var confirmando by remember(d.optString("id")) { mutableStateOf(false) }
+    val vermelho = Color(0xFFE5484D)
+    val forma = RoundedCornerShape(12.dp)
+    Column(Modifier.fillMaxWidth().clip(forma).background(Superficie)
+        .border(1.dp, if (confirmando) vermelho.copy(alpha = 0.75f) else TracoForte, forma)) {
+        Row(Modifier.fillMaxWidth().padding(start = 14.dp, end = 6.dp).height(46.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(when {
+                confirmando -> "Desfazer as mudanças desta resposta?"
+                tudoDesfeito -> if (arquivos.size == 1) "Desfeito: o arquivo voltou" else "Desfeito: os ${arquivos.size} arquivos voltaram"
+                else -> if (arquivos.size == 1) "Alterou 1 arquivo" else "Alterou ${arquivos.size} arquivos"
+            }, color = if (tudoDesfeito && !confirmando) Fraco else Texto, fontSize = 15.sp, fontWeight = FontWeight.Medium,
+                modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (!confirmando && !tudoDesfeito) Row(Modifier.clip(RoundedCornerShape(8.dp)).clickable { confirmando = true }
+                .padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                Ic(Icones.desfazer, Fraco, 15.dp); Spacer(Modifier.width(5.dp)); Text("Desfazer", color = Fraco, fontSize = 14.sp)
+            }
+        }
+        Box(Modifier.fillMaxWidth().height(1.dp).background(Traco))
+        if (confirmando) {
+            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                val faltam = arquivos.size - desfeitos.size
+                Text((if (faltam == 1) "O arquivo volta" else "Os $faltam arquivos voltam") +
+                    " a ficar como estavam antes dela (o resto do projeto não muda).", color = TextoMedio, fontSize = 13.5.sp)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Desfazer", color = Color(0xFFFF8F8F), fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.clip(RoundedCornerShape(9.dp)).background(vermelho.copy(alpha = 0.16f))
+                            .border(1.dp, vermelho.copy(alpha = 0.6f), RoundedCornerShape(9.dp))
+                            .clickable { confirmando = false; desfazer(d.optString("id"), "") }
+                            .padding(horizontal = 16.dp, vertical = 9.dp))
+                    Text("Cancelar", color = Texto, fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.clip(RoundedCornerShape(9.dp)).background(Superficie2)
+                            .border(1.dp, Traco, RoundedCornerShape(9.dp)).clickable { confirmando = false }
+                            .padding(horizontal = 16.dp, vertical = 9.dp))
+                }
+                Text("ou fala “desfaz isso”", color = MuitoFraco, fontSize = 12.sp)
+            }
+        } else {
+            for (a in arquivos.take(3)) {
+                val voltou = a.optString("arquivo") in desfeitos
+                Row(Modifier.fillMaxWidth().clickable { verArquivo(a.optString("arquivo")) }
+                    .padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(a.optString("arquivo"), color = if (voltou) MuitoFraco else TextoMedio, fontSize = 14.sp,
+                        fontFamily = FontFamily.Monospace, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        textDecoration = if (voltou) TextDecoration.LineThrough else null, modifier = Modifier.weight(1f))
+                    Spacer(Modifier.width(8.dp))
+                    Text("+${a.optInt("mais")}", color = Color(0xFF4ADE80), fontSize = 13.sp, fontFamily = FontFamily.Monospace)
+                    if (a.optString("estado") != "novo") {
+                        Spacer(Modifier.width(6.dp))
+                        Text("−${a.optInt("menos")}", color = Color(0xFFF87171), fontSize = 13.sp, fontFamily = FontFamily.Monospace)
+                    }
+                }
+            }
+            Row(Modifier.fillMaxWidth().clickable { verArquivo("") }.padding(horizontal = 14.dp, vertical = 11.dp),
+                verticalAlignment = Alignment.CenterVertically) {
+                Text(if (arquivos.size > 3) "Ver tudo (mais ${arquivos.size - 3})" else "Ver tudo", color = Texto,
+                    fontSize = 14.sp, modifier = Modifier.weight(1f))
+                Text("+${d.optInt("mais")}", color = Color(0xFF4ADE80), fontSize = 13.sp, fontFamily = FontFamily.Monospace)
+                Spacer(Modifier.width(6.dp))
+                Text("−${d.optInt("menos")}", color = Color(0xFFF87171), fontSize = 13.sp, fontFamily = FontFamily.Monospace)
+            }
+        }
+    }
+}
+
+/** Uma linha do diff, com o número e a cor de fundo (igual à janela). */
+private data class LinhaDiff(val tipo: Char, val numero: String, val texto: String)
+
+private fun linhasDoDiff(texto: String): List<LinhaDiff> {
+    val saida = mutableListOf<LinhaDiff>()
+    var velha = 0; var nova = 0
+    for (l in texto.lines()) {
+        if (saida.size >= 3000) break
+        if (l.startsWith("diff --git") || l.startsWith("index ") || l.startsWith("---") || l == "novo arquivo" ||
+            l.startsWith("new file") || l.startsWith("deleted file") || l.startsWith("similarity")) continue
+        if (l.startsWith("+++")) { velha = 0; nova = 1; continue }
+        if (l.startsWith("@@")) {
+            Regex("""@@ -(\d+)(?:,\d+)? \+(\d+)""").find(l)?.let { velha = it.groupValues[1].toInt(); nova = it.groupValues[2].toInt() }
+            continue
+        }
+        when (l.firstOrNull()) {
+            '+' -> { saida.add(LinhaDiff('+', if (nova > 0) "$nova" else "", "+ " + l.drop(1))); if (nova > 0) nova++ }
+            '-' -> { saida.add(LinhaDiff('-', if (velha > 0) "$velha" else "", "- " + l.drop(1))); if (velha > 0) velha++ }
+            '(' -> saida.add(LinhaDiff('@', "", l))
+            null -> {}
+            else -> { saida.add(LinhaDiff(' ', if (nova > 0) "$nova" else "", "  " + l.drop(1))); if (velha > 0) velha++; if (nova > 0) nova++ }
+        }
+    }
+    return saida
+}
+
+/** A folha dos painéis do modo code (app beta 0.20.0): as abas Mudanças,
+ *  Terminal e Plano, como no desenho aprovado. */
+@Composable
+private fun FolhaPaineis(modelo: Jarvis) {
+    val aba = modelo.folhaPaineis.value
+    val plano = modelo.plano.value
+    val feitos = plano.count { it.second == "completed" }
+    Column(Modifier.fillMaxWidth().fillMaxHeight(0.86f)) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            for ((id, nome) in listOf("mudancas" to "Mudanças", "terminal" to "Terminal",
+                                      "plano" to (if (plano.isEmpty()) "Plano" else "Plano $feitos/${plano.size}"))) {
+                val sel = aba == id
+                Box(Modifier.weight(1f).height(40.dp).clip(RoundedCornerShape(10.dp)).background(if (sel) Realce else Lateral)
+                    .clickable { modelo.folhaPaineis.value = id }, contentAlignment = Alignment.Center) {
+                    Text(nome, color = if (sel) Texto else Fraco, fontSize = 15.sp, fontWeight = if (sel) FontWeight.Medium else FontWeight.Normal)
                 }
             }
         }
-        Spacer(Modifier.height(8.dp))
-        Box(Modifier.weight(1f).fillMaxWidth().clip(RoundedCornerShape(11.dp)).border(1.dp, Traco, RoundedCornerShape(11.dp))
-            .background(Color(0xFF0C0F15))) {
-            if (arquivos.isEmpty()) Text("Quando ele mexer em algo, aparece aqui.", color = MuitoFraco, fontSize = 13.sp,
-                modifier = Modifier.align(Alignment.Center))
-            else Text(diffColorido(trecho.lines().take(3000).joinToString("\n")), fontSize = 11.5.sp,
-                fontFamily = FontFamily.Monospace, lineHeight = 16.sp,
-                modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())
-                    .horizontalScroll(rememberScrollState()).padding(12.dp))
+        Spacer(Modifier.height(10.dp))
+        when (aba) {
+            "terminal" -> AbaTerminal(modelo)
+            "plano" -> AbaPlano(plano)
+            else -> AbaMudancas(modelo)
         }
-        Row(Modifier.fillMaxWidth().padding(vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = { modelo.pedirMudancas() }) { Text("Atualizar", color = Texto) }
-            Button(onClick = { modelo.git("commit") }, enabled = !ocupado && arquivos.isNotEmpty(),
-                colors = ButtonDefaults.buttonColors(containerColor = Azul, contentColor = Fundo)) { Text("Commit") }
-            OutlinedButton(onClick = { modelo.git("push") },
-                enabled = !ocupado && m?.optBoolean("remoto") == true && (m.optInt("a_frente")) > 0) { Text("Push", color = Texto) }
+    }
+}
+
+@Composable
+private fun ColumnScope.AbaMudancas(modelo: Jarvis) {
+    val m = modelo.mudancas.value
+    val arquivos = m?.optJSONArray("arquivos")?.let { a -> List(a.length()) { a.getJSONObject(it) } } ?: emptyList()
+    val nomes = arquivos.map { it.optString("arquivo") }
+    val escolhido = modelo.arquivoEscolhido.value.takeIf { it in nomes } ?: nomes.firstOrNull().orEmpty()
+    val diff = m?.optString("diff").orEmpty()
+    val trecho = diff.split(Regex("\n(?=diff --git )")).firstOrNull { it.contains(" b/$escolhido") } ?: ""
+    val linhas = remember(trecho) { linhasDoDiff(trecho) }
+    val ocupado = modelo.estado.value == "pensando"
+    var confirmar by remember(escolhido) { mutableStateOf(false) }
+    LaunchedEffect(confirmar) { if (confirmar) { delay(4000); confirmar = false } }
+    Column(Modifier.fillMaxWidth().heightIn(max = 180.dp).verticalScroll(rememberScrollState()).padding(horizontal = 10.dp)) {
+        if (m == null) Text("Lendo o projeto…", color = Fraco, fontSize = 13.sp, modifier = Modifier.padding(10.dp))
+        else if (!m.optBoolean("git")) Text("Esse projeto não tem git: as mudanças aparecem só no cartão de cada resposta.",
+            color = Fraco, fontSize = 13.sp, modifier = Modifier.padding(10.dp))
+        for (a in arquivos) {
+            val nome = a.optString("arquivo")
+            val sel = escolhido == nome
+            Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(if (sel) Realce else Color.Transparent)
+                .clickable { modelo.arquivoEscolhido.value = nome }.padding(horizontal = 10.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(7.dp).clip(CircleShape).background(when (a.optString("estado")) {
+                    "novo" -> Color(0xFF4ADE80); "apagado" -> Color(0xFFF87171); else -> Color(0xFFFBBF24) }))
+                Spacer(Modifier.width(10.dp))
+                Text(nome, color = if (sel) Texto else TextoMedio, fontSize = 13.5.sp, fontFamily = FontFamily.Monospace, maxLines = 1,
+                    overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                Text("+${a.optInt("mais")}", color = Color(0xFF4ADE80), fontSize = 12.5.sp, fontFamily = FontFamily.Monospace)
+                if (a.optString("estado") != "novo") {
+                    Spacer(Modifier.width(6.dp))
+                    Text("−${a.optInt("menos")}", color = Color(0xFFF87171), fontSize = 12.5.sp, fontFamily = FontFamily.Monospace)
+                }
+            }
+        }
+    }
+    Spacer(Modifier.height(8.dp))
+    Box(Modifier.weight(1f).fillMaxWidth().padding(horizontal = 12.dp).clip(RoundedCornerShape(12.dp))
+        .border(1.dp, Traco, RoundedCornerShape(12.dp)).background(t(0xFF0C0F15, 0xFFF3F5F9))) {
+        if (arquivos.isEmpty()) Text("Quando ele mexer em algo, aparece aqui.", color = MuitoFraco, fontSize = 13.sp,
+            modifier = Modifier.align(Alignment.Center))
+        else Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(vertical = 8.dp)) {
+            for (l in linhas) Row(Modifier.fillMaxWidth().background(when (l.tipo) {
+                '+' -> t(0xFF11251A, 0xFFE6F6EA); '-' -> t(0xFF2A1418, 0xFFFBE9EA); else -> Color.Transparent })
+                .padding(vertical = 2.dp)) {
+                Text(l.numero, color = MuitoFraco, fontSize = 11.5.sp, fontFamily = FontFamily.Monospace,
+                    textAlign = TextAlign.End, modifier = Modifier.width(34.dp))
+                Spacer(Modifier.width(10.dp))
+                Text(l.texto, fontSize = 11.5.sp, fontFamily = FontFamily.Monospace, lineHeight = 16.sp,
+                    color = when (l.tipo) { '+' -> Color(0xFF4ADE80); '-' -> Color(0xFFF87171); '@' -> Color(0xFFA78BFA); else -> TextoMedio },
+                    modifier = Modifier.padding(end = 8.dp))
+            }
+        }
+    }
+    Box(Modifier.fillMaxWidth().padding(top = 10.dp).height(1.dp).background(Traco))
+    Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+        val podeDesfazer = !ocupado && escolhido.isNotEmpty() && m?.optBoolean("git") == true
+        Row(Modifier.clip(RoundedCornerShape(10.dp)).background(if (confirmar) Color(0x38E5484D) else Superficie)
+            .border(1.dp, TracoForte, RoundedCornerShape(10.dp))
+            .clickable(enabled = podeDesfazer) { if (!confirmar) confirmar = true else { confirmar = false; modelo.desfazerGit(escolhido) } }
+            .alpha(if (podeDesfazer) 1f else 0.45f).padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically) {
+            if (!confirmar) { Ic(Icones.desfazer, Texto, 15.dp); Spacer(Modifier.width(6.dp)) }
+            Text(if (confirmar) "Toca de novo" else "Desfazer", color = Texto, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+        }
+        Spacer(Modifier.weight(1f))
+        Button(onClick = { modelo.git("commit") }, enabled = !ocupado && arquivos.isNotEmpty(),
+            colors = ButtonDefaults.buttonColors(containerColor = Azul, contentColor = Fundo)) { Text("Commit", fontWeight = FontWeight.SemiBold) }
+        Spacer(Modifier.width(8.dp))
+        OutlinedButton(onClick = { modelo.git("push") },
+            enabled = !ocupado && m?.optBoolean("remoto") == true && m.optInt("a_frente") > 0) { Text("Push", color = Texto) }
+    }
+}
+
+@Composable
+private fun ColumnScope.AbaTerminal(modelo: Jarvis) {
+    val rolagem = rememberScrollState()
+    LaunchedEffect(modelo.terminal.size, modelo.terminal.lastOrNull()?.pronto) { rolagem.animateScrollTo(rolagem.maxValue) }
+    Box(Modifier.weight(1f).fillMaxWidth().padding(start = 12.dp, end = 12.dp, bottom = 16.dp).clip(RoundedCornerShape(12.dp))
+        .border(1.dp, Traco, RoundedCornerShape(12.dp)).background(Color(0xFF07090D))) {
+        if (modelo.terminal.isEmpty()) Text("Os comandos que ele roda aparecem aqui.", color = Color(0xFF4D5568), fontSize = 13.sp,
+            modifier = Modifier.align(Alignment.Center))
+        else Column(Modifier.fillMaxSize().verticalScroll(rolagem).padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(modelo.codeCaminho.value.replace(Regex("^/home/[^/]+"), "~"), color = Color(0xFF5F687C), fontSize = 11.5.sp,
+                fontFamily = FontFamily.Monospace)
+            for (l in modelo.terminal) Text(terminalColorido(l), fontSize = 11.5.sp, fontFamily = FontFamily.Monospace, lineHeight = 16.sp)
+        }
+    }
+}
+
+/** A saída de um comando: o que passou em verde, o que falhou em vermelho. As últimas 40 linhas. */
+private fun terminalColorido(l: LinhaTerminal): AnnotatedString = buildAnnotatedString {
+    withStyle(SpanStyle(color = Color(0xFFE6EBF2))) { append("$ " + l.cmd.lineSequence().first()) }
+    if (!l.pronto) { withStyle(SpanStyle(color = Color(0xFF5F687C))) { append("\nrodando…") }; return@buildAnnotatedString }
+    val linhas = l.saida.trimEnd().lines().filter { true }
+    if (linhas.size == 1 && linhas[0].isEmpty()) return@buildAnnotatedString
+    val corte = (linhas.size - 40).coerceAtLeast(0)
+    if (corte > 0) withStyle(SpanStyle(color = Color(0xFF4D5568))) { append("\n… $corte linhas antes") }
+    for (x in linhas.drop(corte)) {
+        val cor = when {
+            Regex("(✗|✕|×|FAIL\\b|failed|error|erro\\b|Traceback|exception)", RegexOption.IGNORE_CASE).containsMatchIn(x) -> Color(0xFFF87171)
+            Regex("(^|\\s)(✓|✔|PASS\\b|ok\\b|passed|passou|sucesso)", RegexOption.IGNORE_CASE).containsMatchIn(x) -> Color(0xFF4ADE80)
+            else -> Color(0xFF9AA3B5)
+        }
+        withStyle(SpanStyle(color = cor)) { append("\n" + x) }
+    }
+    if (l.erro) withStyle(SpanStyle(color = Color(0xFFF87171))) { append("\n(saiu com erro)") }
+}
+
+@Composable
+private fun ColumnScope.AbaPlano(plano: List<Pair<String, String>>) {
+    Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 18.dp, vertical = 6.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        if (plano.isEmpty()) Text("Quando ele fizer um trabalho de vários passos, o plano aparece aqui e vai ticando sozinho.",
+            color = MuitoFraco, fontSize = 14.sp)
+        for ((texto, estado) in plano) Row(verticalAlignment = Alignment.Top) {
+            val feito = estado == "completed"
+            Box(Modifier.padding(top = 2.dp).size(20.dp).clip(RoundedCornerShape(6.dp))
+                .background(if (feito) Color(0xFF22C55E) else Color.Transparent)
+                .border(if (feito) 0.dp else 1.5.dp, if (estado == "in_progress") Azul else TracoForte, RoundedCornerShape(6.dp)),
+                contentAlignment = Alignment.Center) { if (feito) Ic(Icones.certo, Color(0xFF0A0C10), 14.dp) }
+            Spacer(Modifier.width(12.dp))
+            Text(texto, color = if (feito) Fraco else Texto, fontSize = 15.sp, lineHeight = 21.sp,
+                textDecoration = if (feito) TextDecoration.LineThrough else null)
         }
     }
 }

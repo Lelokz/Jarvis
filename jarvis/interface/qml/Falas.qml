@@ -33,7 +33,39 @@ ListModel {
                  titulo: extra.titulo || "", quando: extra.quando || _agora(),
                  perguntando: extra.perguntando === true,
                  opcoes: (extra.opcoes || []).join("\n"), passos: "",
-                 escrevendo: false, bloco: 0, animar: animar };
+                 escrevendo: false, bloco: 0, animar: animar, dados: "" };
+    }
+
+    // -- o cartão "Alterou N arquivos" do modo code (etapa 3 do tchan) --------
+    // Fica DENTRO da resposta que mexeu (a última dele antes da próxima fala
+    // minha), entre o texto e os botões, como no desenho aprovado.
+    function _respostaPara(i) {
+        for (; i >= 0; i--) {
+            var q = get(i).quem;
+            if (q === "jarvis" || q === "painel") return i;
+            if (q === "voce") return -1;
+        }
+        return -1;
+    }
+    function alteracoes(d, animar) {
+        var i = _respostaPara(count - 1);
+        if (i < 0) {
+            append(_nova("jarvis", "", { quando: d.quando }, animar !== false));
+            i = count - 1;
+        }
+        setProperty(i, "dados", JSON.stringify(d));
+    }
+    function desfeito(d) {
+        for (var i = count - 1; i >= 0; i--) {
+            var bruto = get(i).dados;
+            if (!bruto) continue;
+            var c = JSON.parse(bruto);
+            if (c.id === d.id) {
+                c.desfeito = d.desfeito || [];
+                setProperty(i, "dados", JSON.stringify(c));
+                return;
+            }
+        }
     }
 
     // -- o texto chegando em pedaços ------------------------------------------
@@ -150,6 +182,10 @@ ListModel {
         _pularFalaAte = 0;
         for (var i = 0; i < anteriores.length; i++) {
             var f = anteriores[i];
+            if (f.quem === "alteracoes") {
+                alteracoes(f, false);
+                continue;
+            }
             if (f.quem === "atividade") {
                 var ultima = count - 1;
                 if (ultima >= 0 && get(ultima).quem === "atividade") {

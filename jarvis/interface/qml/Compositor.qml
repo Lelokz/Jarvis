@@ -37,6 +37,16 @@ Item {
     signal escolherModelo(string valor)
     signal escolherEsforco(string valor)
     signal escolherPersona(string valor)
+    // O modo code (etapa 3 do tchan): quanto ele faz sozinho.
+    property bool emCode: false
+    property string permissao: "auto"
+    signal escolherPermissao(string valor)
+    readonly property var opcoesPermissao: [
+        { valor: "auto", nome: "Automático", descricao: "Faz e te conta" },
+        { valor: "perguntar", nome: "Perguntar antes", descricao: "Pede teu “pode” antes de mudar cada arquivo" },
+        { valor: "plano", nome: "Plano primeiro", descricao: "Conta o plano, espera o OK e só então mexe" },
+        { valor: "olhar", nome: "Só olhar", descricao: "Lê e explica, não muda nada" },
+    ]
     signal parar()
 
     implicitHeight: coluna.height
@@ -463,6 +473,18 @@ Item {
                     iconeCheio: true
                     paraCima: raiz.menusParaCima
                     onEscolhido: function (v) { raiz.escolherEsforco(v) }
+                }
+                Seletor {
+                    visible: raiz.emCode
+                    tema: raiz.tema
+                    rotulo: "Quanto ele faz sozinho"
+                    opcoes: raiz.opcoesPermissao
+                    valor: raiz.permissao
+                    icone: raiz.tema.icones.escudo
+                    destaque: raiz.tema.pergunta
+                    rodape: "Pela voz: “modo plano”, “pergunta antes”, “pode fazer sozinho”, “só olhar”"
+                    paraCima: raiz.menusParaCima
+                    onEscolhido: function (v) { raiz.escolherPermissao(v) }
                 }
             }
 

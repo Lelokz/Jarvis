@@ -28,6 +28,7 @@ import math
 import queue
 import re
 import signal
+import subprocess
 import sys
 import threading
 import time
@@ -43,7 +44,7 @@ from jarvis.agente import sessoes
 from jarvis.agente.agente import Agente, ErroDoAgente, Saida
 from jarvis.agente.avisos import AvisosWhatsApp
 from jarvis.agente import projetos
-from jarvis.agente.reflexos import comando_code, reflexo
+from jarvis.agente.reflexos import comando_code, comando_code_extra, reflexo
 from jarvis.cronometro import Tempos
 from jarvis.nucleo import memoria_viva, recados, relogio
 from jarvis.nucleo.atalhos import normalizar
@@ -461,6 +462,36 @@ class Ciclo:
         if falar:
             self._falar(f"Modo code no {proj.nome.removeprefix('Projeto ')}. Pode falar.")
 
+    def _desfazer(self, ident: str, arquivo: str) -> str:
+        """O Desfazer do cartão "Alterou N arquivos" (ou "desfaz isso"): os
+        arquivos voltam como estavam antes daquela resposta. Devolve a frase."""
+        if self.agente.ocupado:
+            return "Tô no meio de uma coisa. Fala para antes, ou espera eu terminar."
+        try:
+            r = self.agente.desfazer(ident, arquivo)
+        except (ValueError, OSError, subprocess.SubprocessError) as e:
+            return f"Não desfiz: {e}."
+        self.registrador.registrar_estado("desfez", id=r["id"], arquivos=r["voltaram"])
+        self.emissor.emitir("desfeito", id=r["id"], caminho=r["caminho"], desfeito=r["desfeito"],
+                            voltaram=r["voltaram"])
+        n = len(r["voltaram"])
+        return "Desfeito: o arquivo voltou como tava." if n == 1 else f"Desfeito: os {n} arquivos voltaram como tavam."
+
+    def _desfazer_git(self, caminho: str, arquivo: str) -> str:
+        """O "Desfazer arquivo" do painel Mudanças: volta ao último commit."""
+        if self.agente.ocupado:
+            return "Espera ele terminar (ou diz \"para\") pra desfazer."
+        if self.agente.code is None or str(self.agente.code.caminho) != caminho:
+            return "Só no projeto aberto no modo code."
+        from jarvis.agente import desfazer
+        try:
+            copia = desfazer.desfazer_git(self.agente.code.caminho, arquivo)
+        except (ValueError, OSError, subprocess.SubprocessError) as e:
+            return f"Não desfiz: {e}."
+        self.registrador.registrar_estado("desfez_git", arquivo=arquivo, copia=copia)
+        self.emissor.emitir("desfeito", id="", caminho=caminho, desfeito=[], voltaram=[arquivo])
+        return f"Voltou ao último commit: {arquivo} (guardei uma cópia de como tava)."
+
     def criar_projeto(self, nome: str, falar: bool = True) -> str | None:
         """Projeto novo na pasta Projetos do HD e já entra no modo code nele
         (chat novo). Devolve o motivo se não deu."""
@@ -877,6 +908,22 @@ class Ciclo:
         cmd = comando_code(texto, getattr(self.agente, "code", None) is not None)
         if cmd is not None and self._modo_code(cmd, texto, voz):
             return
+        # 2c. Dentro do modo code: "desfaz isso" e "modo plano"/"pergunta antes"/
+        #     "pode fazer sozinho"/"só olhar" (etapa 3 do tchan).
+        extra = comando_code_extra(texto) if getattr(self.agente, "code", None) is not None else None
+        if extra is not None:
+            self.registrador.registrar_estado("modo_code", pedido=extra[0], valor=extra[1], dito=texto)
+            if extra[0] == "desfazer":
+                self._falar(self._desfazer("", ""))
+            else:
+                ajustes.mudar(code_permissao=extra[1])
+                self.emitir_ajustes()
+                self._falar({"auto": "Beleza, faço sozinho e te conto.",
+                             "perguntar": "Beleza, pergunto antes de mudar cada arquivo.",
+                             "plano": "Beleza, te conto o plano antes de mexer.",
+                             "olhar": "Beleza, só olho e explico, sem mudar nada."}[extra[1]])
+            self._renovar("janela reiniciada")
+            return
 
         # 3. Com o Claude trabalhando: "para" interrompe; o resto entra na
         #    tarefa (medido: ele incorpora a fala nova).
@@ -1009,6 +1056,18 @@ class Ciclo:
             # Entrou/saiu do modo code: a janela e o app mostram o projeto (no "cerebro").
             self.registrador.registrar_estado("modo_code_ativo", projeto=s.texto)
             self.emitir_cerebro()
+            # O Plano e o Terminal são do projeto que saiu.
+            self.emissor.emitir("plano", itens=[])
+            self.emissor.emitir("terminal", limpar=True)
+        elif s.tipo in ("alteracoes", "terminal", "plano", "contexto"):
+            # Os painéis do modo code (etapa 3 do tchan, 11/11/2026).
+            dados = json.loads(s.texto)
+            if s.tipo == "alteracoes":
+                self.registrador.registrar_estado("alteracoes", id=dados["id"], arquivos=len(dados["arquivos"]))
+            if s.tipo == "plano":
+                self.emissor.emitir("plano", itens=dados)
+            else:
+                self.emissor.emitir(s.tipo, **dados)
         elif s.tipo == "sessao":
             # Chat novo ou retomado: a janela troca a conversa que mostra.
             falas = []
@@ -1401,6 +1460,15 @@ class Ciclo:
                 self.avisar_cliente(pedido.cliente, "Esse projeto não pode no modo code.")
                 return
             self._entrar_projeto(proj, falar=False)
+            return
+        if pedido.tipo in ("desfazer", "desfazer_git"):
+            d = json.loads(pedido.valor)
+            if pedido.tipo == "desfazer":
+                msg = self._desfazer(d["id"], d["arquivo"])
+            else:
+                msg = self._desfazer_git(d["caminho"], d["arquivo"])
+            if not msg.startswith(("Desfeito", "Voltou")):
+                self.avisar_cliente(pedido.cliente, msg)   # o certo aparece no próprio cartão
             return
         if pedido.tipo == "novo_projeto":
             # O "+ Novo projeto" da lista do Code (janela e app).

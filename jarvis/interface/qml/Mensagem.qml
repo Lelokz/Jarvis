@@ -35,6 +35,10 @@ Item {
     signal refazer()
     signal avaliar(string texto, string nota)
     property string nota: ""              // "boa" | "ruim" (o que ele já marcou aqui)
+    // O cartão "Alterou N arquivos" do modo code (JSON; "" = sem cartão).
+    property string dados: ""
+    signal desfazer(string id, string arquivo)
+    signal verArquivo(string arquivo)
 
     readonly property bool minha: quem === "voce"
     readonly property bool atividade: quem === "atividade"
@@ -301,6 +305,19 @@ Item {
                                 onClicked: raiz.responder(modelData)
                             }
                         }
+                    }
+                }
+
+                Loader {
+                    active: raiz.dados !== ""
+                    visible: active
+                    width: parent.width
+                    sourceComponent: CartaoAlteracoes {
+                        width: parent ? parent.width : 600
+                        tema: raiz.tema
+                        dados: raiz.dados !== "" ? JSON.parse(raiz.dados) : ({})
+                        onDesfazer: function (id, arq) { raiz.desfazer(id, arq) }
+                        onVerArquivo: function (arq) { raiz.verArquivo(arq) }
                     }
                 }
 

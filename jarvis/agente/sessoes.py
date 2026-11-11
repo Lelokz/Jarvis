@@ -188,4 +188,25 @@ def falas(casa: Path, sessao: str) -> list[dict]:
                     saida.append({"quem": "atividade", "texto": _resumo(b.get("name", ""),
                                                                         b.get("input") or {}),
                                   "quando": quando})
+    return _com_cartoes(sessao, saida)
+
+
+def _com_cartoes(sessao: str, saida: list[dict]) -> list[dict]:
+    """Os cartões "Alterou N arquivos" do modo code dessa conversa, no lugar
+    (depois da resposta que mexeu)."""
+    from jarvis.agente import desfazer
+    cartoes = []
+    for p in desfazer.PASTA.glob("*.json"):
+        try:
+            d = json.loads(p.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if d.get("sessao") == sessao:
+            d.pop("conteudo", None)
+            cartoes.append({"quem": "alteracoes", **d})
+    if not cartoes:
+        return saida
+    for c in sorted(cartoes, key=lambda c: c["quando"]):
+        i = next((i for i, f in enumerate(saida) if f.get("quando", 0) > c["quando"]), len(saida))
+        saida.insert(i, c)
     return saida

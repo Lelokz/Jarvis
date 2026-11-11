@@ -21,6 +21,12 @@ Rectangle {
     property real nivel: 0
     property bool sendoVista: true
     property alias filtro: busca.text
+    // A seção "Programando" (etapa 3 do tchan): os projetos com conversa no
+    // modo code e o estado de cada um.
+    property var programando: []
+    property string codeCaminho: ""
+    signal entrarCode(string caminho)
+    signal escolherProjeto()
     signal novoChat()
     signal abrir(string id)
     signal renomear(string id, string titulo)
@@ -150,10 +156,86 @@ Rectangle {
         }
     }
 
+    // -- programando (os projetos do modo code) ---------------------------------
+    function estadoDoProjeto(p) {
+        if (p.caminho === raiz.codeCaminho && raiz.estado === "pensando") return "trabalhando";
+        if (p.pendentes > 0) return "pra revisar";
+        if (p.caminho === raiz.codeCaminho) return "pronto";
+        if (!p.quando) return "";
+        var d = new Date(p.quando * 1000), hoje = new Date();
+        var dias = Math.round((new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate())
+                               - new Date(d.getFullYear(), d.getMonth(), d.getDate())) / 86400000);
+        return dias <= 0 ? "hoje" : dias === 1 ? "ontem" : ("0" + d.getDate()).slice(-2) + "/" + ("0" + (d.getMonth() + 1)).slice(-2);
+    }
+    Column {
+        id: secaoCode
+        anchors.top: caixaBusca.bottom
+        anchors.topMargin: visible ? 10 : 0
+        x: 8
+        width: parent.width - 16
+        visible: raiz.programando.length > 0
+        height: visible ? implicitHeight : 0
+        spacing: 2
+        Item {
+            width: parent.width; height: 26
+            Text {
+                x: 12; anchors.verticalCenter: parent.verticalCenter
+                text: "PROGRAMANDO"
+                color: raiz.tema.muitoFraco; font.family: raiz.tema.familia; font.pixelSize: 11
+                font.weight: Font.DemiBold; font.letterSpacing: 1.2
+            }
+            Rectangle {
+                anchors { right: parent.right; rightMargin: 6; verticalCenter: parent.verticalCenter }
+                width: 22; height: 22; radius: 6
+                color: areaMaisCode.containsMouse ? raiz.tema.superficie2 : "transparent"
+                Icone { anchors.centerIn: parent; caminho: raiz.tema.icones.mais; tamanho: 13; espessura: 1.8
+                        cor: areaMaisCode.containsMouse ? raiz.tema.texto : raiz.tema.muitoFraco }
+                MouseArea { id: areaMaisCode; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                            onClicked: raiz.escolherProjeto() }
+            }
+        }
+        Repeater {
+            model: raiz.programando
+            Rectangle {
+                required property var modelData
+                readonly property bool aberto: modelData.caminho === raiz.codeCaminho
+                readonly property string situacao: raiz.estadoDoProjeto(modelData)
+                width: secaoCode.width; height: 34; radius: 8
+                color: aberto ? raiz.tema.realce : areaProj.containsMouse ? raiz.tema.superficie2 : "transparent"
+                Rectangle {
+                    x: 14; anchors.verticalCenter: parent.verticalCenter
+                    width: 7; height: 7; radius: 4
+                    color: parent.situacao === "trabalhando" ? "#9b7bff"
+                         : parent.situacao === "pra revisar" ? "#fbbf24" : raiz.tema.muitoFraco
+                    SequentialAnimation on opacity {
+                        running: parent.parent.situacao === "trabalhando"; loops: Animation.Infinite
+                        NumberAnimation { to: 0.35; duration: 700 } NumberAnimation { to: 1; duration: 700 }
+                    }
+                }
+                Text {
+                    x: 30; anchors.verticalCenter: parent.verticalCenter
+                    width: parent.width - 30 - tSit.implicitWidth - 24
+                    elide: Text.ElideRight
+                    text: modelData.nome
+                    color: parent.aberto ? raiz.tema.texto : raiz.tema.textoMedio
+                    font.family: raiz.tema.familia; font.pixelSize: 14
+                }
+                Text {
+                    id: tSit
+                    anchors { right: parent.right; rightMargin: 12; verticalCenter: parent.verticalCenter }
+                    text: parent.situacao
+                    color: raiz.tema.muitoFraco; font.family: raiz.tema.familia; font.pixelSize: 11
+                }
+                MouseArea { id: areaProj; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                            onClicked: if (!parent.aberto) raiz.entrarCode(modelData.caminho) }
+            }
+        }
+    }
+
     // -- as conversas ------------------------------------------------------------
     ListView {
         id: lista
-        anchors.top: caixaBusca.bottom
+        anchors.top: secaoCode.bottom
         anchors.topMargin: 4
         anchors.bottom: rodape.top
         x: 8

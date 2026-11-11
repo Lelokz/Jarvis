@@ -74,6 +74,10 @@ object Icones {
     val raioTraco = traco("M13 2.5L5 13.5h6l-1 8 8-11h-6z")
     // Os botões embaixo da resposta (beta 0.19.5).
     val refazer = traco("M20 12a8 8 0 1 1-2.3-5.6M20 4v5h-5", 1.8f)
+    // O modo code refeito (app beta 0.20.0): os mesmos caminhos da janela.
+    val desfazer = traco("M9 14L4 9l5-5M4 9h10.5a5.5 5.5 0 0 1 0 11H11", 1.8f)
+    val arquivo = traco("M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8zM14 3v5h5", 1.6f)
+    val escudo = traco("M12 3l8 3v6c0 4.5-3.4 8-8 9c-4.6-1-8-4.5-8-9V6z", 1.8f)
     val gostei = traco("M7 11v9H4v-9zM7 11l4-8a2 2 0 0 1 3 2l-1 5h6a2 2 0 0 1 2 2.3l-1.3 6A2 2 0 0 1 17.7 20H7", 1.7f)
     val naoGostei = traco("M7 13V4H4v9zM7 13l4 8a2 2 0 0 0 3-2l-1-5h6a2 2 0 0 0 2-2.3l-1.3-6A2 2 0 0 0 17.7 4H7", 1.7f)
     val ouvir = traco("M4 9h4l5-4v14l-5-4H4zM16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12", 1.7f)

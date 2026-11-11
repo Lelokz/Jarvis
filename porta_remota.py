@@ -73,7 +73,8 @@ PEDIDOS_DO_CELULAR = {"falar", "memoria", "conversas", "abrir", "nova", "continu
                       "memorias", "ler_memoria", "salvar_memoria",  # a aba Memórias (25/10/2026)
                       "conexao",  # o Conectar de Ajustes → Conexões (beta 0.17)
                       "projetos", "code", "mudancas", "git", "novo_projeto",  # o modo code (app beta 0.19.0)
-                      "repetir", "avaliar"}  # os botões da resposta (app beta 0.19.5)
+                      "repetir", "avaliar",  # os botões da resposta (app beta 0.19.5)
+                      "desfazer", "desfazer_git"}  # o Desfazer do modo code (app beta 0.20.0)
 # Foto, vídeo ou arquivo mandado pelo clipe do app. Vídeo de celular passa
 # disso fácil; por enquanto é o teto (o WebSocket guarda tudo na memória).
 MAX_ANEXO_BYTES = 64 * 1024 * 1024
@@ -403,9 +404,11 @@ def criar_app(cfg: config.Config):
                     if not isinstance(pedido, dict) or pedido.get("pedir") not in PEDIDOS_DO_CELULAR:
                         continue
                     if pedido.get("pedir") == "ajustes":
-                        # Do celular, só o "Seu nome" e o grupo da família: volume e
-                        # notificações do PC são da janela.
-                        pedido = {k: v for k, v in pedido.items() if k in ("pedir", "nome", "grupo_ligado")}
+                        # Do celular, o "Seu nome", o grupo da família, o tema e o modo
+                        # code: volume e notificações do PC são da janela.
+                        pedido = {k: v for k, v in pedido.items() if k in (
+                            "pedir", "nome", "grupo_ligado", "tema", "code_narracao", "code_janela_s",
+                            "code_persona", "code_permissao")}
                         if len(pedido) == 1:
                             continue
                     if pedido.get("pedir") == "conexao" and (

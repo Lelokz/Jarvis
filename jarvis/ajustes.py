@@ -25,6 +25,9 @@ PADRAO: dict[str, Any] = {"volume_voz": 100, "nome": "",
                           "persona_inicial": "jarvis",
                           # O modo code (10/11/2026): narração, microfone aberto e quem programa.
                           "code_narracao": "normal", "code_janela_s": 120, "code_persona": "atual",
+                          # Quanto ele faz sozinho no modo code (11/11/2026): "auto",
+                          # "perguntar", "plano" ou "olhar".
+                          "code_permissao": "auto",
                           # A cara da janela e do app (11/11/2026): "escuro" ou "claro".
                           "tema": "escuro"}
 
@@ -75,6 +78,8 @@ def ler() -> dict[str, Any]:
             saida["code_janela_s"] = dados["code_janela_s"]
         if dados.get("code_persona") in ("atual", "jarvis", "friday"):
             saida["code_persona"] = dados["code_persona"]
+        if dados.get("code_permissao") in ("auto", "perguntar", "plano", "olhar"):
+            saida["code_permissao"] = dados["code_permissao"]
         if dados.get("tema") in ("escuro", "claro"):
             saida["tema"] = dados["tema"]
     return saida

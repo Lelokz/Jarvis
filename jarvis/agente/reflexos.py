@@ -146,3 +146,29 @@ def _nome_falado(falado: str) -> str:
         if achou:
             return texto[achou[-1].end():].strip(" ,:;\"'")
     return ""
+
+
+# A etapa 3 do tchan (11/11/2026): dentro do modo code, o botão "quanto ele faz
+# sozinho" e o Desfazer também vão pela voz. Frase inteira, normalizada.
+_PERMISSAO = (
+    ("plano", re.compile(r"^(?:jarvis |friday )?(?:(?:entra|liga|ativa|usa|bota|coloca)(?: (?:no|o))? )?"
+                         r"(?:modo plano|plano primeiro|modo plano primeiro)$")),
+    ("perguntar", re.compile(r"^(?:jarvis |friday )?(?:(?:me )?pergunta antes|modo perguntar(?: antes)?|"
+                             r"pergunta antes de mudar)$")),
+    ("auto", re.compile(r"^(?:jarvis |friday )?(?:pode fazer sozinh[oa]|faz sozinh[oa]|modo automatico|"
+                        r"(?:volta pro|liga o|entra no) (?:modo )?automatico)$")),
+    ("olhar", re.compile(r"^(?:jarvis |friday )?(?:(?:modo )?so olhar|so olha|modo so olha)$")),
+)
+_DESFAZ = re.compile(r"^(?:jarvis |friday )?(?:desfaz|desfazer|desfaca)(?: (?:isso|isso ai|(?:o )?que (?:voce|tu) fez|"
+                     r"a ultima|tudo|essa mudanca|as mudancas))?$")
+
+
+def comando_code_extra(falado: str) -> tuple[str, str] | None:
+    """("permissao", modo) | ("desfazer", "") | None. Só vale no modo code."""
+    t = normalizar(falado)
+    if _DESFAZ.match(t):
+        return ("desfazer", "")
+    for modo, rx in _PERMISSAO:
+        if rx.match(t):
+            return ("permissao", modo)
+    return None

@@ -17,6 +17,8 @@ Item {
     signal responder(string texto)
     signal ouvir(string texto)
     signal avaliar(string texto, string nota)
+    signal desfazer(string id, string arquivo)
+    signal verArquivo(string arquivo)
 
     // A última resposta dele (os botões dela ficam sempre à vista).
     readonly property int ultimaResposta: {
@@ -84,6 +86,9 @@ Item {
             escrevendo: model.escrevendo
             animar: model.animar
             ultima: index === raiz.ultimaResposta
+            dados: model.dados || ""
+            onDesfazer: function (id, arq) { raiz.desfazer(id, arq) }
+            onVerArquivo: function (arq) { raiz.verArquivo(arq) }
             onCopiar: function (t) { raiz.copiar(t) }
             onResponder: function (t) { raiz.responder(t) }
             onOuvir: function (t) { raiz.ouvir(t) }

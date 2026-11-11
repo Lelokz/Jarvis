@@ -109,7 +109,7 @@ def main() -> int:
     a.code = loft
     instr = a._instrucoes_code()
     checa("instruções falam do projeto e da voz", "MODO CODE" in instr and "**Loft**" in instr
-          and "NUNCA leia código" in instr and "Plano + OK" in instr and "{" not in instr.replace("```", ""))
+          and "NUNCA leia código" in instr and "Plano primeiro" in instr and "Só olhar" in instr and "{" not in instr.replace("```", ""))
     a.narracao = "pouca"
     checa("a narração escolhida entra", "pouca narração" in a._instrucoes_code())
     jarvis = str(projetos.PROIBIDO)

@@ -98,6 +98,11 @@ class Servidor:
         self._ultimo_som: dict[str, Any] | None = None
         self._ultimo_ajustes: dict[str, Any] | None = None
         self._ultimo_uso: dict[str, Any] | None = None
+        # O modo code (etapa 3 do tchan): o Plano, o Contexto e o fim do
+        # Terminal, para quem conectar no meio do trabalho.
+        self._ultimo_plano: dict[str, Any] | None = None
+        self._ultimo_contexto: dict[str, Any] | None = None
+        self._terminal: deque = deque(maxlen=80)
         self._conversa_atual: str = ""
         # Quem responde os pedidos "memoria", "conversas" e "abrir" (o
         # assistente põe aqui). Só leem arquivos: rodam na thread da ponte.
@@ -253,6 +258,23 @@ class Servidor:
             self._ultimo_ajustes = evento
         elif tipo == "uso":
             self._ultimo_uso = evento
+        elif tipo == "plano":
+            self._ultimo_plano = evento
+        elif tipo == "contexto":
+            self._ultimo_contexto = evento
+        elif tipo == "terminal":
+            if evento.get("limpar"):
+                self._terminal.clear()
+            else:
+                self._terminal.append(evento)
+        elif tipo == "alteracoes":
+            # O cartão "Alterou N arquivos" fica no histórico, como uma fala.
+            self._falas.append({"quem": "alteracoes", "quando": round(time.time(), 3),
+                                **{k: v for k, v in evento.items() if k != "ev"}})
+        elif tipo == "desfeito":
+            for f in self._falas:
+                if f.get("quem") == "alteracoes" and f.get("id") == evento.get("id"):
+                    f["desfeito"] = list(evento.get("desfeito") or [])
         elif tipo == "conversa_atual":
             # Conversa nova ou retomada: o histórico da ponte passa a ser ela.
             # A linha de atividade fica fora, como no histórico ao vivo (o
@@ -260,7 +282,7 @@ class Servidor:
             self._conversa_atual = str(evento.get("id") or "")
             self._falas.clear()
             for f in evento.get("falas") or []:
-                if f.get("quem") in ("voce", "jarvis", "painel"):
+                if f.get("quem") in ("voce", "jarvis", "painel", "alteracoes"):
                     self._falas.append(f)
         elif tipo in ("voce_disse", "jarvis_disse", "mostrar"):
             # Guardado ANTES de qualquer saída antecipada: o histórico existe
@@ -436,6 +458,9 @@ class Servidor:
                 self._direto(cliente, self._ultimo_uso)
             if self._conversa_atual and cliente.quer_janela:
                 self._direto(cliente, {"ev": "conversa_atual", "id": self._conversa_atual})
+            for ev in ([self._ultimo_plano, self._ultimo_contexto] + list(self._terminal)):
+                if ev is not None:
+                    self._direto(cliente, ev)
             quantas = dados.get("historico", 0)
             if quantas:
                 # Devolve o que TEM, e não o que foi pedido: o anel pode ter
@@ -509,7 +534,8 @@ class Servidor:
         elif tipo == "projetos":
             from jarvis.agente import projetos
             self._direto(cliente, {"ev": "projetos", "lista": [
-                {"nome": p.nome, "caminho": str(p.caminho)} for p in projetos.listar()]})
+                {"nome": p.nome, "caminho": str(p.caminho)} for p in projetos.listar()],
+                "programando": projetos.programando()})
         elif tipo == "mudancas":
             from jarvis.agente import git_code, projetos
             if dados["caminho"] not in {str(p.caminho) for p in projetos.listar()}:
@@ -520,6 +546,8 @@ class Servidor:
         elif tipo in ("repetir", "avaliar"):
             valor = dados["texto"] if tipo == "repetir" else json.dumps(dados)
             self._pedidos.put(Pedido(tipo, valor, cliente.id, cliente.quer_voz))
+        elif tipo in ("desfazer", "desfazer_git"):
+            self._pedidos.put(Pedido(tipo, json.dumps(dados), cliente.id, cliente.quer_voz))
         elif tipo in ("code", "git", "novo_projeto"):
             valor = dados.get("caminho", "") if tipo == "code" else dados["nome"] if tipo == "novo_projeto" else dados["acao"]
             self._pedidos.put(Pedido(tipo, valor, cliente.id, cliente.quer_voz))

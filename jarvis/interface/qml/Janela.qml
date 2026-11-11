@@ -94,6 +94,32 @@ Window {
     property var projetos: []
     property var mudancas: null
     property bool seletorCode: false
+    // O modo code refeito (etapa 3 do tchan, 11/11/2026): os painéis do lado
+    // (os botões do topo abrem e fecham), o Plano, o Contexto e o Terminal.
+    property bool verMudancas: true
+    property bool verTerminal: false
+    property bool verPlano: false
+    property bool verContexto: false
+    property var plano: []
+    property var programando: []
+    property var contexto: null
+    readonly property bool ladoCodeAberto: verMudancas || verTerminal || verPlano || verContexto
+    ListModel { id: terminalModelo }
+    function noTerminal(d) {
+        if (d.limpar) { terminalModelo.clear(); return; }
+        if (d.cmd !== undefined) {
+            terminalModelo.append({ id: d.id, cmd: d.cmd, saida: "", erro: false, pronto: false });
+            while (terminalModelo.count > 60) terminalModelo.remove(0);
+            return;
+        }
+        for (var i = terminalModelo.count - 1; i >= 0; i--)
+            if (terminalModelo.get(i).id === d.id) {
+                terminalModelo.setProperty(i, "saida", d.saida || "");
+                terminalModelo.setProperty(i, "erro", !!d.erro);
+                terminalModelo.setProperty(i, "pronto", true);
+                return;
+            }
+    }
     // Escreveu numa conversa antiga: primeiro o Jarvis volta pra ela, depois
     // a mensagem vai (quando a "conversa_atual" chegar com este id).
     property string esperandoContinuar: ""
@@ -249,6 +275,14 @@ Window {
     // Modo code: depois que ele mexe em algo, o painel Mudanças se atualiza
     // (espera 1,5 s: uma rajada de edições vira um pedido só).
     function mudouAlgo() { if (janela.codeCaminho) relerMudancas.restart() }
+    // O modo code na conversa de agora (numa antiga, a tela é a de sempre).
+    readonly property bool emCodeAqui: codeCaminho !== "" && pagina === "chat" && vendo === ""
+    function alternarPainel(p) {
+        if (p === "mudancas") { verMudancas = !verMudancas; if (verMudancas) mudouAlgo(); }
+        else if (p === "terminal") verTerminal = !verTerminal;
+        else if (p === "plano") verPlano = !verPlano;
+        else verContexto = !verContexto;
+    }
     Timer {
         id: relerMudancas
         interval: 1500
@@ -266,11 +300,12 @@ Window {
         function onEstadoMudou(estado) {
             interno.estado = estado;
             if (estado !== "pensando") { janela.textoPensando = "Pensando…"; janela.ultimaAtividade = ""; }
+            if (estado !== "pensando" && janela.codeCaminho) { janela.mudouAlgo(); ponte.pedirProjetos(); }
         }
         function onNivelMudou(v) { interno.nivel = v }
         function onConexaoMudou(ligado) {
             interno.conectado = ligado;
-            if (ligado) ponte.pedirConversas();
+            if (ligado) { ponte.pedirConversas(); ponte.pedirProjetos(); }
         }
         function onVoceDisse(texto, origem) { falasAtual.acrescentar("voce", texto, { origem: origem }) }
         function onJarvisDisse(texto, acao, perguntando, opcoes) {
@@ -297,12 +332,23 @@ Window {
         function onJogoMudou(nome) { janela.jogo = nome }
         function onGravandoMudou(sim) { janela.gravando = sim }
         function onCodeMudou(nome, caminho) {
-            if (caminho !== janela.codeCaminho) janela.mudancas = null;
+            if (caminho !== janela.codeCaminho) { janela.mudancas = null; janela.contexto = null; }
+            if (nome !== janela.codeNome) ponte.pedirProjetos();
             janela.codeNome = nome; janela.codeCaminho = caminho;
             if (caminho) ponte.pedirMudancas(caminho);
         }
         function onProjetosRecebidos(lista) { janela.projetos = lista }
+        function onProgramandoRecebido(lista) { janela.programando = lista }
         function onMudancasRecebidas(d) { if (d.caminho === janela.codeCaminho) janela.mudancas = d }
+        function onAlteracoesRecebidas(d) { falasAtual.alteracoes(d, true); janela.mudouAlgo(); ponte.pedirProjetos() }
+        function onDesfeitoRecebido(d) {
+            if (d.id) { falasAtual.desfeito(d); falasVendo.desfeito(d); }
+            janela.mudouAlgo();
+            janela.avisar(d.voltaram.length === 1 ? "Desfeito: " + d.voltaram[0] + " voltou" : "Desfeito: " + d.voltaram.length + " arquivos voltaram");
+        }
+        function onTerminalRecebido(d) { janela.noTerminal(d) }
+        function onPlanoRecebido(l) { janela.plano = l }
+        function onContextoRecebido(d) { janela.contexto = d }
         function onCerebroMudou(modelo, esforco, persona, cor) {
             janela.modelo = modelo; janela.esforco = esforco; janela.persona = persona;
             if (cor !== "") janela.corPersona = cor;
@@ -371,6 +417,10 @@ Window {
         corAtual: janela.corAtual
         nivel: janela.nivel
         sendoVista: janela.sendoVista
+        programando: janela.programando
+        codeCaminho: janela.codeCaminho
+        onEntrarCode: function (c) { if (typeof ponte !== "undefined") ponte.entrarCode(c) }
+        onEscolherProjeto: { janela.seletorCode = true; if (typeof ponte !== "undefined") ponte.pedirProjetos(); }
         onNovoChat: janela.novoChat()
         onAbrir: function (sessao) { janela.abrir(sessao) }
         onRenomear: function (sessao, titulo) {
@@ -417,7 +467,60 @@ Window {
             DragHandler { target: null; onActiveChanged: if (active) janela.startSystemMove() }
             TapHandler { onDoubleTapped: janela.alternarMaximizar() }
 
+            // No modo code (etapa 3): "</> Loft ⌄" (abre a lista dos projetos)
+            // e o ramo, no lugar do título da conversa.
             Row {
+                id: tituloCode
+                visible: janela.emCodeAqui
+                anchors.verticalCenter: parent.verticalCenter
+                x: 22
+                spacing: 10
+                Rectangle {
+                    anchors.verticalCenter: parent.verticalCenter
+                    height: 32; radius: 8; width: linhaTitCode.width + 16
+                    color: areaTitCode.containsMouse || janela.seletorCode ? tema.superficie2 : "transparent"
+                    Row {
+                        id: linhaTitCode
+                        anchors.centerIn: parent; spacing: 8
+                        Icone { anchors.verticalCenter: parent.verticalCenter; caminho: tema.icones.codigo
+                                cor: tema.persona; tamanho: 17; espessura: 1.9 }
+                        Text { anchors.verticalCenter: parent.verticalCenter; text: janela.codeNome.replace(/^Projeto /, "")
+                               color: tema.texto; font.family: tema.familia; font.pixelSize: 15; font.weight: Font.DemiBold }
+                        Icone { anchors.verticalCenter: parent.verticalCenter; caminho: tema.icones.seta
+                                cor: tema.textoFraco; tamanho: 13 }
+                    }
+                    MouseArea {
+                        id: areaTitCode
+                        anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                        onClicked: {
+                            janela.seletorCode = !janela.seletorCode;
+                            if (janela.seletorCode && typeof ponte !== "undefined") ponte.pedirProjetos();
+                        }
+                    }
+                }
+                Rectangle {
+                    visible: !!janela.mudancas && janela.mudancas.git
+                    anchors.verticalCenter: parent.verticalCenter
+                    height: 24; radius: 6; width: linhaRamo.width + 16
+                    color: "transparent"; border.width: 1; border.color: tema.tracoForte
+                    Row {
+                        id: linhaRamo
+                        anchors.centerIn: parent; spacing: 6
+                        Icone { anchors.verticalCenter: parent.verticalCenter; caminho: tema.icones.ramo
+                                cor: tema.textoFraco; tamanho: 12; espessura: 1.7 }
+                        Text {
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: !janela.mudancas ? "" : (janela.mudancas.ramo || "?")
+                                  + (janela.mudancas.a_frente > 0 ? " · " + janela.mudancas.a_frente + " commit"
+                                     + (janela.mudancas.a_frente === 1 ? "" : "s") + " esperando push" : "")
+                            color: tema.textoFraco; font.family: tema.mono; font.pixelSize: 12
+                        }
+                    }
+                }
+            }
+
+            Row {
+                visible: !janela.emCodeAqui
                 anchors.verticalCenter: parent.verticalCenter
                 x: 28
                 spacing: 12
@@ -456,8 +559,60 @@ Window {
                 }
             }
 
+            // Os botões dos painéis do modo code (etapa 3): abrem e fecham cada um.
+            Row {
+                id: botoesPaineis
+                visible: janela.emCodeAqui
+                anchors.verticalCenter: parent.verticalCenter
+                anchors.right: botoesJanela.left
+                anchors.rightMargin: 18
+                spacing: 4
+                Repeater {
+                    model: [
+                        { id: "mudancas", nome: "Mudanças", icone: tema.icones.mudancas,
+                          conta: janela.mudancas && janela.mudancas.arquivos ? String(janela.mudancas.arquivos.length || "") : "" },
+                        { id: "terminal", nome: "Terminal", icone: tema.icones.terminal, conta: "" },
+                        { id: "plano", nome: "Plano", icone: tema.icones.plano,
+                          conta: janela.plano.length ? janela.plano.filter(function (p) { return p.estado === "completed" }).length + "/" + janela.plano.length : "" },
+                        { id: "contexto", nome: "Contexto", icone: tema.icones.contexto, conta: "" },
+                    ]
+                    Rectangle {
+                        required property var modelData
+                        readonly property bool aberto: modelData.id === "mudancas" ? janela.verMudancas
+                                                     : modelData.id === "terminal" ? janela.verTerminal
+                                                     : modelData.id === "plano" ? janela.verPlano : janela.verContexto
+                        height: 32; radius: 8; width: linhaPainel.width + 20
+                        color: aberto ? tema.realce : areaPainel.containsMouse ? tema.superficie2 : "transparent"
+                        border.width: aberto ? 1 : 0; border.color: tema.tracoForte
+                        Row {
+                            id: linhaPainel
+                            anchors.centerIn: parent; spacing: 6
+                            Icone { anchors.verticalCenter: parent.verticalCenter; caminho: modelData.icone; tamanho: 14
+                                    espessura: 1.8; cor: parent.parent.aberto ? tema.texto : tema.textoFraco }
+                            Text { anchors.verticalCenter: parent.verticalCenter; text: modelData.nome
+                                   color: parent.parent.aberto ? tema.texto : tema.textoFraco
+                                   font.family: tema.familia; font.pixelSize: 13 }
+                            Rectangle {
+                                visible: modelData.conta !== ""
+                                anchors.verticalCenter: parent.verticalCenter
+                                height: 18; radius: 5; width: tConta.implicitWidth + 10
+                                color: tema.superficie2; border.width: 1; border.color: tema.tracoForte
+                                Text { id: tConta; anchors.centerIn: parent; text: modelData.conta; color: tema.textoMedio
+                                       font.family: tema.familia; font.pixelSize: 11 }
+                            }
+                        }
+                        MouseArea {
+                            id: areaPainel
+                            anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                            onClicked: janela.alternarPainel(modelData.id)
+                        }
+                    }
+                }
+            }
+
             Rectangle {
                 id: botaoCode
+                visible: !janela.emCodeAqui
                 anchors.verticalCenter: parent.verticalCenter
                 anchors.right: botoesJanela.left
                 anchors.rightMargin: 10
@@ -530,21 +685,26 @@ Window {
         }
 
         // -- o chat ----------------------------------------------------------------
-        CodePainel {
+        CodeLado {
             id: painelCode
             anchors { top: topo.bottom; right: parent.right; bottom: parent.bottom }
-            width: visible ? Math.min(440, Math.max(340, principal.width * 0.36)) : 0
-            visible: janela.codeCaminho !== "" && janela.pagina === "chat" && janela.vendo === ""
+            width: visible ? Math.min(580, Math.max(360, principal.width * 0.34)) : 0
+            visible: janela.emCodeAqui && janela.ladoCodeAberto
             tema: tema
-            nome: janela.codeNome
             caminho: janela.codeCaminho
             mudancas: janela.mudancas
+            plano: janela.plano
+            contexto: janela.contexto
+            terminal: terminalModelo
             ocupado: janela.estado === "pensando"
-            onAtualizar: if (typeof ponte !== "undefined") ponte.pedirMudancas(janela.codeCaminho)
+            verMudancas: janela.verMudancas
+            verTerminal: janela.verTerminal
+            verPlano: janela.verPlano
+            verContexto: janela.verContexto
+            onFechar: function (p) { janela.alternarPainel(p) }
             onCommit: if (typeof ponte !== "undefined") ponte.git("commit")
             onPush: if (typeof ponte !== "undefined") ponte.git("push")
-            onSair: if (typeof ponte !== "undefined") ponte.entrarCode("")
-            onTrocar: { janela.seletorCode = true; if (typeof ponte !== "undefined") ponte.pedirProjetos(); }
+            onDesfazerArquivo: function (arq) { if (typeof ponte !== "undefined") ponte.desfazerGit(janela.codeCaminho, arq) }
         }
 
         Item {
@@ -571,6 +731,13 @@ Window {
                 onAvaliar: function (t, nota) {
                     if (typeof ponte !== "undefined" && ponte.avaliar(t, nota))
                         janela.avisar(nota === "boa" ? "Anotado: tu gostou dessa" : "Anotado: essa não ficou boa");
+                }
+                onDesfazer: function (id, arq) {
+                    if (typeof ponte === "undefined" || !ponte.desfazer(id, arq)) janela.avisar("a NOVA não está do outro lado");
+                }
+                onVerArquivo: function (arq) {
+                    if (!janela.codeCaminho) { janela.avisar("Abre o modo code nesse projeto pra ver as mudanças"); return; }
+                    janela.verMudancas = true; janela.mudouAlgo(); painelCode.escolher(arq);
                 }
             }
 
@@ -900,6 +1067,9 @@ Window {
                 esforco: janela.esforco
                 persona: janela.persona
                 menusParaCima: !janela.boasVindas
+                emCode: janela.codeCaminho !== ""
+                permissao: janela.ajustes && janela.ajustes.code_permissao ? janela.ajustes.code_permissao : "auto"
+                onEscolherPermissao: function (v) { if (typeof ponte !== "undefined") ponte.mudarAjusteCode("code_permissao", v) }
                 // Pensando OU falando: o Parar cala a voz no meio da frase (26/10/2026).
                 trabalhando: janela.vendo === "" && janela.conectado
                              && (janela.estado === "pensando" || janela.estado === "falando")

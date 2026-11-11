@@ -67,6 +67,13 @@ class PonteQt(QObject):
     codeMudou = Signal(str, str)           # nome do projeto, caminho ("" = fora do modo code)
     projetosRecebidos = Signal("QVariant") # [{nome, caminho}]
     mudancasRecebidas = Signal("QVariant") # {caminho, git, arquivos, diff, ramo, a_frente, remoto}
+    # O modo code refeito (etapa 3 do tchan, 11/11/2026).
+    alteracoesRecebidas = Signal("QVariant")  # o cartão "Alterou N arquivos" {id, arquivos, mais, menos...}
+    desfeitoRecebido = Signal("QVariant")     # {id, caminho, desfeito, voltaram}
+    terminalRecebido = Signal("QVariant")     # {id, cmd} ou {id, saida, erro} ou {limpar}
+    planoRecebido = Signal("QVariant")        # [{texto, estado}]
+    contextoRecebido = Signal("QVariant")     # {pct, usados, max}
+    programandoRecebido = Signal("QVariant")  # a seção "Programando" da lateral [{nome, caminho, quando, pendentes}]
 
     def __init__(self, caminho: Path, parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -215,9 +222,19 @@ class PonteQt(QObject):
 
     @Slot(str, "QVariant", result=bool)
     def mudarAjusteCode(self, chave: str, valor) -> bool:
-        if chave not in ("code_narracao", "code_janela_s", "code_persona", "tema"):
+        if chave not in ("code_narracao", "code_janela_s", "code_persona", "code_permissao", "tema"):
             return False
         return self._pedir({"pedir": "ajustes", chave: int(valor) if chave == "code_janela_s" else str(valor)})
+
+    @Slot(str, str, result=bool)
+    def desfazer(self, ident: str, arquivo: str) -> bool:
+        """O Desfazer do cartão (arquivo "" = todos os da resposta)."""
+        return self._pedir({"pedir": "desfazer", "id": ident, "arquivo": arquivo})
+
+    @Slot(str, str, result=bool)
+    def desfazerGit(self, caminho: str, arquivo: str) -> bool:
+        """O "Desfazer arquivo" do painel Mudanças (volta ao último commit)."""
+        return self._pedir({"pedir": "desfazer_git", "caminho": caminho, "arquivo": arquivo})
 
     # Os botões embaixo da resposta (beta 0.18.5).
     @Slot(str, result=bool)
@@ -360,8 +377,19 @@ class PonteQt(QObject):
             self.ajustesMudou.emit({k: v for k, v in ev.items() if k != "ev"})
         elif tipo == "projetos":
             self.projetosRecebidos.emit(list(ev.get("lista") or []))
+            self.programandoRecebido.emit(list(ev.get("programando") or []))
         elif tipo == "mudancas":
             self.mudancasRecebidas.emit({k: v for k, v in ev.items() if k != "ev"})
+        elif tipo == "alteracoes":
+            self.alteracoesRecebidas.emit({k: v for k, v in ev.items() if k != "ev"})
+        elif tipo == "desfeito":
+            self.desfeitoRecebido.emit({k: v for k, v in ev.items() if k != "ev"})
+        elif tipo == "terminal":
+            self.terminalRecebido.emit({k: v for k, v in ev.items() if k != "ev"})
+        elif tipo == "plano":
+            self.planoRecebido.emit(list(ev.get("itens") or []))
+        elif tipo == "contexto":
+            self.contextoRecebido.emit({k: v for k, v in ev.items() if k != "ev"})
         elif tipo == "conversa":
             self.conversaRecebida.emit(str(ev.get("id") or ""), list(ev.get("falas") or []))
         elif tipo == "erro":

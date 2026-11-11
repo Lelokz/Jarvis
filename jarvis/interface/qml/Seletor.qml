@@ -15,6 +15,11 @@ Item {
     property color corDaBola: "transparent"
     property bool paraCima: true
     property bool alinharDireita: false
+    // O botão "quanto ele faz sozinho" do modo code (etapa 3): âmbar, e uma
+    // linha embaixo do menu (as frases faladas).
+    property color destaque: "transparent"
+    property string rodape: ""
+    readonly property bool temDestaque: destaque !== Qt.color("transparent")
     signal escolhido(string valor)
 
     readonly property var atual: {
@@ -31,9 +36,11 @@ Item {
         width: linha.width + 22
         height: 32
         radius: 9
-        color: area.containsMouse ? raiz.tema.superficie2 : raiz.tema.lateral
+        color: raiz.temDestaque ? Qt.rgba(raiz.destaque.r, raiz.destaque.g, raiz.destaque.b, area.containsMouse ? 0.16 : 0.08)
+             : area.containsMouse ? raiz.tema.superficie2 : raiz.tema.lateral
         border.width: 1
-        border.color: menu.opened ? raiz.tema.persona : raiz.tema.traco
+        border.color: raiz.temDestaque ? Qt.rgba(raiz.destaque.r, raiz.destaque.g, raiz.destaque.b, menu.opened ? 0.95 : 0.55)
+                    : menu.opened ? raiz.tema.persona : raiz.tema.traco
         Behavior on color { ColorAnimation { duration: raiz.tema.rapido } }
 
         Row {
@@ -51,13 +58,13 @@ Item {
                 anchors.verticalCenter: parent.verticalCenter
                 caminho: raiz.icone
                 cheio: raiz.iconeCheio
-                cor: raiz.tema.textoMedio
+                cor: raiz.temDestaque ? raiz.destaque : raiz.tema.textoMedio
                 tamanho: 14
             }
             Text {
                 anchors.verticalCenter: parent.verticalCenter
                 text: raiz.atual.nome
-                color: raiz.tema.textoMedio
+                color: raiz.temDestaque ? raiz.destaque : raiz.tema.textoMedio
                 font.family: raiz.tema.familia
                 font.pixelSize: 13
             }
@@ -163,6 +170,14 @@ Item {
                         }
                     }
                 }
+            }
+            Rectangle { visible: raiz.rodape !== ""; width: 288; height: 1; color: raiz.tema.traco }
+            Text {
+                visible: raiz.rodape !== ""
+                width: 288; wrapMode: Text.WordWrap
+                leftPadding: 12; rightPadding: 12; topPadding: 6; bottomPadding: 6
+                text: raiz.rodape
+                color: raiz.tema.muitoFraco; font.family: raiz.tema.familia; font.pixelSize: 11
             }
         }
     }
