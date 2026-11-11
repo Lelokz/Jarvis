@@ -439,7 +439,7 @@ def _finalizar(ctx: Contexto, avisar: Avisar) -> None:
         _atalhos_windows(ctx)
         return
     # O menu e o ligar com o PC.
-    icone = ctx.app / "jarvis" / "interface" / "icone.png"
+    icone = _icone(ctx)
     abrir = ctx.app / "jarvis.sh"
     entrada = ("[Desktop Entry]\nType=Application\nName={nome}\nComment={comentario}\nExec={exec}\n"
                f"Icon={icone}\nTerminal=false\nCategories=Utility;\n")
@@ -473,11 +473,21 @@ def _atalho(lnk: Path, ctx: Contexto, argumentos: str, descricao: str) -> None:
                    env=env, check=True, capture_output=True, timeout=30, **SEM_JANELA)
 
 
+def _icone(ctx: Contexto) -> Path:
+    """O PNG do menu, desenhado na hora com o átomo de agora (icone_atomo.py)."""
+    import sys
+    sys.path.insert(0, str(ctx.app))
+    from jarvis.interface import icone_atomo
+    caminho = ctx.app / "jarvis" / "interface" / "icone-menu.png"
+    icone_atomo.desenhar(256).save(str(caminho))
+    return caminho
+
+
 def _atalhos_windows(ctx: Contexto) -> None:
     """Menu Iniciar e a pasta Inicializar (liga com o PC), com o ícone desenhado. Quem
     liga é o jarvis/ligar.py, o irmão do jarvis.sh."""
     # O .ico é o próprio PNG de 256 px dentro do cabeçalho de ícone (o Windows aceita).
-    png = (ctx.app / "jarvis" / "interface" / "icone.png").read_bytes()
+    png = _icone(ctx).read_bytes()
     cabeca = (b"\0\0\1\0\1\0" + bytes([0, 0, 0, 0]) + (1).to_bytes(2, "little") + (32).to_bytes(2, "little")
               + len(png).to_bytes(4, "little") + (22).to_bytes(4, "little"))
     (ctx.app / "jarvis" / "interface" / "icone.ico").write_bytes(cabeca + png)

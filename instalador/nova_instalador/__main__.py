@@ -17,7 +17,7 @@ import time
 from pathlib import Path
 
 from PySide6.QtCore import Property, QObject, QUrl, Signal, Slot
-from PySide6.QtGui import QFontDatabase, QGuiApplication, QIcon
+from PySide6.QtGui import QFontDatabase, QGuiApplication, QIcon, QPixmap
 from PySide6.QtQml import QQmlApplicationEngine
 
 from nova_instalador import checar, passos
@@ -292,7 +292,9 @@ def main() -> int:
     app = QGuiApplication(sys.argv)
     app.setApplicationName("Instalador da NOVA")
     app.setDesktopFileName("nova-instalador")
-    app.setWindowIcon(QIcon(str(INTERFACE / "icone.png")))
+    sys.path.insert(0, str(NOVA))
+    from jarvis.interface import icone_atomo   # o átomo desenhado (o PNG antigo saiu em 11/11/2026)
+    app.setWindowIcon(QIcon(QPixmap.fromImage(icone_atomo.desenhar(256))))
     for fonte in (INTERFACE / "fontes").glob("*.ttf"):
         QFontDatabase.addApplicationFont(str(fonte))
     instalador = Instalador()
