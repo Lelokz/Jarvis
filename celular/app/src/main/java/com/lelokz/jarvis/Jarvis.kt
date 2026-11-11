@@ -40,6 +40,8 @@ data class Mensagem(
     // O cartão "Alterou N arquivos" do modo code (app beta 0.20.0), dentro da
     // resposta que mexeu: {id, arquivos: [{arquivo, estado, mais, menos}], mais, menos, desfeito}.
     val alteracoes: JSONObject? = null,
+    // Chegou agora (não é do histórico): aparece digitando (app beta 0.22.5).
+    val aoVivo: Boolean = false,
 )
 
 /** Um comando do painel Terminal do modo code (app beta 0.20.0). */
@@ -1073,7 +1075,7 @@ class Jarvis(private val app: Application) {
         }
         fecharPerguntas()
         if (fecharEscrita(Quem.JARVIS, texto, perguntando, opcoes)) return
-        mensagens.add(Mensagem(Quem.JARVIS, texto, perguntando = perguntando, opcoes = opcoes))
+        mensagens.add(Mensagem(Quem.JARVIS, texto, perguntando = perguntando, opcoes = opcoes, aoVivo = true))
     }
 
     private fun painel(titulo: String, texto: String) {
@@ -1082,7 +1084,7 @@ class Jarvis(private val app: Application) {
             pularFalaAte = agora() + 15
             if (fecharEscrita(Quem.PAINEL, texto, false, emptyList())) return
         }
-        mensagens.add(Mensagem(Quem.PAINEL, texto, titulo))
+        mensagens.add(Mensagem(Quem.PAINEL, texto, titulo, aoVivo = true))
     }
 
     // -- o texto chegando em pedaços ----------------------------------------------
@@ -1090,7 +1092,7 @@ class Jarvis(private val app: Application) {
     private fun escrever(bloco: Int, delta: String) {
         val i = mensagens.indexOfLast { it.escrevendo && it.bloco == bloco }
         if (i >= 0) mensagens[i] = mensagens[i].copy(texto = mensagens[i].texto + delta)
-        else mensagens.add(Mensagem(Quem.JARVIS, delta, escrevendo = true, bloco = bloco))
+        else mensagens.add(Mensagem(Quem.JARVIS, delta, escrevendo = true, bloco = bloco, aoVivo = true))
     }
 
     /** O texto inteiro chegou: troca a fala que estava sendo escrita (a mais antiga aberta). */

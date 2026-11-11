@@ -1899,7 +1899,7 @@ Item {
                 titulo: "Sobre a NOVA"
                 Repeater {
                     model: [
-                        ["Versão", "beta 0.21.0"],
+                        ["Versão", "beta 0.21.5"],
                         ["Conexão", raiz.conectado ? "Ligado" : "Esperando a NOVA subir"],
                     ]
                     Linha {

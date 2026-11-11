@@ -33,7 +33,7 @@ ListModel {
                  titulo: extra.titulo || "", quando: extra.quando || _agora(),
                  perguntando: extra.perguntando === true,
                  opcoes: (extra.opcoes || []).join("\n"), passos: "",
-                 escrevendo: false, bloco: 0, animar: animar, dados: "" };
+                 escrevendo: false, bloco: 0, animar: animar, dados: "", puff: -1 };
     }
 
     // -- o cartão "Alterou N arquivos" do modo code (etapa 3 do tchan) --------
@@ -210,5 +210,9 @@ ListModel {
                 perguntando: f.perguntando === true && i === anteriores.length - 1
             }, false));
         }
+        // O "puff" (11/11/2026): as últimas falas, as que aparecem na tela,
+        // surgem uma depois da outra, rapidinho. As de cima entram paradas.
+        for (var k = Math.max(0, count - 8); k < count; k++)
+            setProperty(k, "puff", (k - Math.max(0, count - 8)) * 35);
     }
 }

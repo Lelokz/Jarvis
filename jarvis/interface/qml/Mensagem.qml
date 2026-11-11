@@ -25,6 +25,39 @@ Item {
     property string passos: ""
     property bool escrevendo: false       // o texto ainda está chegando
     property bool animar: true
+    property int puff: -1                 // conversa antiga abrindo: o atraso do sopro (ms)
+
+    // -- digitando (11/11/2026, pedido do Léo) --------------------------------
+    // A resposta ao vivo aparece letra por letra, um pouco mais rápido que a
+    // voz, em vez de a frase inteira "teleportar". Atrasou (frase longa,
+    // painel grande)? Acelera e alcança. O histórico entra inteiro.
+    readonly property bool digitar: animar && !minha && !atividade
+    property real mostrados: digitar ? 0 : 1e9
+    readonly property bool digitando: digitar && mostrados < texto.length
+    readonly property string textoParcial: parcial(texto)
+    Timer {
+        interval: 16
+        repeat: true
+        running: raiz.digitando
+        onTriggered: {
+            var falta = raiz.texto.length - raiz.mostrados;
+            raiz.mostrados = Math.min(raiz.texto.length, raiz.mostrados + Math.max(1.1, (falta - 120) / 25));
+        }
+    }
+    // O pedaço já digitado, sem deixar o markdown pela metade: "**" aberto
+    // fecha, bloco de código aberto fecha, e não corta no meio de um "*".
+    function parcial(t) {
+        if (!digitando) return t;
+        var p = t.substring(0, Math.floor(mostrados));
+        while (p.length && (p[p.length - 1] === "*" || p[p.length - 1] === "`" || p[p.length - 1] === "["))
+            p = p.substring(0, p.length - 1);
+        if ((p.split("```").length - 1) % 2) p += "\n```";
+        else if ((p.split("`").length - 1) % 2) p += "`";
+        if ((p.split("**").length - 1) % 2) p += "**";
+        var link = p.lastIndexOf("[");
+        if (link > p.lastIndexOf(")")) p = p.substring(0, link) + p.substring(link + 1).replace(/\]\(.*$/, "");
+        return p;
+    }
     property real largura: 780
     property color corPersona: tema ? tema.persona : "#4da3ff"
     property bool ultima: false           // a última resposta: os botões ficam sempre à vista
@@ -74,9 +107,13 @@ Item {
               : resposta.height
         // A entrada anima ESTE y, e não o do delegado: no ListView quem manda
         // no y do delegado é a lista.
-        y: raiz.animar ? 10 : 0
-        opacity: raiz.animar ? 0 : 1
-        Component.onCompleted: { y = 0; opacity = 1; }
+        y: raiz.animar || raiz.puff >= 0 ? 10 : 0
+        opacity: raiz.animar || raiz.puff >= 0 ? 0 : 1
+        scale: raiz.puff >= 0 ? 0.985 : 1
+        Behavior on scale { NumberAnimation { duration: 260; easing.type: Easing.OutCubic } }
+        // Ao vivo entra na hora; a conversa antiga abre em sopros, uma fala depois da outra.
+        Timer { id: soprar; interval: Math.max(1, raiz.puff); onTriggered: { corpo.y = 0; corpo.opacity = 1; corpo.scale = 1; } }
+        Component.onCompleted: { if (raiz.puff >= 0 && !raiz.animar) soprar.start(); else { y = 0; opacity = 1; } }
         Behavior on y { NumberAnimation { duration: 260; easing.type: Easing.OutCubic } }
         Behavior on opacity { NumberAnimation { duration: 260; easing.type: Easing.OutCubic } }
 
@@ -266,7 +303,7 @@ Item {
                             width: parent.width
                             // Enquanto chega, um cursor no fim.
                             texto: raiz.minha || raiz.atividade ? ""
-                                 : raiz.escrevendo ? raiz.texto + " ▍" : raiz.texto
+                                 : raiz.escrevendo || raiz.digitando ? raiz.parcial(raiz.texto) + " ▍" : raiz.texto
                             onCopiar: function (t) { raiz.copiar(t) }
                         }
                     }
@@ -326,7 +363,7 @@ Item {
                 // outras, com o mouse em cima.
                 Row {
                     spacing: 2
-                    visible: !raiz.escrevendo
+                    visible: !raiz.escrevendo && !raiz.digitando
                     opacity: raiz.ultima || areaResposta.hovered ? 1 : 0
                     Behavior on opacity { NumberAnimation { duration: raiz.tema.rapido } }
                     Repeater {

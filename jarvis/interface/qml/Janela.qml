@@ -729,6 +729,8 @@ Window {
             id: areaDoChat
             anchors { top: topo.bottom; left: parent.left; right: painelCode.visible ? painelCode.left : parent.right; bottom: parent.bottom }
             visible: janela.pagina === "chat"
+            Puff { id: puffChat; alvo: areaDoChat }
+            onVisibleChanged: if (visible) puffChat.restart()
             readonly property real largura: Math.min(780, width - 64)
 
             Conversa {
@@ -776,10 +778,13 @@ Window {
                     // pedido do Léo; "ficou muito em cima": o núcleo logo acima da
                     // saudação, sem encostar). Medido na foto: o núcleo tem raio de
                     // ~0,155 do lado e as argolas, ~0,41.
+                    // v6: 30% maior, e a saudação em cima do terço de baixo do núcleo.
                     readonly property real baseNucleo: boasVindas.y + esfera.height - 6
-                    readonly property real ladoFundo: Math.min(Math.max(fundoAtomo.width, fundoAtomo.height) * 0.45,
+                    readonly property real ladoBase: Math.min(Math.max(fundoAtomo.width, fundoAtomo.height) * 0.45,
                                                           (baseNucleo - 8) / (0.41 + 0.155))
-                    readonly property real centroY: baseNucleo - ladoFundo * 0.155
+                    readonly property real ladoFundo: ladoBase * 1.30
+                    readonly property real meioSaudacao: boasVindas.y + textoSaudacao.y + textoSaudacao.height / 2
+                    readonly property real centroY: meioSaudacao - ladoFundo * 0.155 * 2 / 3
                     width: 460; height: 460
                     x: (parent.width - width) / 2
                     y: centroY - height / 2
@@ -853,6 +858,7 @@ Window {
                 }
                 Item { width: 1; height: 18 }
                 Text {
+                    id: textoSaudacao
                     anchors.horizontalCenter: parent.horizontalCenter
                     text: janela.saudacao()
                     textFormat: Text.StyledText
@@ -1128,6 +1134,9 @@ Window {
         }
 
         PaginaAgendados {
+            id: paginaAgendados
+            Puff { id: puffAgendados; alvo: paginaAgendados }
+            onVisibleChanged: if (visible) puffAgendados.restart()
             anchors { top: topo.bottom; left: parent.left; right: parent.right; bottom: parent.bottom }
             visible: janela.pagina === "agendados"
             tema: tema
@@ -1139,6 +1148,9 @@ Window {
             }
         }
         PaginaFeitos {
+            id: paginaFeitos
+            Puff { id: puffFeitos; alvo: paginaFeitos }
+            onVisibleChanged: if (visible) puffFeitos.restart()
             anchors { top: topo.bottom; left: parent.left; right: parent.right; bottom: parent.bottom }
             visible: janela.pagina === "feitos"
             tema: tema
@@ -1149,6 +1161,8 @@ Window {
 
         PaginaMemoria {
             id: memoria
+            Puff { id: puffMemoria; alvo: memoria }
+            onVisibleChanged: if (visible) puffMemoria.restart()
             anchors { top: topo.bottom; left: parent.left; right: parent.right; bottom: parent.bottom }
             visible: janela.pagina === "memoria"
             tema: tema

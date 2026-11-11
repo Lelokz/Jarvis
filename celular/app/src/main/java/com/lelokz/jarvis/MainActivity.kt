@@ -106,6 +106,10 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.ExperimentalTextApi
 import androidx.compose.ui.text.SpanStyle
@@ -349,12 +353,21 @@ fun Tela(modelo: Jarvis) {
             Column(Modifier.fillMaxSize().imePadding()) {
                 Topo(modelo, abrirGaveta = { escopo.launch { gaveta.open() } }, abrirSeletores = { seletores = true },
                     abrirCode = { folhaCode = true; modelo.pedirProjetos() })
-                when (modelo.pagina.value) {
-                    "memoria" -> PaginaMemoria(modelo)
-                    "agendados" -> PaginaAgendados(modelo)
-                    "feitos" -> PaginaFeitos(modelo)
-                    "ajustes" -> PaginaAjustes(modelo)
-                    else -> Chat(modelo) { seletores = true }
+                // O "puff" da troca de tela (app beta 0.22.5, como no app do Claude):
+                // a tela nova surge rapidinho, sem teleportar.
+                val chaveTela = modelo.pagina.value + "|" + modelo.vendo.value
+                val sopro = remember { Animatable(1f) }
+                LaunchedEffect(chaveTela) { sopro.snapTo(0f); sopro.animateTo(1f, tween(260, easing = FastOutSlowInEasing)) }
+                Box(Modifier.weight(1f).fillMaxWidth().graphicsLayer {
+                    alpha = sopro.value; scaleX = 0.985f + 0.015f * sopro.value; scaleY = scaleX
+                }) {
+                    when (modelo.pagina.value) {
+                        "memoria" -> PaginaMemoria(modelo)
+                        "agendados" -> PaginaAgendados(modelo)
+                        "feitos" -> PaginaFeitos(modelo)
+                        "ajustes" -> PaginaAjustes(modelo)
+                        else -> Chat(modelo) { seletores = true }
+                    }
                 }
             }
             val temAtualizacao = modelo.atualizacao.value != 0
@@ -739,7 +752,7 @@ private fun Chat(modelo: Jarvis, abrirSeletores: () -> Unit) {
                 // A última resposta dele: os botões ficam sempre à vista.
                 val ultimaResposta = falas.indexOfLast { it.quem == Quem.JARVIS || it.quem == Quem.PAINEL }
                 itemsIndexed(falas) { i, m ->
-                    Item(m, ultima = i == ultimaResposta, responder = { r -> enviar(r) },
+                    Item(m, ultima = i == ultimaResposta, sopro = if (m.aoVivo) -1 else maxOf(0, i - (falas.size - 8)) * 35, responder = { r -> enviar(r) },
                         ouvir = { modelo.repetir(it) },
                         refazer = { falas.subList(0, i).lastOrNull { it.quem == Quem.VOCE }?.let { enviar(it.texto) } },
                         avaliar = { t, n -> modelo.avaliar(t, n) },
@@ -947,7 +960,7 @@ private fun BarraDeEscrever(modelo: Jarvis, texto: String, mudar: (String) -> Un
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun Item(
-    m: Mensagem, ultima: Boolean = false, responder: (String) -> Unit,
+    m: Mensagem, ultima: Boolean = false, sopro: Int = -1, responder: (String) -> Unit,
     ouvir: (String) -> Unit = {}, refazer: () -> Unit = {}, avaliar: (String, String) -> Unit = { _, _ -> },
     desfazer: (String, String) -> Unit = { _, _ -> }, verArquivo: (String) -> Unit = {},
 ) {
@@ -955,6 +968,30 @@ fun Item(
     // Os botões da resposta: sempre na última; nas outras, tocando nela.
     var mostrarBotoes by remember { mutableStateOf(false) }
     var nota by remember(m.quando) { mutableStateOf("") }
+    // A conversa antiga abre em sopros: as últimas falas surgem uma depois da outra.
+    val entrada = remember(m.quando) { Animatable(if (sopro >= 0) 0f else 1f) }
+    LaunchedEffect(m.quando) {
+        if (sopro >= 0 && entrada.value < 1f) { delay(sopro.toLong()); entrada.animateTo(1f, tween(240, easing = FastOutSlowInEasing)) }
+    }
+    // Digitando: a resposta ao vivo aparece letra por letra, um pouco mais rápido que a voz;
+    // atrasou, acelera e alcança. O histórico entra inteiro.
+    var mostrados by remember(m.quando) { mutableStateOf(if (m.aoVivo) 0f else Float.MAX_VALUE) }
+    LaunchedEffect(m.quando, m.texto) {
+        var antes = 0L
+        while (mostrados < m.texto.length) {
+            withFrameMillis { agora ->
+                val dt = if (antes == 0L) 16L else (agora - antes).coerceIn(1L, 100L)
+                antes = agora
+                val falta = m.texto.length - mostrados
+                mostrados = minOf(m.texto.length.toFloat(), mostrados + maxOf(1.1f, (falta - 120f) / 25f) * dt / 16f)
+            }
+        }
+    }
+    val digitando = m.aoVivo && mostrados < m.texto.length
+    Box(Modifier.fillMaxWidth().graphicsLayer {
+        alpha = entrada.value; translationY = (1f - entrada.value) * 24f
+        scaleX = 0.985f + 0.015f * entrada.value; scaleY = scaleX
+    }) {
     when (m.quem) {
         Quem.AVISO -> Text(m.texto, color = Perigo, fontSize = 12.sp, textAlign = TextAlign.Center,
             modifier = Modifier.fillMaxWidth())
@@ -1018,13 +1055,13 @@ fun Item(
                         Spacer(Modifier.height(8.dp))
                     }
                     if (m.texto.isNotEmpty() || m.escrevendo)
-                    Markdown(if (m.escrevendo) m.texto + " ▍" else m.texto, TextoResposta,
+                    Markdown(if (m.escrevendo || digitando) parcialMarkdown(m.texto, if (digitando) mostrados.toInt() else m.texto.length) + " ▍" else m.texto, TextoResposta,
                         Modifier.combinedClickableCopiar(aoTocar = { mostrarBotoes = !mostrarBotoes }) {
                             area.setText(AnnotatedString(m.texto))
                         })
                 }
                 m.alteracoes?.let { CartaoAlteracoes(it, desfazer, verArquivo) }
-                if (!m.escrevendo && (ultima || mostrarBotoes)) {
+                if (!m.escrevendo && !digitando && (ultima || mostrarBotoes)) {
                     var copiou by remember { mutableStateOf(false) }
                     LaunchedEffect(copiou) { if (copiou) { delay(1400); copiou = false } }
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1054,6 +1091,20 @@ fun Item(
             }
         }
     }
+    }
+}
+
+/** O pedaço já digitado, sem deixar o markdown pela metade (app beta 0.22.5):
+ *  "**" aberto fecha, código aberto fecha, link pela metade vira só o texto. */
+fun parcialMarkdown(t: String, n: Int): String {
+    var p = t.take(n.coerceIn(0, t.length))
+    while (p.isNotEmpty() && p.last() in "*`[") p = p.dropLast(1)
+    if (p.windowed(3).count { it == "```" } % 2 == 1) p += "\n```"
+    else if (p.count { it == '`' } % 2 == 1) p += "`"
+    if (Regex("\\*\\*").findAll(p).count() % 2 == 1) p += "**"
+    val link = p.lastIndexOf('[')
+    if (link > p.lastIndexOf(')')) p = p.substring(0, link) + p.substring(link + 1).replace(Regex("\\]\\(.*$"), "")
+    return p
 }
 
 /** A voz dentro do campo (beta 0.19.5): a onda (segue o microfone quando ele

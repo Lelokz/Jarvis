@@ -85,6 +85,7 @@ Item {
             passos: model.passos
             escrevendo: model.escrevendo
             animar: model.animar
+            puff: model.puff
             ultima: index === raiz.ultimaResposta
             dados: model.dados || ""
             onDesfazer: function (id, arq) { raiz.desfazer(id, arq) }
