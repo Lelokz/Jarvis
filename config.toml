@@ -129,7 +129,11 @@ pre_roll_ms = 300
 fala_minima_ms = 250
 
 # Trava de segurança: encerra o segmento à força.
-fala_maxima_s = 20.0
+# 11/11/2026: era 20 e cortava o Léo no meio de pedido grande (7 falas de
+# ~50 palavras em 10/11 viraram duas mensagens; a 2ª metade chegava depois e
+# o Jarvis entendia pela metade). 90 s cabe qualquer pedido falado; continua
+# sendo a defesa contra barulho contínuo prendendo o microfone.
+fala_maxima_s = 90.0
 
 [stt]
 modelo = "large-v3-turbo"

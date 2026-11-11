@@ -584,12 +584,18 @@ Window {
                 Behavior on opacity { NumberAnimation { duration: tema.lento } }
                 clip: true
                 Esfera {
+                    id: esferaFundo
                     objectName: "esferaFundo"
+                    // O núcleo logo acima da caixa de escrever, e o átomo inteiro
+                    // na tela (sem cortar em cima): o tamanho é o que cabe.
+                    readonly property real centroY: compositor.y - 30
+                    readonly property real ladoFundo: Math.min(Math.max(fundoAtomo.width, fundoAtomo.height) * 0.5,
+                                                          2 * (centroY - 16))
                     width: 460; height: 460
                     x: (parent.width - width) / 2
-                    y: (parent.height - height) / 2 - parent.height * 0.08
+                    y: centroY - height / 2
                     transform: Scale { origin.x: 230; origin.y: 230
-                                       xScale: Math.max(fundoAtomo.width, fundoAtomo.height) / 460 * 1.05; yScale: xScale }
+                                       xScale: Math.max(0.3, esferaFundo.ladoFundo / 460); yScale: xScale }
                     opacity: tema.claro ? 0.30 : 0.22
                     readonly property bool vivo: janela.conectado
                     corDeFundo: tema.fundo
@@ -605,9 +611,8 @@ Window {
                     anchors.fill: parent
                     gradient: Gradient {
                         orientation: Gradient.Vertical
-                        GradientStop { position: 0.0; color: tema.fundo }
-                        GradientStop { position: 0.18; color: "transparent" }
-                        GradientStop { position: 0.75; color: "transparent" }
+                        GradientStop { position: 0.0; color: "transparent" }
+                        GradientStop { position: 0.80; color: "transparent" }
                         GradientStop { position: 1.0; color: tema.fundo }
                     }
                 }
@@ -627,7 +632,8 @@ Window {
                     id: esfera
                     anchors.horizontalCenter: parent.horizontalCenter
                     visible: !janela.atomoNoFundo
-                    width: Math.min(230, areaDoChat.height * 0.28)
+                    // Em tela grande ele cresce (11/11/2026: 230 px ficava miúdo no 1080p do Léo).
+                    width: Math.min(370, areaDoChat.height * 0.36)
                     height: janela.atomoNoFundo ? 0 : width
                     readonly property bool vivo: janela.conectado
                     corDeFundo: tema.fundo
