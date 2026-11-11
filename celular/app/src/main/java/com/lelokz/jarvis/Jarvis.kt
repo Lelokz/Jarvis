@@ -148,6 +148,8 @@ class Jarvis(private val app: Application) {
     // sozinho, o Plano, o Terminal, o Contexto e a folha dos painéis aberta
     // ("" = fechada; senão "mudancas", "terminal" ou "plano").
     val codePermissao = mutableStateOf("auto")
+    // Quem atende quando a NOVA liga (Ajustes → Personas, app beta 0.20.5).
+    val personaInicial = mutableStateOf("jarvis")
     val plano = mutableStateOf<List<Pair<String, String>>>(emptyList())   // (texto, estado)
     val terminal = mutableStateListOf<LinhaTerminal>()
     val contextoPct = mutableIntStateOf(-1)
@@ -940,6 +942,7 @@ class Jarvis(private val app: Application) {
                 codeJanela.intValue = ev.optInt("code_janela_s", codeJanela.intValue)
                 codePersona.value = ev.optString("code_persona", codePersona.value)
                 codePermissao.value = ev.optString("code_permissao", codePermissao.value)
+                personaInicial.value = ev.optString("persona_inicial", personaInicial.value)
                 // O tema (beta 0.19.5): o mesmo da janela; guardado pra abrir já certo.
                 temaClaro.value = ev.optString("tema", "escuro") == "claro"
                 prefs.edit().putString("nome_usuario", nomeUsuario.value).putString("nome_pc", nomePc.value)

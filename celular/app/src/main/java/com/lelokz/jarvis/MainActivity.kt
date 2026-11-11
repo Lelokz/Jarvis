@@ -1658,23 +1658,26 @@ private fun AjustesUso(modelo: Jarvis) {
 
 @Composable
 private fun AjustesPersonas(modelo: Jarvis) {
-    SecaoDosAjustes("Personas", "Quem responde. As duas dividem a conversa, a memória e as ferramentas; muda o jeito de falar, a voz e a cor.") {
+    SecaoDosAjustes("Personas", "Quem atende quando a NOVA liga. Pra trocar na hora, usa o botão da persona em cima do campo (ou chama \"Hey Friday\").") {
         val lista = listOf(
             Triple("jarvis", "Jarvis", "O mordomo de humor seco. Chamado com \"Hey Jarvis\"."),
             Triple("friday", "Friday", "Carinhosa e animada. Chamada com \"Hey Friday\"."))
         lista.forEachIndexed { i, (id, nome, descricao) ->
-            val ativa = personaAtiva.value == id
+            // O padrão (app beta 0.20.5): antes o botão só trocava na hora e,
+            // ao ligar, voltava sempre o Jarvis.
+            val ativa = modelo.personaInicial.value == id
             LinhaDeAjuste(nome, descricao, ultima = i == lista.lastIndex) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.size(20.dp).clip(CircleShape).background(if (id == "friday") corDaFriday.value else CorDoJarvis))
                     Spacer(Modifier.width(12.dp))
-                    Text(if (ativa) "Ativa" else "Usar", color = if (ativa) Color(0xFF38D39F) else TextoMedio, fontSize = 13.sp,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.width(72.dp).clip(RoundedCornerShape(9.dp))
+                    Text(if (ativa) "Padrão" else "Escolher como padrão", color = if (ativa) Color(0xFF38D39F) else TextoMedio,
+                        fontSize = 13.sp, textAlign = TextAlign.Center,
+                        modifier = Modifier.clip(RoundedCornerShape(9.dp))
                             .background(if (ativa) Color(0x2138D39F) else Color.Transparent)
                             .then(if (ativa) Modifier else Modifier.border(1.dp, TracoForte, RoundedCornerShape(9.dp)))
-                            .clickable(enabled = !ativa && modelo.conectado.value) { modelo.escolherPersona(id) }
-                            .padding(vertical = 8.dp))
+                            .clickable(enabled = !ativa && modelo.conectado.value) {
+                                modelo.personaInicial.value = id; modelo.mudarAjusteCode("persona_inicial", id) }
+                            .padding(horizontal = 12.dp, vertical = 8.dp))
                 }
             }
         }

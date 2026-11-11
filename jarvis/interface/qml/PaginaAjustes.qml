@@ -19,7 +19,6 @@ Item {
     property string esforco: ""
     property string persona: "jarvis"
     property string corFriday: ""
-    signal escolherPersona(string valor)
     // O uso da assinatura (0 a 1; -1 = ainda não sei) e quando cada um renova.
     property real usoCinco: -1
     property real voltaCinco: 0
@@ -965,7 +964,7 @@ Item {
             width: pagina.width
             Secao {
                 titulo: "Personas"
-                dica: "Quem responde. As duas dividem a conversa, a memória e as ferramentas; muda o jeito de falar, a voz e a cor."
+                dica: "Quem atende quando a NOVA liga. Pra trocar na hora, usa o botão da persona no campo de escrever (ou chama \"Hey Friday\"). As duas dividem a conversa, a memória e as ferramentas."
                 Repeater {
                     model: [
                         { id: "jarvis", nome: "Jarvis", cor: "#4da3ff", descricao: "O mordomo de humor seco. Chamado com \"Hey Jarvis\"." },
@@ -985,15 +984,19 @@ Item {
                                 color: modelData.cor
                             }
                             Rectangle {
-                                readonly property bool ativa: raiz.persona === modelData.id
+                                // O padrão (11/11/2026): antes o botão só trocava na hora e,
+                                // ao ligar, voltava sempre o Jarvis (pedido do Léo).
+                                readonly property bool ativa: (raiz.ajustes && raiz.ajustes.persona_inicial
+                                                               ? raiz.ajustes.persona_inicial : "jarvis") === modelData.id
                                 anchors.verticalCenter: parent.verticalCenter
-                                width: 96; height: 32; radius: 9
+                                width: textoPadrao.implicitWidth + 28; height: 32; radius: 9
                                 color: ativa ? Qt.rgba(0.22, 0.83, 0.62, 0.13) : botaoUsar.containsMouse ? raiz.tema.realce : "transparent"
                                 border.width: ativa ? 0 : 1
                                 border.color: raiz.tema.tracoForte
                                 Text {
+                                    id: textoPadrao
                                     anchors.centerIn: parent
-                                    text: parent.ativa ? "Ativa" : "Usar"
+                                    text: parent.ativa ? "Padrão" : "Escolher como padrão"
                                     color: parent.ativa ? "#38d39f" : raiz.tema.textoMedio
                                     font.family: raiz.tema.familia
                                     font.pixelSize: 13
@@ -1005,7 +1008,7 @@ Item {
                                     enabled: !parent.ativa && raiz.conectado
                                     hoverEnabled: true
                                     cursorShape: Qt.PointingHandCursor
-                                    onClicked: raiz.escolherPersona(modelData.id)
+                                    onClicked: raiz.mudarCode("persona_inicial", modelData.id)
                                 }
                             }
                         }
@@ -1497,7 +1500,7 @@ Item {
                 titulo: "Sobre a NOVA"
                 Repeater {
                     model: [
-                        ["Versão", "beta 0.19.0"],
+                        ["Versão", "beta 0.19.5"],
                         ["Conexão", raiz.conectado ? "Ligado" : "Esperando a NOVA subir"],
                     ]
                     Linha {

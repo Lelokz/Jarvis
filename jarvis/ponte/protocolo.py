@@ -372,6 +372,8 @@ def ler_pedido(linha: bytes) -> tuple[str, dict[str, Any]]:
         for campo, validos in (("code_narracao", ("pouca", "normal", "muita")),
                                ("code_persona", ("atual", "jarvis", "friday")),
                                ("code_permissao", ("auto", "perguntar", "plano", "olhar")),
+                               # Quem atende quando a NOVA liga (Ajustes → Personas, 11/11/2026).
+                               ("persona_inicial", ("jarvis", "friday")),
                                ("tema", ("escuro", "claro"))):
             valor = objeto.get(campo)
             if valor is not None:

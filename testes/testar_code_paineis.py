@@ -168,8 +168,11 @@ def main() -> int:
     checa("desfazer", lp({"pedir": "desfazer", "id": "abc123"}) == ("desfazer", {"id": "abc123", "arquivo": ""}))
     checa("desfazer_git", lp({"pedir": "desfazer_git", "caminho": "/x", "arquivo": "a.js"})[1] == {"caminho": "/x", "arquivo": "a.js"})
     checa("permissão nos ajustes", lp({"pedir": "ajustes", "code_permissao": "plano"})[1] == {"code_permissao": "plano"})
+    checa("quem atende quando liga, nos ajustes", lp({"pedir": "ajustes", "persona_inicial": "friday"})[1] == {"persona_inicial": "friday"})
+    import porta_remota
+    checa("o celular pode mudar quem atende quando liga", "persona_inicial" in Path(porta_remota.__file__).read_text())
     for ruim in ({"pedir": "desfazer", "id": "../x"}, {"pedir": "desfazer_git", "caminho": "/x"},
-                 {"pedir": "ajustes", "code_permissao": "tudo"}):
+                 {"pedir": "ajustes", "code_permissao": "tudo"}, {"pedir": "ajustes", "persona_inicial": "lucas"}):
         try:
             lp(ruim)
             checa(f"recusa {ruim}", False)

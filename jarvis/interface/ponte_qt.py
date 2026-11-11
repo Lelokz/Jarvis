@@ -222,7 +222,7 @@ class PonteQt(QObject):
 
     @Slot(str, "QVariant", result=bool)
     def mudarAjusteCode(self, chave: str, valor) -> bool:
-        if chave not in ("code_narracao", "code_janela_s", "code_persona", "code_permissao", "tema"):
+        if chave not in ("code_narracao", "code_janela_s", "code_persona", "code_permissao", "persona_inicial", "tema"):
             return False
         return self._pedir({"pedir": "ajustes", chave: int(valor) if chave == "code_janela_s" else str(valor)})
 

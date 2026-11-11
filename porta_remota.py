@@ -408,7 +408,7 @@ def criar_app(cfg: config.Config):
                         # code: volume e notificações do PC são da janela.
                         pedido = {k: v for k, v in pedido.items() if k in (
                             "pedir", "nome", "grupo_ligado", "tema", "code_narracao", "code_janela_s",
-                            "code_persona", "code_permissao")}
+                            "code_persona", "code_permissao", "persona_inicial")}
                         if len(pedido) == 1:
                             continue
                     if pedido.get("pedir") == "conexao" and (

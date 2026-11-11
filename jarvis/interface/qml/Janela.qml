@@ -1335,10 +1335,6 @@ Window {
         voltaSemana: janela.voltaSemana
         som: janela.som
         ajustes: janela.ajustes
-        onEscolherPersona: (v) => {
-            janela.persona = v;
-            if (typeof ponte !== "undefined") ponte.definirPersona(v);
-        }
         onMudarVolume: (volume) => { if (typeof ponte !== "undefined") ponte.mudarVolumeVoz(volume) }
         onMudarNome: (nome) => { if (typeof ponte !== "undefined") ponte.mudarNome(nome) }
         onMudarCode: (chave, valor) => { if (typeof ponte !== "undefined") ponte.mudarAjusteCode(chave, valor) }
