@@ -62,6 +62,7 @@ Window {
         // Cada persona tem a sua cor: a Friday a dela (rosa, do config), o
         // Jarvis o azul. (A "Cor de destaque" saiu na beta 0.10.0.)
         persona: janela.persona === "friday" && janela.corPersona !== "" ? janela.corPersona : "#4da3ff"
+        claro: !!(janela.ajustes && janela.ajustes.tema === "claro")
     }
 
     // -- o estado da tela ---------------------------------------------------
@@ -100,11 +101,42 @@ Window {
 
     readonly property bool boasVindas: pagina === "chat" && vendo === "" && falasAtual.count === 0
 
+    // A hora da saudação: muda sozinha (de minuto em minuto), sem reabrir a janela.
+    property int horaAgora: new Date().getHours()
+    Timer { interval: 60000; running: true; repeat: true; onTriggered: janela.horaAgora = new Date().getHours() }
+    property string ultimaAtividade: ""
+    // PROTÓTIPO (11/11/2026, ideia do Léo): o átomo grandão, meio transparente,
+    // atrás de tudo na tela inicial. Desligado até ele aprovar.
+    property bool atomoNoFundo: false   // o que ele está fazendo agora (vai pro campo, "Pensando… lendo X")
+
+    // A saudação da tela inicial (beta 0.18.5): muda com a hora e com a
+    // persona. O Jarvis chama pelo nome; a Friday, de "chefinho".
     function saudacao() {
-        var h = new Date().getHours();
-        // O nome de quem usa (Ajustes, "Seu nome"); sem nome, só o cumprimento.
-        var nome = ajustes && ajustes.nome ? ", " + ajustes.nome : "";
-        return (h < 5 ? "Boa noite" : h < 12 ? "Bom dia" : h < 18 ? "Boa tarde" : "Boa noite") + nome + ".";
+        var h = horaAgora;
+        var friday = persona === "friday";
+        var nome = friday ? "chefinho" : (ajustes && ajustes.nome ? ajustes.nome : "");
+        var n = nome ? "<b>" + nome + "</b>" : "";
+        if (h < 5) return nome ? "Madrugada, hein, " + n + "?" : "Madrugada, hein?";
+        if (h < 12) return friday ? "Bom dia, " + n + "!" : (nome ? "Bom dia, " + n + "." : "Bom dia.");
+        if (h < 18) return friday ? "Boa tarde, " + n + "!" : (nome ? "Boa tarde, " + n + "." : "Boa tarde.");
+        return friday ? "Boa noite, " + n + "!" : (nome ? "Boa noite, " + n + "." : "Boa noite.");
+    }
+
+    // "Continuar de onde parou": as 3 conversas mais recentes (com o resumo
+    // do que ele disse por último).
+    readonly property var recentes: {
+        var l = listaDeConversas.slice().sort(function (a, b) { return (b.quando || 0) - (a.quando || 0) });
+        return l.filter(function (c) { return c.id !== conversaAtual }).slice(0, 3);
+    }
+    function quandoFoi(seg) {
+        var d = Date.now() / 1000 - seg;
+        if (d < 3600) return "há " + Math.max(1, Math.round(d / 60)) + " min";
+        if (d < 6 * 3600) return "há " + Math.round(d / 3600) + " h";
+        var hoje = new Date(); hoje.setHours(0, 0, 0, 0);
+        if (seg >= hoje.getTime() / 1000) return "hoje";
+        if (seg >= hoje.getTime() / 1000 - 86400) return "ontem";
+        var dt = new Date(seg * 1000);
+        return dt.getDate() + "/" + (dt.getMonth() + 1);
     }
 
     function grupoDe(quando) {
@@ -233,7 +265,7 @@ Window {
         ignoreUnknownSignals: true
         function onEstadoMudou(estado) {
             interno.estado = estado;
-            if (estado !== "pensando") janela.textoPensando = "Pensando…";
+            if (estado !== "pensando") { janela.textoPensando = "Pensando…"; janela.ultimaAtividade = ""; }
         }
         function onNivelMudou(v) { interno.nivel = v }
         function onConexaoMudou(ligado) {
@@ -250,6 +282,7 @@ Window {
         function onMostrar(titulo, texto) { escrita.esvaziar(); falasAtual.mostrar(titulo, texto); janela.mudouAlgo() }
         function onAtividade(texto) {
             janela.mudouAlgo();
+            janela.ultimaAtividade = texto.split(" — ").slice(1).join(" — ") || texto;
             falasAtual.atividade(texto);
             janela.textoPensando = texto.split(" — ")[0] === "Pensando com calma"
                 ? "Pensando com calma…" : "Pensando…";
@@ -400,8 +433,10 @@ Window {
                     font.pixelSize: 15
                     font.weight: Font.Medium
                 }
+                // Só o aviso "Conversa antiga": o cérebro e o esforço já estão
+                // embaixo do campo (pedido do Léo, 11/11/2026).
                 Rectangle {
-                    visible: janela.pagina === "chat" && !janela.boasVindas
+                    visible: janela.pagina === "chat" && janela.vendo !== ""
                     anchors.verticalCenter: parent.verticalCenter
                     height: 22
                     width: textoPilula.implicitWidth + 18
@@ -530,13 +565,59 @@ Window {
                 corPensando: tema.corDoEstado("pensando")
                 onCopiar: function (t) { if (typeof ponte !== "undefined") ponte.copiar(t) }
                 onResponder: function (t) { janela.enviar(t, []) }
+                onOuvir: function (t) {
+                    if (typeof ponte === "undefined" || !ponte.repetir(t)) janela.avisar("a NOVA não está do outro lado");
+                }
+                onAvaliar: function (t, nota) {
+                    if (typeof ponte !== "undefined" && ponte.avaliar(t, nota))
+                        janela.avisar(nota === "boa" ? "Anotado: tu gostou dessa" : "Anotado: essa não ficou boa");
+                }
+            }
+
+            // O átomo no fundo (protótipo): desenhado em 460 px e esticado,
+            // atrás de tudo, meio transparente. Só na tela inicial.
+            Item {
+                id: fundoAtomo
+                anchors.fill: parent
+                visible: janela.atomoNoFundo && opacity > 0
+                opacity: janela.boasVindas ? 1 : 0
+                Behavior on opacity { NumberAnimation { duration: tema.lento } }
+                clip: true
+                Esfera {
+                    objectName: "esferaFundo"
+                    width: 460; height: 460
+                    x: (parent.width - width) / 2
+                    y: (parent.height - height) / 2 - parent.height * 0.08
+                    transform: Scale { origin.x: 230; origin.y: 230
+                                       xScale: Math.max(fundoAtomo.width, fundoAtomo.height) / 460 * 1.05; yScale: xScale }
+                    opacity: tema.claro ? 0.30 : 0.22
+                    readonly property bool vivo: janela.conectado
+                    corDeFundo: tema.fundo
+                    parada: !vivo
+                    sendoVista: janela.sendoVista && janela.boasVindas && janela.atomoNoFundo
+                    nivel: janela.nivel
+                    cor: janela.corAtual
+                    velocidade: !vivo ? 0.0 : janela.estado === "pensando" ? 1.6 : janela.estado === "dormindo" ? 0.3 : 0.8
+                    brilho: !vivo ? 0.3 : 0.9
+                }
+                // Escurece as bordas: o átomo some no fundo, sem cortar seco.
+                Rectangle {
+                    anchors.fill: parent
+                    gradient: Gradient {
+                        orientation: Gradient.Vertical
+                        GradientStop { position: 0.0; color: tema.fundo }
+                        GradientStop { position: 0.18; color: "transparent" }
+                        GradientStop { position: 0.75; color: "transparent" }
+                        GradientStop { position: 1.0; color: tema.fundo }
+                    }
+                }
             }
 
             // O chat novo: o átomo grande, a saudação e (logo abaixo) a barra.
             Column {
                 id: boasVindas
                 anchors.horizontalCenter: parent.horizontalCenter
-                y: Math.max(20, (parent.height - (height + 30 + compositor.height + 70)) / 2 - 20)
+                y: Math.max(16, (parent.height - (height + 30 + compositor.height + (cartoes.visible ? 190 : 20))) / 2 - 10)
                 visible: opacity > 0
                 opacity: janela.boasVindas ? 1 : 0
                 Behavior on opacity { NumberAnimation { duration: tema.normal } }
@@ -545,8 +626,9 @@ Window {
                 Esfera {
                     id: esfera
                     anchors.horizontalCenter: parent.horizontalCenter
+                    visible: !janela.atomoNoFundo
                     width: Math.min(230, areaDoChat.height * 0.28)
-                    height: width
+                    height: janela.atomoNoFundo ? 0 : width
                     readonly property bool vivo: janela.conectado
                     corDeFundo: tema.fundo
                     parada: !vivo
@@ -576,16 +658,17 @@ Window {
                 Text {
                     anchors.horizontalCenter: parent.horizontalCenter
                     text: janela.saudacao()
+                    textFormat: Text.StyledText
                     color: tema.texto
                     font.family: tema.familia
-                    font.pixelSize: 34
-                    font.weight: Font.Medium
-                    font.letterSpacing: -0.3
+                    font.pixelSize: 36
+                    font.weight: Font.Light
+                    font.letterSpacing: -0.5
                 }
                 Item { width: 1; height: 8 }
                 Text {
                     anchors.horizontalCenter: parent.horizontalCenter
-                    text: janela.conectado ? "Fala \"Hey Jarvis\" ou \"Hey Friday\", ou escreve aqui embaixo."
+                    text: janela.conectado ? "Fala \u201cHey " + (janela.persona === "friday" ? "Friday" : "Jarvis") + "\u201d ou escreve aqui embaixo"
                                            : "Esperando a NOVA subir…"
                     color: tema.textoFraco
                     font.family: tema.familia
@@ -593,39 +676,108 @@ Window {
                 }
             }
 
-            // Ideias de pedido, embaixo da barra no chat novo.
-            Row {
+            // Continuar de onde parou (beta 0.18.5): as 3 conversas mais
+            // recentes, com o que ele disse por último. Clicar abre.
+            Column {
+                id: cartoes
                 anchors.horizontalCenter: parent.horizontalCenter
-                y: compositor.y + compositor.height + 6
-                spacing: 10
-                visible: opacity > 0
+                y: compositor.y + compositor.height + 34
+                width: areaDoChat.largura
+                spacing: 14
+                visible: opacity > 0 && janela.recentes.length > 0
                 opacity: janela.boasVindas && janela.conectado ? 1 : 0
                 Behavior on opacity { NumberAnimation { duration: tema.normal } }
-                Repeater {
-                    model: ["Como tá o tempo amanhã?", "O que eu tenho essa semana?",
-                            "Toca alguma coisa pra focar"]
-                    Rectangle {
-                        required property string modelData
-                        width: textoIdeia.implicitWidth + 28
-                        height: 36
-                        radius: 18
-                        color: areaIdeia.containsMouse ? tema.superficie : tema.lateral
-                        border.width: 1
-                        border.color: tema.traco
-                        Text {
-                            id: textoIdeia
-                            anchors.centerIn: parent
-                            text: modelData
-                            color: tema.textoMedio
-                            font.family: tema.familia
-                            font.pixelSize: 13
-                        }
-                        MouseArea {
-                            id: areaIdeia
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: janela.enviar(modelData, [])
+                Item {
+                    width: parent.width; height: 18
+                    Text { text: "Continuar de onde parou"; color: tema.textoFraco; font.family: tema.familia; font.pixelSize: 13 }
+                    Text {
+                        anchors.right: parent.right
+                        text: "Ver todas"
+                        color: areaVerTodas.containsMouse ? tema.texto : tema.textoFraco
+                        font.family: tema.familia; font.pixelSize: 13
+                        MouseArea { id: areaVerTodas; anchors.fill: parent; hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor; onClicked: lateral.focarBusca() }
+                    }
+                }
+                Row {
+                    spacing: 14
+                    Repeater {
+                        model: janela.recentes
+                        Rectangle {
+                            id: cartao
+                            required property var modelData
+                            required property int index
+                            width: (cartoes.width - 28) / 3
+                            height: 116
+                            radius: 14
+                            color: areaCartao.containsMouse ? tema.superficie2 : tema.superficie
+                            border.width: 1
+                            border.color: areaCartao.containsMouse ? tema.tracoForte : tema.traco
+                            Behavior on color { ColorAnimation { duration: tema.rapido } }
+                            // Entram um depois do outro.
+                            opacity: 0
+                            y: 8
+                            Component.onCompleted: entrada.start()
+                            ParallelAnimation {
+                                id: entrada
+                                SequentialAnimation {
+                                    PauseAnimation { duration: 80 * cartao.index }
+                                    NumberAnimation { target: cartao; property: "opacity"; to: 1; duration: 320; easing.type: Easing.OutCubic }
+                                }
+                                SequentialAnimation {
+                                    PauseAnimation { duration: 80 * cartao.index }
+                                    NumberAnimation { target: cartao; property: "y"; to: 0; duration: 320; easing.type: Easing.OutCubic }
+                                }
+                            }
+                            Column {
+                                x: 15; y: 14
+                                width: parent.width - 30
+                                spacing: 6
+                                Text {
+                                    width: parent.width
+                                    elide: Text.ElideRight
+                                    text: cartao.modelData.titulo || "Conversa"
+                                    color: tema.texto
+                                    font.family: tema.familia; font.pixelSize: 14; font.weight: Font.Medium
+                                }
+                                Text {
+                                    width: parent.width
+                                    height: 36
+                                    wrapMode: Text.WordWrap
+                                    maximumLineCount: 2
+                                    elide: Text.ElideRight
+                                    text: cartao.modelData.ultima || "Sem resumo ainda."
+                                    color: tema.textoFraco
+                                    font.family: tema.familia; font.pixelSize: 13
+                                    lineHeight: 1.1
+                                }
+                            }
+                            Row {
+                                x: 15
+                                anchors.bottom: parent.bottom; anchors.bottomMargin: 12
+                                spacing: 6
+                                Icone {
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    caminho: cartao.modelData.origem === "voz" ? tema.icones.voz
+                                           : cartao.modelData.origem === "celular" ? tema.icones.celular
+                                           : cartao.modelData.origem === "relogio" ? tema.icones.relogio : tema.icones.teclado
+                                    cor: tema.muitoFraco
+                                    tamanho: 12
+                                }
+                                Text {
+                                    text: ({ voz: "voz", celular: "celular", relogio: "relógio" }[cartao.modelData.origem] || "texto")
+                                          + " · " + janela.quandoFoi(cartao.modelData.quando || 0)
+                                    color: tema.muitoFraco
+                                    font.family: tema.familia; font.pixelSize: 12
+                                }
+                            }
+                            MouseArea {
+                                id: areaCartao
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: janela.abrir(cartao.modelData.id)
+                            }
                         }
                     }
                 }
@@ -733,6 +885,9 @@ Window {
                 tema: tema
                 conectado: janela.conectado
                 estado: janela.estado
+                nivel: janela.nivel
+                fazendo: janela.ultimaAtividade
+                mostrarDica: !janela.boasVindas
                 modelo: janela.modelo
                 localDisponivel: janela.localDisponivel
                 localNome: janela.localNome

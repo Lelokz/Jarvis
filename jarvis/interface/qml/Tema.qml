@@ -7,19 +7,24 @@ import QtQuick
 // quase preto, barra lateral um tom acima, cartões mais um tom, e as cores
 // dos estados do átomo de sempre.
 QtObject {
-    readonly property color fundo:        "#0a0c10"
-    readonly property color lateral:      "#0d1016"
-    readonly property color superficie:   "#131821"
-    readonly property color superficie2:  "#181e29"
-    readonly property color realce:       "#1f2738"   // item escolhido, hover forte
-    readonly property color traco:        "#1f2734"
-    readonly property color tracoForte:   "#2a3446"
-    readonly property color texto:        "#e6ebf2"
-    readonly property color textoMedio:   "#b9c1cf"
-    readonly property color textoFraco:   "#7e879b"
-    readonly property color muitoFraco:   "#4d5568"
+    // O tema claro (beta 0.18.5, Ajustes > Aparência). O padrão é o escuro.
+    property bool claro: false
+    // A borda do campo de escrever e o brilho dele (no lugar da sombra escura).
+    readonly property color bordaCampo:   claro ? "#d9dee7" : "#2c374a"
+    readonly property color fundoCampo:   claro ? "#ffffff" : "#151b25"
+    readonly property color fundo:        claro ? "#f6f7fa" : "#0a0c10"
+    readonly property color lateral:      claro ? "#eef0f5" : "#0d1016"
+    readonly property color superficie:   claro ? "#ffffff" : "#131821"
+    readonly property color superficie2:  claro ? "#f1f3f7" : "#181e29"
+    readonly property color realce:       claro ? "#e3e8f2" : "#1f2738"   // item escolhido, hover forte
+    readonly property color traco:        claro ? "#e1e5ec" : "#1f2734"
+    readonly property color tracoForte:   claro ? "#cfd5df" : "#2a3446"
+    readonly property color texto:        claro ? "#141a24" : "#e6ebf2"
+    readonly property color textoMedio:   claro ? "#3b4556" : "#b9c1cf"
+    readonly property color textoFraco:   claro ? "#6b7487" : "#7e879b"
+    readonly property color muitoFraco:   claro ? "#a1a9b8" : "#4d5568"
     readonly property color perigo:       "#ff6b6b"
-    readonly property color codigo:       "#0c0f15"
+    readonly property color codigo:       claro ? "#f3f5f9" : "#0c0f15"
     // A borda da pergunta que ainda espera resposta. Fixa: se seguisse a cor
     // do estado, a bolha mudaria de cor junto com o átomo.
     readonly property color pergunta:     "#ffb454"
@@ -109,6 +114,13 @@ QtObject {
         whats: "M4 20l1.3-4A8 8 0 1 1 8 18.7zM9 9.5c0 3 2.5 5.5 5.5 5.5l1-1.5-2-1-1 1a4 4 0 0 1-2-2l1-1-1-2z",
         grupo: "M8 6.4a2.6 2.6 0 1 1 0 5.2a2.6 2.6 0 1 1 0-5.2M16 6.4a2.6 2.6 0 1 1 0 5.2a2.6 2.6 0 1 1 0-5.2M3 19c0-2.8 2.2-4.5 5-4.5s5 1.7 5 4.5M11 19c0-2.8 2.2-4.5 5-4.5s5 1.7 5 4.5",
         globo: "M12 3a9 9 0 1 1 0 18a9 9 0 1 1 0-18M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z",
-        musica: "M9 18V5l11-2v13M6 15a3 3 0 1 1 0 6a3 3 0 1 1 0-6M17 13a3 3 0 1 1 0 6a3 3 0 1 1 0-6"
+        musica: "M9 18V5l11-2v13M6 15a3 3 0 1 1 0 6a3 3 0 1 1 0-6M17 13a3 3 0 1 1 0 6a3 3 0 1 1 0-6",
+        // Os botões embaixo da resposta (beta 0.18.5).
+        som: "M4 9h4l5-4v14l-5-4H4zM16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12",
+        refazer: "M20 12a8 8 0 1 1-2.3-5.6M20 4v5h-5",
+        gostei: "M7 11v9H4v-9zM7 11l4-8a2 2 0 0 1 3 2l-1 5h6a2 2 0 0 1 2 2.3l-1.3 6A2 2 0 0 1 17.7 20H7",
+        naoGostei: "M7 13V4H4v9zM7 13l4 8a2 2 0 0 0 3-2l-1-5h6a2 2 0 0 0 2-2.3l-1.3-6A2 2 0 0 0 17.7 4H7",
+        sol: "M12 8a4 4 0 1 1 0 8a4 4 0 1 1 0-8M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4",
+        lua: "M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"
     })
 }

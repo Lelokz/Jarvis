@@ -50,7 +50,7 @@ data class MemoriaItem(val id: String, val titulo: String, val tipo: String, val
 data class MemoriaAberta(val id: String, val titulo: String, val texto: String, val versao: String)
 
 data class Conversa(val id: String, val titulo: String, val quando: Double, val origem: String,
-                    val fixada: Boolean = false)
+                    val fixada: Boolean = false, val ultima: String = "")
 
 /** Um anexo do clipe, esperando a mensagem: miniatura, nome e o ✕. */
 data class Anexo(
@@ -110,6 +110,7 @@ class Jarvis(private val app: Application) {
     // Como o Jarvis chama quem usa e o nome do computador (vêm do PC, no
     // evento "ajustes"; beta 0.12.5). Guardados para o app abrir já com eles.
     val nomeUsuario = mutableStateOf(prefs.getString("nome_usuario", "") ?: "")
+    init { temaClaro.value = prefs.getBoolean("tema_claro", false) }
     val nomePc = mutableStateOf(prefs.getString("nome_pc", "") ?: "")
     // O Jarvis no grupo da família (beta 0.13.0): configurado no PC? ligado?
     val grupoLigado = mutableStateOf(false)
@@ -376,6 +377,23 @@ class Jarvis(private val app: Application) {
         if (codeCaminho.value.isEmpty()) return
         releitura?.cancel()
         releitura = viewModelScope.launch { kotlinx.coroutines.delay(1500); pedirMudancas() }
+    }
+
+    /** Os botões embaixo da resposta (beta 0.19.5): ouvir de novo (a voz sai no
+     *  celular) e gostei/não gostei (vira nota na memória viva do PC). */
+    fun repetir(texto: String) {
+        if (texto.isBlank()) return
+        conexao?.enviar(JSONObject().put("pedir", "repetir").put("texto", texto.take(8000)))
+    }
+
+    fun avaliar(texto: String, nota: String) {
+        if (texto.isBlank()) return
+        conexao?.enviar(JSONObject().put("pedir", "avaliar").put("texto", texto.take(2000)).put("nota", nota))
+    }
+
+    fun mudarTema(claro: Boolean) {
+        temaClaro.value = claro
+        conexao?.enviar(JSONObject().put("pedir", "ajustes").put("tema", if (claro) "claro" else "escuro"))
     }
 
     /** Os botões Commit e Push: o toque já é o OK. */
@@ -652,6 +670,13 @@ class Jarvis(private val app: Application) {
         get() = conectado.value && vendo.value.isEmpty() &&
             (estado.value == "pensando" || estado.value == "falando")
 
+    /** O que ele está fazendo agora ("projeto.godot"), pro "Pensando…" do campo. */
+    fun atividadeAgora(): String {
+        val a = mensagens.lastOrNull() ?: return ""
+        if (a.quem != Quem.ATIVIDADE) return ""
+        return a.texto.split(" — ").drop(1).joinToString(" — ").ifEmpty { a.texto }
+    }
+
     private var segurandoAtomo = false
 
     fun comecarFala() {
@@ -758,7 +783,8 @@ class Jarvis(private val app: Application) {
                 for (i in 0 until lista.length()) {
                     val c = lista.getJSONObject(i)
                     conversas.add(Conversa(c.optString("id"), c.optString("titulo").ifEmpty { "Conversa" },
-                        c.optDouble("quando", 0.0), c.optString("origem"), c.optBoolean("fixada", false)))
+                        c.optDouble("quando", 0.0), c.optString("origem"), c.optBoolean("fixada", false),
+                        c.optString("ultima", "")))
                 }
             }
             "conversa" -> if (ev.optString("id") == vendo.value) preencher(mensagensVendo, ev.optJSONArray("falas"))
@@ -836,7 +862,10 @@ class Jarvis(private val app: Application) {
                 codeNarracao.value = ev.optString("code_narracao", codeNarracao.value)
                 codeJanela.intValue = ev.optInt("code_janela_s", codeJanela.intValue)
                 codePersona.value = ev.optString("code_persona", codePersona.value)
-                prefs.edit().putString("nome_usuario", nomeUsuario.value).putString("nome_pc", nomePc.value).apply()
+                // O tema (beta 0.19.5): o mesmo da janela; guardado pra abrir já certo.
+                temaClaro.value = ev.optString("tema", "escuro") == "claro"
+                prefs.edit().putString("nome_usuario", nomeUsuario.value).putString("nome_pc", nomePc.value)
+                    .putBoolean("tema_claro", temaClaro.value).apply()
             }
             "conexao" -> if (ev.optString("id") == passoConexao.value) estadoPasso.value = ev
             "uso" -> {

@@ -20,6 +20,17 @@ Item {
     // Ele está trabalhando: com o campo vazio, o enviar vira o Parar.
     property bool trabalhando: false
     property var anexos: []          // URLs (file://...) esperando a mensagem
+    // A voz no campo (beta 0.18.5): o nível do microfone, o que ele está
+    // fazendo agora e se a dica de baixo aparece.
+    property real nivel: 0.0
+    property string fazendo: ""
+    property bool mostrarDica: true
+    property bool digitando: false   // começou a escrever: o campo volta no lugar da voz
+    readonly property bool vozAtiva: conectado && ["ouvindo", "escutando", "pensando", "falando"].indexOf(estado) >= 0
+    readonly property bool modoVoz: vozAtiva && !digitando && campo.text === "" && anexos.length === 0
+    readonly property color corVoz: tema.corDoEstado(estado)
+    onEstadoChanged: if (estado === "dormindo") digitando = false
+    readonly property string nomePersona: persona === "friday" ? "Friday" : "Jarvis"
     signal enviar(string texto)
     signal enviarComAnexos(string texto, var arquivos)
     signal avisar(string texto)
@@ -61,6 +72,7 @@ Item {
             raiz.enviar(texto);
         campo.text = "";
         raiz.anexos = [];
+        raiz.digitando = false;
     }
 
     readonly property var opcoesPersona: [
@@ -180,16 +192,190 @@ Item {
         Rectangle {
             id: caixa
             width: parent.width
-            height: rolagem.height + 62
+            height: (raiz.modoVoz ? 44 : rolagem.height) + 62 + (cabecalho.visible ? 26 : 0)
+            Behavior on height { NumberAnimation { duration: raiz.tema.rapido; easing.type: Easing.OutCubic } }
             radius: 18
-            color: raiz.tema.superficie
+            color: raiz.tema.fundoCampo
             border.width: 1
-            border.color: campo.activeFocus ? raiz.tema.tracoForte : raiz.tema.traco
-            Behavior on border.color { ColorAnimation { duration: raiz.tema.rapido } }
+            // Com a voz ativa, a borda pega a cor do estado (verde ouvindo, roxo
+            // pensando, âmbar falando); senão, um contorno fino e limpo.
+            border.color: raiz.vozAtiva ? Qt.rgba(raiz.corVoz.r, raiz.corVoz.g, raiz.corVoz.b, 0.6)
+                        : campo.activeFocus ? raiz.tema.persona : raiz.tema.bordaCampo
+            Behavior on border.color { ColorAnimation { duration: raiz.tema.normal } }
+
+            // Um brilho bem leve por fora, na cor da voz (no lugar de sombra escura).
+            Rectangle {
+                anchors.fill: parent
+                anchors.margins: -4
+                z: -1
+                radius: parent.radius + 4
+                color: "transparent"
+                border.width: 4
+                border.color: Qt.rgba(raiz.corVoz.r, raiz.corVoz.g, raiz.corVoz.b, raiz.vozAtiva ? 0.10 : 0)
+                Behavior on border.color { ColorAnimation { duration: raiz.tema.normal } }
+            }
+            // Um fio de luz no alto da caixa: dá relevo sem sombra.
+            Rectangle {
+                x: parent.radius; y: 1
+                width: parent.width - 2 * parent.radius; height: 1
+                color: raiz.tema.claro ? "transparent" : Qt.rgba(1, 1, 1, 0.05)
+            }
+
+            // Dormindo ou com o campo em uso: uma linha fina com o estado da voz.
+            Row {
+                id: cabecalho
+                x: 18; y: 14
+                spacing: 8
+                visible: raiz.conectado && !raiz.modoVoz && raiz.mostrarDica === false
+                Rectangle {
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: 8; height: 8; radius: 4
+                    color: raiz.corVoz
+                }
+                Text {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: raiz.estado === "dormindo" ? "Dormindo · esperando o \u201cHey " + raiz.nomePersona + "\u201d"
+                        : raiz.estado === "ouvindo" ? "Acordado · pode falar"
+                        : raiz.estado === "escutando" ? "Te ouvindo…"
+                        : raiz.estado === "pensando" ? "Pensando…"
+                        : "Falando…"
+                    color: raiz.tema.textoFraco
+                    font.family: raiz.tema.familia
+                    font.pixelSize: 13
+                }
+            }
+
+            // A voz no lugar do campo: a onda, o que está acontecendo e o Parar.
+            Item {
+                id: linhaVoz
+                x: 18; y: 12
+                width: parent.width - 36
+                height: 44
+                visible: opacity > 0
+                opacity: raiz.modoVoz ? 1 : 0
+                Behavior on opacity { NumberAnimation { duration: raiz.tema.rapido } }
+
+                // A onda: segue o microfone quando ele te ouve; viva quando fala.
+                Row {
+                    id: onda
+                    anchors.verticalCenter: parent.verticalCenter
+                    spacing: 3
+                    visible: raiz.estado !== "pensando"
+                    property var alturas: [6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6]
+                    Timer {
+                        running: linhaVoz.visible && onda.visible
+                        interval: 90
+                        repeat: true
+                        onTriggered: {
+                            var amp = raiz.estado === "escutando" ? Math.max(0.12, Math.min(1, raiz.nivel * 3.2))
+                                    : raiz.estado === "falando" ? 0.75 : 0.14;
+                            var a = [];
+                            for (var i = 0; i < 11; i++) {
+                                var meio = 1 - Math.abs(i - 5) / 7;
+                                a.push(5 + 25 * amp * meio * (0.45 + Math.random() * 0.55));
+                            }
+                            onda.alturas = a;
+                        }
+                    }
+                    Repeater {
+                        model: 11
+                        Rectangle {
+                            required property int index
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: 4; radius: 2
+                            height: onda.alturas[index]
+                            color: raiz.corVoz
+                            Behavior on height { NumberAnimation { duration: 90 } }
+                        }
+                    }
+                }
+                // Pensando: três pontos que respiram.
+                Row {
+                    id: pontos
+                    anchors.verticalCenter: parent.verticalCenter
+                    visible: raiz.estado === "pensando"
+                    spacing: 6
+                    Repeater {
+                        model: 3
+                        Rectangle {
+                            required property int index
+                            width: 8; height: 8; radius: 4
+                            color: raiz.corVoz
+                            SequentialAnimation on opacity {
+                                running: pontos.visible
+                                loops: Animation.Infinite
+                                PauseAnimation { duration: index * 160 }
+                                NumberAnimation { from: 0.25; to: 1; duration: 380 }
+                                NumberAnimation { from: 1; to: 0.25; duration: 380 }
+                                PauseAnimation { duration: (2 - index) * 160 }
+                            }
+                        }
+                    }
+                }
+                Text {
+                    id: rotuloVoz
+                    anchors.left: onda.visible ? onda.right : pontos.right
+                    anchors.leftMargin: 14
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: raiz.estado === "ouvindo" ? "Pode falar…"
+                        : raiz.estado === "escutando" ? "Ouvindo…"
+                        : raiz.estado === "pensando" ? "Pensando…" : "Falando…"
+                    color: raiz.tema.texto
+                    font.family: raiz.tema.familia
+                    font.pixelSize: 16
+                    font.weight: Font.Medium
+                }
+                Text {
+                    anchors.left: rotuloVoz.right
+                    anchors.leftMargin: 8
+                    anchors.right: botaoParar.left
+                    anchors.rightMargin: 12
+                    anchors.verticalCenter: parent.verticalCenter
+                    elide: Text.ElideRight
+                    text: raiz.estado === "ouvindo" ? "ou escreve aqui"
+                        : raiz.estado === "escutando" ? ""
+                        : raiz.estado === "pensando" ? raiz.fazendo
+                        : "fala \u201cpara\u201d ou toca pra cortar"
+                    color: raiz.tema.textoFraco
+                    font.family: raiz.tema.familia
+                    font.pixelSize: 14
+                }
+                Rectangle {
+                    id: botaoParar
+                    anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: linhaParar.width + 26
+                    height: 34
+                    radius: 10
+                    color: Qt.rgba(raiz.corVoz.r, raiz.corVoz.g, raiz.corVoz.b, areaParar.containsMouse ? 0.26 : 0.15)
+                    Behavior on color { ColorAnimation { duration: raiz.tema.rapido } }
+                    Row {
+                        id: linhaParar
+                        anchors.centerIn: parent
+                        spacing: 8
+                        Rectangle { anchors.verticalCenter: parent.verticalCenter; width: 10; height: 10; radius: 2; color: raiz.corVoz }
+                        Text {
+                            text: raiz.estado === "ouvindo" || raiz.estado === "escutando" ? "Dormir" : "Parar"
+                            color: raiz.corVoz
+                            font.family: raiz.tema.familia
+                            font.pixelSize: 14
+                            font.weight: Font.DemiBold
+                        }
+                    }
+                    MouseArea {
+                        id: areaParar
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: raiz.parar()
+                    }
+                }
+            }
 
             Flickable {
                 id: rolagem
-                x: 18; y: 14
+                x: 18; y: cabecalho.visible ? 40 : 14
+                visible: !raiz.modoVoz
                 width: parent.width - 36
                 height: Math.min(Math.max(campo.implicitHeight, 26), 220)
                 contentHeight: campo.implicitHeight
@@ -210,6 +396,7 @@ Item {
                     font.family: raiz.tema.familia
                     font.pixelSize: 15
                     onCursorRectangleChanged: rolagem.seguirCursor(cursorRectangle)
+                    onTextChanged: if (text !== "") raiz.digitando = true
                     Keys.onPressed: function (evento) {
                         if ((evento.key === Qt.Key_Return || evento.key === Qt.Key_Enter)
                                 && !(evento.modifiers & Qt.ShiftModifier)) {
@@ -238,8 +425,9 @@ Item {
                 }
             }
 
-            // Clicar no vazio da caixa também foca o campo.
-            TapHandler { onTapped: campo.forceActiveFocus() }
+            // Clicar no vazio da caixa também foca o campo (e, com a voz no
+            // lugar, abre o campo pra escrever).
+            TapHandler { onTapped: { raiz.digitando = true; campo.forceActiveFocus(); } }
 
             Row {
                 id: seletores
@@ -346,6 +534,7 @@ Item {
         }
 
         Text {
+            visible: raiz.mostrarDica
             width: parent.width
             horizontalAlignment: Text.AlignHCenter
             text: "Enter envia · Shift+Enter quebra a linha · arraste ou cole (Ctrl+V) imagens e arquivos"

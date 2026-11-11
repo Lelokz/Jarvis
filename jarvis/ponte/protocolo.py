@@ -200,7 +200,8 @@ PEDIDOS = frozenset({"ola", "falar", "memoria", "ouvir",
                      "conversas", "abrir", "nova", "continuar", "cerebro", "parar",
                      "renomear", "apagar", "som", "ajustes", "fixar",
                      "memorias", "ler_memoria", "salvar_memoria", "conexao",
-                     "projetos", "code", "mudancas", "git", "novo_projeto"})
+                     "projetos", "code", "mudancas", "git", "novo_projeto",
+                     "repetir", "avaliar"})
 
 # Uma linha maior que isto sem quebra é um cliente com defeito, não um pedido.
 MAX_LINHA = 64 * 1024
@@ -264,6 +265,16 @@ def ler_pedido(linha: bytes) -> tuple[str, dict[str, Any]]:
         if objeto.get("acao") not in ("commit", "push"):
             raise ErroDeProtocolo("'git' com acao commit ou push")
         return tipo, {"acao": objeto["acao"]}
+    # Os botões embaixo da resposta (11/11/2026): "ouvir de novo" e gostei/não gostei.
+    if tipo in ("repetir", "avaliar"):
+        texto = objeto.get("texto")
+        if not isinstance(texto, str) or not texto.strip():
+            raise ErroDeProtocolo(f"'{tipo}' sem o texto da resposta")
+        if tipo == "repetir":
+            return tipo, {"texto": texto.strip()[:MAX_TEXTO]}
+        if objeto.get("nota") not in ("boa", "ruim"):
+            raise ErroDeProtocolo("'avaliar' com nota boa ou ruim")
+        return tipo, {"texto": texto.strip()[:2000], "nota": objeto["nota"]}
 
     if tipo in ("ler_memoria", "salvar_memoria"):
         ident = objeto.get("id")
@@ -341,7 +352,8 @@ def ler_pedido(linha: bytes) -> tuple[str, dict[str, Any]]:
         # O modo code (10/11/2026): quanto ele narra, quanto tempo o microfone
         # fica aberto e quem programa.
         for campo, validos in (("code_narracao", ("pouca", "normal", "muita")),
-                               ("code_persona", ("atual", "jarvis", "friday"))):
+                               ("code_persona", ("atual", "jarvis", "friday")),
+                               ("tema", ("escuro", "claro"))):
             valor = objeto.get(campo)
             if valor is not None:
                 if valor not in validos:

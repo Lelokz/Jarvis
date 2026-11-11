@@ -26,6 +26,7 @@ import datetime as dt
 import json
 import math
 import queue
+import re
 import signal
 import sys
 import threading
@@ -44,7 +45,7 @@ from jarvis.agente.avisos import AvisosWhatsApp
 from jarvis.agente import projetos
 from jarvis.agente.reflexos import comando_code, reflexo
 from jarvis.cronometro import Tempos
-from jarvis.nucleo import recados, relogio
+from jarvis.nucleo import memoria_viva, recados, relogio
 from jarvis.nucleo.atalhos import normalizar
 from jarvis.nucleo.whatsapp import WhatsApp
 from jarvis.quem_fala import QuemFala, Voz
@@ -528,9 +529,12 @@ class Ciclo:
 
     def _falar(
         self, texto: str, *, acao: str | None = None, perguntando: bool = False,
-        opcoes: list[str] | None = None, mostrar: str | None = None,
+        opcoes: list[str] | None = None, mostrar: str | None = None, so_voz: bool = False,
     ) -> tts.TemposDaFala:
         """Fala com o portão anti-eco fechado.
+
+        `so_voz`: só o som, sem a fala entrar na conversa (o "ouvir de novo"
+        da janela e do app, 11/11/2026).
 
         Sem isto o microfone pega a própria voz do Jarvis: o VAD dispara e ele
         se responde, e — pior neste etapa — o wake word pode se ouvir e acordar
@@ -552,7 +556,7 @@ class Ciclo:
                                     reproducao_s=0.0, duracao_audio_s=0.0)
         if self._corpo is not None:
             return self._falar_no_corpo(texto, acao=acao, perguntando=perguntando, extra=extra,
-                                        mostrar=mostrar)
+                                        mostrar=mostrar, so_voz=so_voz)
         if self.gravando:
             self.emissor.emitir("jarvis_disse", texto=mostrar, acao=acao, perguntando=perguntando, **extra)
             return tts.TemposDaFala(primeiro_audio_s=0.0, sintese_total_s=0.0,
@@ -563,9 +567,10 @@ class Ciclo:
             # Texto, estado "falando" e voz saem juntos: antes o texto chegava
             # na janela uns 2 s antes do som (o tempo de gerar a voz).
             self._mudar_estado("falando")
-            self.emissor.emitir(
-                "jarvis_disse", texto=mostrar, acao=acao, perguntando=perguntando, **extra
-            )
+            if not so_voz:
+                self.emissor.emitir(
+                    "jarvis_disse", texto=mostrar, acao=acao, perguntando=perguntando, **extra
+                )
 
         try:
             return tts.falar(self.voz, texto, dispositivo=self.dispositivo_saida,
@@ -577,7 +582,8 @@ class Ciclo:
             self.vad.reiniciar()
 
     def _falar_no_corpo(
-        self, texto: str, *, acao: str | None, perguntando: bool, extra: dict, mostrar: str
+        self, texto: str, *, acao: str | None, perguntando: bool, extra: dict, mostrar: str,
+        so_voz: bool = False,
     ) -> tts.TemposDaFala:
         """A voz vai para o celular, pedaço por pedaço, pelos eventos "voz"
         da ponte. Sem portão: o microfone do PC não ouve o celular. No mudo,
@@ -597,13 +603,14 @@ class Ciclo:
                 if primeiro is None:
                     primeiro = time.monotonic() - inicio
                     self._mudar_estado("falando")
-                    self.emissor.emitir("jarvis_disse", texto=mostrar, acao=acao,
-                                        perguntando=perguntando, **extra)
+                    if not so_voz:
+                        self.emissor.emitir("jarvis_disse", texto=mostrar, acao=acao,
+                                            perguntando=perguntando, **extra)
                 self.emissor.emitir("voz", para=self._corpo, taxa=trecho.taxa,
                                     pcm=base64.b64encode(trecho.pcm).decode("ascii"))
                 duracao += len(trecho.pcm) / 2 / trecho.taxa
         finally:
-            if primeiro is None:  # a voz falhou: o texto chega mesmo assim
+            if primeiro is None and not so_voz:  # a voz falhou: o texto chega mesmo assim
                 self.emissor.emitir("jarvis_disse", texto=mostrar, acao=acao,
                                     perguntando=perguntando, **extra)
             self.emissor.emitir("voz", para=self._corpo, fim=True)
@@ -1365,6 +1372,20 @@ class Ciclo:
                 self.avisar_cliente(pedido.cliente, "Espera ele terminar o pedido (ou diz "
                                                     "\"para\") pra trocar de conversa.")
             return
+        if pedido.tipo == "repetir":
+            self._repetir(pedido)
+            return
+        if pedido.tipo == "avaliar":
+            # Gostei / não gostei: vira nota na memória viva (ela aprende o jeito
+            # que o Léo gosta de resposta).
+            try:
+                d = json.loads(pedido.valor)
+                gostou = "GOSTOU" if d["nota"] == "boa" else "NÃO GOSTOU"
+                memoria_viva.gravar_depois("avaliacao", f"O Léo {gostou} desta resposta: {d['texto'][:1500]}",
+                                           "botao")
+            except (ValueError, KeyError) as e:
+                self.avisar_cliente(pedido.cliente, f"Não guardei a avaliação ({e})")
+            return
         if pedido.tipo == "code":
             # A janela/app escolheu um projeto ("" = sair do modo code).
             if self.agente.ocupado:
@@ -1406,6 +1427,10 @@ class Ciclo:
             self.pediu_parar()  # já tratado aqui: desmarca
             if self._locutor is not None or self._pergunta is not None or self.agente.ocupado:
                 self._parar_tudo()
+            elif self.estado is Estado.ACORDADO:
+                # Acordado e ouvindo, sem nada rodando (o Parar dentro do campo,
+                # beta 0.18.5): ele volta a dormir na hora.
+                self.dormir("botão parar")
             return
         if pedido.tipo == "som":
             try:
@@ -1513,6 +1538,30 @@ class Ciclo:
         self.estado = Estado.ACORDADO
 
     # -- o que os clientes veem --------------------------------------------
+
+    def _repetir(self, pedido: Pedido) -> None:
+        """"Ouvir de novo": fala o texto de uma resposta outra vez, só a voz
+        (nada entra na conversa e o Claude não é chamado). No PC, ou no celular
+        se o pedido veio dele com voz."""
+        if self.agente.ocupado or self._locutor is not None or self._pergunta is not None \
+                or self._visivel in ("pensando", "falando", "escutando"):
+            self.avisar_cliente(pedido.cliente, "Espera ele terminar pra ouvir de novo.")
+            return
+        texto = re.sub(r"```.*?```", " ", pedido.valor, flags=re.S)   # código não se lê em voz alta
+        texto = " ".join(re.sub(r"[*_`#>|]+", "", texto).split())
+        if not texto:
+            return
+        antes = self._visivel
+        corpo, mudo = self._corpo, self._mudo
+        if pedido.voz:
+            self._corpo, self._mudo = pedido.cliente, False
+        else:
+            self._corpo = None
+        try:
+            self._falar(texto, so_voz=True)
+        finally:
+            self._corpo, self._mudo = corpo, mudo
+            self._mudar_estado(antes)
 
     def _mudar_estado(self, nome: str) -> None:
         """Emite o estado visível só quando ele MUDA."""

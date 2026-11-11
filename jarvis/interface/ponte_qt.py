@@ -215,9 +215,19 @@ class PonteQt(QObject):
 
     @Slot(str, "QVariant", result=bool)
     def mudarAjusteCode(self, chave: str, valor) -> bool:
-        if chave not in ("code_narracao", "code_janela_s", "code_persona"):
+        if chave not in ("code_narracao", "code_janela_s", "code_persona", "tema"):
             return False
         return self._pedir({"pedir": "ajustes", chave: int(valor) if chave == "code_janela_s" else str(valor)})
+
+    # Os botões embaixo da resposta (beta 0.18.5).
+    @Slot(str, result=bool)
+    def repetir(self, texto: str) -> bool:
+        return bool(texto.strip()) and self._pedir({"pedir": "repetir", "texto": texto[:8000]})
+
+    @Slot(str, str, result=bool)
+    def avaliar(self, texto: str, nota: str) -> bool:
+        return bool(texto.strip()) and nota in ("boa", "ruim") and \
+            self._pedir({"pedir": "avaliar", "texto": texto[:2000], "nota": nota})
 
     @Slot(str, str, result=bool)
     def escolherSom(self, tipo: str, aparelho: str) -> bool:

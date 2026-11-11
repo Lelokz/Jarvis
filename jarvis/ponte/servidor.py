@@ -517,6 +517,9 @@ class Servidor:
                 return
             self._direto(cliente, {"ev": "mudancas", "caminho": dados["caminho"],
                                    **git_code.mudancas(Path(dados["caminho"]))})
+        elif tipo in ("repetir", "avaliar"):
+            valor = dados["texto"] if tipo == "repetir" else json.dumps(dados)
+            self._pedidos.put(Pedido(tipo, valor, cliente.id, cliente.quer_voz))
         elif tipo in ("code", "git", "novo_projeto"):
             valor = dados.get("caminho", "") if tipo == "code" else dados["nome"] if tipo == "novo_projeto" else dados["acao"]
             self._pedidos.put(Pedido(tipo, valor, cliente.id, cliente.quer_voz))

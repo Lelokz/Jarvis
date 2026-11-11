@@ -15,6 +15,26 @@ Item {
     property real largura: Math.min(780, width - 64)
     signal copiar(string texto)
     signal responder(string texto)
+    signal ouvir(string texto)
+    signal avaliar(string texto, string nota)
+
+    // A última resposta dele (os botões dela ficam sempre à vista).
+    readonly property int ultimaResposta: {
+        var n = lista.count;
+        for (var i = n - 1; i >= 0; i--) {
+            var q = raiz.falas.get(i).quem;
+            if (q === "jarvis" || q === "painel") return i;
+        }
+        return -1;
+    }
+
+    // "Pedir de novo": manda outra vez a última fala minha antes desta resposta.
+    function refazerDe(indice) {
+        for (var i = indice - 1; i >= 0; i--) {
+            var f = raiz.falas.get(i);
+            if (f.quem === "voce") { raiz.responder(f.texto); return; }
+        }
+    }
 
     // "Estou acompanhando o fim da conversa." Só muda quando o Léo rola a
     // lista — e não a cada fala nova (decidir por `atYEnd` na hora da fala
@@ -63,8 +83,12 @@ Item {
             passos: model.passos
             escrevendo: model.escrevendo
             animar: model.animar
+            ultima: index === raiz.ultimaResposta
             onCopiar: function (t) { raiz.copiar(t) }
             onResponder: function (t) { raiz.responder(t) }
+            onOuvir: function (t) { raiz.ouvir(t) }
+            onRefazer: raiz.refazerDe(index)
+            onAvaliar: function (t, n) { raiz.avaliar(t, n) }
         }
 
         // Enquanto ele trabalha: o átomo roxo e o que está fazendo.

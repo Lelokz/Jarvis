@@ -104,6 +104,9 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.ExperimentalTextApi
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
@@ -123,17 +126,23 @@ import kotlinx.coroutines.launch
 import java.util.Calendar
 
 // As cores da janela do PC (jarvis/interface/qml/Tema.qml), as mesmas.
-private val Fundo = Color(0xFF0A0C10)
-private val Lateral = Color(0xFF0D1016)
-private val Superficie = Color(0xFF131821)
-private val Superficie2 = Color(0xFF181E29)
-private val Realce = Color(0xFF1F2738)
-private val Traco = Color(0xFF1F2734)
-private val TracoForte = Color(0xFF2A3446)
-private val Texto = Color(0xFFE6EBF2)
-private val TextoMedio = Color(0xFFB9C1CF)
-private val Fraco = Color(0xFF7E879B)
-private val MuitoFraco = Color(0xFF4D5568)
+// O tema claro (beta 0.19.5, Ajustes > Aparência; o mesmo da janela). As
+// cores leem este estado: trocar repinta o app inteiro na hora.
+val temaClaro = mutableStateOf(false)
+private fun t(escuro: Long, claro: Long) = Color(if (temaClaro.value) claro else escuro)
+private val Fundo: Color get() = t(0xFF0A0C10, 0xFFF6F7FA)
+private val Lateral: Color get() = t(0xFF0D1016, 0xFFEEF0F5)
+private val Superficie: Color get() = t(0xFF131821, 0xFFFFFFFF)
+private val Superficie2: Color get() = t(0xFF181E29, 0xFFF1F3F7)
+private val Realce: Color get() = t(0xFF1F2738, 0xFFE3E8F2)
+private val Traco: Color get() = t(0xFF1F2734, 0xFFE1E5EC)
+private val TracoForte: Color get() = t(0xFF2A3446, 0xFFCFD5DF)
+private val Texto: Color get() = t(0xFFE6EBF2, 0xFF141A24)
+private val TextoMedio: Color get() = t(0xFFB9C1CF, 0xFF3B4556)
+private val Fraco: Color get() = t(0xFF7E879B, 0xFF6B7487)
+private val MuitoFraco: Color get() = t(0xFF4D5568, 0xFFA1A9B8)
+private val BordaCampo: Color get() = t(0xFF2C374A, 0xFFD9DEE7)
+private val TextoResposta: Color get() = t(0xFFD7DDE7, 0xFF1E2532)
 private val Perigo = Color(0xFFFF6B6B)
 private val Pergunta = Color(0xFFFFB454)
 // A persona ativa (beta 0.14.5): cada uma tem a sua cor, a Friday a dela
@@ -217,7 +226,16 @@ class MainActivity : ComponentActivity() {
         }
         enableEdgeToEdge()
         setContent {
-            MaterialTheme(colorScheme = darkColorScheme(background = Fundo, surface = Fundo)) {
+            // Os ícones da barra de cima do Android: escuros no tema claro.
+            val claro = temaClaro.value
+            LaunchedEffect(claro) {
+                androidx.core.view.WindowCompat.getInsetsController(window, window.decorView).apply {
+                    isAppearanceLightStatusBars = claro
+                    isAppearanceLightNavigationBars = claro
+                }
+            }
+            MaterialTheme(colorScheme = if (claro) androidx.compose.material3.lightColorScheme(background = Fundo, surface = Fundo)
+                                        else darkColorScheme(background = Fundo, surface = Fundo)) {
                 CompositionLocalProvider(LocalTextStyle provides TextStyle(fontFamily = Inter)) {
                     val modelo = (application as App).jarvis
                     // Estava "sempre ouvindo" quando fechou: garante o serviço de pé.
@@ -541,9 +559,6 @@ private fun Topo(modelo: Jarvis, abrirGaveta: () -> Unit, abrirSeletores: () -> 
                         (modelo.mudancas.value?.optJSONArray("arquivos")?.length()?.takeIf { it > 0 }
                             ?.let { " · $it mudado" + (if (it > 1) "s" else "") } ?: ""),
                         color = Azul, fontSize = 11.sp, maxLines = 1)
-                    else -> Text("${nomesModelo[modelo.modelo.value] ?: modelo.modelo.value} · esforço " +
-                        (nomesEsforco[modelo.esforco.value] ?: modelo.esforco.value).lowercase(),
-                        color = Fraco, fontSize = 11.sp, maxLines = 1)
                 }
             }
         }
@@ -668,19 +683,23 @@ private fun Chat(modelo: Jarvis, abrirSeletores: () -> Unit) {
                 Text(rotuloDoEstado(modelo.estadoVisivel), color = corDoEstado(modelo.estadoVisivel),
                     fontSize = 11.sp, letterSpacing = 2.sp, fontWeight = FontWeight.SemiBold)
                 Spacer(Modifier.height(14.dp))
-                Text(saudacao(modelo.nomeUsuario.value), color = Texto, fontSize = 28.sp, fontWeight = FontWeight.Medium)
+                Text(saudacao(modelo.nomeUsuario.value), color = Texto, fontSize = 28.sp, fontWeight = FontWeight.Light,
+                    textAlign = TextAlign.Center, lineHeight = 34.sp, modifier = Modifier.padding(horizontal = 24.dp))
                 Spacer(Modifier.height(6.dp))
                 Text("Segura o átomo pra falar, ou escreve aqui embaixo.", color = Fraco, fontSize = 14.sp,
                     textAlign = TextAlign.Center, modifier = Modifier.padding(horizontal = 30.dp))
-                Spacer(Modifier.height(24.dp))
-                Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    for (ideia in listOf("Como tá o tempo amanhã?", "O que eu tenho essa semana?",
-                        "Toca alguma coisa pra focar")) {
-                        Text(ideia, color = TextoMedio, fontSize = 14.sp,
-                            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp))
-                                .background(Lateral).border(1.dp, Traco, RoundedCornerShape(14.dp))
-                                .clickable(enabled = modelo.conectado.value) { enviar(ideia) }
-                                .padding(horizontal = 14.dp, vertical = 12.dp))
+                Spacer(Modifier.height(28.dp))
+                // Continuar de onde parou (beta 0.19.5): as conversas mais
+                // recentes, com o que ele disse por último. Tocar abre.
+                val recentes = modelo.conversas.filter { it.id != modelo.conversaAtual.value }
+                    .sortedByDescending { it.quando }.take(2)
+                if (recentes.isNotEmpty() && modelo.conectado.value) {
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp)) {
+                        Text("Continuar de onde parou", color = Fraco, fontSize = 13.sp, modifier = Modifier.weight(1f))
+                    }
+                    Spacer(Modifier.height(10.dp))
+                    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        recentes.forEachIndexed { i, c -> CartaoRecente(c, i) { modelo.abrir(c.id) } }
                     }
                 }
                 Spacer(Modifier.height(16.dp))
@@ -692,7 +711,14 @@ private fun Chat(modelo: Jarvis, abrirSeletores: () -> Unit) {
                 contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(18.dp),
             ) {
-                items(falas) { m -> Item(m) { r -> enviar(r) } }
+                // A última resposta dele: os botões ficam sempre à vista.
+                val ultimaResposta = falas.indexOfLast { it.quem == Quem.JARVIS || it.quem == Quem.PAINEL }
+                itemsIndexed(falas) { i, m ->
+                    Item(m, ultima = i == ultimaResposta, responder = { r -> enviar(r) },
+                        ouvir = { modelo.repetir(it) },
+                        refazer = { falas.subList(0, i).lastOrNull { it.quem == Quem.VOCE }?.let { enviar(it.texto) } },
+                        avaliar = { t, n -> modelo.avaliar(t, n) })
+                }
                 if (pensando) item {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         AtomoFixo(Roxo, 26.dp)
@@ -724,8 +750,9 @@ private fun Chat(modelo: Jarvis, abrirSeletores: () -> Unit) {
             Spacer(Modifier.height(8.dp))
         }
 
-        // No chat novo, os seletores à mão (na conversa, tocar no título abre).
-        if (boasVindas) {
+        // Os seletores sempre à mão, em cima do campo (o topo não repete mais;
+        // pedido do Léo, 11/11/2026). Escondidos com a voz ativa.
+        if (!antiga) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp).padding(bottom = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Pilula(null, if (personaAtiva.value == "friday") "Friday" else "Jarvis", Azul, abrirSeletores)
@@ -738,10 +765,64 @@ private fun Chat(modelo: Jarvis, abrirSeletores: () -> Unit) {
     }
 }
 
-private fun saudacao(nome: String): String {
+/** A saudação (beta 0.19.5, igual à da janela): muda com a hora e a persona.
+ *  O Jarvis chama pelo nome; a Friday, de "chefinho". O nome vai em negrito. */
+private fun saudacao(nome: String): AnnotatedString {
     val h = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
-    return (if (h < 5) "Boa noite" else if (h < 12) "Bom dia" else if (h < 18) "Boa tarde" else "Boa noite") +
-        (if (nome.isNotBlank()) ", $nome." else ".")
+    val friday = personaAtiva.value == "friday"
+    val quem = if (friday) "chefinho" else nome.trim()
+    val (antes, depois) = when {
+        h < 5 -> "Madrugada, hein" to "?"
+        h < 12 -> "Bom dia" to (if (friday) "!" else ".")
+        h < 18 -> "Boa tarde" to (if (friday) "!" else ".")
+        else -> "Boa noite" to (if (friday) "!" else ".")
+    }
+    return buildAnnotatedString {
+        append(antes)
+        if (quem.isNotEmpty()) {
+            append(", ")
+            withStyle(SpanStyle(fontWeight = FontWeight.SemiBold)) { append(quem) }
+        }
+        append(depois)
+    }
+}
+
+private fun quandoFoi(seg: Double): String {
+    val d = System.currentTimeMillis() / 1000.0 - seg
+    return when {
+        d < 3600 -> "há ${maxOf(1, (d / 60).toInt())} min"
+        d < 6 * 3600 -> "há ${(d / 3600).toInt()} h"
+        grupoDe(seg) == "Hoje" -> "hoje"
+        grupoDe(seg) == "Ontem" -> "ontem"
+        else -> Calendar.getInstance().apply { timeInMillis = (seg * 1000).toLong() }
+            .let { "${it.get(Calendar.DAY_OF_MONTH)}/${it.get(Calendar.MONTH) + 1}" }
+    }
+}
+
+@Composable
+private fun CartaoRecente(c: Conversa, indice: Int, abrir: () -> Unit) {
+    // Entram um depois do outro.
+    val aparecer = remember { androidx.compose.animation.core.Animatable(0f) }
+    LaunchedEffect(c.id) { delay(80L * indice); aparecer.animateTo(1f, androidx.compose.animation.core.tween(320)) }
+    Column(
+        Modifier.fillMaxWidth()
+            .graphicsLayer { alpha = aparecer.value; translationY = (1f - aparecer.value) * 24f }
+            .clip(RoundedCornerShape(14.dp)).background(Superficie)
+            .border(1.dp, Traco, RoundedCornerShape(14.dp)).clickable { abrir() }
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(5.dp),
+    ) {
+        Text(c.titulo, color = Texto, fontSize = 14.sp, fontWeight = FontWeight.Medium, maxLines = 1,
+            overflow = TextOverflow.Ellipsis)
+        Text(c.ultima.ifEmpty { "Sem resumo ainda." }, color = Fraco, fontSize = 12.5.sp, maxLines = 2,
+            overflow = TextOverflow.Ellipsis, lineHeight = 17.sp)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Ic(Icones.daOrigem(c.origem), MuitoFraco, 11.dp)
+            Spacer(Modifier.width(5.dp))
+            val origem = when (c.origem) { "voz" -> "voz"; "celular" -> "celular"; "relogio" -> "relógio"; else -> "texto" }
+            Text("$origem · ${quandoFoi(c.quando)}", color = MuitoFraco, fontSize = 11.5.sp)
+        }
+    }
 }
 
 @Composable
@@ -766,6 +847,11 @@ private fun BarraDeEscrever(modelo: Jarvis, texto: String, mudar: (String) -> Un
     val temTexto = texto.isNotBlank() || modelo.anexos.isNotEmpty()
     // Trabalhando e sem nada escrito: o enviar vira o Parar.
     val modoParar = modelo.trabalhando && !temTexto
+    // A voz dentro do campo (beta 0.19.5): ouvindo, pensando, falando.
+    val estado = modelo.estadoVisivel
+    val vozAtiva = modelo.conectado.value && estado in listOf("escutando", "pensando", "falando")
+    val modoVoz = vozAtiva && texto.isEmpty() && modelo.anexos.isEmpty()
+    val corVoz = corDoEstado(estado)
     // [átomo] [barra: texto + clipe] [enviar]. O átomo e o enviar ocupam o
     // mesmo espaço dos dois lados, e a barra fica no centro da tela (pedido
     // do Léo, 22/10/2026: o enviar dentro da barra ficava feio e torto).
@@ -779,12 +865,13 @@ private fun BarraDeEscrever(modelo: Jarvis, texto: String, mudar: (String) -> Un
         }
         Row(
             Modifier.weight(1f).clip(RoundedCornerShape(24.dp)).background(Superficie)
-                .border(1.dp, Color(0xFF263042), RoundedCornerShape(24.dp))
+                .border(1.dp, if (vozAtiva) corVoz.copy(alpha = 0.6f) else BordaCampo, RoundedCornerShape(24.dp))
                 .padding(start = 16.dp, end = 6.dp, top = 5.dp, bottom = 5.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(Modifier.weight(1f).padding(vertical = 8.dp)) {
-                if (texto.isEmpty()) Text(
+                if (modoVoz) VozNoCampo(estado, corVoz, modelo.nivel.floatValue, modelo.atividadeAgora())
+                else if (texto.isEmpty()) Text(
                     when {
                         // Curto: na barra estreita do celular a frase longa cortava.
                         !modelo.conectado.value -> "Esperando…"
@@ -828,8 +915,14 @@ private fun BarraDeEscrever(modelo: Jarvis, texto: String, mudar: (String) -> Un
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun Item(m: Mensagem, responder: (String) -> Unit) {
+fun Item(
+    m: Mensagem, ultima: Boolean = false, responder: (String) -> Unit,
+    ouvir: (String) -> Unit = {}, refazer: () -> Unit = {}, avaliar: (String, String) -> Unit = { _, _ -> },
+) {
     val area = LocalClipboardManager.current
+    // Os botões da resposta: sempre na última; nas outras, tocando nela.
+    var mostrarBotoes by remember { mutableStateOf(false) }
+    var nota by remember(m.quando) { mutableStateOf("") }
     when (m.quem) {
         Quem.AVISO -> Text(m.texto, color = Perigo, fontSize = 12.sp, textAlign = TextAlign.Center,
             modifier = Modifier.fillMaxWidth())
@@ -892,8 +985,29 @@ fun Item(m: Mensagem, responder: (String) -> Unit) {
                         Text(m.titulo, color = Texto, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                         Spacer(Modifier.height(8.dp))
                     }
-                    Markdown(if (m.escrevendo) m.texto + " ▍" else m.texto, Color(0xFFD7DDE7),
-                        Modifier.combinedClickableCopiar { area.setText(AnnotatedString(m.texto)) })
+                    Markdown(if (m.escrevendo) m.texto + " ▍" else m.texto, TextoResposta,
+                        Modifier.combinedClickableCopiar(aoTocar = { mostrarBotoes = !mostrarBotoes }) {
+                            area.setText(AnnotatedString(m.texto))
+                        })
+                }
+                if (!m.escrevendo && (ultima || mostrarBotoes)) {
+                    var copiou by remember { mutableStateOf(false) }
+                    LaunchedEffect(copiou) { if (copiou) { delay(1400); copiou = false } }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        @Composable
+                        fun Botao(icone: androidx.compose.ui.graphics.vector.ImageVector, marcado: Boolean = false, aoTocar: () -> Unit) {
+                            Box(Modifier.size(34.dp).clip(RoundedCornerShape(9.dp))
+                                .background(if (marcado) Superficie2 else Color.Transparent).clickable { aoTocar() },
+                                contentAlignment = Alignment.Center) { Ic(icone, if (marcado) Azul else Fraco, 16.dp) }
+                        }
+                        Botao(if (copiou) Icones.certo else Icones.copiar) { area.setText(AnnotatedString(m.texto)); copiou = true }
+                        Botao(Icones.ouvir) { ouvir(m.texto) }
+                        Botao(Icones.refazer) { refazer() }
+                        Botao(Icones.gostei, nota == "boa") { if (nota != "boa") { nota = "boa"; avaliar(m.texto, "boa") } }
+                        Botao(Icones.naoGostei, nota == "ruim") { if (nota != "ruim") { nota = "ruim"; avaliar(m.texto, "ruim") } }
+                        Spacer(Modifier.width(6.dp))
+                        Text(hora(m.quando), color = MuitoFraco, fontSize = 11.sp)
+                    }
                 }
                 if (m.perguntando && m.opcoes.isNotEmpty()) {
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -908,10 +1022,47 @@ fun Item(m: Mensagem, responder: (String) -> Unit) {
     }
 }
 
+/** A voz dentro do campo (beta 0.19.5): a onda (segue o microfone quando ele
+ *  te ouve, viva quando ele fala) ou os três pontos pensando, e o que é. */
+@Composable
+private fun VozNoCampo(estado: String, cor: Color, nivel: Float, fazendo: String) {
+    var alturas by remember { mutableStateOf(List(9) { 5f }) }
+    LaunchedEffect(estado) {
+        while (estado != "pensando") {
+            val amp = if (estado == "escutando") (nivel * 3.2f).coerceIn(0.12f, 1f) else 0.75f
+            alturas = List(9) { i -> 5f + 19f * amp * (1f - kotlin.math.abs(i - 4) / 6f) * (0.45f + Math.random().toFloat() * 0.55f) }
+            delay(90)
+        }
+    }
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.height(22.dp)) {
+        if (estado == "pensando") {
+            val pulso = androidx.compose.animation.core.rememberInfiniteTransition(label = "pontos")
+            for (i in 0 until 3) {
+                val a by pulso.animateFloat(0.25f, 1f, androidx.compose.animation.core.infiniteRepeatable(
+                    androidx.compose.animation.core.tween(380, delayMillis = i * 160),
+                    androidx.compose.animation.core.RepeatMode.Reverse), label = "p$i")
+                Box(Modifier.padding(end = 5.dp).size(7.dp).clip(CircleShape).background(cor.copy(alpha = a)))
+            }
+        } else {
+            for (h in alturas) Box(Modifier.padding(end = 3.dp).width(3.dp)
+                .height(androidx.compose.animation.core.animateDpAsState(h.dp, label = "onda").value)
+                .clip(RoundedCornerShape(2.dp)).background(cor))
+        }
+        Spacer(Modifier.width(8.dp))
+        Text(when (estado) { "escutando" -> "Ouvindo…"; "pensando" -> "Pensando…"; else -> "Falando…" },
+            color = Texto, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+        val detalhe = if (estado == "pensando") fazendo else ""
+        if (detalhe.isNotEmpty()) {
+            Spacer(Modifier.width(6.dp))
+            Text(detalhe, color = Fraco, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+    }
+}
+
 /** Segurar a resposta copia o texto inteiro. */
 @OptIn(ExperimentalFoundationApi::class)
-private fun Modifier.combinedClickableCopiar(copiar: () -> Unit): Modifier =
-    this.combinedClickable(onClick = {}, onLongClick = copiar,
+private fun Modifier.combinedClickableCopiar(aoTocar: () -> Unit = {}, copiar: () -> Unit): Modifier =
+    this.combinedClickable(onClick = aoTocar, onLongClick = copiar,
         indication = null, interactionSource = null)
 
 @Composable
@@ -1275,7 +1426,7 @@ private data class Categoria(val id: String, val nome: String, val sub: String, 
 
 private val categoriasDosAjustes = listOf(
     "Preferências" to listOf(
-        Categoria("geral", "Geral", "Teu nome e este celular", Icones.geral),
+        Categoria("geral", "Geral", "Teu nome, aparência e este celular", Icones.geral),
         Categoria("voz", "Voz e som", "Sempre ouvindo, volume da voz", Icones.voz),
         Categoria("avisos", "Avisos", "O que ele avisa aqui", Icones.sino),
         Categoria("uso", "Uso", "A assinatura do Claude", Icones.uso)),
@@ -1392,6 +1543,10 @@ private fun AjustesGeral(modelo: Jarvis) {
             }
         }
     }
+    // A aparência (beta 0.19.5): a mesma da janela do PC.
+    Grupo("Aparência")
+    Opcao("Escuro", "O de sempre", !temaClaro.value) { modelo.mudarTema(false) }
+    Opcao("Claro", "Fundo claro, pra usar de dia", temaClaro.value) { modelo.mudarTema(true) }
     SecaoDosAjustes("Este celular") {
         LinhaDeAjuste("Ligado ao PC", ultima = false) {
             Text(modelo.nomePc.value.ifEmpty { "—" }, color = TextoMedio, fontSize = 14.sp)

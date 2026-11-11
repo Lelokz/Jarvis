@@ -677,6 +677,41 @@ Item {
                     }
                 }
             }
+            // A aparência (beta 0.18.5): vale na janela e no app.
+            Secao {
+                titulo: "Aparência"
+                Linha {
+                    titulo: "Tema"
+                    descricao: "Escuro (o de sempre) ou claro. Vale na janela e no app."
+                    ultima: true
+                    Row {
+                        spacing: 6
+                        Repeater {
+                            model: [ { valor: "escuro", nome: "Escuro", icone: "lua" }, { valor: "claro", nome: "Claro", icone: "sol" } ]
+                            Rectangle {
+                                required property var modelData
+                                readonly property bool escolhido: (raiz.ajustes && raiz.ajustes.tema === "claro" ? "claro" : "escuro") === modelData.valor
+                                width: linhaTema.width + 26; height: 34; radius: 9
+                                color: escolhido ? Qt.rgba(raiz.tema.persona.r, raiz.tema.persona.g, raiz.tema.persona.b, 0.16)
+                                     : maTema.containsMouse ? raiz.tema.superficie2 : raiz.tema.superficie
+                                border.width: 1
+                                border.color: escolhido ? raiz.tema.persona : raiz.tema.traco
+                                Row {
+                                    id: linhaTema
+                                    anchors.centerIn: parent
+                                    spacing: 7
+                                    Icone { anchors.verticalCenter: parent.verticalCenter; caminho: raiz.tema.icones[modelData.icone]
+                                            cor: escolhido ? raiz.tema.persona : raiz.tema.textoFraco; tamanho: 15 }
+                                    Text { anchors.verticalCenter: parent.verticalCenter; text: modelData.nome
+                                           color: raiz.tema.texto; font.family: raiz.tema.familia; font.pixelSize: 13 }
+                                }
+                                MouseArea { id: maTema; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                                            enabled: !!raiz.ajustes; onClicked: raiz.mudarCode("tema", modelData.valor) }
+                            }
+                        }
+                    }
+                }
+            }
             Secao {
                 titulo: "Este computador"
                 Linha {
@@ -1462,7 +1497,7 @@ Item {
                 titulo: "Sobre a NOVA"
                 Repeater {
                     model: [
-                        ["Versão", "beta 0.18.0"],
+                        ["Versão", "beta 0.18.5"],
                         ["Conexão", raiz.conectado ? "Ligado" : "Esperando a NOVA subir"],
                     ]
                     Linha {

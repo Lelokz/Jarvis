@@ -74,7 +74,37 @@ def listar(casa: Path, limite: int = 200) -> list[dict]:
             "fixada": s.session_id in presas,
         })
     conversas.sort(key=lambda c: (c["fixada"], c["quando"]), reverse=True)
+    # O resumo dos cartões "Continuar de onde parou" (11/11/2026): só as 3
+    # mais recentes, porque cada um lê o fim do arquivo da conversa.
+    for c in sorted(conversas, key=lambda c: c["quando"], reverse=True)[:3]:
+        c["ultima"] = ultima_fala(c["id"])
     return conversas
+
+
+def ultima_fala(sessao: str, limite: int = 140) -> str:
+    """A última coisa que ele disse na conversa (o texto, sem markdown), lendo
+    só o fim do arquivo."""
+    for arquivo in (Path.home() / ".claude" / "projects").glob(f"*/{sessao}.jsonl"):
+        try:
+            with open(arquivo, "rb") as f:
+                f.seek(0, 2)
+                f.seek(max(0, f.tell() - 200_000))
+                linhas = f.read().decode("utf-8", errors="ignore").splitlines()
+        except OSError:
+            continue
+        for linha in reversed(linhas):
+            try:
+                e = json.loads(linha)
+            except ValueError:
+                continue
+            if e.get("type") != "assistant":
+                continue
+            partes = (e.get("message") or {}).get("content") or []
+            texto = " ".join(p.get("text", "") for p in partes if isinstance(p, dict) and p.get("type") == "text")
+            texto = " ".join(re.sub(r"[*_`#>|]+", "", texto).split())
+            if texto:
+                return texto if len(texto) <= limite else texto[:limite].rsplit(" ", 1)[0] + "…"
+    return ""
 
 
 def renomear(casa: Path, sessao: str, titulo: str) -> None:

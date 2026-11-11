@@ -24,7 +24,9 @@ PADRAO: dict[str, Any] = {"volume_voz": 100, "nome": "",
                           # Quem atende quando a NOVA liga (o instalador pergunta).
                           "persona_inicial": "jarvis",
                           # O modo code (10/11/2026): narração, microfone aberto e quem programa.
-                          "code_narracao": "normal", "code_janela_s": 120, "code_persona": "atual"}
+                          "code_narracao": "normal", "code_janela_s": 120, "code_persona": "atual",
+                          # A cara da janela e do app (11/11/2026): "escuro" ou "claro".
+                          "tema": "escuro"}
 
 
 def limpar_nome(nome: str) -> str:
@@ -73,6 +75,8 @@ def ler() -> dict[str, Any]:
             saida["code_janela_s"] = dados["code_janela_s"]
         if dados.get("code_persona") in ("atual", "jarvis", "friday"):
             saida["code_persona"] = dados["code_persona"]
+        if dados.get("tema") in ("escuro", "claro"):
+            saida["tema"] = dados["tema"]
     return saida
 
 

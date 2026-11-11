@@ -27,8 +27,14 @@ Item {
     property bool animar: true
     property real largura: 780
     property color corPersona: tema ? tema.persona : "#4da3ff"
+    property bool ultima: false           // a última resposta: os botões ficam sempre à vista
     signal copiar(string texto)
     signal responder(string texto)
+    // Os botões embaixo da resposta (beta 0.18.5).
+    signal ouvir(string texto)
+    signal refazer()
+    signal avaliar(string texto, string nota)
+    property string nota: ""              // "boa" | "ruim" (o que ele já marcou aqui)
 
     readonly property bool minha: quem === "voce"
     readonly property bool atividade: quem === "atividade"
@@ -298,40 +304,66 @@ Item {
                     }
                 }
 
-                // Copiar e a hora: aparecem com o mouse em cima.
+                // Copiar, ouvir de novo, refazer, gostei/não gostei e a hora
+                // (beta 0.18.5). Na última resposta ficam sempre à vista; nas
+                // outras, com o mouse em cima.
                 Row {
-                    spacing: 14
+                    spacing: 2
                     visible: !raiz.escrevendo
-                    opacity: areaResposta.hovered ? 1 : 0
+                    opacity: raiz.ultima || areaResposta.hovered ? 1 : 0
                     Behavior on opacity { NumberAnimation { duration: raiz.tema.rapido } }
-                    Item {
-                        width: linhaCopiar.width
-                        height: linhaCopiar.height
-                        Row {
-                            id: linhaCopiar
-                            spacing: 5
+                    Repeater {
+                        model: [
+                            { id: "copiar", icone: raiz.tema.icones.copiar, dica: "Copiar" },
+                            { id: "ouvir", icone: raiz.tema.icones.som, dica: "Ouvir de novo" },
+                            { id: "refazer", icone: raiz.tema.icones.refazer, dica: "Pedir de novo" },
+                            { id: "boa", icone: raiz.tema.icones.gostei, dica: "Gostei" },
+                            { id: "ruim", icone: raiz.tema.icones.naoGostei, dica: "Não gostei" },
+                        ]
+                        Rectangle {
+                            id: botaoAcao
+                            required property var modelData
+                            readonly property bool marcado: raiz.nota === modelData.id
+                            property bool feito: false
+                            width: 30; height: 30; radius: 8
+                            color: areaAcao.containsMouse || marcado ? raiz.tema.superficie2 : "transparent"
+                            Behavior on color { ColorAnimation { duration: raiz.tema.rapido } }
                             Icone {
-                                anchors.verticalCenter: parent.verticalCenter
-                                caminho: raiz.tema.icones.copiar
-                                cor: areaCopiarTudo.containsMouse ? raiz.tema.texto : raiz.tema.muitoFraco
-                                tamanho: 13
+                                anchors.centerIn: parent
+                                caminho: botaoAcao.feito ? raiz.tema.icones.certo : botaoAcao.modelData.icone
+                                cor: botaoAcao.marcado ? raiz.corPersona
+                                   : areaAcao.containsMouse ? raiz.tema.texto : raiz.tema.textoFraco
+                                tamanho: 15
+                                espessura: 1.7
                             }
-                            Text {
-                                text: "Copiar"
-                                color: areaCopiarTudo.containsMouse ? raiz.tema.texto : raiz.tema.muitoFraco
-                                font.family: raiz.tema.familia
-                                font.pixelSize: 12
+                            MouseArea {
+                                id: areaAcao
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: {
+                                    var id = botaoAcao.modelData.id;
+                                    if (id === "copiar") { raiz.copiar(raiz.texto); botaoAcao.feito = true; voltaCerto.restart(); }
+                                    else if (id === "ouvir") raiz.ouvir(raiz.texto);
+                                    else if (id === "refazer") raiz.refazer();
+                                    else if (raiz.nota !== id) { raiz.nota = id; raiz.avaliar(raiz.texto, id); }
+                                }
                             }
-                        }
-                        MouseArea {
-                            id: areaCopiarTudo
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: raiz.copiar(raiz.texto)
+                            Timer { id: voltaCerto; interval: 1400; onTriggered: botaoAcao.feito = false }
+                            ToolTipSimples {
+                                tema: raiz.tema
+                                anchors.bottom: undefined
+                                anchors.top: parent.bottom
+                                anchors.topMargin: 6
+                                visivel: areaAcao.containsMouse
+                                texto: botaoAcao.modelData.dica
+                                z: 5
+                            }
                         }
                     }
                     Text {
+                        anchors.verticalCenter: parent.verticalCenter
+                        leftPadding: 8
                         text: raiz.hora(raiz.quando)
                         color: raiz.tema.muitoFraco
                         font.family: raiz.tema.familia

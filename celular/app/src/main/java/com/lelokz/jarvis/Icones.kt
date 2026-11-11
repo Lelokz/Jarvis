@@ -72,6 +72,11 @@ object Icones {
     val globo = traco("M12 3a9 9 0 1 1 0 18a9 9 0 1 1 0-18M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z")
     val musica = traco("M9 18V5l11-2v13M6 15a3 3 0 1 1 0 6a3 3 0 1 1 0-6M17 13a3 3 0 1 1 0 6a3 3 0 1 1 0-6")
     val raioTraco = traco("M13 2.5L5 13.5h6l-1 8 8-11h-6z")
+    // Os botões embaixo da resposta (beta 0.19.5).
+    val refazer = traco("M20 12a8 8 0 1 1-2.3-5.6M20 4v5h-5", 1.8f)
+    val gostei = traco("M7 11v9H4v-9zM7 11l4-8a2 2 0 0 1 3 2l-1 5h6a2 2 0 0 1 2 2.3l-1.3 6A2 2 0 0 1 17.7 20H7", 1.7f)
+    val naoGostei = traco("M7 13V4H4v9zM7 13l4 8a2 2 0 0 0 3-2l-1-5h6a2 2 0 0 0 2-2.3l-1.3-6A2 2 0 0 0 17.7 4H7", 1.7f)
+    val ouvir = traco("M4 9h4l5-4v14l-5-4H4zM16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12", 1.7f)
 
     fun daOrigem(o: String): ImageVector = when (o) {
         "voz" -> voz

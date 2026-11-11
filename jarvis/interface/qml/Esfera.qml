@@ -48,6 +48,8 @@ Item {
     // assim trocar a velocidade vale no quadro seguinte, sem pulo. Desenha a
     // 30 quadros por segundo: o átomo anda devagar, e o desenho custa ~5 ms.
     property real tempo: 3
+    // Parado, mudar o tempo de fora (fotos e vídeos quadro a quadro) redesenha.
+    onTempoChanged: if (!animando) tela.requestPaint()
     property real _desdeODesenho: 0
     property var _estado: Atomo.novo()
     FrameAnimation {
