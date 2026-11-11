@@ -771,11 +771,15 @@ Window {
                 Esfera {
                     id: esferaFundo
                     objectName: "esferaFundo"
-                    // O núcleo logo acima da caixa de escrever, e o átomo inteiro
-                    // na tela (sem cortar em cima): o tamanho é o que cabe.
-                    readonly property real centroY: compositor.y - 30
-                    readonly property real ladoFundo: Math.min(Math.max(fundoAtomo.width, fundoAtomo.height) * 0.5,
-                                                          2 * (centroY - 16))
+                    // O núcleo inteiro à mostra, logo acima da caixa de escrever, e o
+                    // átomo inteiro na tela (11/11/2026: um pouco menor e mais alto,
+                    // pedido do Léo; "ficou muito em cima": o núcleo logo acima da
+                    // saudação, sem encostar). Medido na foto: o núcleo tem raio de
+                    // ~0,155 do lado e as argolas, ~0,41.
+                    readonly property real baseNucleo: boasVindas.y + esfera.height - 6
+                    readonly property real ladoFundo: Math.min(Math.max(fundoAtomo.width, fundoAtomo.height) * 0.45,
+                                                          (baseNucleo - 8) / (0.41 + 0.155))
+                    readonly property real centroY: baseNucleo - ladoFundo * 0.155
                     width: 460; height: 460
                     x: (parent.width - width) / 2
                     y: centroY - height / 2
@@ -816,15 +820,17 @@ Window {
                 Esfera {
                     id: esfera
                     anchors.horizontalCenter: parent.horizontalCenter
-                    visible: !janela.atomoNoFundo
+                    // Com o átomo no fundo, este some mas guarda o lugar: a tela fica
+                    // igual à de sempre (11/11/2026: escondê-lo puxava tudo pra cima).
+                    opacity: janela.atomoNoFundo ? 0 : 1
                     // Em tela grande ele cresce (11/11/2026: 230 px ficava miúdo no 1080p do Léo).
                     width: Math.min(370, areaDoChat.height * 0.36)
-                    height: janela.atomoNoFundo ? 0 : width
+                    height: width
                     readonly property bool vivo: janela.conectado
                     corDeFundo: tema.fundo
                     parada: !vivo
                     pulsando: vivo && janela.estado === "dormindo"
-                    sendoVista: janela.sendoVista && janela.boasVindas
+                    sendoVista: janela.sendoVista && janela.boasVindas && !janela.atomoNoFundo
                     nivel: janela.nivel
                     cor: janela.corAtual
                     escala: !vivo ? 0.80

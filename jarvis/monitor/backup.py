@@ -382,8 +382,8 @@ def main(a: list[str]) -> int:
                                       "abrindo só com a senha antiga. (s/n) ").strip().lower() != "s":
             return 1
         senha = getpass.getpass("Escolha a senha do backup: ")
-        if len(senha) < 8 or senha != getpass.getpass("Repita a senha: "):
-            print("As senhas não batem ou são curtas demais (mínimo 8). Nada mudou.")
+        if len(senha) < 6 or senha != getpass.getpass("Repita a senha: "):
+            print("As senhas não batem ou são curtas demais (mínimo 6). Nada mudou.")
             return 1
         criar_chaves(senha)
         print("Pronto. Guarde essa senha: sem ela, ninguém abre o backup (nem eu).")
