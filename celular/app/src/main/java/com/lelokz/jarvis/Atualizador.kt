@@ -84,6 +84,22 @@ object Atualizador {
 
 /** O instalador responde aqui: precisa da confirmação do Léo, deu certo ou falhou. */
 class ResultadoDaInstalacao : BroadcastReceiver() {
+    private fun notificar(c: Context, confirmar: Intent) {
+        val gerente = c.getSystemService(android.app.NotificationManager::class.java)
+        gerente.createNotificationChannel(android.app.NotificationChannel("atualizacao", "Atualização do app",
+            android.app.NotificationManager.IMPORTANCE_HIGH))
+        val abrir = PendingIntent.getActivity(c, 5, confirmar, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+        val aviso = android.app.Notification.Builder(c, "atualizacao")
+            .setContentTitle("Atualização da NOVA pronta")
+            .setContentText("Toca pra instalar")
+            .setSmallIcon(R.drawable.ic_notificacao)
+            .setContentIntent(abrir)
+            .setAutoCancel(true)
+            .setTimeoutAfter(15 * 60 * 1000L)
+            .build()
+        try { gerente.notify(79, aviso) } catch (e: SecurityException) { }
+    }
+
     override fun onReceive(c: Context, intent: Intent) {
         when (intent.getIntExtra(PackageInstaller.EXTRA_STATUS, PackageInstaller.STATUS_FAILURE)) {
             PackageInstaller.STATUS_PENDING_USER_ACTION -> {
@@ -91,7 +107,12 @@ class ResultadoDaInstalacao : BroadcastReceiver() {
                 val confirmar = if (Build.VERSION.SDK_INT >= 33)
                     intent.getParcelableExtra(Intent.EXTRA_INTENT, Intent::class.java)
                 else intent.getParcelableExtra(Intent.EXTRA_INTENT)
-                confirmar?.let { c.startActivity(it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+                confirmar ?: return
+                confirmar.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                // O Android pode barrar abrir a tela daqui (app em segundo plano):
+                // a notificação "Toca pra instalar" abre a mesma tela (app beta 0.21.0).
+                notificar(c, confirmar)
+                try { c.startActivity(confirmar) } catch (e: Exception) { }
             }
             PackageInstaller.STATUS_SUCCESS -> Unit  // o app reinicia na versão nova
             else -> (c.applicationContext as? App)?.jarvis?.let {

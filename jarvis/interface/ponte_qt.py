@@ -73,6 +73,7 @@ class PonteQt(QObject):
     terminalRecebido = Signal("QVariant")     # {id, cmd} ou {id, saida, erro} ou {limpar}
     planoRecebido = Signal("QVariant")        # [{texto, estado}]
     contextoRecebido = Signal("QVariant")     # {pct, usados, max}
+    estatisticasRecebidas = Signal("QVariant")  # Ajustes → Uso e Tempo e foco {uso, conversa, pedidos}
     programandoRecebido = Signal("QVariant")  # a seção "Programando" da lateral [{nome, caminho, quando, pendentes}]
 
     def __init__(self, caminho: Path, parent: QObject | None = None) -> None:
@@ -225,6 +226,16 @@ class PonteQt(QObject):
         if chave not in ("code_narracao", "code_janela_s", "code_persona", "code_permissao", "persona_inicial", "tema"):
             return False
         return self._pedir({"pedir": "ajustes", chave: int(valor) if chave == "code_janela_s" else str(valor)})
+
+    # Ajustes → Uso e Tempo e foco (etapa 4 do tchan).
+    @Slot(result=bool)
+    def pedirEstatisticas(self) -> bool:
+        return self._pedir({"pedir": "estatisticas"})
+
+    @Slot(int, result=bool)
+    def mudarFoco(self, minutos: int) -> bool:
+        """0 = desliga, -1 = até desligar."""
+        return minutos in (0, -1, 30, 60, 120) and self._pedir({"pedir": "foco", "minutos": minutos})
 
     @Slot(str, str, result=bool)
     def desfazer(self, ident: str, arquivo: str) -> bool:
@@ -380,6 +391,8 @@ class PonteQt(QObject):
             self.programandoRecebido.emit(list(ev.get("programando") or []))
         elif tipo == "mudancas":
             self.mudancasRecebidas.emit({k: v for k, v in ev.items() if k != "ev"})
+        elif tipo == "estatisticas":
+            self.estatisticasRecebidas.emit({k: v for k, v in ev.items() if k != "ev"})
         elif tipo == "alteracoes":
             self.alteracoesRecebidas.emit({k: v for k, v in ev.items() if k != "ev"})
         elif tipo == "desfeito":

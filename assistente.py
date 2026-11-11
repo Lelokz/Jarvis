@@ -44,7 +44,7 @@ from jarvis.agente import sessoes
 from jarvis.agente.agente import Agente, ErroDoAgente, Saida
 from jarvis.agente.avisos import AvisosWhatsApp
 from jarvis.agente import projetos
-from jarvis.agente.reflexos import comando_code, comando_code_extra, reflexo
+from jarvis.agente.reflexos import comando_code, comando_code_extra, comando_foco, reflexo
 from jarvis.cronometro import Tempos
 from jarvis.nucleo import memoria_viva, recados, relogio
 from jarvis.nucleo.atalhos import normalizar
@@ -908,6 +908,12 @@ class Ciclo:
         cmd = comando_code(texto, getattr(self.agente, "code", None) is not None)
         if cmd is not None and self._modo_code(cmd, texto, voz):
             return
+        # 2b'. O modo foco: "modo foco por uma hora", "sai do modo foco".
+        minutos = comando_foco(texto)
+        if minutos is not None:
+            self._falar(self.definir_foco(minutos))
+            self._renovar("janela reiniciada")
+            return
         # 2c. Dentro do modo code: "desfaz isso" e "modo plano"/"pergunta antes"/
         #     "pode fazer sozinho"/"só olhar" (etapa 3 do tchan).
         extra = comando_code_extra(texto) if getattr(self.agente, "code", None) is not None else None
@@ -1208,6 +1214,13 @@ class Ciclo:
         if uso and uso != getattr(self, "_ultimo_uso", None):
             self._ultimo_uso = dict(uso)
             self.emissor.emitir("uso", **uso)
+            # O histórico (Ajustes → Uso: o gasto por dia e o ritmo; etapa 4 do tchan).
+            try:
+                from jarvis.nucleo import estatisticas
+                code = getattr(self.agente, "code", None)
+                estatisticas.registrar(uso, getattr(self.agente, "_modelo_atual", ""), code.nome if code else "")
+            except OSError:
+                pass
         s = self.agente.situacao()
         chave = (s.get("tipo"), s.get("volta_em") if s.get("tipo") == "limite" else None)
         if chave == getattr(self, "_ultimo_aviso", None):
@@ -1239,7 +1252,7 @@ class Ciclo:
             return
         # Jogando: nada de anunciar cada mensagem. Aparece na janela e entra no
         # resumo que ele ouve quando fechar o jogo.
-        if self.jogo or self.gravando:
+        if self.jogo or self.gravando or self.em_foco():
             for fala, (nome, n) in zip(aviso.falar, aviso.nomes or []):
                 self._whats_no_jogo[nome] = self._whats_no_jogo.get(nome, 0) + n
                 self.registrador.registrar_estado("whatsapp_no_jogo", fala=fala)
@@ -1340,7 +1353,7 @@ class Ciclo:
         self.agente.jogo = nome
         self.registrador.registrar_estado("modo_jogo", jogo=nome or "")
         self.emitir_cerebro()   # a janela mostra "Modo jogo" embaixo do estado
-        if nome or not antes or self.gravando:
+        if nome or not antes or self.gravando or self.em_foco():
             return None
         return self._resumo_do_whats("jogava")
 
@@ -1352,9 +1365,56 @@ class Ciclo:
         self.gravando = gravando
         self.registrador.registrar_estado("modo_gravacao", gravando=gravando)
         self.emitir_cerebro()
-        if gravando or self.jogo:
+        if gravando or self.jogo or self.em_foco():
             return None
         return self._resumo_do_whats("gravava")
+
+    # -- o modo foco (etapa 4 do tchan, 11/11/2026) ---------------------------
+    # Fica quieta: o WhatsApp vai pro resumo (como no modo jogo), recados e
+    # alertas esperam, e o celular não notifica. O "hey Jarvis" continua.
+
+    def em_foco(self) -> bool:
+        agora = time.monotonic()
+        cache = getattr(self, "_foco_cache", (-99.0, False))
+        if agora - cache[0] > 2:
+            cache = (agora, ajustes.em_foco())
+            self._foco_cache = cache
+        return cache[1]
+
+    def definir_foco(self, minutos: int) -> str:
+        """0 = desliga, -1 = até desligar. Devolve a frase."""
+        ate = 0 if minutos == 0 else -1 if minutos < 0 else time.time() + minutos * 60
+        estava = ajustes.em_foco()
+        ajustes.mudar(foco_ate=ate)
+        self._foco_cache = (-99.0, False)
+        self.registrador.registrar_estado("modo_foco", minutos=minutos)
+        self.emitir_ajustes()
+        if minutos == 0:
+            if not estava:
+                return "O modo foco já tava desligado."
+            if not (self.jogo or self.gravando):
+                self._fim_do_foco = self._resumo_do_whats("tava no foco") or ""
+            return "Saí do modo foco."
+        quando = "até tu desligar" if minutos < 0 else "até as " + time.strftime("%H:%M", time.localtime(ate))
+        return f"Modo foco {quando}. Fico quieta, só falo se tu me chamar." if self.persona == "friday" \
+            else f"Modo foco {quando}. Fico quieto, só falo se você me chamar."
+
+    def checar_foco(self) -> str | None:
+        """Do laço: o foco acabou pelo tempo, ou ele desligou e chegou WhatsApp
+        enquanto isso: a frase pra falar (como um alerta)."""
+        pendente = getattr(self, "_fim_do_foco", None)
+        if pendente is not None:
+            self._fim_do_foco = None
+            return pendente or None
+        ate = ajustes.ler()["foco_ate"]
+        if ate > 0 and ate <= time.time():
+            ajustes.mudar(foco_ate=0)
+            self._foco_cache = (-99.0, False)
+            self.registrador.registrar_estado("modo_foco", minutos=0, por="tempo")
+            self.emitir_ajustes()
+            resumo = None if (self.jogo or self.gravando) else self._resumo_do_whats("tava no foco")
+            return "Acabou o modo foco." + (" " + resumo if resumo else "")
+        return None
 
     def _resumo_do_whats(self, fazendo: str) -> str | None:
         if not self._whats_no_jogo:
@@ -1460,6 +1520,10 @@ class Ciclo:
                 self.avisar_cliente(pedido.cliente, "Esse projeto não pode no modo code.")
                 return
             self._entrar_projeto(proj, falar=False)
+            return
+        if pedido.tipo == "foco":
+            # O Modo foco de Ajustes → Tempo e foco (janela e app): sem falar.
+            self.definir_foco(int(pedido.valor))
             return
         if pedido.tipo in ("desfazer", "desfazer_git"):
             d = json.loads(pedido.valor)
@@ -2034,8 +2098,12 @@ def conversar(cfg: config.Config) -> int:
                     ciclo.atualizar_aviso(conferir_internet=True)
                     proximo_aviso = time.monotonic() + 30
                     # O relógio interno: recados que ele deixou para si mesmo.
-                    for recado in recados.vencidos(agente.casa / recados.NOME):
-                        ciclo.do_recado(recado)
+                    if not ciclo.em_foco():   # no modo foco, os recados esperam
+                        for recado in recados.vencidos(agente.casa / recados.NOME):
+                            ciclo.do_recado(recado)
+                    fim_do_foco = ciclo.checar_foco()
+                    if fim_do_foco:
+                        alertas.append(fim_do_foco)
                     # Os avisos do Painel do Canal (comentário com pergunta, marcos):
                     # pela fila do alerta; jogando ou gravando, esperam.
                     try:
@@ -2056,7 +2124,7 @@ def conversar(cfg: config.Config) -> int:
                 novo = vigia.pegar()
                 if novo:
                     alertas.append(novo)
-                if alertas and not ciclo.vad.falando and ciclo.alertar(alertas[0]):
+                if alertas and not ciclo.vad.falando and not ciclo.em_foco() and ciclo.alertar(alertas[0]):
                     alertas.pop(0)
                 while not do_organizador.empty():
                     organizador_espera.append(do_organizador.get_nowait())

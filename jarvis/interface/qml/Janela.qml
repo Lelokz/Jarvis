@@ -102,6 +102,7 @@ Window {
     property bool verContexto: false
     property var plano: []
     property var programando: []
+    property var estatisticas: null   // Ajustes → Uso e Tempo e foco (etapa 4)
     property var contexto: null
     readonly property bool ladoCodeAberto: verMudancas || verTerminal || verPlano || verContexto
     ListModel { id: terminalModelo }
@@ -339,6 +340,7 @@ Window {
         }
         function onProjetosRecebidos(lista) { janela.projetos = lista }
         function onProgramandoRecebido(lista) { janela.programando = lista }
+        function onEstatisticasRecebidas(d) { janela.estatisticas = d }
         function onMudancasRecebidas(d) { if (d.caminho === janela.codeCaminho) janela.mudancas = d }
         function onAlteracoesRecebidas(d) { falasAtual.alteracoes(d, true); janela.mudouAlgo(); ponte.pedirProjetos() }
         function onDesfeitoRecebido(d) {
@@ -1335,6 +1337,9 @@ Window {
         voltaSemana: janela.voltaSemana
         som: janela.som
         ajustes: janela.ajustes
+        estatisticas: janela.estatisticas
+        onPedirEstatisticas: if (typeof ponte !== "undefined") ponte.pedirEstatisticas()
+        onMudarFoco: (minutos) => { if (typeof ponte !== "undefined") ponte.mudarFoco(minutos) }
         onMudarVolume: (volume) => { if (typeof ponte !== "undefined") ponte.mudarVolumeVoz(volume) }
         onMudarNome: (nome) => { if (typeof ponte !== "undefined") ponte.mudarNome(nome) }
         onMudarCode: (chave, valor) => { if (typeof ponte !== "undefined") ponte.mudarAjusteCode(chave, valor) }

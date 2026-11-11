@@ -1466,7 +1466,8 @@ private val categoriasDosAjustes = listOf(
         Categoria("geral", "Geral", "Teu nome, aparência e este celular", Icones.geral),
         Categoria("voz", "Voz e som", "Sempre ouvindo, volume da voz", Icones.voz),
         Categoria("avisos", "Avisos", "O que ele avisa aqui", Icones.sino),
-        Categoria("uso", "Uso", "A assinatura do Claude", Icones.uso)),
+        Categoria("uso", "Uso", "A assinatura do Claude", Icones.uso),
+        Categoria("foco", "Tempo e foco", "Modo foco e tempo conversando", Icones.lua)),
     "Personalização" to listOf(
         Categoria("personas", "Personas", "Jarvis e Friday", Icones.personas),
         Categoria("code", "Modo code", "Programar pela voz", Icones.codigo),
@@ -1477,6 +1478,7 @@ private val categoriasDosAjustes = listOf(
 @Composable
 private fun PaginaAjustes(modelo: Jarvis) {
     val aba = modelo.abaAjustes.value
+    LaunchedEffect(aba) { if (aba == "uso" || aba == "foco") modelo.pedirEstatisticas() }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp)) {
         when (aba) {
             "" -> ListaDeCategorias(modelo)
@@ -1484,6 +1486,7 @@ private fun PaginaAjustes(modelo: Jarvis) {
             "voz" -> AjustesVoz(modelo)
             "avisos" -> AjustesAvisos(modelo)
             "uso" -> AjustesUso(modelo)
+            "foco" -> AjustesFoco(modelo)
             "personas" -> AjustesPersonas(modelo)
             "code" -> AjustesCode(modelo)
             "conexoes" -> if (modelo.passoConexao.value.isEmpty()) AjustesConexoes(modelo) else PassoDaConexao(modelo)
@@ -1496,6 +1499,41 @@ private fun PaginaAjustes(modelo: Jarvis) {
 /** A lista das categorias: o toque entra em cada uma. */
 @Composable
 private fun ListaDeCategorias(modelo: Jarvis) {
+    // A busca (app beta 0.21.0): no nome e na explicação de cada ajuste, sem acento.
+    var busca by remember { mutableStateOf("") }
+    Row(Modifier.fillMaxWidth().padding(top = 6.dp).height(46.dp).clip(RoundedCornerShape(12.dp)).background(Superficie)
+        .border(1.dp, if (busca.isNotEmpty()) Azul else TracoForte, RoundedCornerShape(12.dp)).padding(horizontal = 14.dp),
+        verticalAlignment = Alignment.CenterVertically) {
+        Ic(Icones.lupa, if (busca.isNotEmpty()) TextoMedio else MuitoFraco, 17.dp)
+        Spacer(Modifier.width(10.dp))
+        Box(Modifier.weight(1f)) {
+            if (busca.isEmpty()) Text("Procurar nos ajustes", color = MuitoFraco, fontSize = 15.sp)
+            BasicTextField(value = busca, onValueChange = { busca = it.take(40) }, singleLine = true,
+                textStyle = TextStyle(color = Texto, fontSize = 15.sp, fontFamily = Inter), cursorBrush = SolidColor(Azul),
+                modifier = Modifier.fillMaxWidth())
+        }
+        if (busca.isNotEmpty()) Box(Modifier.size(30.dp).clip(CircleShape).clickable { busca = "" },
+            contentAlignment = Alignment.Center) { Ic(Icones.fechar, Fraco, 15.dp) }
+    }
+    if (busca.isNotBlank()) {
+        val q = semAcento(busca.trim())
+        val achados = indiceDosAjustes.filter { semAcento(it.titulo + " " + it.onde + " " + it.palavras).contains(q) }
+        Text(if (achados.isEmpty()) "Nada com “${busca.trim()}”" else "${achados.size} resultado" + (if (achados.size > 1) "s" else ""),
+            color = Fraco, fontSize = 13.sp, modifier = Modifier.padding(start = 4.dp, top = 10.dp, bottom = 8.dp))
+        for (r in achados) Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
+            .clickable { busca = ""; modelo.abaAjustes.value = r.aba }.padding(horizontal = 10.dp, vertical = 11.dp),
+            verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(34.dp).clip(RoundedCornerShape(9.dp)).background(Superficie2), contentAlignment = Alignment.Center) {
+                Ic(r.icone, TextoMedio, 17.dp) }
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(marcado(r.titulo, q), color = Texto, fontSize = 15.sp)
+                Text(r.onde, color = Fraco, fontSize = 12.5.sp)
+            }
+            Ic(Icones.direita, MuitoFraco, 16.dp)
+        }
+        return
+    }
     for ((grupo, itens) in categoriasDosAjustes) {
         if (grupo.isNotEmpty()) Text(grupo, color = MuitoFraco, fontSize = 12.5.sp,
             modifier = Modifier.padding(start = 6.dp, top = 14.dp, bottom = 8.dp))
@@ -1653,6 +1691,179 @@ private fun AjustesUso(modelo: Jarvis) {
             BarraDeUso("Últimas 5 horas", modelo.usoCinco.value, modelo.voltaCinco.value, false)
             BarraDeUso("Esta semana", modelo.usoSemana.value, modelo.voltaSemana.value, true)
         }
+        // O ritmo (app beta 0.21.0): se continuar assim, quando a semana acaba.
+        val est = modelo.estatisticas.value?.optJSONObject("uso")
+        est?.optJSONObject("previsao")?.let { prev ->
+            val antes = prev.optBoolean("antes_de_renovar")
+            val c = Calendar.getInstance().apply { timeInMillis = prev.optLong("acaba_em") * 1000 }
+            val dias = listOf("dom", "seg", "ter", "qua", "qui", "sex", "sáb")
+            val quando = "${dias[c.get(Calendar.DAY_OF_WEEK) - 1]} ${c.get(Calendar.DAY_OF_MONTH)}/${c.get(Calendar.MONTH) + 1}, " +
+                "%02d:%02d".format(c.get(Calendar.HOUR_OF_DAY), c.get(Calendar.MINUTE))
+            Row(Modifier.padding(top = 16.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp))
+                .background(if (antes) Pergunta.copy(alpha = 0.08f) else Superficie)
+                .border(1.dp, if (antes) Pergunta.copy(alpha = 0.4f) else Traco, RoundedCornerShape(12.dp)).padding(12.dp)) {
+                Box(Modifier.padding(top = 5.dp).size(8.dp).clip(CircleShape).background(if (antes) Pergunta else Color(0xFF38D39F)))
+                Spacer(Modifier.width(10.dp))
+                Text(if (antes) "No ritmo de hoje, a semana acaba $quando (antes de renovar). Trocar o cérebro pro Sonnet gasta bem menos."
+                     else "No ritmo de hoje, a semana dá até renovar.",
+                    color = if (antes) Color(0xFFFFCF8A) else TextoMedio, fontSize = 13.sp)
+            }
+        }
+    }
+    val est = modelo.estatisticas.value
+    val dias = est?.optJSONObject("uso")?.optJSONArray("dias")?.let { a ->
+        List(a.length()) { a.getJSONObject(it).let { d -> d.optString("dia") to d.optDouble("pct") } } } ?: emptyList()
+    if (dias.isNotEmpty()) SecaoDosAjustes("Quanto da semana foi em cada dia", "Pedaço do limite semanal gasto por dia. Começou a contar em 11/11.") {
+        GraficoDias(dias, Azul) { "${it.toInt()}%" }
+    }
+    if (est != null) SecaoDosAjustes("Hoje") {
+        val ped = est.optJSONObject("pedidos")
+        val total = ped?.keys()?.asSequence()?.sumOf { ped.optInt(it) } ?: 0
+        val nomes = mapOf("voz" to "por voz", "celular" to "do celular", "texto" to "digitados", "relogio" to "do relógio")
+        val cerebro = est.optJSONObject("uso")?.optJSONObject("cerebro")
+        val code = est.optJSONObject("uso")?.optJSONObject("code")
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            for ((n, r) in listOf(
+                "$total" to ("pedidos" + (ped?.keys()?.asSequence()?.sortedByDescending { ped.optInt(it) }
+                    ?.joinToString(", ", " · ") { "${ped.optInt(it)} ${nomes[it] ?: it}" }?.takeIf { total > 0 } ?: " ainda")),
+                (cerebro?.optString("nome") ?: "—") to (cerebro?.let { "o cérebro que mais gastou hoje (${it.optInt("pct")}%)" } ?: "o cérebro que mais gastou hoje"),
+                (if (code != null) "Modo code" else "—") to (code?.let { "${it.optDouble("pct")}% da semana no ${it.optString("nome").removePrefix("Projeto ")}" } ?: "sem modo code hoje"),
+            )) Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Superficie)
+                .border(1.dp, Traco, RoundedCornerShape(12.dp)).padding(horizontal = 14.dp, vertical = 11.dp),
+                verticalAlignment = Alignment.CenterVertically) {
+                Text(n, color = Texto, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.widthIn(min = 64.dp))
+                Spacer(Modifier.width(10.dp))
+                Text(r, color = Fraco, fontSize = 13.sp)
+            }
+        }
+    }
+}
+
+// -- a etapa 4 do tchan (app beta 0.21.0): busca, Uso com as contas e Tempo e foco --
+
+private data class AjusteAchavel(val titulo: String, val onde: String, val aba: String, val icone: ImageVector, val palavras: String)
+
+private val indiceDosAjustes = listOf(
+    AjusteAchavel("Seu nome", "Geral", "geral", Icones.geral, "como ela te chama usuario"),
+    AjusteAchavel("Aparência (tema escuro ou claro)", "Geral", "geral", Icones.geral, "tema cor escuro claro"),
+    AjusteAchavel("Sempre ouvindo (“hey Jarvis” com a tela desligada)", "Voz e som", "voz", Icones.voz, "ouvido microfone wake"),
+    AjusteAchavel("Volume da voz no PC", "Voz e som", "voz", Icones.som, "alto baixo volume"),
+    AjusteAchavel("Avisos", "Avisos", "avisos", Icones.sino, "notificacao"),
+    AjusteAchavel("Uso da assinatura", "Uso", "uso", Icones.uso, "limite claude semana horas ritmo gasto"),
+    AjusteAchavel("Modo foco", "Tempo e foco", "foco", Icones.lua, "silencio quieto nao perturbe estudar gravar dormir"),
+    AjusteAchavel("Tempo conversando", "Tempo e foco", "foco", Icones.relogio, "horas minutos por dia"),
+    AjusteAchavel("Quem atende quando a NOVA liga", "Personas", "personas", Icones.personas, "persona padrao jarvis friday"),
+    AjusteAchavel("Modo code (narração, microfone, quem programa)", "Modo code", "code", Icones.codigo, "programar code projeto"),
+    AjusteAchavel("WhatsApp", "Conexões", "conexoes", Icones.whats, "mensagens zap whats"),
+    AjusteAchavel("Grupos do WhatsApp", "Conexões", "conexoes", Icones.grupo, "familia grupo whats zap"),
+    AjusteAchavel("Fora de casa (Tailscale)", "Conexões", "conexoes", Icones.globo, "rua longe internet"),
+    AjusteAchavel("Relógio (Wear OS)", "Conexões", "conexoes", Icones.relogio, "pulso relogio"),
+    AjusteAchavel("Música (YouTube)", "Conexões", "conexoes", Icones.musica, "tocar video youtube musica"),
+    AjusteAchavel("Sobre a NOVA (versão)", "Sobre a NOVA", "sobre", Icones.sobre, "versao beta atualizacao"),
+)
+
+private fun semAcento(t: String) = java.text.Normalizer.normalize(t.lowercase(), java.text.Normalizer.Form.NFD)
+    .replace(Regex("\\p{M}+"), "")
+
+/** O pedaço procurado em destaque no título. */
+private fun marcado(titulo: String, q: String): AnnotatedString = buildAnnotatedString {
+    val i = semAcento(titulo).indexOf(q)
+    if (i < 0 || q.isEmpty()) { append(titulo); return@buildAnnotatedString }
+    append(titulo.substring(0, i))
+    withStyle(SpanStyle(background = Azul.copy(alpha = 0.28f))) { append(titulo.substring(i, i + q.length)) }
+    append(titulo.substring(i + q.length))
+}
+
+private fun duracao(min: Int) = if (min < 60) "${min}min" else "${min / 60}h" + (if (min % 60 > 0) " %02dmin".format(min % 60) else "")
+
+private fun diaCurto(iso: String, hoje: Boolean): String {
+    if (hoje) return "hoje"
+    val d = runCatching { java.time.LocalDate.parse(iso) }.getOrNull() ?: return ""
+    return listOf("seg", "ter", "qua", "qui", "sex", "sáb", "dom")[d.dayOfWeek.value - 1]
+}
+
+/** As barras dos últimos dias (Uso e Tempo e foco); hoje na cor. */
+@Composable
+private fun GraficoDias(dias: List<Pair<String, Double>>, cor: Color, rotulo: (Double) -> String) {
+    if (dias.isEmpty()) return
+    val maximo = (dias.maxOf { it.second }).coerceAtLeast(0.0001)
+    Row(Modifier.fillMaxWidth().height(130.dp).padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.Bottom) {
+        dias.forEachIndexed { i, (_, v) ->
+            Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(rotulo(v), color = Fraco, fontSize = 10.sp, maxLines = 1)
+                Spacer(Modifier.height(4.dp))
+                Box(Modifier.fillMaxWidth().height((96 * v / maximo).coerceAtLeast(3.0).dp)
+                    .clip(RoundedCornerShape(topStart = 5.dp, topEnd = 5.dp, bottomStart = 2.dp, bottomEnd = 2.dp))
+                    .background(if (i == dias.lastIndex) cor else TracoForte))
+            }
+        }
+    }
+    Box(Modifier.fillMaxWidth().height(1.dp).background(Traco))
+    Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        dias.forEachIndexed { i, (dia, _) ->
+            Text(diaCurto(dia, i == dias.lastIndex), color = if (i == dias.lastIndex) Texto else Fraco, fontSize = 11.5.sp,
+                textAlign = TextAlign.Center, modifier = Modifier.weight(1f))
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun AjustesFoco(modelo: Jarvis) {
+    var agora by remember { mutableStateOf(System.currentTimeMillis() / 1000.0) }
+    LaunchedEffect(Unit) { while (true) { delay(20_000); agora = System.currentTimeMillis() / 1000.0 } }
+    val ate = modelo.focoAte.value
+    val ligado = ate == -1.0 || ate > agora
+    var escolhido by remember { mutableStateOf(60) }
+    val roxo = Color(0xFF9B7BFF)
+    SecaoDosAjustes("Modo foco", "Pra estudar, gravar ou dormir em paz. Ela continua atendendo quando tu chama.") {
+        val forma = RoundedCornerShape(16.dp)
+        Column(Modifier.fillMaxWidth().clip(forma).background(roxo.copy(alpha = if (ligado) 0.10f else 0.05f))
+            .border(1.dp, roxo.copy(alpha = if (ligado) 0.55f else 0.28f), forma).padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(40.dp).clip(RoundedCornerShape(11.dp)).background(roxo.copy(alpha = 0.18f)),
+                    contentAlignment = Alignment.Center) { Ic(Icones.lua, roxo, 20.dp) }
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(when { !ligado -> "Modo foco"; ate == -1.0 -> "Foco · até tu desligar"
+                        else -> "Foco · até " + java.text.SimpleDateFormat("HH:mm", java.util.Locale("pt", "BR")).format(java.util.Date((ate * 1000).toLong())) },
+                        color = Texto, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+                    Text(when { !ligado -> "desligado"; ate == -1.0 -> "desliga aqui ou falando"
+                        else -> "falta " + duracao(kotlin.math.ceil((ate - agora) / 60).toInt().coerceAtLeast(1)) },
+                        color = Fraco, fontSize = 13.sp)
+                }
+                Switch(checked = ligado, enabled = modelo.conectado.value,
+                    onCheckedChange = { modelo.mudarFoco(if (it) escolhido else 0) },
+                    colors = SwitchDefaults.colors(checkedTrackColor = roxo, checkedThumbColor = Color.White))
+            }
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                for ((m, n) in listOf(30 to "30 min", 60 to "1 hora", 120 to "2 horas", -1 to "Até eu desligar")) {
+                    val sel = escolhido == m
+                    Text(n, color = if (sel) Texto else TextoMedio, fontSize = 14.sp,
+                        modifier = Modifier.clip(RoundedCornerShape(10.dp)).background(if (sel) roxo.copy(alpha = 0.16f) else Superficie)
+                            .border(1.dp, if (sel) roxo else TracoForte, RoundedCornerShape(10.dp))
+                            .clickable(enabled = modelo.conectado.value) { escolhido = m; modelo.mudarFoco(m) }
+                            .padding(horizontal = 14.dp, vertical = 8.dp))
+                }
+            }
+            for ((ok, t) in listOf(false to "Avisos de WhatsApp (ela conta quando o foco acabar)", false to "Lembretes e recados falados",
+                                   false to "Notificação no celular", true to "“Hey Jarvis” e “Hey Friday” continuam")) Row {
+                Text(if (ok) "✓" else "✕", color = if (ok) Color(0xFF38D39F) else Color(0xFFF87171), fontSize = 13.sp)
+                Spacer(Modifier.width(10.dp))
+                Text(t, color = TextoMedio, fontSize = 13.5.sp)
+            }
+            Text("Pela voz: “modo foco por uma hora”, “sai do modo foco”", color = MuitoFraco, fontSize = 12.sp)
+        }
+    }
+    val conversa = modelo.estatisticas.value?.optJSONArray("conversa")?.let { a ->
+        List(a.length()) { a.getJSONObject(it).let { d -> d.optString("dia") to d.optDouble("min") } } } ?: emptyList()
+    SecaoDosAjustes("Tempo conversando", "Quanto tempo ela ficou acordada contigo por dia (voz, texto e celular).") {
+        if (conversa.isEmpty()) Text("Carregando…", color = MuitoFraco, fontSize = 13.sp)
+        GraficoDias(conversa, roxo) { duracao(it.toInt()) }
+        if (conversa.isNotEmpty()) Text("Média de " + duracao((conversa.sumOf { it.second } / conversa.size).toInt()) + " por dia",
+            color = Fraco, fontSize = 13.sp, modifier = Modifier.padding(top = 10.dp))
     }
 }
 

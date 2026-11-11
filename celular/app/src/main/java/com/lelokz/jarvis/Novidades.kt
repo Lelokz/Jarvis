@@ -34,6 +34,9 @@ object Novidades {
     /** Busca e mostra as novidades que ainda não apareceram. Roda fora da thread principal. */
     fun buscar(c: Context) {
         val p = prefs(c)
+        // O Modo foco (app beta 0.21.0): nada de aviso; fica guardado pra depois.
+        val foco = p.getFloat("foco_ate", 0f).toDouble()
+        if (foco == -1.0 || foco > System.currentTimeMillis() / 1000.0) return
         val base = p.getString("base", null)?.trimEnd('/') ?: return
         val chave = p.getString("chave", null) ?: return
         val primeiraVez = !p.contains("novidade_ultima")

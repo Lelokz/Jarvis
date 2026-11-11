@@ -203,7 +203,8 @@ PEDIDOS = frozenset({"ola", "falar", "memoria", "ouvir",
                      "renomear", "apagar", "som", "ajustes", "fixar",
                      "memorias", "ler_memoria", "salvar_memoria", "conexao",
                      "projetos", "code", "mudancas", "git", "novo_projeto",
-                     "repetir", "avaliar", "desfazer", "desfazer_git"})
+                     "repetir", "avaliar", "desfazer", "desfazer_git",
+                     "estatisticas", "foco"})
 
 # Uma linha maior que isto sem quebra é um cliente com defeito, não um pedido.
 MAX_LINHA = 64 * 1024
@@ -248,7 +249,7 @@ def ler_pedido(linha: bytes) -> tuple[str, dict[str, Any]]:
             raise ErroDeProtocolo(f"texto com mais de {MAX_TEXTO} caracteres")
         return tipo, {"texto": texto, "anexos": _anexos(objeto), "mudo": _mudo(objeto)}
 
-    if tipo in ("memoria", "conversas", "nova", "parar", "memorias", "projetos"):
+    if tipo in ("memoria", "conversas", "nova", "parar", "memorias", "projetos", "estatisticas"):
         return tipo, {}
 
     # O modo code (10/11/2026): entrar num projeto ("" = sair), ver as mudanças
@@ -267,6 +268,13 @@ def ler_pedido(linha: bytes) -> tuple[str, dict[str, Any]]:
         if objeto.get("acao") not in ("commit", "push"):
             raise ErroDeProtocolo("'git' com acao commit ou push")
         return tipo, {"acao": objeto["acao"]}
+    # O Modo foco (Ajustes → Tempo e foco, 11/11/2026): minutos; 0 = desliga,
+    # -1 = até desligar.
+    if tipo == "foco":
+        minutos = objeto.get("minutos")
+        if minutos not in (0, -1, 30, 60, 120):
+            raise ErroDeProtocolo("'foco' com minutos 0, -1, 30, 60 ou 120")
+        return tipo, {"minutos": minutos}
     # O Desfazer do modo code (11/11/2026): o cartão de uma resposta ("id"; ""
     # = a última do projeto), um arquivo só ou todos; e o "Desfazer arquivo" do
     # painel Mudanças, contra o último commit ("desfazer_git").

@@ -150,6 +150,10 @@ class Jarvis(private val app: Application) {
     val codePermissao = mutableStateOf("auto")
     // Quem atende quando a NOVA liga (Ajustes → Personas, app beta 0.20.5).
     val personaInicial = mutableStateOf("jarvis")
+    // Ajustes → Uso e Tempo e foco (app beta 0.21.0): as contas do PC e o Modo foco
+    // (até quando, época; 0 = desligado, -1 = até desligar).
+    val estatisticas = mutableStateOf<JSONObject?>(null)
+    val focoAte = mutableStateOf(prefs.getFloat("foco_ate", 0f).toDouble())
     val plano = mutableStateOf<List<Pair<String, String>>>(emptyList())   // (texto, estado)
     val terminal = mutableStateListOf<LinhaTerminal>()
     val contextoPct = mutableIntStateOf(-1)
@@ -368,6 +372,10 @@ class Jarvis(private val app: Application) {
                     if (erro.isNotEmpty()) { aviso.value = erro; atualizando.value = -1f }
                     else atualizando.value = 2f
                 }
+                // O Android às vezes não abre o "Atualizar este app?" (11/11/2026: ficou
+                // preso no "Instalando…"). A notificação fica; o retângulo volta.
+                kotlinx.coroutines.delay(60_000)
+                withContext(Dispatchers.Main) { if (atualizando.value > 1f) atualizando.value = -1f }
             }
         }
     }
@@ -425,6 +433,15 @@ class Jarvis(private val app: Application) {
         if (c.isNotEmpty() && arquivo.isNotEmpty())
             conexao?.enviar(JSONObject().put("pedir", "desfazer_git").put("caminho", c).put("arquivo", arquivo))
     }
+
+    fun pedirEstatisticas() { conexao?.enviar(JSONObject().put("pedir", "estatisticas")) }
+
+    /** 0 = desliga, -1 = até desligar. */
+    fun mudarFoco(minutos: Int) {
+        conexao?.enviar(JSONObject().put("pedir", "foco").put("minutos", minutos))
+    }
+
+    val emFoco: Boolean get() = focoAte.value == -1.0 || focoAte.value > System.currentTimeMillis() / 1000.0
 
     fun mudarPermissao(modo: String) {
         codePermissao.value = modo
@@ -893,6 +910,7 @@ class Jarvis(private val app: Application) {
             "plano" -> plano.value = ev.optJSONArray("itens")?.let { a ->
                 List(a.length()) { a.getJSONObject(it).let { p -> p.optString("texto") to p.optString("estado") } } } ?: emptyList()
             "contexto" -> contextoPct.intValue = ev.optInt("pct", -1)
+            "estatisticas" -> estatisticas.value = ev
             "memorias" -> {
                 memoriasCarregando.value = false
                 memorias.clear()
@@ -943,6 +961,9 @@ class Jarvis(private val app: Application) {
                 codePersona.value = ev.optString("code_persona", codePersona.value)
                 codePermissao.value = ev.optString("code_permissao", codePermissao.value)
                 personaInicial.value = ev.optString("persona_inicial", personaInicial.value)
+                focoAte.value = ev.optDouble("foco_ate", 0.0)
+                // O Novidades (o aviso no celular) olha isto mesmo com o app fechado.
+                prefs.edit().putFloat("foco_ate", focoAte.value.toFloat()).apply()
                 // O tema (beta 0.19.5): o mesmo da janela; guardado pra abrir já certo.
                 temaClaro.value = ev.optString("tema", "escuro") == "claro"
                 prefs.edit().putString("nome_usuario", nomeUsuario.value).putString("nome_pc", nomePc.value)

@@ -172,3 +172,37 @@ def comando_code_extra(falado: str) -> tuple[str, str] | None:
         if rx.match(t):
             return ("permissao", modo)
     return None
+
+
+# O modo foco (etapa 4 do tchan, 11/11/2026): "modo foco por uma hora", "modo
+# foco" (até desligar), "sai do modo foco". Devolve os minutos (-1 = até
+# desligar, 0 = desligar) ou None.
+_FOCO_SAI = re.compile(r"^(?:jarvis |friday )?(?:sai|sair|desliga|desligar|tira|acaba|termina|para)(?: (?:d|do|o|com o))? "
+                       r"(?:modo )?foco$")
+_FOCO = re.compile(r"^(?:jarvis |friday )?(?:(?:liga|ligar|ativa|ativar|entra|entrar|bota|coloca|quero)(?: (?:no|o|em))? )?"
+                   r"modo foco(?: (?:por|de|durante))?(?: (?P<tempo>.+))?$")
+_NUMEROS = {"um": 1, "uma": 1, "dois": 2, "duas": 2, "tres": 3, "quatro": 4, "cinco": 5, "dez": 10, "quinze": 15,
+            "vinte": 20, "trinta": 30, "quarenta": 40, "quarenta e cinco": 45, "noventa": 90}
+
+
+def comando_foco(falado: str) -> int | None:
+    t = normalizar(falado)
+    if _FOCO_SAI.match(t):
+        return 0
+    m = _FOCO.match(t)
+    if not m:
+        return None
+    tempo = (m["tempo"] or "").strip()
+    if not tempo or tempo in ("ate eu desligar", "ate eu tirar", "sem hora"):
+        return -1
+    if tempo.startswith("meia hora"):
+        return 30
+    if tempo == "hora":          # "uma hora" (o "uma" sai no normalizar)
+        return 60
+    m2 = re.match(r"^(?P<n>\d+|[a-z]+(?: e cinco)?) (?P<u>hora|horas|minuto|minutos|min)$", tempo)
+    if not m2:
+        return None
+    n = int(m2["n"]) if m2["n"].isdigit() else _NUMEROS.get(m2["n"])
+    if not n:
+        return None
+    return n * 60 if m2["u"].startswith("hora") else n

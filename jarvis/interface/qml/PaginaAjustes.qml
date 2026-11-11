@@ -35,7 +35,77 @@ Item {
     signal mudarGrupo(bool ligado)
 
     property string aba: "geral"
-    onAbaChanged: fecharPasso()
+    onAbaChanged: { fecharPasso(); if (aba === "uso" || aba === "foco") pedirEstatisticas() }
+
+    // -- a etapa 4 do tchan (11/11/2026): busca, Uso com as contas e Tempo e foco --
+    property var estatisticas: null          // o evento "estatisticas" (jarvis/nucleo/estatisticas.py)
+    signal pedirEstatisticas()
+    signal mudarFoco(int minutos)            // 0 = desliga, -1 = até desligar
+    readonly property real focoAte: ajustes && ajustes.foco_ate !== undefined ? ajustes.foco_ate : 0
+    property real agoraSeg: Date.now() / 1000
+    Timer { interval: 20000; repeat: true; running: raiz.aberto; onTriggered: raiz.agoraSeg = Date.now() / 1000 }
+    readonly property bool focoLigado: focoAte === -1 || focoAte > agoraSeg
+    property int focoEscolhido: 60
+
+    property string busca: ""
+    function semAcento(t) { return t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase() }
+    // Cada ajuste que dá pra achar: o nome, onde mora, a categoria e palavras
+    // que a pessoa pode usar pra procurar.
+    readonly property var indice: [
+        { t: "Seu nome", onde: "Geral", aba: "geral", icone: "pessoa", p: "como ela te chama usuario" },
+        { t: "Aparência (tema escuro ou claro)", onde: "Geral", aba: "geral", icone: "geral", p: "tema cor escuro claro" },
+        { t: "Nome do PC", onde: "Geral", aba: "geral", icone: "geral", p: "computador este" },
+        { t: "Microfone (a voz que ela ouve)", onde: "Voz e som", aba: "voz", icone: "voz", p: "entrada som aparelho fifine" },
+        { t: "Saída da voz (caixa ou fone)", onde: "Voz e som", aba: "voz", icone: "som", p: "alto falante fone caixa som aparelho" },
+        { t: "Volume da voz no PC", onde: "Voz e som", aba: "voz", icone: "som", p: "alto baixo volume" },
+        { t: "Quanto ele conta no modo code", onde: "Voz e som › Modo code", aba: "voz", icone: "codigo", p: "narracao programar code" },
+        { t: "Microfone aberto depois da resposta", onde: "Voz e som › Modo code", aba: "voz", icone: "codigo", p: "ouve sem hey jarvis programar code janela" },
+        { t: "Quem programa no modo code", onde: "Voz e som › Modo code", aba: "voz", icone: "codigo", p: "persona jarvis friday programar code" },
+        { t: "Reconhecer a tua voz", onde: "Voz e som › Quem fala", aba: "voz", icone: "personas", p: "dono so eu seguranca" },
+        { t: "Vozes dubladas (Jarvis e Friday)", onde: "Voz e som", aba: "voz", icone: "voz", p: "pasta rvc f5" },
+        { t: "Uso da assinatura", onde: "Uso", aba: "uso", icone: "uso", p: "limite claude semana horas ritmo gasto" },
+        { t: "Modo foco", onde: "Tempo e foco", aba: "foco", icone: "lua", p: "silencio quieto nao perturbe estudar gravar dormir" },
+        { t: "Tempo conversando", onde: "Tempo e foco", aba: "foco", icone: "relogio", p: "horas minutos por dia" },
+        { t: "Quem atende quando a NOVA liga", onde: "Personas", aba: "personas", icone: "personas", p: "persona padrao jarvis friday" },
+        { t: "WhatsApp", onde: "Conexões", aba: "conexoes", icone: "whats", p: "mensagens zap whats" },
+        { t: "Grupos do WhatsApp", onde: "Conexões", aba: "conexoes", icone: "grupo", p: "familia grupo whats zap" },
+        { t: "Fora de casa (Tailscale)", onde: "Conexões", aba: "conexoes", icone: "globo", p: "rua celular longe" },
+        { t: "Celular (o app NOVA)", onde: "Conexões", aba: "conexoes", icone: "celular", p: "app telefone qr" },
+        { t: "Relógio (Wear OS)", onde: "Conexões", aba: "conexoes", icone: "relogio", p: "relogio pulso" },
+        { t: "Música (YouTube)", onde: "Conexões", aba: "conexoes", icone: "musica", p: "tocar video youtube musica" },
+        { t: "Atalhos (programas e pastas)", onde: "Conexões", aba: "conexoes", icone: "raio", p: "abrir programa pasta" },
+        { t: "Da tua conta do Claude (Gmail, Agenda, Drive)", onde: "Conexões", aba: "conexoes", icone: "conexoes", p: "gmail email agenda drive conectores" },
+        { t: "Sobre a NOVA (versão)", onde: "Sobre a NOVA", aba: "sobre", icone: "sobre", p: "versao beta" },
+    ]
+    readonly property var resultados: {
+        var q = semAcento(busca.trim());
+        if (!q) return [];
+        return indice.filter(function (i) { return semAcento(i.t + " " + i.onde + " " + i.p).indexOf(q) >= 0 });
+    }
+    property int escolhaBusca: 0
+    onBuscaChanged: escolhaBusca = 0
+    function abrirResultado(i) {
+        var r = resultados[i];
+        if (!r) return;
+        busca = ""; campoBusca.text = ""; aba = r.aba; rolagem.contentY = 0;
+    }
+    function marcar(titulo) {
+        var q = semAcento(busca.trim()), i = semAcento(titulo).indexOf(q);
+        var esc = function (t) { return t.replace(/&/g, "&amp;").replace(/</g, "&lt;") };
+        if (!q || i < 0) return esc(titulo);
+        return esc(titulo.slice(0, i)) + "<span style=\"background-color:" + Qt.rgba(tema.persona.r, tema.persona.g, tema.persona.b, 0.28)
+               + "\">" + esc(titulo.slice(i, i + q.length)) + "</span>" + esc(titulo.slice(i + q.length));
+    }
+    function duracao(min) {
+        if (min < 60) return min + "min";
+        var h = Math.floor(min / 60), m = min % 60;
+        return h + "h" + (m ? " " + ("0" + m).slice(-2) + "min" : "");
+    }
+    function diaCurto(iso, ultimo) {
+        if (ultimo) return "hoje";
+        var d = new Date(iso + "T12:00:00");
+        return ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"][d.getDay()];
+    }
 
     // O passo a passo aberto (o id da conexão, "" = a lista) e a última
     // resposta do PC para ele (o evento "conexao", jarvis/conectar.py).
@@ -73,7 +143,8 @@ Item {
             { id: "geral", nome: "Geral", icone: "geral" },
             { id: "voz", nome: "Voz e som", icone: "voz" },
             { id: "avisos", nome: "Avisos", icone: "sino" },
-            { id: "uso", nome: "Uso", icone: "uso" } ] },
+            { id: "uso", nome: "Uso", icone: "uso" },
+            { id: "foco", nome: "Tempo e foco", icone: "lua" } ] },
         { grupo: "Personalização", itens: [
             { id: "personas", nome: "Personas", icone: "personas" },
             { id: "conexoes", nome: "Conexões", icone: "conexoes" } ] },
@@ -138,7 +209,10 @@ Item {
     visible: opacity > 0
     opacity: aberto ? 1 : 0
     Behavior on opacity { NumberAnimation { duration: raiz.tema.rapido } }
-    onAbertoChanged: if (aberto) painel.forceActiveFocus(); else fecharPasso()
+    onAbertoChanged: {
+        if (aberto) { painel.forceActiveFocus(); if (aba === "uso" || aba === "foco") pedirEstatisticas() }
+        else { fecharPasso(); campoBusca.text = "" }
+    }
 
     // -- as peças das páginas -------------------------------------------------
 
@@ -501,6 +575,7 @@ Item {
         clip: true
         focus: true
         Keys.onEscapePressed: raiz.fechar()
+        Shortcut { sequence: "Ctrl+F"; enabled: raiz.aberto; onActivated: campoBusca.forceActiveFocus() }
         // O clique dentro do painel não fecha.
         MouseArea { anchors.fill: parent }
 
@@ -549,6 +624,41 @@ Item {
             topPadding: 12
             leftPadding: 12
             rightPadding: 12
+            // A busca (etapa 4): no nome e na explicação de cada ajuste, sem acento.
+            Item { width: categorias.width - 24; height: 44
+            Rectangle {
+                width: parent.width
+                height: 36; radius: 9
+                color: raiz.tema.superficie
+                border.width: 1
+                border.color: campoBusca.activeFocus ? raiz.tema.persona : raiz.tema.tracoForte
+                Icone { x: 10; anchors.verticalCenter: parent.verticalCenter; caminho: raiz.tema.icones.lupa
+                        cor: campoBusca.activeFocus ? raiz.tema.textoMedio : raiz.tema.muitoFraco; tamanho: 15; espessura: 2 }
+                TextInput {
+                    id: campoBusca
+                    x: 32; width: parent.width - 32 - dicaBusca.width - 14
+                    anchors.verticalCenter: parent.verticalCenter
+                    color: raiz.tema.texto; selectionColor: raiz.tema.tracoForte
+                    font.family: raiz.tema.familia; font.pixelSize: 13
+                    clip: true
+                    onTextChanged: raiz.busca = text
+                    Keys.onEscapePressed: { if (text) text = ""; else raiz.fechar() }
+                    Keys.onReturnPressed: raiz.abrirResultado(raiz.escolhaBusca)
+                    Keys.onDownPressed: raiz.escolhaBusca = Math.min(raiz.resultados.length - 1, raiz.escolhaBusca + 1)
+                    Keys.onUpPressed: raiz.escolhaBusca = Math.max(0, raiz.escolhaBusca - 1)
+                    Text { visible: !campoBusca.text && !campoBusca.activeFocus; text: "Procurar"
+                           color: raiz.tema.muitoFraco; font: campoBusca.font }
+                }
+                Rectangle {
+                    id: dicaBusca
+                    anchors { right: parent.right; rightMargin: 8; verticalCenter: parent.verticalCenter }
+                    width: tDica.implicitWidth + 10; height: 18; radius: 4
+                    color: "transparent"; border.width: 1; border.color: raiz.tema.tracoForte
+                    Text { id: tDica; anchors.centerIn: parent; text: campoBusca.text ? "Esc" : "Ctrl F"
+                           color: raiz.tema.muitoFraco; font.family: raiz.tema.familia; font.pixelSize: 10 }
+                }
+            }
+            }
             Repeater {
                 model: raiz.categorias
                 Column {
@@ -573,7 +683,7 @@ Item {
                         model: modelData.itens
                         Rectangle {
                             required property var modelData
-                            readonly property bool aqui: raiz.aba === modelData.id
+                            readonly property bool aqui: raiz.aba === modelData.id && raiz.busca === ""
                             width: parent.width
                             height: 36
                             radius: 9
@@ -598,7 +708,7 @@ Item {
                                 anchors.fill: parent
                                 hoverEnabled: true
                                 cursorShape: Qt.PointingHandCursor
-                                onClicked: { raiz.aba = modelData.id; rolagem.contentY = 0 }
+                                onClicked: { campoBusca.text = ""; raiz.aba = modelData.id; rolagem.contentY = 0 }
                             }
                         }
                     }
@@ -623,8 +733,10 @@ Item {
                 id: pagina
                 x: 28; y: 22
                 width: rolagem.width - 56
-                sourceComponent: raiz.aba === "voz" ? paginaVoz : raiz.aba === "avisos" ? paginaAvisos
-                               : raiz.aba === "uso" ? paginaUso : raiz.aba === "personas" ? paginaPersonas
+                sourceComponent: raiz.busca.trim() !== "" ? paginaBusca
+                               : raiz.aba === "voz" ? paginaVoz : raiz.aba === "avisos" ? paginaAvisos
+                               : raiz.aba === "uso" ? paginaUso : raiz.aba === "foco" ? paginaFoco
+                               : raiz.aba === "personas" ? paginaPersonas
                                : raiz.aba === "conexoes" ? (raiz.passo ? paginaPasso : paginaConexoes)
                                : raiz.aba === "sobre" ? paginaSobre
                                : paginaGeral
@@ -953,6 +1065,293 @@ Item {
                             }
                         }
                     }
+                }
+                // O ritmo (etapa 4): se continuar assim, quando a semana acaba.
+                Rectangle {
+                    readonly property var prev: raiz.estatisticas && raiz.estatisticas.uso ? raiz.estatisticas.uso.previsao : null
+                    visible: !!prev
+                    width: parent.width
+                    height: visible ? tRitmo.implicitHeight + 24 : 0
+                    radius: 10
+                    color: prev && prev.antes_de_renovar ? Qt.rgba(1, 0.71, 0.33, 0.07) : raiz.tema.superficie
+                    border.width: 1
+                    border.color: prev && prev.antes_de_renovar ? Qt.rgba(1, 0.71, 0.33, 0.35) : raiz.tema.traco
+                    Rectangle { x: 14; y: 17; width: 8; height: 8; radius: 4
+                                color: parent.prev && parent.prev.antes_de_renovar ? "#ffb454" : "#38d39f" }
+                    Text {
+                        id: tRitmo
+                        x: 32; y: 12; width: parent.width - 46
+                        wrapMode: Text.WordWrap
+                        textFormat: Text.StyledText
+                        color: parent.prev && parent.prev.antes_de_renovar ? "#ffcf8a" : raiz.tema.textoMedio
+                        font.family: raiz.tema.familia; font.pixelSize: 13
+                        text: !parent.prev ? "" : parent.prev.antes_de_renovar
+                              ? "<b>No ritmo de hoje, a semana acaba " + raiz.quandoRenova(parent.prev.acaba_em, true).replace("renova ", "")
+                                + "</b> (antes de renovar). Trocar o cérebro pro Sonnet gasta bem menos."
+                              : "No ritmo de hoje, a semana dá até renovar."
+                    }
+                }
+            }
+            Secao {
+                titulo: "Quanto da semana foi em cada dia"
+                dica: "Pedaço do limite semanal gasto por dia. Começou a contar em 11/11."
+                Grafico {
+                    width: parent.width
+                    cor: raiz.tema.persona
+                    dias: raiz.estatisticas && raiz.estatisticas.uso ? raiz.estatisticas.uso.dias : []
+                    valor: function (d) { return d.pct }
+                    rotulo: function (d) { return Math.round(d.pct) + "%" }
+                }
+            }
+            Secao {
+                titulo: "Hoje"
+                bottomPadding: 0
+                Row {
+                    id: cartoesHoje
+                    width: parent.width
+                    spacing: 10
+                    readonly property var est: raiz.estatisticas
+                    readonly property var ped: est && est.pedidos ? est.pedidos : ({})
+                    readonly property int total: Object.keys(ped).reduce(function (a, k) { return a + ped[k] }, 0)
+                    readonly property var nomesOrigem: ({ voz: "por voz", celular: "do celular", texto: "digitados", relogio: "do relógio", recado: "recados" })
+                    Repeater {
+                        model: [
+                            { n: String(cartoesHoje.total), r: cartoesHoje.total === 0 ? "pedidos ainda" : "pedidos · " + Object.keys(cartoesHoje.ped).sort(function (a, b) { return cartoesHoje.ped[b] - cartoesHoje.ped[a] })
+                                  .map(function (k) { return cartoesHoje.ped[k] + " " + (cartoesHoje.nomesOrigem[k] || k) }).join(", ") },
+                            { n: cartoesHoje.est && cartoesHoje.est.uso && cartoesHoje.est.uso.cerebro ? cartoesHoje.est.uso.cerebro.nome : "—",
+                              r: cartoesHoje.est && cartoesHoje.est.uso && cartoesHoje.est.uso.cerebro ? "o cérebro que mais gastou hoje (" + cartoesHoje.est.uso.cerebro.pct + "%)" : "o cérebro que mais gastou hoje" },
+                            { n: cartoesHoje.est && cartoesHoje.est.uso && cartoesHoje.est.uso.code ? "Modo code" : "—",
+                              r: cartoesHoje.est && cartoesHoje.est.uso && cartoesHoje.est.uso.code ? cartoesHoje.est.uso.code.pct + "% da semana no " + cartoesHoje.est.uso.code.nome.replace(/^Projeto /, "") : "sem modo code hoje" },
+                        ]
+                        Rectangle {
+                            required property var modelData
+                            width: (cartoesHoje.width - 20) / 3
+                            height: Math.max(78, colHoje.height + 24)
+                            radius: 12; color: raiz.tema.superficie; border.width: 1; border.color: raiz.tema.traco
+                            Column {
+                                id: colHoje
+                                x: 14; y: 12; width: parent.width - 28; spacing: 3
+                                Text { text: modelData.n; color: raiz.tema.texto; font.family: raiz.tema.familia; font.pixelSize: 20; font.weight: Font.DemiBold }
+                                Text { width: parent.width; wrapMode: Text.WordWrap; text: modelData.r; color: raiz.tema.textoFraco
+                                       font.family: raiz.tema.familia; font.pixelSize: 12 }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Um gráfico de barras dos últimos dias (Uso e Tempo e foco). Hoje na cor.
+    component Grafico: Column {
+        id: gr
+        property var dias: []
+        property color cor: raiz.tema.persona
+        property var valor: function (d) { return 0 }
+        property var rotulo: function (d) { return "" }
+        readonly property real maximo: Math.max.apply(null, dias.map(function (d) { return valor(d) }).concat([0.0001]))
+        spacing: 6
+        Item {
+            width: gr.width; height: 120
+            Row {
+                anchors.fill: parent
+                spacing: 14
+                Repeater {
+                    model: gr.dias
+                    Item {
+                        required property var modelData
+                        required property int index
+                        readonly property bool hoje: index === gr.dias.length - 1
+                        width: (gr.width - 14 * (gr.dias.length - 1)) / Math.max(1, gr.dias.length)
+                        height: parent.height
+                        Rectangle {
+                            id: barra
+                            anchors.bottom: parent.bottom
+                            width: parent.width
+                            height: Math.max(3, (parent.height - 22) * gr.valor(modelData) / gr.maximo)
+                            radius: 5
+                            color: parent.hoje ? gr.cor : raiz.tema.tracoForte
+                            Behavior on height { NumberAnimation { duration: raiz.tema.lento; easing.type: Easing.OutCubic } }
+                        }
+                        Text {
+                            anchors { bottom: barra.top; bottomMargin: 5; horizontalCenter: parent.horizontalCenter }
+                            text: gr.rotulo(modelData); color: raiz.tema.textoFraco; font.family: raiz.tema.familia; font.pixelSize: 11
+                        }
+                    }
+                }
+            }
+            Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: raiz.tema.traco }
+        }
+        Row {
+            spacing: 14
+            Repeater {
+                model: gr.dias
+                Text {
+                    required property var modelData
+                    required property int index
+                    width: (gr.width - 14 * (gr.dias.length - 1)) / Math.max(1, gr.dias.length)
+                    horizontalAlignment: Text.AlignHCenter
+                    text: raiz.diaCurto(modelData.dia, index === gr.dias.length - 1)
+                    color: index === gr.dias.length - 1 ? raiz.tema.texto : raiz.tema.textoFraco
+                    font.family: raiz.tema.familia; font.pixelSize: 12
+                    font.weight: index === gr.dias.length - 1 ? Font.Medium : Font.Normal
+                }
+            }
+        }
+    }
+
+    Component {
+        id: paginaBusca
+        Column {
+            width: pagina.width
+            spacing: 4
+            Text { text: raiz.resultados.length === 0 ? "Nada com “" + raiz.busca.trim() + "”"
+                         : raiz.resultados.length + (raiz.resultados.length === 1 ? " resultado" : " resultados") + " pra “" + raiz.busca.trim() + "”"
+                   color: raiz.tema.texto; font.family: raiz.tema.familia; font.pixelSize: 15; font.weight: Font.DemiBold }
+            Text { text: raiz.resultados.length ? "Enter abre o escolhido · ↑ ↓ escolhe" : "Tenta outra palavra: “voz”, “tema”, “whats”, “foco”…"
+                   color: raiz.tema.textoFraco; font.family: raiz.tema.familia; font.pixelSize: 13; bottomPadding: 10 }
+            Repeater {
+                model: raiz.resultados
+                Rectangle {
+                    required property var modelData
+                    required property int index
+                    width: parent.width; height: 58; radius: 10
+                    color: index === raiz.escolhaBusca || areaRes.containsMouse ? raiz.tema.realce : "transparent"
+                    Rectangle {
+                        x: 14; anchors.verticalCenter: parent.verticalCenter
+                        width: 32; height: 32; radius: 8; color: raiz.tema.superficie2
+                        Icone { anchors.centerIn: parent; caminho: raiz.tema.icones[modelData.icone] || ""; cor: raiz.tema.textoMedio; tamanho: 16 }
+                    }
+                    Column {
+                        x: 60; anchors.verticalCenter: parent.verticalCenter; spacing: 2
+                        Text { text: raiz.marcar(modelData.t); textFormat: Text.RichText; color: raiz.tema.texto
+                               font.family: raiz.tema.familia; font.pixelSize: 14 }
+                        Text { text: modelData.onde; color: raiz.tema.textoFraco; font.family: raiz.tema.familia; font.pixelSize: 12 }
+                    }
+                    Icone { anchors { right: parent.right; rightMargin: 14; verticalCenter: parent.verticalCenter }
+                            caminho: raiz.tema.icones.direita; cor: raiz.tema.muitoFraco; tamanho: 14 }
+                    MouseArea { id: areaRes; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                                onClicked: raiz.abrirResultado(index) }
+                }
+            }
+        }
+    }
+
+    Component {
+        id: paginaFoco
+        Column {
+            width: pagina.width
+            Secao {
+                titulo: "Modo foco"
+                dica: "Pra estudar, gravar ou dormir em paz. Ela continua atendendo quando tu chama."
+                Rectangle {
+                    width: parent.width
+                    height: colFoco.height + 36
+                    radius: 14
+                    gradient: Gradient {
+                        GradientStop { position: 0; color: Qt.rgba(0.61, 0.48, 1, raiz.focoLigado ? 0.13 : 0.06) }
+                        GradientStop { position: 1; color: Qt.rgba(0.61, 0.48, 1, raiz.focoLigado ? 0.04 : 0.02) }
+                    }
+                    border.width: 1
+                    border.color: Qt.rgba(0.61, 0.48, 1, raiz.focoLigado ? 0.55 : 0.28)
+                    Column {
+                        id: colFoco
+                        x: 20; y: 18; width: parent.width - 40; spacing: 14
+                        Item {
+                            width: parent.width; height: 42
+                            Rectangle {
+                                width: 40; height: 40; radius: 11; color: Qt.rgba(0.61, 0.48, 1, 0.18)
+                                Icone { anchors.centerIn: parent; caminho: raiz.tema.icones.lua; cor: "#9b7bff"; tamanho: 20; espessura: 1.9 }
+                            }
+                            Column {
+                                x: 54; anchors.verticalCenter: parent.verticalCenter; spacing: 2
+                                Text {
+                                    text: !raiz.focoLigado ? "Modo foco desligado"
+                                        : raiz.focoAte === -1 ? "Foco ligado · até tu desligar"
+                                        : "Foco ligado · até " + Qt.formatTime(new Date(raiz.focoAte * 1000), "HH:mm")
+                                    color: raiz.tema.texto; font.family: raiz.tema.familia; font.pixelSize: 15; font.weight: Font.Medium
+                                }
+                                Text {
+                                    text: !raiz.focoLigado ? "Escolhe quanto tempo e liga"
+                                        : raiz.focoAte === -1 ? "Desliga aqui ou falando “sai do modo foco”"
+                                        : "falta " + raiz.duracao(Math.max(1, Math.ceil((raiz.focoAte - raiz.agoraSeg) / 60)))
+                                    color: raiz.tema.textoFraco; font.family: raiz.tema.familia; font.pixelSize: 13
+                                }
+                            }
+                            Rectangle {
+                                anchors { right: parent.right; verticalCenter: parent.verticalCenter }
+                                width: 44; height: 26; radius: 13
+                                color: raiz.focoLigado ? "#9b7bff" : raiz.tema.tracoForte
+                                opacity: raiz.conectado ? 1 : 0.5
+                                Behavior on color { ColorAnimation { duration: raiz.tema.rapido } }
+                                Rectangle {
+                                    x: raiz.focoLigado ? parent.width - width - 3 : 3; y: 3
+                                    width: 20; height: 20; radius: 10; color: "white"
+                                    Behavior on x { NumberAnimation { duration: raiz.tema.rapido } }
+                                }
+                                MouseArea { anchors.fill: parent; enabled: raiz.conectado; cursorShape: Qt.PointingHandCursor
+                                            onClicked: raiz.mudarFoco(raiz.focoLigado ? 0 : raiz.focoEscolhido) }
+                            }
+                        }
+                        Flow {
+                            width: parent.width; spacing: 8
+                            Repeater {
+                                model: [ { m: 30, n: "30 min" }, { m: 60, n: "1 hora" }, { m: 120, n: "2 horas" }, { m: -1, n: "Até eu desligar" } ]
+                                Rectangle {
+                                    required property var modelData
+                                    readonly property bool sel: raiz.focoEscolhido === modelData.m
+                                    width: tPill.implicitWidth + 26; height: 32; radius: 9
+                                    color: sel ? Qt.rgba(0.61, 0.48, 1, 0.16) : areaPill.containsMouse ? raiz.tema.superficie2 : raiz.tema.superficie
+                                    border.width: 1; border.color: sel ? "#9b7bff" : raiz.tema.tracoForte
+                                    Text { id: tPill; anchors.centerIn: parent; text: modelData.n; color: parent.sel ? raiz.tema.texto : raiz.tema.textoMedio
+                                           font.family: raiz.tema.familia; font.pixelSize: 13 }
+                                    MouseArea { id: areaPill; anchors.fill: parent; hoverEnabled: true; enabled: raiz.conectado
+                                                cursorShape: Qt.PointingHandCursor
+                                                onClicked: { raiz.focoEscolhido = modelData.m; raiz.mudarFoco(modelData.m) } }
+                                }
+                            }
+                        }
+                        Column {
+                            width: parent.width; spacing: 8
+                            Repeater {
+                                model: [ { ok: false, t: "Avisos de WhatsApp (ficam guardados e ela conta quando o foco acabar)" },
+                                         { ok: false, t: "Lembretes, recados e alertas falados (esperam o foco acabar)" },
+                                         { ok: false, t: "Notificação no celular" },
+                                         { ok: true, t: "“Hey Jarvis” e “Hey Friday” continuam funcionando" } ]
+                                Row {
+                                    required property var modelData
+                                    spacing: 10
+                                    Text { text: modelData.ok ? "✓" : "✕"; color: modelData.ok ? "#38d39f" : "#f87171"
+                                           font.family: raiz.tema.familia; font.pixelSize: 13 }
+                                    Text { text: modelData.t; color: raiz.tema.textoMedio; font.family: raiz.tema.familia; font.pixelSize: 14 }
+                                }
+                            }
+                        }
+                        Text { text: "Pela voz: “modo foco por uma hora”, “sai do modo foco”"; color: raiz.tema.muitoFraco
+                               font.family: raiz.tema.familia; font.pixelSize: 12 }
+                    }
+                }
+            }
+            Secao {
+                titulo: "Tempo conversando"
+                dica: "Quanto tempo ela ficou acordada contigo por dia (voz, texto e celular)."
+                bottomPadding: 0
+                Grafico {
+                    width: parent.width
+                    cor: "#9b7bff"
+                    dias: raiz.estatisticas && raiz.estatisticas.conversa ? raiz.estatisticas.conversa : []
+                    valor: function (d) { return d.min }
+                    rotulo: function (d) { return raiz.duracao(d.min) }
+                }
+                Text {
+                    readonly property var dias: raiz.estatisticas && raiz.estatisticas.conversa ? raiz.estatisticas.conversa : []
+                    readonly property int media: dias.length ? Math.round(dias.reduce(function (a, d) { return a + d.min }, 0) / dias.length) : 0
+                    readonly property var maisDia: dias.length ? dias.reduce(function (a, d) { return d.min > a.min ? d : a }, dias[0]) : null
+                    visible: dias.length > 0
+                    topPadding: 14
+                    text: "Média de " + raiz.duracao(media) + " por dia" + (maisDia && maisDia.min > 0 ? " · mais conversado: "
+                          + ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"][new Date(maisDia.dia + "T12:00:00").getDay()] : "")
+                    color: raiz.tema.textoFraco; font.family: raiz.tema.familia; font.pixelSize: 13
                 }
             }
         }
@@ -1500,7 +1899,7 @@ Item {
                 titulo: "Sobre a NOVA"
                 Repeater {
                     model: [
-                        ["Versão", "beta 0.19.5"],
+                        ["Versão", "beta 0.20.0"],
                         ["Conexão", raiz.conectado ? "Ligado" : "Esperando a NOVA subir"],
                     ]
                     Linha {

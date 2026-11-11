@@ -28,6 +28,9 @@ PADRAO: dict[str, Any] = {"volume_voz": 100, "nome": "",
                           # Quanto ele faz sozinho no modo code (11/11/2026): "auto",
                           # "perguntar", "plano" ou "olhar".
                           "code_permissao": "auto",
+                          # O modo foco (11/11/2026): até quando (época); 0 = desligado,
+                          # -1 = até ele desligar.
+                          "foco_ate": 0,
                           # A cara da janela e do app (11/11/2026): "escuro" ou "claro".
                           "tema": "escuro"}
 
@@ -46,6 +49,13 @@ def grupos_ativos() -> list[str]:
     """Os grupos onde o Jarvis responde agora (nenhum com a chave desligada)."""
     a = ler()
     return a["grupos"] if a["grupo_ligado"] else []
+
+
+def em_foco(agora: float | None = None) -> bool:
+    """O modo foco está ligado agora? (Ajustes → Tempo e foco)"""
+    import time
+    ate = ler()["foco_ate"]
+    return ate == -1 or ate > (agora or time.time())
 
 
 def ler() -> dict[str, Any]:
@@ -80,6 +90,9 @@ def ler() -> dict[str, Any]:
             saida["code_persona"] = dados["code_persona"]
         if dados.get("code_permissao") in ("auto", "perguntar", "plano", "olhar"):
             saida["code_permissao"] = dados["code_permissao"]
+        foco = dados.get("foco_ate")
+        if isinstance(foco, (int, float)) and not isinstance(foco, bool) and (foco == -1 or foco >= 0):
+            saida["foco_ate"] = foco
         if dados.get("tema") in ("escuro", "claro"):
             saida["tema"] = dados["tema"]
     return saida

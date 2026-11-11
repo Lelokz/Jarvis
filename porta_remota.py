@@ -74,7 +74,8 @@ PEDIDOS_DO_CELULAR = {"falar", "memoria", "conversas", "abrir", "nova", "continu
                       "conexao",  # o Conectar de Ajustes → Conexões (beta 0.17)
                       "projetos", "code", "mudancas", "git", "novo_projeto",  # o modo code (app beta 0.19.0)
                       "repetir", "avaliar",  # os botões da resposta (app beta 0.19.5)
-                      "desfazer", "desfazer_git"}  # o Desfazer do modo code (app beta 0.20.0)
+                      "desfazer", "desfazer_git",  # o Desfazer do modo code (app beta 0.20.0)
+                      "estatisticas", "foco"}  # Uso e Tempo e foco (app beta 0.21.0)
 # Foto, vídeo ou arquivo mandado pelo clipe do app. Vídeo de celular passa
 # disso fácil; por enquanto é o teto (o WebSocket guarda tudo na memória).
 MAX_ANEXO_BYTES = 64 * 1024 * 1024

@@ -546,6 +546,17 @@ class Servidor:
         elif tipo in ("repetir", "avaliar"):
             valor = dados["texto"] if tipo == "repetir" else json.dumps(dados)
             self._pedidos.put(Pedido(tipo, valor, cliente.id, cliente.quer_voz))
+        elif tipo == "estatisticas":
+            # Ajustes → Uso e Tempo e foco (etapa 4 do tchan): as contas, só pra quem pediu.
+            from jarvis.nucleo import estatisticas
+            try:
+                dados = estatisticas.montar(Path(__file__).resolve().parents[2] / "logs")
+            except Exception as e:  # noqa: BLE001 - conta errada não derruba a ponte
+                self._direto(cliente, {"ev": "erro", "motivo": f"não fiz as contas ({e})"})
+                return
+            self._direto(cliente, {"ev": "estatisticas", **dados})
+        elif tipo == "foco":
+            self._pedidos.put(Pedido(tipo, str(dados["minutos"]), cliente.id, cliente.quer_voz))
         elif tipo in ("desfazer", "desfazer_git"):
             self._pedidos.put(Pedido(tipo, json.dumps(dados), cliente.id, cliente.quer_voz))
         elif tipo in ("code", "git", "novo_projeto"):
