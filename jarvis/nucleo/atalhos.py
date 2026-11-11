@@ -143,7 +143,7 @@ class Tabela:
         if not caminho.is_file():
             raise FileNotFoundError(
                 f"atalhos.toml não encontrado em {caminho}.\n"
-                "  É a tabela do que o Jarvis sabe abrir."
+                "  É a tabela do que a NOVA sabe abrir."
             )
         with caminho.open("rb") as f:
             bruto = tomllib.load(f)

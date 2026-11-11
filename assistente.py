@@ -1862,7 +1862,7 @@ def _abrir_ponte(
         servidor.iniciar()
     except ServidorOcupado:
         servidor.encerrar()
-        _partida("ponte", "OCUPADA — outro Jarvis já responde nela; seguindo sem")
+        _partida("ponte", "OCUPADA — outra NOVA já responde nela; seguindo sem")
         return None
     except OSError as e:
         servidor.encerrar()
@@ -2204,7 +2204,7 @@ def _checar_nivel(mic: microfone.Microfone, segundos: float = 1.0) -> None:
     if pico < 50:
         _partida("nível do mic", f"PICO {pico}/32767 — praticamente silêncio")
         print("\n  ATENÇÃO: este microfone não está captando nada.")
-        print("  O Jarvis nunca vai acordar. Confira o mute físico do Fifine")
+        print("  A NOVA nunca vai acordar. Confira o mute físico do Fifine")
         print("  ou escolha outra entrada com --listar-dispositivos.\n")
     else:
         _partida("nível do mic", f"pico {pico}/32767 — captando")
@@ -2240,7 +2240,7 @@ def main(argv: list[str] | None = None) -> int:
     signal.signal(signal.SIGINT, signal.default_int_handler)
     signal.signal(signal.SIGTERM, _desligar_como_ctrl_c)
     p = argparse.ArgumentParser(
-        description="Jarvis — assistente por voz com wake word (Etapa 0.6)."
+        description="NOVA — assistente por voz com wake word (Etapa 0.6)."
     )
     p.add_argument("--listar-dispositivos", action="store_true")
     p.add_argument(

@@ -136,7 +136,7 @@ object Novidades {
             .putExtra("aprovacao", true).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         val aviso = Notification.Builder(c, CANAL_SEGURANCA)
-            .setContentTitle("Pedido de $quem pro Jarvis")
+            .setContentTitle("Pedido de $quem pra NOVA")
             .setContentText(pedido)
             .setStyle(Notification.BigTextStyle().bigText(pedido))
             .setSmallIcon(R.drawable.ic_notificacao)
@@ -194,7 +194,7 @@ object Novidades {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         val aviso = Notification.Builder(c, CANAL_SEGURANCA)
             .setContentTitle("Desbloquear o PC?")
-            .setContentText("Pediram pro Jarvis desbloquear o PC. Toque pra responder.")
+            .setContentText("Pediram pra NOVA desbloquear o PC. Toque pra responder.")
             .setSmallIcon(R.drawable.ic_notificacao)
             .setContentIntent(abrir)
             .setAutoCancel(true)

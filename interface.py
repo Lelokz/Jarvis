@@ -146,7 +146,7 @@ def main(argv: list[str] | None = None) -> int:
     # Custa 5,8 MB de memória residente (65,7 -> 71,5 MB, medido isolado), e é
     # o preço do ícone no painel.
     app = QApplication(sys.argv)
-    app.setApplicationName("Jarvis")
+    app.setApplicationName("NOVA")
     # Esconder a janela na bandeja não pode encerrar o programa.
     app.setQuitOnLastWindowClosed(False)
     # "Desligar Jarvis" manda SIGTERM. Sem isto a interface morria na hora,
@@ -165,7 +165,7 @@ def main(argv: list[str] | None = None) -> int:
     # sequer piscar uma janela nova, e sim trazer a que já existe.
     instancia = Instancia()
     if modo_normal and not instancia.tomar():
-        print("  o Jarvis já estava aberto — trouxe a janela para a frente")
+        print("  a NOVA já estava aberta — trouxe a janela para a frente")
         return 0
 
     # Sem pedir nada, a janela sem moldura desenhava à taxa cheia da tela —

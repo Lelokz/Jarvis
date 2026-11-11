@@ -258,7 +258,7 @@ class GrupoFamilia(threading.Thread):
     def _notificar(self, texto: str, titulo: str = "Grupo do WhatsApp") -> None:
         """Para o dono: notificação no PC e no app (nada de WhatsApp)."""
         try:   # o aviso do PC (Linux); sem ele (Windows), o app e a janela avisam do mesmo jeito
-            subprocess.run(["notify-send", "-a", "Jarvis", "-i", "jarvis-atomo", titulo, texto],
+            subprocess.run(["notify-send", "-a", "NOVA", "-i", "jarvis-atomo", titulo, texto],
                            check=False, timeout=10)
         except (OSError, subprocess.TimeoutExpired):
             pass
@@ -471,7 +471,7 @@ class GrupoFamilia(threading.Thread):
             return _t("O dono foi avisado.")
 
         @tool("pedir_ao_dono", "Pede ao dono, no celular dele, para liberar um pedido que mexe no PC ou nas "
-              "coisas dele. Se ele aprovar, o Jarvis do PC faz.", {"quem": str, "pedido": str})
+              "coisas dele. Se ele aprovar, a NOVA do PC faz.", {"quem": str, "pedido": str})
         async def pedir_ao_dono(args):
             a = aprovacoes.criar(str(args.get("quem") or "alguém"), str(args.get("pedido") or ""), jid=jid)
             self._saidas.put(("aprovacao", a["id"]))

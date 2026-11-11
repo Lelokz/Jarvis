@@ -435,12 +435,12 @@ private fun AvisoPedido(modelo: Jarvis, quem: String, pedido: String) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 AtomoFixo(Azul, 26.dp)
                 Spacer(Modifier.width(10.dp))
-                Text("Pedido de $quem pro Jarvis", color = Texto, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+                Text("Pedido de $quem pra NOVA", color = Texto, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
             }
             Spacer(Modifier.height(10.dp))
             Text("\"$pedido\"", color = Texto, fontSize = 15.sp, lineHeight = 21.sp)
             Spacer(Modifier.height(6.dp))
-            Text("Veio de um grupo do WhatsApp. Se você liberar, o Jarvis do PC faz.",
+            Text("Veio de um grupo do WhatsApp. Se você liberar, a NOVA do PC faz.",
                 color = TextoMedio, fontSize = 13.sp, lineHeight = 19.sp)
             Spacer(Modifier.height(20.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -469,7 +469,7 @@ private fun AvisoDesbloqueio(modelo: Jarvis) {
                 Text("Desbloquear o PC?", color = Texto, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
             }
             Spacer(Modifier.height(10.dp))
-            Text("Pediram pro Jarvis desbloquear o seu PC. Se não foi você, toque em Não.",
+            Text("Pediram pra NOVA desbloquear o seu PC. Se não foi você, toque em Não.",
                 color = TextoMedio, fontSize = 14.sp, lineHeight = 20.sp)
             Spacer(Modifier.height(20.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -2577,7 +2577,7 @@ private fun FolhaCode(modelo: Jarvis, fechar: () -> Unit) {
         }
         if (emCode) {
             Grupo("")
-            Opcao("Sair do modo code", "Volta pro Jarvis de sempre", false) { modelo.entrarCode(""); fechar() }
+            Opcao("Sair do modo code", "Volta pra NOVA de sempre", false) { modelo.entrarCode(""); fechar() }
         }
         Text("Pela voz: \"modo code no Loft\", \"troca pro Terror\", \"cria um projeto novo chamado…\", \"sai do modo code\".",
             color = MuitoFraco, fontSize = 12.sp, modifier = Modifier.padding(start = 12.dp, top = 12.dp, end = 12.dp))

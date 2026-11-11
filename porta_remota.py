@@ -284,7 +284,7 @@ def criar_app(cfg: config.Config):
         try:
             leitor, escritor = await canal.abrir(socket_ponte, limit=LIMITE_LINHA_PONTE)
         except OSError:
-            await ws.send_text(json.dumps({"ev": "erro", "motivo": "o Jarvis está desligado"},
+            await ws.send_text(json.dumps({"ev": "erro", "motivo": "a NOVA está desligada"},
                                           ensure_ascii=False))
             await ws.close(code=4503)
             return
@@ -319,7 +319,7 @@ def criar_app(cfg: config.Config):
                     print(f"{time.strftime('%H:%M:%S')} voz -> {quem}: {len(linha) // 1024} KB",
                           flush=True)
                 await ws.send_text(linha.decode("utf-8").rstrip("\n"))
-            await ws.send_text(json.dumps({"ev": "erro", "motivo": "o Jarvis desligou"},
+            await ws.send_text(json.dumps({"ev": "erro", "motivo": "a NOVA desligou"},
                                           ensure_ascii=False))
 
         # O clipe do app: {"pedir":"anexo","nome":...} e, logo depois, o

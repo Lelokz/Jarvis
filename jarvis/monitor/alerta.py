@@ -67,7 +67,7 @@ def maior_programa() -> str | None:
     return {"brave": "o Brave", "java": "o Minecraft", "Godot_v4": "o Godot", "godot": "o Godot",
             "code": "o VS Code", "obs": "o OBS", "python": "um programa em Python",
             "python3": "um programa em Python", "Web Content": "o navegador",
-            "assistente": "o próprio Jarvis", "interface": "a janela do Jarvis",
+            "assistente": "a própria NOVA", "interface": "a janela da NOVA",
             "servidor_rvc": "a voz do Jarvis", "servidor_friday": "a voz da Friday",
             "servidor_voz": "a voz do Jarvis"}.get(nome, nome)
 

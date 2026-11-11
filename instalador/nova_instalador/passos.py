@@ -447,7 +447,7 @@ def _finalizar(ctx: Contexto, avisar: Avisar) -> None:
     if ctx.atalho:
         menu.mkdir(parents=True, exist_ok=True)
         (menu / "nova.desktop").write_text(entrada.format(
-            nome="NOVA", comentario="Liga a NOVA e abre a janela", exec=abrir) + "StartupWMClass=Jarvis\n")
+            nome="NOVA", comentario="Liga a NOVA e abre a janela", exec=abrir) + "StartupWMClass=NOVA\n")
         (menu / "nova-desligar.desktop").write_text(entrada.format(
             nome="Desligar NOVA", comentario="Desliga a NOVA", exec=f"{abrir} --desligar"))
     if ctx.com_o_pc:

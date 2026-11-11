@@ -338,7 +338,7 @@ Window {
                color: texto; font { family: familia; pixelSize: 22; weight: Font.DemiBold } }
         Text { width: parent.width; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.WordWrap; color: textoFraco
                font { family: familia; pixelSize: 14 }
-               text: d.conectado ? "Leva um minutinho na primeira vez." : "É uma vez só, uns 10 minutos: siga o guia em docs/PAINEL - CONECTAR O YOUTUBE.md, no projeto do Jarvis." }
+               text: d.conectado ? "Leva um minutinho na primeira vez." : "É uma vez só, uns 10 minutos: siga o guia em docs/PAINEL - CONECTAR O YOUTUBE.md, no projeto da NOVA." }
     }
 
     Item {

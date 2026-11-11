@@ -123,7 +123,7 @@ def main(argv: list[str] | None = None) -> int:
                 cliente.conectar(historico=args.historico)
             except OSError:
                 if not avisado:
-                    print(f"  desconectado — esperando o Jarvis em {caminho}", flush=True)
+                    print(f"  desconectado — esperando a NOVA em {caminho}", flush=True)
                     avisado = True
                 time.sleep(1.0)
                 continue

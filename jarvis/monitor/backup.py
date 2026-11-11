@@ -244,9 +244,9 @@ def _fontes() -> str:
         except (OSError, UnicodeDecodeError):
             pass
 
-    junta("caderno do Jarvis", DADOS / "casa/CLAUDE.md")
+    junta("caderno da NOVA", DADOS / "casa/CLAUDE.md")
     for md in sorted((DADOS / "memorias").rglob("*.md")):
-        junta("memória do Jarvis", md)
+        junta("memória da NOVA", md)
     for md in sorted(PROJETO.glob("jarvis/personas/persona_*.md")):
         junta("persona", md)
     for md in sorted((CASA / ".claude/projects").glob("*/memory/*.md")):

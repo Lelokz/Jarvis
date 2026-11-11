@@ -287,8 +287,8 @@ class Jarvis(private val app: Application) {
             val r = Novidades.responderPedido(app, p.first, sim)
             withContext(Dispatchers.Main) {
                 aviso.value = when (r) {
-                    "aprovado" -> "Liberado: o Jarvis vai fazer."
-                    "recusado" -> "Recusado. O Jarvis avisa no grupo."
+                    "aprovado" -> "Liberado: a NOVA vai fazer."
+                    "recusado" -> "Recusado. A NOVA avisa no grupo."
                     "expirou" -> "Esse pedido já expirou."
                     else -> "Sem conexão com o PC."
                 }

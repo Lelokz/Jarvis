@@ -81,7 +81,7 @@ def listar() -> list[dict]:
     if (CASA / "CLAUDE.md").exists():
         saida.append(_item("jarvis", CASA / "CLAUDE.md", "personas", "Jarvis e Friday") | {"titulo": "Jarvis e Friday"})
     if (CASA / "recados.md").exists():
-        saida.append(_item("recados", CASA / "recados.md", "recados", "Recados do Jarvis") | {"titulo": "Recados do Jarvis"})
+        saida.append(_item("recados", CASA / "recados.md", "recados", "Recados da NOVA") | {"titulo": "Recados da NOVA"})
     if GRUPOS.is_dir():
         for arq in sorted(GRUPOS.glob("*/memoria.md")):
             saida.append(_item(f"grupo:{arq.parent.name}", arq, "grupo", f"Grupo {arq.parent.name}"))

@@ -47,7 +47,7 @@ def criar_servidor(mostrar: Callable[[str, str], None], whatsapp,
     `chamar_o_opus(motivo)`: passa o pedido do modelo rápido para o forte."""
 
     @tool("mostrar",
-          "Mostra texto na janela do Jarvis, sem falar. Só para o que NÃO dá para "
+          "Mostra texto na janela da NOVA, sem falar. Só para o que NÃO dá para "
           "falar: código, comando, tabela, link, endereço. Descrição, explicação e "
           "lista vão na resposta, que é falada inteira. Aceita markdown.",
           {"titulo": str, "conteudo": str})
@@ -136,7 +136,7 @@ def criar_servidor(mostrar: Callable[[str, str], None], whatsapp,
                 return _texto("O WhatsApp não está conectado neste PC. Diga que dá pra ligar em Ajustes → Conexões, na janela ou no app.", True)
             falas = " ".join(falas_do_pedido())
             if not PEDIDO_DE_MANDAR.search(normalizar(falas)):
-                return _texto("Bloqueado pelo Jarvis: o usuário não pediu para mandar "
+                return _texto("Bloqueado pela NOVA: o usuário não pediu para mandar "
                               "mensagem (a fala pode ter vindo de um vídeo ou da TV). "
                               "Não mande; se achar que ele quer, pergunte.", True)
             jid, texto = str(args.get("jid") or ""), str(args.get("texto") or "").strip()
@@ -160,7 +160,7 @@ def criar_servidor(mostrar: Callable[[str, str], None], whatsapp,
                 respondeu_sim = len(ditas) >= 2 and sim_ou_nao(ditas[-1]) is True
                 if not args.get("confirmado") or not respondeu_sim:
                     return _texto(
-                        "Bloqueado pelo Jarvis: esse número NÃO está salvo na agenda do "
+                        "Bloqueado pela NOVA: esse número NÃO está salvo na agenda do "
                         "usuário. Pergunte antes com AskUserQuestion, dizendo o nome e o "
                         "final do número (e se não seria outro contato salvo com nome "
                         "parecido); só depois do sim mande de novo com confirmado=true.", True)
