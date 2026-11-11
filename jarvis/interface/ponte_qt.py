@@ -73,6 +73,8 @@ class PonteQt(QObject):
     terminalRecebido = Signal("QVariant")     # {id, cmd} ou {id, saida, erro} ou {limpar}
     planoRecebido = Signal("QVariant")        # [{texto, estado}]
     contextoRecebido = Signal("QVariant")     # {pct, usados, max}
+    agendadosRecebidos = Signal("QVariant")   # a tela Agendados {recados, rotinas} (etapa 5)
+    feitosRecebidos = Signal("QVariant")      # a galeria Feitos [{id, caminho, nome, tipo...}] (etapa 5)
     estatisticasRecebidas = Signal("QVariant")  # Ajustes → Uso e Tempo e foco {uso, conversa, pedidos}
     programandoRecebido = Signal("QVariant")  # a seção "Programando" da lateral [{nome, caminho, quando, pendentes}]
 
@@ -226,6 +228,23 @@ class PonteQt(QObject):
         if chave not in ("code_narracao", "code_janela_s", "code_persona", "code_permissao", "persona_inicial", "tema"):
             return False
         return self._pedir({"pedir": "ajustes", chave: int(valor) if chave == "code_janela_s" else str(valor)})
+
+    # A lateral nova (etapa 5 do tchan): Agendados e Feitos.
+    @Slot(result=bool)
+    def pedirAgendados(self) -> bool:
+        return self._pedir({"pedir": "agendados"})
+
+    @Slot(str, result=bool)
+    def apagarRecado(self, ident: str) -> bool:
+        return self._pedir({"pedir": "apagar_recado", "id": ident})
+
+    @Slot(str, result=bool)
+    def novoAgendado(self, texto: str) -> bool:
+        return bool(texto.strip()) and self._pedir({"pedir": "novo_agendado", "texto": texto.strip()[:500]})
+
+    @Slot(result=bool)
+    def pedirFeitos(self) -> bool:
+        return self._pedir({"pedir": "feitos"})
 
     # Ajustes → Uso e Tempo e foco (etapa 4 do tchan).
     @Slot(result=bool)
@@ -391,6 +410,10 @@ class PonteQt(QObject):
             self.programandoRecebido.emit(list(ev.get("programando") or []))
         elif tipo == "mudancas":
             self.mudancasRecebidas.emit({k: v for k, v in ev.items() if k != "ev"})
+        elif tipo == "agendados":
+            self.agendadosRecebidos.emit({k: v for k, v in ev.items() if k != "ev"})
+        elif tipo == "feitos":
+            self.feitosRecebidos.emit(list(ev.get("lista") or []))
         elif tipo == "estatisticas":
             self.estatisticasRecebidas.emit({k: v for k, v in ev.items() if k != "ev"})
         elif tipo == "alteracoes":

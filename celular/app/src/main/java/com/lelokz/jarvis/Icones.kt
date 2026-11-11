@@ -77,6 +77,11 @@ object Icones {
     // O modo code refeito (app beta 0.20.0): os mesmos caminhos da janela.
     val desfazer = traco("M9 14L4 9l5-5M4 9h10.5a5.5 5.5 0 0 1 0 11H11", 1.8f)
     val arquivo = traco("M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8zM14 3v5h5", 1.6f)
+    // A lateral nova (app beta 0.21.5).
+    val agenda = traco("M4 7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2zM4 10h16M8 3v4M16 3v4M8 14h3")
+    val feitos = traco("M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z")
+    val lixo = traco("M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13M10 11v6M14 11v6")
+    val play = cheio("M8 5l11 7-11 7z")
     val lua = traco("M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z", 1.9f)
     val escudo = traco("M12 3l8 3v6c0 4.5-3.4 8-8 9c-4.6-1-8-4.5-8-9V6z", 1.8f)
     val gostei = traco("M7 11v9H4v-9zM7 11l4-8a2 2 0 0 1 3 2l-1 5h6a2 2 0 0 1 2 2.3l-1.3 6A2 2 0 0 1 17.7 20H7", 1.7f)

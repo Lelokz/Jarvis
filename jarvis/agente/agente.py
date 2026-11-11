@@ -364,6 +364,8 @@ class Agente:
         self._plano_ok = False
         self._bash: dict[str, str] = {}
         self._tarefas: list[dict] = []
+        # A galeria "Feitos" (etapa 5): o que esperar o resultado pra anotar.
+        self._feitos_pend: dict[str, tuple] = {}
 
     # -- ciclo de vida -----------------------------------------------------
 
@@ -857,17 +859,21 @@ class Agente:
                                     self.saidas.put(Saida("mostrar", diff, f"{'Criou' if b.name == 'Write' else 'Mudou'} {rel}"))
                             if getattr(self, "code", None) is not None:
                                 self._painel_code(b)
+                            if hasattr(self, "_feitos_pend"):
+                                self._talvez_feito(b)
                 elif isinstance(m, UserMessage):
                     # O que o comando respondeu: vai para o Terminal (modo code).
                     if m.parent_tool_use_id or not isinstance(m.content, list):
                         continue
                     for b in m.content:
-                        if isinstance(b, ToolResultBlock) and b.tool_use_id in self._bash:
+                        if isinstance(b, ToolResultBlock) and b.tool_use_id in getattr(self, "_feitos_pend", {}):
+                            self._anotar_feito(self._feitos_pend.pop(b.tool_use_id), bool(b.is_error))
+                        if isinstance(b, ToolResultBlock) and b.tool_use_id in getattr(self, "_bash", {}):
                             self._bash.pop(b.tool_use_id)
                             self.saidas.put(Saida("terminal", json.dumps({
                                 "id": b.tool_use_id, "saida": _texto_do_resultado(b.content)[-6000:],
                                 "erro": bool(b.is_error)}, ensure_ascii=False)))
-                        elif isinstance(b, ToolResultBlock) and self._tarefas:
+                        elif isinstance(b, ToolResultBlock) and getattr(self, "_tarefas", None):
                             achou = re.search(r"Task #(\d+) created", _texto_do_resultado(b.content))
                             if achou and not self._tarefas[-1].get("id"):
                                 self._tarefas[-1]["id"] = achou.group(1)
@@ -950,6 +956,36 @@ class Agente:
                 if t.get("id") == alvo and entrada.get("status"):
                     t["estado"] = "completed" if entrada["status"] == "deleted" else str(entrada["status"])
             self.saidas.put(Saida("plano", json.dumps(self._tarefas, ensure_ascii=False)))
+
+    # -- a galeria "Feitos" (etapa 5 do tchan, 11/11/2026) -----------------------
+
+    def _talvez_feito(self, b: ToolUseBlock) -> None:
+        entrada = b.input or {}
+        if b.name == "Write" and entrada.get("file_path"):
+            self._feitos_pend[b.id] = ("criou", str(entrada["file_path"]), 0.0)
+        elif b.name in travas.TERMINAIS and entrada.get("command"):
+            self._feitos_pend[b.id] = ("comando", str(entrada["command"]), time.time())
+        elif b.name.endswith("whatsapp_mandar") and entrada.get("arquivo"):
+            self._feitos_pend[b.id] = ("mandou", str(entrada["arquivo"]), 0.0)
+        while len(self._feitos_pend) > 50:
+            self._feitos_pend.pop(next(iter(self._feitos_pend)))
+
+    def _anotar_feito(self, pend: tuple, erro: bool) -> None:
+        from jarvis.nucleo import feitos
+        como, alvo, desde = pend
+        try:
+            if como == "comando":
+                pasta = self.code.caminho if getattr(self, "code", None) is not None else self.casa
+                caminhos = feitos.do_comando(alvo, Path(pasta), desde)
+                como = "criou"
+            elif erro:
+                return
+            else:
+                caminhos = [Path(alvo)]
+            for c in caminhos:
+                feitos.registrar(c, self.sessao or "", como)
+        except OSError:
+            pass
 
     def _turno_code(self) -> desfazer.Turno:
         if self._turno is None or self._turno.projeto != self.code.caminho:

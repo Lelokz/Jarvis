@@ -1521,6 +1521,12 @@ class Ciclo:
                 return
             self._entrar_projeto(proj, falar=False)
             return
+        if pedido.tipo == "novo_agendado":
+            # O campo "Novo: o quê e quando…" da tela Agendados (etapa 5): vira um
+            # pedido, e ela anota no jeito dela (uma vez ou repetindo).
+            self._responder(f"[Pela tela Agendados] Agenda isso nos teus recados (uma vez ou repetindo, "
+                            f"conforme o pedido) e confirma em uma frase: {pedido.valor}", origem="texto")
+            return
         if pedido.tipo == "foco":
             # O Modo foco de Ajustes → Tempo e foco (janela e app): sem falar.
             self.definir_foco(int(pedido.valor))

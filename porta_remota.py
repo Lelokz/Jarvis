@@ -75,7 +75,8 @@ PEDIDOS_DO_CELULAR = {"falar", "memoria", "conversas", "abrir", "nova", "continu
                       "projetos", "code", "mudancas", "git", "novo_projeto",  # o modo code (app beta 0.19.0)
                       "repetir", "avaliar",  # os botões da resposta (app beta 0.19.5)
                       "desfazer", "desfazer_git",  # o Desfazer do modo code (app beta 0.20.0)
-                      "estatisticas", "foco"}  # Uso e Tempo e foco (app beta 0.21.0)
+                      "estatisticas", "foco",  # Uso e Tempo e foco (app beta 0.21.0)
+                      "agendados", "apagar_recado", "novo_agendado", "feitos"}  # a lateral (app beta 0.21.5)
 # Foto, vídeo ou arquivo mandado pelo clipe do app. Vídeo de celular passa
 # disso fácil; por enquanto é o teto (o WebSocket guarda tudo na memória).
 MAX_ANEXO_BYTES = 64 * 1024 * 1024
@@ -237,6 +238,17 @@ def criar_app(cfg: config.Config):
         resultado = await asyncio.to_thread(desbloqueio.responder, id_pedido, sim)
         print(f"{time.strftime('%H:%M:%S')} desbloqueio pelo celular: {resultado}", flush=True)
         return JSONResponse({"resultado": resultado})
+
+    async def feito(request):
+        # A galeria Feitos no celular (app beta 0.21.5): só o que está na galeria.
+        if not hmac.compare_digest(request.headers.get("authorization", ""), f"Bearer {chave}"):
+            return JSONResponse({"erro": "chave"}, status_code=401)
+        from jarvis.nucleo import feitos
+        caminho = feitos.caminho_de(request.query_params.get("id", ""),
+                                    miniatura=request.query_params.get("mini") == "1")
+        if caminho is None:
+            return JSONResponse({"erro": "não achei"}, status_code=404)
+        return FileResponse(caminho, filename=caminho.name, headers={"Cache-Control": "no-store"})
 
     async def novidades(request):
         # Com chave: o texto é da vida do Léo (notas, provas).
@@ -441,7 +453,7 @@ def criar_app(cfg: config.Config):
                 pass  # já fechado pelo celular
 
     return Starlette(routes=[Route("/", pagina), Route("/ligar", ligar), Route("/saude", saude), Route("/jarvis.apk", apk),
-                               Route("/versao", versao), Route("/novidades", novidades),
+                               Route("/versao", versao), Route("/novidades", novidades), Route("/feito", feito),
                              Route("/desbloqueio", desbloqueio_pc, methods=["GET", "POST"]),
                              Route("/anexo", anexo_http, methods=["POST"]),
                              Route("/aprovacao", aprovacao, methods=["GET", "POST"]),

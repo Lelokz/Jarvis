@@ -153,6 +153,9 @@ class Jarvis(private val app: Application) {
     // Ajustes → Uso e Tempo e foco (app beta 0.21.0): as contas do PC e o Modo foco
     // (até quando, época; 0 = desligado, -1 = até desligar).
     val estatisticas = mutableStateOf<JSONObject?>(null)
+    // A lateral nova (app beta 0.21.5): Agendados ({recados, rotinas}) e Feitos.
+    val agendados = mutableStateOf<JSONObject?>(null)
+    val feitos = mutableStateOf<List<JSONObject>?>(null)
     val focoAte = mutableStateOf(prefs.getFloat("foco_ate", 0f).toDouble())
     val plano = mutableStateOf<List<Pair<String, String>>>(emptyList())   // (texto, estado)
     val terminal = mutableStateListOf<LinhaTerminal>()
@@ -433,6 +436,15 @@ class Jarvis(private val app: Application) {
         if (c.isNotEmpty() && arquivo.isNotEmpty())
             conexao?.enviar(JSONObject().put("pedir", "desfazer_git").put("caminho", c).put("arquivo", arquivo))
     }
+
+    fun pedirAgendados() { conexao?.enviar(JSONObject().put("pedir", "agendados")) }
+    fun apagarRecado(id: String) { conexao?.enviar(JSONObject().put("pedir", "apagar_recado").put("id", id)) }
+    fun novoAgendado(texto: String) {
+        if (texto.isBlank()) return
+        conexao?.enviar(JSONObject().put("pedir", "novo_agendado").put("texto", texto.trim().take(500)))
+        aviso.value = "Pedido mandado: ela anota e te confirma"
+    }
+    fun pedirFeitos() { conexao?.enviar(JSONObject().put("pedir", "feitos")) }
 
     fun pedirEstatisticas() { conexao?.enviar(JSONObject().put("pedir", "estatisticas")) }
 
@@ -833,8 +845,18 @@ class Jarvis(private val app: Application) {
 
     private fun receber(ev: JSONObject) {
         when (ev.optString("ev")) {
-            "sessao" -> estado.value = "dormindo"
-            "estado" -> estado.value = ev.optString("estado")
+            "sessao" -> { estado.value = "dormindo"; pedirAgendados() }
+            "estado" -> {
+                val antes = estado.value
+                estado.value = ev.optString("estado")
+                // Ela pode ter anotado um recado ou feito um arquivo.
+                if (antes == "pensando" && estado.value != "pensando") {
+                    pedirAgendados()
+                    if (pagina.value == "feitos") pedirFeitos()
+                }
+            }
+            "agendados" -> agendados.value = ev
+            "feitos" -> feitos.value = ev.optJSONArray("lista")?.let { a -> List(a.length()) { a.getJSONObject(it) } } ?: emptyList()
             "historico" -> preencher(mensagens, ev.optJSONArray("falas"))
             "conversa_atual" -> {
                 val id = ev.optString("id")

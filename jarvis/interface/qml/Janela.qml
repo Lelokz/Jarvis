@@ -103,6 +103,13 @@ Window {
     property var plano: []
     property var programando: []
     property var estatisticas: null   // Ajustes → Uso e Tempo e foco (etapa 4)
+    property var agendados: null      // a tela Agendados (etapa 5)
+    property var feitos: null         // a galeria Feitos (etapa 5)
+    readonly property var titulosDasConversas: {
+        var t = {};
+        for (var i = 0; i < listaDeConversas.length; i++) t[listaDeConversas[i].id] = listaDeConversas[i].titulo;
+        return t;
+    }
     property var contexto: null
     readonly property bool ladoCodeAberto: verMudancas || verTerminal || verPlano || verContexto
     ListModel { id: terminalModelo }
@@ -302,11 +309,13 @@ Window {
             interno.estado = estado;
             if (estado !== "pensando") { janela.textoPensando = "Pensando…"; janela.ultimaAtividade = ""; }
             if (estado !== "pensando" && janela.codeCaminho) { janela.mudouAlgo(); ponte.pedirProjetos(); }
+            // Ela pode ter anotado um recado ou feito um arquivo: a lateral e as páginas se atualizam.
+            if (estado !== "pensando") { ponte.pedirAgendados(); if (janela.pagina === "feitos") ponte.pedirFeitos(); }
         }
         function onNivelMudou(v) { interno.nivel = v }
         function onConexaoMudou(ligado) {
             interno.conectado = ligado;
-            if (ligado) { ponte.pedirConversas(); ponte.pedirProjetos(); }
+            if (ligado) { ponte.pedirConversas(); ponte.pedirProjetos(); ponte.pedirAgendados(); }
         }
         function onVoceDisse(texto, origem) { falasAtual.acrescentar("voce", texto, { origem: origem }) }
         function onJarvisDisse(texto, acao, perguntando, opcoes) {
@@ -341,6 +350,8 @@ Window {
         function onProjetosRecebidos(lista) { janela.projetos = lista }
         function onProgramandoRecebido(lista) { janela.programando = lista }
         function onEstatisticasRecebidas(d) { janela.estatisticas = d }
+        function onAgendadosRecebidos(d) { janela.agendados = d }
+        function onFeitosRecebidos(l) { janela.feitos = l }
         function onMudancasRecebidas(d) { if (d.caminho === janela.codeCaminho) janela.mudancas = d }
         function onAlteracoesRecebidas(d) { falasAtual.alteracoes(d, true); janela.mudouAlgo(); ponte.pedirProjetos() }
         function onDesfeitoRecebido(d) {
@@ -420,6 +431,7 @@ Window {
         nivel: janela.nivel
         sendoVista: janela.sendoVista
         programando: janela.programando
+        qtosAgendados: janela.agendados && janela.agendados.recados ? janela.agendados.recados.length : 0
         codeCaminho: janela.codeCaminho
         onEntrarCode: function (c) { if (typeof ponte !== "undefined") ponte.entrarCode(c) }
         onEscolherProjeto: { janela.seletorCode = true; if (typeof ponte !== "undefined") ponte.pedirProjetos(); }
@@ -445,6 +457,8 @@ Window {
                 return;
             }
             janela.pagina = p;
+            if (p === "agendados" && typeof ponte !== "undefined") ponte.pedirAgendados();
+            if (p === "feitos" && typeof ponte !== "undefined") ponte.pedirFeitos();
             if (p === "memoria") {
                 memoria.voltarParaLista();
                 memoria.carregando = memoria.lista.length === 0;
@@ -531,6 +545,8 @@ Window {
                     width: Math.min(implicitWidth, topo.width - 420)
                     elide: Text.ElideRight
                     text: janela.pagina === "memoria" ? "Memórias"
+                        : janela.pagina === "agendados" ? "Agendados"
+                        : janela.pagina === "feitos" ? "Feitos"
                         : janela.pagina === "ajustes" ? "Ajustes"
                         : janela.tituloDe(janela.vendo || janela.conversaAtual)
                     color: janela.boasVindas ? tema.textoFraco : tema.texto
@@ -1103,6 +1119,26 @@ Window {
                     return janela.esforco;
                 }
             }
+        }
+
+        PaginaAgendados {
+            anchors { top: topo.bottom; left: parent.left; right: parent.right; bottom: parent.bottom }
+            visible: janela.pagina === "agendados"
+            tema: tema
+            dados: janela.agendados
+            conectado: janela.conectado
+            onApagar: function (id) { if (typeof ponte !== "undefined") ponte.apagarRecado(id) }
+            onCriar: function (texto) {
+                if (typeof ponte !== "undefined" && ponte.novoAgendado(texto)) janela.avisar("Pedido mandado: ela anota e te confirma");
+            }
+        }
+        PaginaFeitos {
+            anchors { top: topo.bottom; left: parent.left; right: parent.right; bottom: parent.bottom }
+            visible: janela.pagina === "feitos"
+            tema: tema
+            lista: janela.feitos
+            titulos: janela.titulosDasConversas
+            onAbrirConversa: function (sessao) { janela.abrir(sessao) }
         }
 
         PaginaMemoria {

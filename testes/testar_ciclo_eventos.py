@@ -31,6 +31,11 @@ import terminal_identico as ti  # noqa: E402
 from jarvis import config, eventos, tts  # noqa: E402
 from jarvis.ponte.servidor import Pedido  # noqa: E402
 from jarvis.agente.agente import Saida  # noqa: E402
+from jarvis import ajustes  # noqa: E402
+
+# Os ajustes de verdade do Léo (a persona padrão, o modo foco) não entram no
+# teste: um arquivo vazio, só deste teste.
+ajustes.ARQUIVO = Path(tempfile.mkdtemp()) / "ajustes.json"
 from jarvis.ponte.cliente import Cliente  # noqa: E402
 from jarvis.registro import Registrador  # noqa: E402
 

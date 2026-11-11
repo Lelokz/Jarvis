@@ -24,6 +24,7 @@ Rectangle {
     // A seção "Programando" (etapa 3 do tchan): os projetos com conversa no
     // modo code e o estado de cada um.
     property var programando: []
+    property int qtosAgendados: 0       // o número no botão Agendados (etapa 5)
     property string codeCaminho: ""
     signal entrarCode(string caminho)
     signal escolherProjeto()
@@ -167,9 +168,46 @@ Rectangle {
                                - new Date(d.getFullYear(), d.getMonth(), d.getDate())) / 86400000);
         return dias <= 0 ? "hoje" : dias === 1 ? "ontem" : ("0" + d.getDate()).slice(-2) + "/" + ("0" + (d.getMonth() + 1)).slice(-2);
     }
+    // -- Agendados e Feitos (etapa 5 do tchan, 11/11/2026) ----------------------
+    Column {
+        id: atalhos
+        anchors.top: caixaBusca.bottom
+        anchors.topMargin: 6
+        x: 8
+        width: parent.width - 16
+        spacing: 2
+        Repeater {
+            model: [
+                { id: "agendados", nome: "Agendados",
+                  icone: "M4 7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2zM4 10h16M8 3v4M16 3v4M8 14h3" },
+                { id: "feitos", nome: "Feitos", icone: "M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z" },
+            ]
+            Rectangle {
+                required property var modelData
+                readonly property bool aqui: raiz.pagina === modelData.id
+                width: atalhos.width; height: 36; radius: 9
+                color: aqui ? raiz.tema.realce : areaAtalho.containsMouse ? raiz.tema.superficie2 : "transparent"
+                Icone { x: 12; anchors.verticalCenter: parent.verticalCenter; caminho: modelData.icone; tamanho: 16
+                        cor: parent.aqui ? raiz.tema.persona : raiz.tema.textoFraco }
+                Text { x: 40; anchors.verticalCenter: parent.verticalCenter; text: modelData.nome
+                       color: parent.aqui ? raiz.tema.texto : raiz.tema.textoMedio; font.family: raiz.tema.familia; font.pixelSize: 14 }
+                Rectangle {
+                    visible: modelData.id === "agendados" && raiz.qtosAgendados > 0
+                    anchors { right: parent.right; rightMargin: 10; verticalCenter: parent.verticalCenter }
+                    width: tQtos.implicitWidth + 12; height: 18; radius: 6
+                    color: raiz.tema.superficie2; border.width: 1; border.color: raiz.tema.tracoForte
+                    Text { id: tQtos; anchors.centerIn: parent; text: raiz.qtosAgendados; color: raiz.tema.textoMedio
+                           font.family: raiz.tema.familia; font.pixelSize: 11 }
+                }
+                MouseArea { id: areaAtalho; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                            onClicked: raiz.irPara(modelData.id) }
+            }
+        }
+    }
+
     Column {
         id: secaoCode
-        anchors.top: caixaBusca.bottom
+        anchors.top: atalhos.bottom
         anchors.topMargin: visible ? 10 : 0
         x: 8
         width: parent.width - 16
@@ -348,6 +386,13 @@ Rectangle {
                     else
                         raiz.abrir(item.sessao);
                 }
+            }
+            // O alfinete das fixadas (etapa 5); some quando o "⋯" aparece.
+            Icone {
+                visible: item.fixada && !botaoMais.visible && !item.editando
+                anchors { right: parent.right; rightMargin: 12; verticalCenter: parent.verticalCenter }
+                caminho: "M9 4h6l-1 6 3 3H7l3-3zM12 13v7"
+                cor: raiz.tema.textoFraco; tamanho: 13
             }
             // O "⋯": aparece com o mouse em cima.
             Rectangle {

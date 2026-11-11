@@ -557,6 +557,28 @@ class Servidor:
             self._direto(cliente, {"ev": "estatisticas", **dados})
         elif tipo == "foco":
             self._pedidos.put(Pedido(tipo, str(dados["minutos"]), cliente.id, cliente.quer_voz))
+        elif tipo in ("agendados", "apagar_recado"):
+            # A tela Agendados (etapa 5 do tchan): os recados e as rotinas.
+            from jarvis.nucleo import feitos, recados
+            arquivo = Path.home() / ".local/share/jarvis/casa" / recados.NOME
+            if tipo == "apagar_recado" and not recados.apagar(arquivo, dados["id"]):
+                self._direto(cliente, {"ev": "erro", "motivo": "esse recado já não existe"})
+            self._direto(cliente, {"ev": "agendados", "recados": recados.listar(arquivo), "rotinas": feitos.rotinas()})
+        elif tipo == "novo_agendado":
+            self._pedidos.put(Pedido(tipo, dados["texto"], cliente.id, cliente.quer_voz))
+        elif tipo == "feitos":
+            # A galeria Feitos: as miniaturas dos vídeos podem levar uns segundos
+            # (ffmpeg): fora da thread da ponte.
+            def montar(c=cliente):
+                from jarvis.nucleo import feitos
+                try:
+                    lista = feitos.listar()
+                except Exception as e:  # noqa: BLE001
+                    self._direto(c, {"ev": "erro", "motivo": f"não li os feitos ({e})"})
+                else:
+                    self._direto(c, {"ev": "feitos", "lista": lista})
+                self._acordar()
+            threading.Thread(target=montar, daemon=True, name="feitos").start()
         elif tipo in ("desfazer", "desfazer_git"):
             self._pedidos.put(Pedido(tipo, json.dumps(dados), cliente.id, cliente.quer_voz))
         elif tipo in ("code", "git", "novo_projeto"):

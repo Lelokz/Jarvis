@@ -204,7 +204,8 @@ PEDIDOS = frozenset({"ola", "falar", "memoria", "ouvir",
                      "memorias", "ler_memoria", "salvar_memoria", "conexao",
                      "projetos", "code", "mudancas", "git", "novo_projeto",
                      "repetir", "avaliar", "desfazer", "desfazer_git",
-                     "estatisticas", "foco"})
+                     "estatisticas", "foco",
+                     "agendados", "apagar_recado", "novo_agendado", "feitos"})
 
 # Uma linha maior que isto sem quebra é um cliente com defeito, não um pedido.
 MAX_LINHA = 64 * 1024
@@ -249,7 +250,7 @@ def ler_pedido(linha: bytes) -> tuple[str, dict[str, Any]]:
             raise ErroDeProtocolo(f"texto com mais de {MAX_TEXTO} caracteres")
         return tipo, {"texto": texto, "anexos": _anexos(objeto), "mudo": _mudo(objeto)}
 
-    if tipo in ("memoria", "conversas", "nova", "parar", "memorias", "projetos", "estatisticas"):
+    if tipo in ("memoria", "conversas", "nova", "parar", "memorias", "projetos", "estatisticas", "agendados", "feitos"):
         return tipo, {}
 
     # O modo code (10/11/2026): entrar num projeto ("" = sair), ver as mudanças
@@ -268,6 +269,17 @@ def ler_pedido(linha: bytes) -> tuple[str, dict[str, Any]]:
         if objeto.get("acao") not in ("commit", "push"):
             raise ErroDeProtocolo("'git' com acao commit ou push")
         return tipo, {"acao": objeto["acao"]}
+    # A tela Agendados (etapa 5): apagar um recado pela lixeira, criar escrevendo.
+    if tipo == "apagar_recado":
+        ident = objeto.get("id")
+        if not isinstance(ident, str) or not re.fullmatch(r"[0-9a-f]{10}", ident):
+            raise ErroDeProtocolo("'apagar_recado' sem um id válido")
+        return tipo, {"id": ident}
+    if tipo == "novo_agendado":
+        texto = objeto.get("texto")
+        if not isinstance(texto, str) or not texto.strip() or len(texto) > 500:
+            raise ErroDeProtocolo("'novo_agendado' sem o texto")
+        return tipo, {"texto": " ".join(texto.split())}
     # O Modo foco (Ajustes → Tempo e foco, 11/11/2026): minutos; 0 = desliga,
     # -1 = até desligar.
     if tipo == "foco":

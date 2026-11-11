@@ -126,6 +126,13 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.runtime.produceState
+import android.graphics.Bitmap
 import java.util.Calendar
 
 // As cores da janela do PC (jarvis/interface/qml/Tema.qml), as mesmas.
@@ -344,6 +351,8 @@ fun Tela(modelo: Jarvis) {
                     abrirCode = { folhaCode = true; modelo.pedirProjetos() })
                 when (modelo.pagina.value) {
                     "memoria" -> PaginaMemoria(modelo)
+                    "agendados" -> PaginaAgendados(modelo)
+                    "feitos" -> PaginaFeitos(modelo)
                     "ajustes" -> PaginaAjustes(modelo)
                     else -> Chat(modelo) { seletores = true }
                 }
@@ -544,6 +553,8 @@ private fun Topo(modelo: Jarvis, abrirGaveta: () -> Unit, abrirSeletores: () -> 
     val vazio = !antiga && modelo.mensagens.isEmpty()
     val titulo = when {
         pagina == "memoria" -> "Memórias"
+        pagina == "agendados" -> "Agendados"
+        pagina == "feitos" -> "Feitos"
         // O modo code (app beta 0.20.0): o nome do projeto no título.
         pagina == "chat" && modelo.codeNome.value.isNotEmpty() && modelo.vendo.value.isEmpty() ->
             modelo.codeNome.value.removePrefix("Projeto ")
@@ -1150,6 +1161,21 @@ private fun Gaveta(modelo: Jarvis, fechar: () -> Unit) {
                 BasicTextField(busca, { busca = it }, singleLine = true,
                     textStyle = TextStyle(color = Texto, fontSize = 14.sp, fontFamily = Inter),
                     cursorBrush = SolidColor(Azul), modifier = Modifier.fillMaxWidth())
+            }
+        }
+        // Agendados e Feitos (app beta 0.21.5), em cima das conversas.
+        for ((id, nome, icone) in listOf(Triple("agendados", "Agendados", Icones.agenda), Triple("feitos", "Feitos", Icones.feitos))) {
+            val aqui = modelo.pagina.value == id
+            Row(Modifier.padding(horizontal = 12.dp).fillMaxWidth().height(44.dp).clip(RoundedCornerShape(11.dp))
+                .background(if (aqui) Realce else Color.Transparent)
+                .clickable { modelo.pagina.value = id; if (id == "feitos") modelo.pedirFeitos() else modelo.pedirAgendados(); fechar() }
+                .padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+                Ic(icone, if (aqui) Azul else Fraco, 19.dp)
+                Spacer(Modifier.width(14.dp))
+                Text(nome, color = if (aqui) Texto else TextoMedio, fontSize = 15.sp, modifier = Modifier.weight(1f))
+                val n = if (id == "agendados") modelo.agendados.value?.optJSONArray("recados")?.length() ?: 0 else 0
+                if (n > 0) Text("$n", color = TextoMedio, fontSize = 12.sp, modifier = Modifier.clip(RoundedCornerShape(6.dp))
+                    .background(Superficie2).border(1.dp, TracoForte, RoundedCornerShape(6.dp)).padding(horizontal = 7.dp, vertical = 1.dp))
             }
         }
         val visiveis = modelo.conversas.filter { busca.isBlank() || it.titulo.contains(busca.trim(), ignoreCase = true) }
@@ -1864,6 +1890,181 @@ private fun AjustesFoco(modelo: Jarvis) {
         GraficoDias(conversa, roxo) { duracao(it.toInt()) }
         if (conversa.isNotEmpty()) Text("Média de " + duracao((conversa.sumOf { it.second } / conversa.size).toInt()) + " por dia",
             color = Fraco, fontSize = 13.sp, modifier = Modifier.padding(top = 10.dp))
+    }
+}
+
+// -- a lateral nova (app beta 0.21.5, etapa 5 do tchan): Agendados e Feitos ----------
+
+private fun horaDe(seg: Double): String {
+    val c = Calendar.getInstance().apply { timeInMillis = (seg * 1000).toLong() }
+    return "%02d:%02d".format(c.get(Calendar.HOUR_OF_DAY), c.get(Calendar.MINUTE))
+}
+
+private fun diaDe(seg: Double): String {
+    val d = java.time.Instant.ofEpochMilli((seg * 1000).toLong()).atZone(java.time.ZoneId.systemDefault()).toLocalDate()
+    val n = java.time.temporal.ChronoUnit.DAYS.between(java.time.LocalDate.now(), d)
+    return when (n) { 0L -> "hoje"; 1L -> "amanhã"; -1L -> "ontem"
+        else -> listOf("seg", "ter", "qua", "qui", "sex", "sáb", "dom")[d.dayOfWeek.value - 1] + " ${d.dayOfMonth}/${d.monthValue}" }
+}
+
+@Composable
+private fun PaginaAgendados(modelo: Jarvis) {
+    LaunchedEffect(Unit) { modelo.pedirAgendados() }
+    var texto by remember { mutableStateOf("") }
+    val dados = modelo.agendados.value
+    val recados = dados?.optJSONArray("recados")?.let { a -> List(a.length()) { a.getJSONObject(it) } } ?: emptyList()
+    val rotinas = dados?.optJSONArray("rotinas")?.let { a -> List(a.length()) { a.getJSONObject(it) } } ?: emptyList()
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp)) {
+        Text("O que ela faz sozinha na hora marcada. Pede aqui ou falando: “me lembra amanhã às 8 de…”, “todo dia às 7 me fala a agenda”.",
+            color = Fraco, fontSize = 13.5.sp)
+        Row(Modifier.padding(top = 14.dp).fillMaxWidth().height(50.dp).clip(RoundedCornerShape(14.dp)).background(Superficie)
+            .border(1.dp, TracoForte, RoundedCornerShape(14.dp)).padding(start = 14.dp, end = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.weight(1f)) {
+                if (texto.isEmpty()) Text("Novo: o quê e quando…", color = MuitoFraco, fontSize = 15.sp)
+                BasicTextField(texto, { texto = it.take(500) }, singleLine = true,
+                    textStyle = TextStyle(color = Texto, fontSize = 15.sp, fontFamily = Inter), cursorBrush = SolidColor(Azul),
+                    keyboardOptions = KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Send),
+                    keyboardActions = KeyboardActions(onSend = { modelo.novoAgendado(texto); texto = "" }),
+                    modifier = Modifier.fillMaxWidth())
+            }
+            Box(Modifier.size(38.dp).clip(RoundedCornerShape(10.dp)).background(if (texto.isBlank()) lerp(Fundo, Azul, 0.4f) else Azul)
+                .clickable(enabled = texto.isNotBlank() && modelo.conectado.value) { modelo.novoAgendado(texto); texto = "" },
+                contentAlignment = Alignment.Center) { Ic(Icones.enviar, Color(0xFF06101D), 18.dp) }
+        }
+        Grupo("Próximos")
+        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Superficie).border(1.dp, Traco, RoundedCornerShape(14.dp))) {
+            if (recados.isEmpty()) Text(if (dados == null) "Carregando…" else "Nada marcado.", color = MuitoFraco, fontSize = 13.sp,
+                modifier = Modifier.padding(16.dp))
+            recados.forEachIndexed { i, r ->
+                if (i > 0) Box(Modifier.fillMaxWidth().height(1.dp).background(Traco))
+                Row(Modifier.padding(start = 14.dp, end = 4.dp, top = 12.dp, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.width(70.dp)) {
+                        Text(horaDe(r.optDouble("quando")), color = Texto, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                        Text(diaDe(r.optDouble("quando")), color = Fraco, fontSize = 12.sp)
+                    }
+                    Column(Modifier.weight(1f)) {
+                        Text(r.optString("texto"), color = Texto, fontSize = 14.5.sp)
+                        val rep = r.optString("repete")
+                        Text(rep.ifEmpty { "uma vez" }, color = if (rep.isNotEmpty()) Color(0xFF9CCBFF) else Fraco, fontSize = 12.sp,
+                            modifier = Modifier.padding(top = 3.dp))
+                    }
+                    Box(Modifier.size(40.dp).clip(CircleShape).clickable(enabled = modelo.conectado.value) { modelo.apagarRecado(r.optString("id")) },
+                        contentAlignment = Alignment.Center) { Ic(Icones.lixo, Fraco, 18.dp) }
+                }
+            }
+        }
+        Grupo("Rotinas da NOVA")
+        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Superficie).border(1.dp, Traco, RoundedCornerShape(14.dp))) {
+            rotinas.forEachIndexed { i, r ->
+                if (i > 0) Box(Modifier.fillMaxWidth().height(1.dp).background(Traco))
+                val estado = r.optString("estado")
+                Column(Modifier.padding(14.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(r.optString("nome"), color = Texto, fontSize = 15.sp, modifier = Modifier.weight(1f))
+                        val cor = when (estado) { "ligado" -> Color(0xFF38D39F); "falta configurar" -> Pergunta; else -> Fraco }
+                        Text(if (estado == "falta configurar") "falta tu configurar" else estado, color = cor, fontSize = 11.5.sp,
+                            modifier = Modifier.clip(RoundedCornerShape(7.dp)).background(cor.copy(alpha = 0.09f))
+                                .border(1.dp, cor.copy(alpha = 0.45f), RoundedCornerShape(7.dp)).padding(horizontal = 8.dp, vertical = 2.dp))
+                    }
+                    Text(r.optString("descricao"), color = Fraco, fontSize = 12.5.sp, modifier = Modifier.padding(top = 2.dp))
+                    Text(r.optString("quando"), color = TextoMedio, fontSize = 12.5.sp, modifier = Modifier.padding(top = 4.dp))
+                }
+            }
+        }
+        Spacer(Modifier.height(24.dp))
+    }
+}
+
+/** A miniatura (ou a imagem) que mora no PC. */
+@Composable
+private fun ImagemDoPc(id: String, mini: Boolean, lado: Int, modifier: Modifier, ajuste: androidx.compose.ui.layout.ContentScale) {
+    val c = LocalContext.current
+    val bmp by produceState<Bitmap?>(null, id, mini) {
+        value = withContext(Dispatchers.IO) { FeitosDoPc.imagem(c, id, mini, lado) }
+    }
+    bmp?.let { Image(it.asImageBitmap(), null, modifier, contentScale = ajuste) } ?: Box(modifier)
+}
+
+@Composable
+private fun PaginaFeitos(modelo: Jarvis) {
+    LaunchedEffect(Unit) { modelo.pedirFeitos() }
+    val c = LocalContext.current
+    val escopo = rememberCoroutineScope()
+    var filtro by remember { mutableStateOf("") }
+    var vendo by remember { mutableStateOf<JSONObject?>(null) }
+    val todos = modelo.feitos.value
+    val lista = (todos ?: emptyList()).filter { filtro.isEmpty() || it.optString("tipo") == filtro }
+    val titulos = modelo.conversas.associate { it.id to it.titulo }
+    fun abrir(f: JSONObject) {
+        if (f.optString("tipo") == "imagem") { vendo = f; return }
+        modelo.aviso.value = "Baixando do PC…"
+        escopo.launch {
+            val erro = withContext(Dispatchers.IO) { FeitosDoPc.abrir(c, f.optString("id"), f.optString("nome")) }
+            modelo.aviso.value = erro
+        }
+    }
+    LazyVerticalGrid(GridCells.Fixed(2), Modifier.fillMaxSize().padding(horizontal = 14.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        item(span = { GridItemSpan(2) }) {
+            Row(Modifier.horizontalScroll(rememberScrollState()).padding(vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                for ((t, n) in listOf("" to "Tudo", "imagem" to "Imagens", "video" to "Vídeos", "documento" to "Docs", "codigo" to "Código")) {
+                    val sel = filtro == t
+                    val qtos = (todos ?: emptyList()).count { t.isEmpty() || it.optString("tipo") == t }
+                    Text("$n  $qtos", color = if (sel) Texto else TextoMedio, fontSize = 14.sp,
+                        modifier = Modifier.clip(RoundedCornerShape(10.dp)).background(if (sel) Azul.copy(alpha = 0.12f) else Superficie)
+                            .border(1.dp, if (sel) Azul else TracoForte, RoundedCornerShape(10.dp)).clickable { filtro = t }
+                            .padding(horizontal = 14.dp, vertical = 8.dp))
+                }
+            }
+        }
+        if (lista.isEmpty()) item(span = { GridItemSpan(2) }) {
+            Text(if (todos == null) "Carregando…" else "Nada ainda. O que ela criar ou te mandar daqui pra frente aparece aqui.",
+                color = MuitoFraco, fontSize = 14.sp, modifier = Modifier.padding(top = 20.dp))
+        }
+        items(lista.size) { i ->
+            val f = lista[i]
+            val tipo = f.optString("tipo")
+            Column(Modifier.clip(RoundedCornerShape(14.dp)).background(Superficie).border(1.dp, Traco, RoundedCornerShape(14.dp))
+                .clickable { abrir(f) }) {
+                Box(Modifier.fillMaxWidth().height(104.dp).background(if (tipo == "codigo") t(0xFF0C0F15, 0xFFF3F5F9) else t(0xFF10141C, 0xFFE9EDF3)),
+                    contentAlignment = Alignment.Center) {
+                    when {
+                        f.optString("miniatura").isNotEmpty() -> ImagemDoPc(f.optString("id"), tipo == "video", 400,
+                            Modifier.fillMaxSize(), androidx.compose.ui.layout.ContentScale.Crop)
+                        tipo == "codigo" -> Text(f.optString("previa"), color = TextoMedio, fontSize = 9.5.sp, fontFamily = FontFamily.Monospace,
+                            lineHeight = 13.sp, modifier = Modifier.fillMaxSize().padding(10.dp))
+                        else -> Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            val ext = f.optString("nome").substringAfterLast('.').uppercase()
+                            val cor = when { ext == "PDF" -> Color(0xFFFF8F8F); ext.startsWith("DOC") || ext == "ODT" -> Color(0xFF7FB8FF)
+                                tipo == "video" -> Color(0xFFC4A5FF); else -> TextoMedio }
+                            Ic(Icones.arquivo, cor, 34.dp)
+                            Text(ext, color = cor, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                        }
+                    }
+                    if (tipo == "video" && f.optString("miniatura").isNotEmpty()) Box(Modifier.size(36.dp).clip(CircleShape)
+                        .background(Color.Black.copy(alpha = 0.55f)), contentAlignment = Alignment.Center) { Ic(Icones.play, Color.White, 16.dp) }
+                    if (f.optString("duracao").isNotEmpty()) Text(f.optString("duracao"), color = Color.White, fontSize = 11.sp,
+                        modifier = Modifier.align(Alignment.BottomEnd).padding(6.dp).clip(RoundedCornerShape(5.dp))
+                            .background(Color.Black.copy(alpha = 0.7f)).padding(horizontal = 5.dp, vertical = 1.dp))
+                }
+                Column(Modifier.padding(horizontal = 11.dp, vertical = 9.dp)) {
+                    Text(f.optString("nome"), color = Texto, fontSize = 13.sp, fontWeight = FontWeight.Medium, maxLines = 1,
+                        overflow = TextOverflow.Ellipsis)
+                    Text(diaDe(f.optDouble("quando")).let { if (it == "hoje") horaDe(f.optDouble("quando")) else it } + " · " +
+                        (if (f.optString("como") == "mandou") "enviado no WhatsApp" else titulos[f.optString("sessao")] ?: f.optString("pasta").substringAfterLast('/')),
+                        color = Fraco, fontSize = 11.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+            }
+        }
+        item(span = { GridItemSpan(2) }) { Spacer(Modifier.height(20.dp)) }
+    }
+    // A imagem aberta, na tela toda; tocar fecha.
+    vendo?.let { f ->
+        BackHandler { vendo = null }
+        Box(Modifier.fillMaxSize().background(Color.Black).clickable { vendo = null }, contentAlignment = Alignment.Center) {
+            ImagemDoPc(f.optString("id"), false, 1600, Modifier.fillMaxSize(), androidx.compose.ui.layout.ContentScale.Fit)
+            Text(f.optString("nome"), color = Color.White, fontSize = 13.sp, modifier = Modifier.align(Alignment.BottomCenter).padding(20.dp))
+        }
     }
 }
 

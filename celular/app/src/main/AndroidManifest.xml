@@ -75,6 +75,14 @@
                 <data android:scheme="wear" android:host="*" android:pathPrefix="/jarvis" />
             </intent-filter>
         </service>
+        <!-- A galeria Feitos (app beta 0.21.5): abrir no app certo o vídeo/documento baixado do PC. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.arquivos"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/arquivos" />
+        </provider>
         <receiver
             android:name=".ResultadoDaInstalacao"
             android:exported="false" />
