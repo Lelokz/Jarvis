@@ -1,0 +1,384 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Painel do Canal — NOVA</title>
+<meta name="description" content="Painel do Canal: o canal do YouTube num painel só, dentro da NOVA.">
+<link rel="icon" type="image/png" href="../img/favicon.png">
+<style>
+  @font-face { font-family: "Inter"; src: url("../fontes/InterVariable.ttf") format("truetype"); font-weight: 100 900; font-display: swap; }
+
+  /* As cores do site da NOVA, com o roxo do Painel do Canal (Painel.qml). */
+  :root {
+    --fundo: #05070b;
+    --traco: rgba(150, 140, 210, 0.14);
+    --traco-forte: rgba(150, 140, 210, 0.28);
+    --texto: #ece9f5;
+    --texto-medio: #bdb6d0;
+    --texto-fraco: #857d9c;
+    --muito-fraco: #4d4862;
+    --verde: #4ade80;
+    --amarelo: #fbbf24;
+    --vermelho: #f87171;
+    --cor: #a78bfa;
+    --cor-rgb: 167, 139, 250;
+    --mono: ui-monospace, "JetBrains Mono", "DejaVu Sans Mono", monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body { background: var(--fundo); color: var(--texto); font-family: "Inter", system-ui, sans-serif; line-height: 1.55; -webkit-font-smoothing: antialiased; overflow-x: hidden; }
+  a { color: inherit; text-decoration: none; }
+  .largura { max-width: 1480px; margin: 0 auto; padding: 0 clamp(20px, 3.5vw, 64px); position: relative; }
+  .vidro { background: rgba(13, 12, 20, 0.86); border: 1px solid var(--traco); }
+  .rotulo { display: inline-flex; align-items: center; gap: 10px; font: 600 12px var(--mono); letter-spacing: .22em; color: var(--cor); }
+  .rotulo::before { content: ""; width: 26px; height: 1px; background: currentColor; box-shadow: 0 0 8px currentColor; }
+
+  /* topo */
+  .topo { position: sticky; top: 0; z-index: 20; background: rgba(5,7,11,.9); border-bottom: 1px solid var(--traco); backdrop-filter: blur(8px); }
+  .topo .largura { display: flex; align-items: center; height: 66px; gap: 18px; }
+  .marca { display: flex; align-items: center; gap: 11px; font-weight: 800; letter-spacing: .2em; font-size: 15px; }
+  .marca img { width: 30px; height: 30px; }
+  .topo .barra { width: 1px; height: 22px; background: var(--traco-forte); }
+  .topo .produto { font: 600 12px var(--mono); letter-spacing: .18em; color: var(--cor); }
+  .topo nav { margin-left: auto; display: flex; gap: 26px; font-size: 14px; color: var(--texto-medio); }
+  .topo nav a { position: relative; padding: 4px 0; }
+  .topo nav a::after { content: ""; position: absolute; left: 0; right: 100%; bottom: -2px; height: 1px; background: var(--cor); box-shadow: 0 0 8px var(--cor); transition: right .3s; }
+  .topo nav a:hover { color: var(--texto); }
+  .topo nav a:hover::after { right: 0; }
+
+  /* abertura */
+  .abertura { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: clamp(30px, 4vw, 80px); align-items: center; min-height: min(calc(100vh - 66px), 940px); padding: 40px 0 60px; }
+  .abertura h1 { font-size: clamp(42px, 4.4vw, 84px); line-height: 1; letter-spacing: -0.045em; font-weight: 820; margin: 18px 0 20px; }
+  .abertura h1 .brilho { color: var(--cor); text-shadow: 0 0 34px rgba(var(--cor-rgb), .45); position: relative; display: inline-block; }
+  .abertura h1 .brilho::after {
+    content: attr(data-texto); position: absolute; inset: 0; color: transparent;
+    background: linear-gradient(100deg, transparent 35%, rgba(255,255,255,.95) 50%, transparent 65%);
+    background-size: 300% 100%; -webkit-background-clip: text; background-clip: text; animation: varre 4.5s ease-in-out infinite;
+  }
+  @keyframes varre { from { background-position: 150% 0; } to { background-position: -150% 0; } }
+  .sub { font-size: clamp(18px, 1.2vw, 22px); color: var(--texto-medio); max-width: 34em; text-wrap: balance; }
+  .sub b { color: var(--texto); font-weight: 620; }
+  .selos { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 30px; }
+  .selo { display: inline-flex; align-items: center; gap: 9px; padding: 9px 14px; border-radius: 10px; font: 12.5px var(--mono); color: var(--texto-medio); }
+  .selo i { width: 7px; height: 7px; border-radius: 50%; background: var(--verde); box-shadow: 0 0 8px var(--verde); }
+  .selo.roxo i { background: var(--cor); box-shadow: 0 0 8px var(--cor); }
+  .botoes { display: flex; gap: 12px; margin-top: 32px; flex-wrap: wrap; }
+  .botao { display: inline-flex; align-items: center; gap: 10px; height: 48px; padding: 0 24px; border-radius: 12px; font: 650 15px "Inter", sans-serif; border: 1px solid transparent; transition: transform .15s, box-shadow .25s, background .25s; }
+  .botao.cheio { background: linear-gradient(180deg, rgba(255,255,255,.18), transparent 60%), var(--cor); color: #0b0716; box-shadow: 0 0 0 1px rgba(255,255,255,.12) inset, 0 8px 30px rgba(var(--cor-rgb), .35); }
+  .botao.cheio:hover { transform: translateY(-2px); box-shadow: 0 0 0 1px rgba(255,255,255,.2) inset, 0 12px 44px rgba(var(--cor-rgb), .55); }
+  .botao.vazio { background: rgba(var(--cor-rgb), .06); border-color: rgba(var(--cor-rgb), .35); }
+  .botao.vazio:hover { background: rgba(var(--cor-rgb), .13); }
+  .botao svg { width: 18px; height: 18px; }
+
+  /* A janela do painel, desenhada (com o átomo atrás). */
+  .vitrine { position: relative; aspect-ratio: 1 / .92; }
+  .vitrine .atomo { position: absolute; width: 74%; aspect-ratio: 1; top: -8%; right: -10%; }
+  .atomo img, .atomo canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .atomo canvas { display: none; mix-blend-mode: screen; -webkit-mask-image: radial-gradient(closest-side, #000 72%, transparent 100%); mask-image: radial-gradient(closest-side, #000 72%, transparent 100%); }
+  .com-3d .atomo canvas { display: block; }
+  .com-3d .atomo img { display: none; }
+  .atomo img { filter: hue-rotate(28deg) saturate(.9); }
+  .janela { position: absolute; left: 0; right: 6%; bottom: 0; border-radius: 18px; overflow: hidden; background: rgba(14, 12, 21, .94); border: 1px solid var(--traco-forte); box-shadow: 0 40px 120px rgba(0,0,0,.6), 0 0 0 1px rgba(var(--cor-rgb), .08) inset, 0 30px 90px rgba(var(--cor-rgb), .14); }
+  .janela .barra-j { display: flex; align-items: center; gap: 8px; height: 38px; padding: 0 14px; border-bottom: 1px solid var(--traco); font: 600 11px var(--mono); letter-spacing: .14em; color: var(--texto-fraco); }
+  .janela .barra-j b { width: 9px; height: 9px; border-radius: 50%; background: var(--muito-fraco); }
+  .janela .barra-j span { margin-left: 8px; }
+  .janela .corpo { display: grid; grid-template-columns: 128px 1fr; min-height: 300px; }
+  .janela .lado { border-right: 1px solid var(--traco); padding: 14px 10px; display: grid; gap: 4px; align-content: start; }
+  .janela .lado div { padding: 7px 10px; border-radius: 8px; font-size: 12.5px; color: var(--texto-fraco); display: flex; gap: 8px; align-items: center; }
+  .janela .lado div.on { background: rgba(var(--cor-rgb), .14); color: var(--texto); }
+  .janela .lado div i { width: 6px; height: 6px; border-radius: 2px; background: currentColor; opacity: .7; }
+  .janela .meio { padding: 16px 18px; display: grid; gap: 12px; align-content: start; }
+  .janela .numeros { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .janela .num { border-radius: 10px; padding: 10px 12px; background: rgba(255,255,255,.025); border: 1px solid var(--traco); }
+  .janela .num small { display: block; font: 600 9.5px var(--mono); letter-spacing: .14em; color: var(--texto-fraco); }
+  .janela .num b { display: block; font-size: 20px; letter-spacing: -.02em; margin-top: 2px; }
+  .janela .num em { font: 11px var(--mono); color: var(--verde); font-style: normal; }
+  .janela .grafico { height: 96px; border-radius: 10px; border: 1px solid var(--traco); background: rgba(255,255,255,.02); padding: 10px 12px; }
+  .janela .grafico svg { width: 100%; height: 100%; overflow: visible; }
+  .janela .faixa { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+  .janela .faixa div { border-radius: 8px; padding: 8px; background: rgba(255,255,255,.025); border: 1px solid var(--traco); min-height: 54px; }
+  .janela .faixa small { font: 600 8.5px var(--mono); letter-spacing: .12em; color: var(--texto-fraco); }
+  .janela .faixa span { display: block; height: 7px; border-radius: 3px; background: rgba(var(--cor-rgb), .35); margin-top: 7px; }
+  .janela .faixa span + span { width: 60%; background: rgba(var(--cor-rgb), .18); margin-top: 5px; }
+  .traco-grafico { stroke-dasharray: 600; stroke-dashoffset: 600; animation: desenha 2.4s .4s cubic-bezier(.4,0,.2,1) forwards; }
+  @keyframes desenha { to { stroke-dashoffset: 0; } }
+
+  /* seções */
+  section { padding: clamp(64px, 6vw, 120px) 0; position: relative; }
+  h2 { font-size: clamp(32px, 3.4vw, 62px); line-height: 1.04; letter-spacing: -0.04em; font-weight: 800; margin: 16px 0 16px; }
+  h2 .cor { color: var(--cor); text-shadow: 0 0 30px rgba(var(--cor-rgb), .4); }
+  .cabeca { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: clamp(30px, 5vw, 110px); align-items: end; }
+  .intro { color: var(--texto-medio); font-size: clamp(17px, 1.1vw, 20px); max-width: 40em; text-wrap: balance; margin-bottom: 18px; }
+  .aparece { opacity: 0; transform: translateY(26px); transition: opacity .8s, transform .8s cubic-bezier(.2,.7,.2,1); }
+  .aparece.visto { opacity: 1; transform: none; }
+
+  /* O que tem: seis cartões. */
+  .grade { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 50px; }
+  .cartao { border-radius: 20px; padding: clamp(24px, 2vw, 34px); position: relative; overflow: hidden; transition: border-color .3s, box-shadow .3s, transform .3s; }
+  .cartao:hover { border-color: rgba(var(--cor-rgb), .45); box-shadow: 0 24px 70px rgba(var(--cor-rgb), .12); transform: translateY(-3px); }
+  .cartao::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: radial-gradient(400px circle at var(--mx, -999px) var(--my, -999px), rgba(var(--cor-rgb), .1), transparent 60%); }
+  .cartao .icone { width: 48px; height: 48px; border-radius: 13px; display: grid; place-items: center; background: rgba(var(--cor-rgb), .1); border: 1px solid rgba(var(--cor-rgb), .3); color: var(--cor); }
+  .cartao .icone svg { width: 22px; height: 22px; }
+  .cartao small { display: block; margin-top: 22px; font: 600 11px var(--mono); letter-spacing: .2em; color: var(--texto-fraco); }
+  .cartao h3 { font-size: 23px; letter-spacing: -0.02em; margin: 6px 0 8px; }
+  .cartao p { color: var(--texto-medio); font-size: 15.5px; }
+
+  /* Do jeito que um vídeo nasce: a esteira da produção. */
+  .esteira { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0; margin-top: 56px; position: relative; }
+  .esteira::before { content: ""; position: absolute; left: 10%; right: 10%; top: 31px; height: 2px; background: repeating-linear-gradient(90deg, rgba(var(--cor-rgb), .45) 0 6px, transparent 6px 12px); }
+  .esteira .luz { position: absolute; top: 26px; left: 10%; width: 12px; height: 12px; border-radius: 50%; background: #d9ccff; box-shadow: 0 0 16px var(--cor); animation: anda 6s linear infinite; }
+  @keyframes anda { from { left: 10%; } to { left: calc(90% - 12px); } }
+  .etapa { text-align: center; position: relative; padding: 0 10px; }
+  .etapa .bola { width: 64px; height: 64px; margin: 0 auto; border-radius: 50%; display: grid; place-items: center; font: 700 15px var(--mono); color: var(--texto); background: radial-gradient(circle, rgba(var(--cor-rgb), .2), rgba(5,7,11,.95) 70%); border: 1px solid rgba(var(--cor-rgb), .4); position: relative; z-index: 1; }
+  .etapa:last-child .bola { border-color: var(--verde); color: var(--verde); background: radial-gradient(circle, rgba(74,222,128,.18), rgba(5,7,11,.95) 70%); box-shadow: 0 0 30px rgba(74,222,128,.25); }
+  .etapa h4 { margin-top: 16px; font-size: 18px; letter-spacing: -.01em; }
+  .etapa p { color: var(--texto-fraco); font-size: 14px; margin-top: 4px; }
+
+  /* Jarvis e Friday contam. */
+  .falas { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; margin-top: 50px; }
+  .fala { border-radius: 20px; padding: 26px 28px; position: relative; overflow: hidden; }
+  .fala.jarvis { --c: 77, 163, 255; }
+  .fala.friday { --c: 255, 111, 181; }
+  .fala { background: linear-gradient(160deg, rgba(var(--c), .1), rgba(10,11,17,.92) 50%); border: 1px solid rgba(var(--c), .28); }
+  .fala .quem { font: 700 12px var(--mono); letter-spacing: .2em; color: rgb(var(--c)); }
+  .fala .msg { font-size: 18px; margin-top: 12px; color: var(--texto); }
+  .fala .hora { font: 12px var(--mono); color: var(--texto-fraco); margin-top: 12px; }
+
+  /* Os dados: o que o painel pede ao YouTube. */
+  .dados { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 22px; margin-top: 50px; }
+  .caixa { border-radius: 20px; padding: clamp(26px, 2.4vw, 40px); }
+  .caixa h4 { font: 700 12px var(--mono); letter-spacing: .2em; margin-bottom: 18px; color: var(--cor); }
+  .caixa.verde h4 { color: var(--verde); }
+  .caixa ul { list-style: none; display: grid; gap: 12px; }
+  .caixa li { display: flex; gap: 12px; align-items: baseline; font-size: 16px; color: var(--texto-medio); }
+  .caixa li::before { content: ""; width: 6px; height: 6px; border-radius: 50%; flex: none; transform: translateY(-2px); background: var(--cor); box-shadow: 0 0 8px var(--cor); }
+  .caixa.verde li::before { background: var(--verde); box-shadow: 0 0 8px var(--verde); }
+  .caixa li b { color: var(--texto); font-weight: 600; }
+  .aviso { display: flex; gap: 14px; align-items: center; margin-top: 22px; padding: 16px 22px; border-radius: 14px; color: var(--texto-medio); font-size: 15px; }
+  .aviso svg { width: 20px; height: 20px; color: var(--cor); flex: none; }
+  .aviso a { color: var(--cor); border-bottom: 1px solid rgba(var(--cor-rgb), .4); }
+
+  footer { padding: 46px 0 70px; border-top: 1px solid var(--traco); color: var(--texto-fraco); font-size: 13.5px; }
+  footer .largura { display: flex; align-items: center; gap: 22px; flex-wrap: wrap; }
+  footer .marca { color: var(--texto); }
+  footer .marca img { width: 26px; height: 26px; }
+  footer nav { display: flex; gap: 22px; flex-wrap: wrap; }
+  footer nav a:hover { color: var(--texto); }
+  footer .dir { margin-left: auto; font: 12px var(--mono); letter-spacing: .06em; }
+
+  @media (max-width: 960px) {
+    .topo nav { display: none; }
+    .abertura, .cabeca, .dados, .falas { grid-template-columns: 1fr; }
+    .abertura { min-height: 0; padding-top: 30px; }
+    .vitrine { max-width: 560px; width: 100%; justify-self: center; }
+    .grade { grid-template-columns: 1fr; }
+    .esteira { grid-template-columns: 1fr; gap: 26px; }
+    .esteira::before, .esteira .luz { display: none; }
+    footer .dir { margin-left: 0; }
+  }
+  @media (max-width: 480px) {
+    .largura { padding: 0 16px; }
+    .janela .corpo { grid-template-columns: 1fr; }
+    .janela .lado { display: none; }
+    .topo .produto, .topo .barra { display: none; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .esteira .luz, .abertura h1 .brilho::after { animation: none; }
+    .traco-grafico { animation: none; stroke-dashoffset: 0; }
+  }
+</style>
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+               "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/" } }
+</script>
+</head>
+<body>
+<header class="topo">
+  <div class="largura">
+    <a class="marca" href="../"><img src="../img/logo-azul.png" alt="">NOVA</a>
+    <span class="barra"></span>
+    <span class="produto">PAINEL DO CANAL</span>
+    <nav>
+      <a href="#recursos">O que tem</a>
+      <a href="#producao">Produção</a>
+      <a href="#dados">Seus dados</a>
+      <a href="../privacidade/">Privacidade</a>
+    </nav>
+  </div>
+</header>
+
+<main class="largura">
+  <!-- ABERTURA -->
+  <section class="abertura">
+    <div>
+      <span class="rotulo">PAINEL DO CANAL · NOVA</span>
+      <h1>O seu canal.<br><span class="brilho" data-texto="Num painel só.">Num painel só.</span></h1>
+      <p class="sub">Vídeos, calendário, produção, comentários e análises do seu canal do YouTube, num lugar bonito e rápido. E o <b>Jarvis</b> e a <b>Friday</b> te contam o que importa.</p>
+      <div class="selos">
+        <span class="selo vidro"><i></i>roda no seu PC</span>
+        <span class="selo vidro roxo"><i></i>API oficial do YouTube</span>
+        <span class="selo vidro"><i></i>nada vendido, nada compartilhado</span>
+      </div>
+      <div class="botoes">
+        <a class="botao cheio" href="#recursos">Ver o que faz</a>
+        <a class="botao vazio" href="../privacidade/">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5c0 4.5-3 8.3-7 10-4-1.7-7-5.5-7-10V6z"/><path d="M9 12l2 2 4-4"/></svg>
+          Política de privacidade
+        </a>
+      </div>
+    </div>
+    <div class="vitrine" aria-hidden="true">
+      <div class="atomo"><img src="../img/atomo-azul.png" alt=""><canvas></canvas></div>
+      <div class="janela">
+        <div class="barra-j"><b></b><b></b><b></b><span>PAINEL DO CANAL</span></div>
+        <div class="corpo">
+          <div class="lado">
+            <div class="on"><i></i>Início</div><div><i></i>Vídeos</div><div><i></i>Calendário</div>
+            <div><i></i>Produção</div><div><i></i>Comentários</div><div><i></i>Análises</div>
+          </div>
+          <div class="meio">
+            <div class="numeros">
+              <div class="num"><small>INSCRITOS</small><b>+1,2 mil</b><em>▲ 28 dias</em></div>
+              <div class="num"><small>VIEWS</small><b>48,3 mil</b><em>▲ 12%</em></div>
+              <div class="num"><small>HORAS</small><b>2.140</b><em>▲ 9%</em></div>
+            </div>
+            <div class="grafico">
+              <svg viewBox="0 0 300 70" preserveAspectRatio="none">
+                <defs><linearGradient id="g" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#a78bfa" stop-opacity=".35"/><stop offset="1" stop-color="#a78bfa" stop-opacity="0"/></linearGradient></defs>
+                <path d="M0 58 C20 54 30 50 45 52 S75 40 90 42 120 30 135 34 165 22 180 26 210 12 225 18 255 8 270 10 290 4 300 3 L300 70 L0 70Z" fill="url(#g)"/>
+                <path class="traco-grafico" d="M0 58 C20 54 30 50 45 52 S75 40 90 42 120 30 135 34 165 22 180 26 210 12 225 18 255 8 270 10 290 4 300 3" fill="none" stroke="#a78bfa" stroke-width="2" vector-effect="non-scaling-stroke"/>
+              </svg>
+            </div>
+            <div class="faixa">
+              <div><small>IDEIA</small><span></span><span></span></div>
+              <div><small>ROTEIRO</small><span></span></div>
+              <div><small>GRAVAÇÃO</small><span></span><span></span></div>
+              <div><small>EDIÇÃO</small><span></span></div>
+              <div><small>POSTADO</small><span></span><span></span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- O QUE TEM -->
+  <section id="recursos">
+    <div class="cabeca"><div><span class="rotulo">O QUE TEM</span>
+      <h2>Tudo do canal, <span class="cor">sem o Studio.</span></h2></div>
+      <p class="intro">Feito pra quem cria: abre rápido, mostra o que importa primeiro e deixa o resto a um clique.</p></div>
+    <div class="grade">
+      <div class="cartao vidro aparece"><div class="icone"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-7 9 7v9a1 1 0 01-1 1h-5v-6h-6v6H4a1 1 0 01-1-1z"/></svg></div>
+        <small>01 · INÍCIO</small><h3>O canal num relance</h3><p>Inscritos, visualizações e horas assistidas, com o que subiu e o que caiu desde a última vez.</p></div>
+      <div class="cartao vidro aparece"><div class="icone"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M10 9l5 3-5 3z"/></svg></div>
+        <small>02 · VÍDEOS</small><h3>Catálogo completo</h3><p>Todos os vídeos com a ficha de cada um: título, descrição, tags, miniatura e desempenho.</p></div>
+      <div class="cartao vidro aparece"><div class="icone"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/></svg></div>
+        <small>03 · CALENDÁRIO</small><h3>O que sai e quando</h3><p>Os vídeos agendados e os planejados lado a lado, pra nunca deixar a semana vazia.</p></div>
+      <div class="cartao vidro aparece"><div class="icone"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h4v12H4zM10 6h4v8h-4zM16 6h4v5h-4z"/></svg></div>
+        <small>04 · PRODUÇÃO</small><h3>Da ideia ao postado</h3><p>Cada vídeo anda pelas etapas: ideia, roteiro, gravação, edição e postado. Você sabe onde tudo está.</p></div>
+      <div class="cartao vidro aparece"><div class="icone"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 01-11.6 7.1L4 20l1-4.6A8 8 0 1121 12z"/></svg></div>
+        <small>05 · COMENTÁRIOS</small><h3>Responder sem caçar</h3><p>Os comentários novos juntos, com as perguntas em destaque. Responde dali mesmo.</p></div>
+      <div class="cartao vidro aparece"><div class="icone"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V9M10 19V5M16 19v-7M22 19H2"/></svg></div>
+        <small>06 · ANÁLISES</small><h3>Números que explicam</h3><p>Retenção, de onde vem o público e quais vídeos puxam inscritos, em gráficos que dá pra entender.</p></div>
+    </div>
+  </section>
+
+  <!-- PRODUÇÃO -->
+  <section id="producao">
+    <div class="cabeca"><div><span class="rotulo">PRODUÇÃO</span>
+      <h2>Todo vídeo tem <span class="cor">um caminho.</span></h2></div>
+      <p class="intro">O painel acompanha cada vídeo da primeira ideia até o dia em que ele vai ao ar.</p></div>
+    <div class="esteira aparece">
+      <span class="luz"></span>
+      <div class="etapa"><div class="bola">01</div><h4>Ideia</h4><p>anotada antes de fugir</p></div>
+      <div class="etapa"><div class="bola">02</div><h4>Roteiro</h4><p>o que vai ser dito</p></div>
+      <div class="etapa"><div class="bola">03</div><h4>Gravação</h4><p>gameplay e narração</p></div>
+      <div class="etapa"><div class="bola">04</div><h4>Edição</h4><p>cortes, animação, som</p></div>
+      <div class="etapa"><div class="bola">✓</div><h4>Postado</h4><p>agendado ou no ar</p></div>
+    </div>
+  </section>
+
+  <!-- JARVIS E FRIDAY -->
+  <section>
+    <div class="cabeca"><div><span class="rotulo">COM A NOVA</span>
+      <h2>Eles te contam <span class="cor">o que importa.</span></h2></div>
+      <p class="intro">Pergunta “como tá o canal?” e eles respondem. E avisam sozinhos quando aparece algo que vale a pena, só entre 8h e 23h.</p></div>
+    <div class="falas">
+      <div class="fala jarvis aparece"><span class="quem">JARVIS</span>
+        <p class="msg">Bom dia, senhor. O vídeo de ontem passou das mil visualizações, e há três perguntas nos comentários esperando resposta.</p>
+        <p class="hora">// no bom dia</p></div>
+      <div class="fala friday aparece"><span class="quem">FRIDAY</span>
+        <p class="msg">Chefinho!! Bateu mais um marco de inscritos agora! E alguém perguntou qual mod tu usou, quer que eu te mostre?</p>
+        <p class="hora">// no meio do dia</p></div>
+    </div>
+  </section>
+
+  <!-- SEUS DADOS -->
+  <section id="dados">
+    <div class="cabeca"><div><span class="rotulo">SEUS DADOS</span>
+      <h2>O que ele usa <span class="cor">e onde fica.</span></h2></div>
+      <p class="intro">O Painel do Canal conversa só com o YouTube, pela API oficial do Google, com a permissão que você dá uma vez.</p></div>
+    <div class="dados aparece">
+      <div class="caixa vidro">
+        <h4>// O QUE ELE PEDE AO YOUTUBE</h4>
+        <ul>
+          <li><span><b>Ver e gerenciar o canal:</b> vídeos, playlists, comentários e agendamentos, pra mostrar e editar o que você pedir.</span></li>
+          <li><span><b>Ler as análises:</b> visualizações, retenção e público, só pra leitura.</span></li>
+        </ul>
+      </div>
+      <div class="caixa vidro verde">
+        <h4>// COMO ELE GUARDA</h4>
+        <ul>
+          <li><span><b>No seu PC.</b> A permissão e os dados ficam no seu computador.</span></li>
+          <li><span><b>Sem servidor no meio.</b> Ninguém além de você vê os dados do canal.</span></li>
+          <li><span><b>Nunca vendido nem compartilhado,</b> e nunca usado pra treinar IA ou anúncio.</span></li>
+          <li><span><b>Desliga quando quiser</b> em myaccount.google.com/permissions, ou pedindo pra NOVA apagar tudo.</span></li>
+        </ul>
+      </div>
+    </div>
+    <div class="aviso vidro aparece">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5c0 4.5-3 8.3-7 10-4-1.7-7-5.5-7-10V6z"/></svg>
+      <span>Os detalhes estão na <a href="../privacidade/">política de privacidade</a>. O uso dos dados do Google segue a Política de Dados do Usuário dos Serviços de API do Google, incluindo as regras de Uso Limitado.</span>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="largura">
+    <span class="marca"><img src="../img/logo-azul.png" alt="">NOVA</span>
+    <nav>
+      <a href="../">Site da NOVA</a>
+      <a href="../privacidade/">Privacidade</a>
+      <a href="../termos/">Termos de uso</a>
+    </nav>
+    <span class="dir">Painel do Canal · parte da NOVA · usa os Serviços de API do YouTube</span>
+  </div>
+</footer>
+
+<script>
+const obs = new IntersectionObserver(es => es.forEach(e => e.isIntersecting && e.target.classList.add("visto")), { threshold: 0.12 });
+document.querySelectorAll(".aparece").forEach(e => obs.observe(e));
+if (new URLSearchParams(location.search).get("tudo")) document.querySelectorAll(".aparece").forEach(e => e.classList.add("visto"));
+// O brilho que segue o mouse nos cartões.
+document.querySelectorAll(".cartao").forEach(c => c.addEventListener("mousemove", e => {
+  const r = c.getBoundingClientRect();
+  c.style.setProperty("--mx", (e.clientX - r.left) + "px"); c.style.setProperty("--my", (e.clientY - r.top) + "px");
+}));
+</script>
+<script type="module">
+import { criarAtomo } from "../atomo3d.js";
+const raiz = document.documentElement, canvas = document.querySelector(".vitrine canvas");
+const parado = matchMedia("(prefers-reduced-motion: reduce)").matches;
+try {
+  raiz.classList.add("com-3d");
+  const a = criarAtomo(canvas, { parado, cor: () => [167, 139, 250], fundo: 0x000000, brilho: .5 });
+  let visivel = true;
+  new IntersectionObserver(es => { visivel = es[0].isIntersecting; }).observe(canvas.parentElement);
+  let antes = performance.now();
+  (function laco(agora) { if (visivel) a.passo(Math.min((agora - antes) / 1000, .1)); antes = agora; requestAnimationFrame(laco); })(antes);
+} catch (e) { raiz.classList.remove("com-3d"); }
+</script>
+</body>
+</html>

@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Política de Privacidade — NOVA</title>
+<meta name="description" content="Política de privacidade da NOVA e do Painel do Canal.">
+<link rel="icon" type="image/png" href="../img/favicon.png">
+<style>
+  @font-face { font-family: "Inter"; src: url("../fontes/InterVariable.ttf") format("truetype"); font-weight: 100 900; font-display: swap; }
+  :root {
+    --fundo: #05070b;
+    --traco: rgba(130, 150, 210, 0.14);
+    --traco-forte: rgba(130, 150, 210, 0.28);
+    --texto: #e8eef7;
+    --texto-medio: #b9c1cf;
+    --texto-fraco: #7e879b;
+    --verde: #38d39f;
+    --azul: #4da3ff;
+    --roxo: #a78bfa;
+    --cor: #a78bfa;
+    --cor-rgb: 167, 139, 250;
+    --mono: ui-monospace, "JetBrains Mono", "DejaVu Sans Mono", monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; scroll-padding-top: 90px; }
+  body { background: var(--fundo); color: var(--texto); font-family: "Inter", system-ui, sans-serif; line-height: 1.65; -webkit-font-smoothing: antialiased; overflow-x: hidden; }
+  a { color: inherit; text-decoration: none; }
+  .largura { max-width: 1280px; margin: 0 auto; padding: 0 clamp(20px, 3.5vw, 64px); position: relative; }
+  .vidro { background: rgba(12, 14, 21, 0.86); border: 1px solid var(--traco); }
+  .rotulo { display: inline-flex; align-items: center; gap: 10px; font: 600 12px var(--mono); letter-spacing: .22em; color: var(--cor); }
+  .rotulo::before { content: ""; width: 26px; height: 1px; background: currentColor; box-shadow: 0 0 8px currentColor; }
+
+  .topo { position: sticky; top: 0; z-index: 20; background: rgba(5,7,11,.9); border-bottom: 1px solid var(--traco); backdrop-filter: blur(8px); }
+  .topo .largura { display: flex; align-items: center; height: 66px; gap: 18px; }
+  .marca { display: flex; align-items: center; gap: 11px; font-weight: 800; letter-spacing: .2em; font-size: 15px; }
+  .marca img { width: 30px; height: 30px; }
+  .topo nav { margin-left: auto; display: flex; gap: 26px; font-size: 14px; color: var(--texto-medio); }
+  .topo nav a:hover { color: var(--texto); }
+
+  /* O brilho roxo e azul atrás do título. */
+  .cabeca { position: relative; padding: clamp(60px, 7vw, 120px) 0 clamp(40px, 4vw, 70px); }
+  .cabeca::before { content: ""; position: absolute; width: 900px; height: 620px; right: -120px; top: -200px; pointer-events: none; border-radius: 50%;
+    background: radial-gradient(closest-side, rgba(167,139,250,.16), transparent), radial-gradient(closest-side at 30% 70%, rgba(77,163,255,.12), transparent); filter: blur(10px); }
+  h1 { font-size: clamp(40px, 4.6vw, 80px); line-height: 1.02; letter-spacing: -0.045em; font-weight: 820; margin: 18px 0 18px; position: relative; }
+  h1 .cor { color: var(--cor); text-shadow: 0 0 34px rgba(var(--cor-rgb), .45); }
+  .cabeca p { color: var(--texto-medio); font-size: clamp(18px, 1.2vw, 21px); max-width: 40em; position: relative; }
+  .meta { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 28px; position: relative; }
+  .meta span { padding: 8px 14px; border-radius: 10px; font: 12.5px var(--mono); color: var(--texto-medio); }
+  .meta b { color: var(--texto); font-weight: 600; }
+
+  /* Resumo: as quatro promessas. */
+  .resumo { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+  .promessa { border-radius: 18px; padding: 22px 22px 24px; }
+  .promessa svg { width: 22px; height: 22px; color: var(--verde); }
+  .promessa h3 { font-size: 17px; margin: 14px 0 4px; letter-spacing: -.01em; }
+  .promessa p { color: var(--texto-fraco); font-size: 14.5px; line-height: 1.5; }
+
+  /* O texto, com o índice parado do lado. */
+  .corpo { display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: clamp(30px, 4vw, 70px); padding: clamp(50px, 5vw, 90px) 0; align-items: start; }
+  .indice { position: sticky; top: 96px; display: grid; gap: 2px; font-size: 14px; }
+  .indice small { font: 600 11px var(--mono); letter-spacing: .2em; color: var(--texto-fraco); margin-bottom: 10px; }
+  .indice a { padding: 7px 12px; border-left: 2px solid var(--traco); color: var(--texto-fraco); transition: color .2s, border-color .2s; }
+  .indice a:hover { color: var(--texto); }
+  .indice a.ativo { color: var(--texto); border-left-color: var(--cor); box-shadow: -6px 0 12px -8px var(--cor); }
+  article section { padding: 0 0 46px; margin-bottom: 46px; border-bottom: 1px solid var(--traco); }
+  article section:last-child { border-bottom: 0; }
+  article .num { font: 600 12px var(--mono); letter-spacing: .2em; color: var(--cor); }
+  article h2 { font-size: clamp(24px, 1.9vw, 32px); letter-spacing: -0.03em; margin: 6px 0 14px; line-height: 1.15; }
+  article p { color: var(--texto-medio); font-size: 16.5px; max-width: 46em; }
+  article p + p { margin-top: 12px; }
+  article b { color: var(--texto); font-weight: 600; }
+  article a { color: var(--cor); border-bottom: 1px solid rgba(var(--cor-rgb), .4); }
+  article ul { list-style: none; display: grid; gap: 10px; margin-top: 14px; max-width: 46em; }
+  article li { display: flex; gap: 12px; color: var(--texto-medio); font-size: 16px; }
+  article li::before { content: ""; width: 6px; height: 6px; border-radius: 50%; flex: none; margin-top: 10px; background: var(--cor); box-shadow: 0 0 8px var(--cor); }
+  .tabela { margin-top: 18px; border-radius: 16px; overflow: hidden; }
+  .tabela div { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: 20px; padding: 14px 20px; border-top: 1px solid var(--traco); font-size: 15px; }
+  .tabela div:first-child { border-top: 0; font: 600 11px var(--mono); letter-spacing: .16em; color: var(--texto-fraco); }
+  .tabela div span:first-child { color: var(--texto); }
+  .tabela div span:last-child { color: var(--texto-medio); }
+  .destaque { margin-top: 18px; padding: 18px 22px; border-radius: 14px; border-left: 2px solid var(--verde); background: rgba(56,211,159,.06); color: var(--texto-medio); font-size: 15.5px; }
+
+  footer { padding: 46px 0 70px; border-top: 1px solid var(--traco); color: var(--texto-fraco); font-size: 13.5px; }
+  footer .largura { display: flex; align-items: center; gap: 22px; flex-wrap: wrap; }
+  footer .marca { color: var(--texto); }
+  footer .marca img { width: 26px; height: 26px; }
+  footer nav { display: flex; gap: 22px; }
+  footer nav a:hover { color: var(--texto); }
+  footer .dir { margin-left: auto; font: 12px var(--mono); }
+
+  @media (max-width: 960px) {
+    .topo nav { display: none; }
+    .resumo { grid-template-columns: 1fr 1fr; }
+    .corpo { grid-template-columns: 1fr; }
+    .indice { display: none; }
+    footer .dir { margin-left: 0; }
+  }
+  @media (max-width: 480px) {
+    .largura { padding: 0 16px; }
+    .resumo { grid-template-columns: 1fr; }
+    .tabela div { grid-template-columns: 1fr; gap: 4px; }
+  }
+</style>
+</head>
+<body>
+<header class="topo">
+  <div class="largura">
+    <a class="marca" href="../"><img src="../img/logo-azul.png" alt="">NOVA</a>
+    <nav>
+      <a href="../">Site da NOVA</a>
+      <a href="../painel/">Painel do Canal</a>
+    </nav>
+  </div>
+</header>
+
+<main class="largura">
+  <div class="cabeca">
+    <span class="rotulo">POLÍTICA DE PRIVACIDADE</span>
+    <h1>Seus dados ficam <span class="cor">com você.</span></h1>
+    <p>Como a NOVA e o Painel do Canal usam, guardam e protegem as suas informações, incluindo os dados que vêm da sua conta Google e do YouTube.</p>
+    <div class="meta">
+      <span class="vidro">vale para: <b>NOVA</b> e <b>Painel do Canal</b></span>
+      <span class="vidro">atualizada em <b>11 de novembro de 2026</b></span>
+    </div>
+  </div>
+
+  <div class="resumo">
+    <div class="promessa vidro"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8"/></svg>
+      <h3>Mora no seu PC</h3><p>Os dados ficam guardados no seu computador, não num servidor nosso.</p></div>
+    <div class="promessa vidro"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/></svg>
+      <h3>Nunca vendido</h3><p>Nada é vendido, alugado ou compartilhado com ninguém.</p></div>
+    <div class="promessa vidro"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h16M12 4v16"/><circle cx="12" cy="12" r="9"/></svg>
+      <h3>Sem anúncio</h3><p>Seus dados não viram propaganda nem treinam inteligência artificial.</p></div>
+    <div class="promessa vidro"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      <h3>Desliga quando quiser</h3><p>Você tira a permissão e apaga tudo a qualquer momento.</p></div>
+  </div>
+
+  <div class="corpo">
+    <nav class="indice">
+      <small>NESTA PÁGINA</small>
+      <a href="#quem">Quem somos</a>
+      <a href="#coleta">O que é usado</a>
+      <a href="#google">Dados do Google e YouTube</a>
+      <a href="#uso">Para que serve</a>
+      <a href="#onde">Onde fica guardado</a>
+      <a href="#compartilha">Compartilhamento</a>
+      <a href="#controle">Seu controle</a>
+      <a href="#seguranca">Segurança</a>
+      <a href="#mudancas">Mudanças</a>
+      <a href="#contato">Contato</a>
+    </nav>
+
+    <article>
+      <section id="quem"><span class="num">01</span><h2>Quem somos</h2>
+        <p>A <b>NOVA</b> (Núcleo Operacional de Vozes Autônomas) é um assistente de voz que roda no computador de quem usa, com as personalidades Jarvis e Friday. O <b>Painel do Canal</b> faz parte da NOVA: é um painel para acompanhar e cuidar de um canal do YouTube.</p>
+        <p>Os dois são um projeto pessoal e independente do criador do canal Lelokz. Não têm ligação com o Google, o YouTube ou a Anthropic.</p>
+      </section>
+
+      <section id="coleta"><span class="num">02</span><h2>O que é usado</h2>
+        <ul>
+          <li><span><b>A sua voz e o que você escreve,</b> para entender o pedido. A voz vira texto no próprio computador.</span></li>
+          <li><span><b>As memórias e conversas</b> que você mesmo cria, guardadas no seu PC e editáveis a qualquer hora.</span></li>
+          <li><span><b>Os dados do canal do YouTube,</b> só no Painel do Canal e só depois da sua permissão (detalhes abaixo).</span></li>
+        </ul>
+        <p>Para entender e responder, o texto do pedido vai para a sua própria conta do Claude, da Anthropic, que segue a política de privacidade dela.</p>
+      </section>
+
+      <section id="google"><span class="num">03</span><h2>Dados do Google e do YouTube</h2>
+        <p>O Painel do Canal usa os <b>Serviços de API do YouTube</b>. Quando você conecta, o Google pede a sua permissão para estes acessos:</p>
+        <div class="tabela vidro">
+          <div><span>PERMISSÃO</span><span>PARA QUÊ</span></div>
+          <div><span>Ver, editar e gerenciar a sua conta do YouTube</span><span>Mostrar os vídeos, comentários, playlists e agendamentos, e fazer as mudanças que você pedir (como editar um título ou responder um comentário).</span></div>
+          <div><span>Ver os relatórios do YouTube Analytics</span><span>Mostrar visualizações, horas assistidas, retenção e público. Só leitura.</span></div>
+        </div>
+        <p style="margin-top:16px">Ao usar o Painel do Canal, você também concorda com os <a href="https://www.youtube.com/t/terms" rel="noopener">Termos de Serviço do YouTube</a>, e os dados são tratados também pela <a href="https://policies.google.com/privacy" rel="noopener">Política de Privacidade do Google</a>.</p>
+        <div class="destaque">O uso e a transferência de informações recebidas das APIs do Google seguem a <a href="https://developers.google.com/terms/api-services-user-data-policy" rel="noopener">Política de Dados do Usuário dos Serviços de API do Google</a>, incluindo os requisitos de Uso Limitado.</div>
+      </section>
+
+      <section id="uso"><span class="num">04</span><h2>Para que serve</h2>
+        <p>Os dados são usados <b>só</b> para mostrar e cuidar do seu canal dentro da NOVA, e para o Jarvis e a Friday te contarem novidades (como um comentário com pergunta ou um marco de inscritos). Nunca para anúncios, perfis de público, revenda ou para treinar modelos de inteligência artificial.</p>
+      </section>
+
+      <section id="onde"><span class="num">05</span><h2>Onde fica guardado</h2>
+        <p>A permissão do Google (o “token”) e os dados do canal ficam <b>no seu computador</b>, numa pasta só sua. Não existe um servidor da NOVA guardando os seus dados. O app do celular mostra os dados buscando direto no seu PC, pela sua conexão.</p>
+        <p>Se você ligar o backup mensal da NOVA, uma cópia vai para o <b>seu próprio</b> Google Drive, trancada com uma senha que só você sabe.</p>
+      </section>
+
+      <section id="compartilha"><span class="num">06</span><h2>Compartilhamento</h2>
+        <p>Nenhum dado é vendido, alugado ou entregue a terceiros. As únicas conexões para fora são as necessárias para funcionar: o Google/YouTube (para os dados do canal) e a sua conta do Claude (para entender os pedidos).</p>
+      </section>
+
+      <section id="controle"><span class="num">07</span><h2>Seu controle</h2>
+        <ul>
+          <li><span><b>Tirar a permissão:</b> a qualquer momento em <a href="https://myaccount.google.com/permissions" rel="noopener">myaccount.google.com/permissions</a>, removendo o “Painel do Canal”.</span></li>
+          <li><span><b>Apagar os dados:</b> peça para a NOVA apagar os dados do canal, e ela apaga a permissão e tudo o que guardou do YouTube no seu PC.</span></li>
+          <li><span><b>Ver e corrigir as memórias:</b> na aba Memórias da NOVA, no PC ou no celular.</span></li>
+        </ul>
+        <p>Enquanto o painel está ligado, os dados do YouTube guardados no PC são atualizados sozinhos, para não mostrar informação velha.</p>
+      </section>
+
+      <section id="seguranca"><span class="num">08</span><h2>Segurança</h2>
+        <p>A conexão com o Google é sempre criptografada (HTTPS). A ligação entre o celular e o PC exige uma chave só sua. Os backups são trancados com criptografia forte antes de sair do computador.</p>
+      </section>
+
+      <section id="mudancas"><span class="num">09</span><h2>Mudanças nesta política</h2>
+        <p>Se algo mudar, esta página é atualizada e a data no topo muda junto. Mudanças importantes são avisadas dentro da NOVA.</p>
+      </section>
+
+      <section id="contato"><span class="num">10</span><h2>Contato</h2>
+        <p>Dúvidas sobre privacidade ou pedidos sobre os seus dados: <a href="mailto:lelokz.jogos37@gmail.com">lelokz.jogos37@gmail.com</a>.</p>
+      </section>
+    </article>
+  </div>
+</main>
+
+<footer>
+  <div class="largura">
+    <span class="marca"><img src="../img/logo-azul.png" alt="">NOVA</span>
+    <nav><a href="../">Site da NOVA</a><a href="../painel/">Painel do Canal</a><a href="../termos/">Termos de uso</a></nav>
+    <span class="dir">Núcleo Operacional de Vozes Autônomas</span>
+  </div>
+</footer>
+
+<script>
+// O índice acende a seção que está na tela.
+const links = [...document.querySelectorAll(".indice a")];
+const obs = new IntersectionObserver(es => es.forEach(e => {
+  if (!e.isIntersecting) return;
+  links.forEach(l => l.classList.toggle("ativo", l.getAttribute("href") === "#" + e.target.id));
+}), { rootMargin: "-30% 0px -60% 0px" });
+document.querySelectorAll("article section").forEach(s => obs.observe(s));
+</script>
+</body>
+</html>
