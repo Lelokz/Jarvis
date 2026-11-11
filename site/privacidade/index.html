@@ -32,12 +32,6 @@
   .rotulo { display: inline-flex; align-items: center; gap: 10px; font: 600 12px var(--mono); letter-spacing: .22em; color: var(--cor); }
   .rotulo::before { content: ""; width: 26px; height: 1px; background: currentColor; box-shadow: 0 0 8px currentColor; }
 
-  .topo { position: sticky; top: 0; z-index: 20; background: rgba(5,7,11,.9); border-bottom: 1px solid var(--traco); backdrop-filter: blur(8px); }
-  .topo .largura { display: flex; align-items: center; height: 66px; gap: 18px; }
-  .marca { display: flex; align-items: center; gap: 11px; font-weight: 800; letter-spacing: .2em; font-size: 15px; }
-  .marca img { width: 30px; height: 30px; }
-  .topo nav { margin-left: auto; display: flex; gap: 26px; font-size: 14px; color: var(--texto-medio); }
-  .topo nav a:hover { color: var(--texto); }
 
   /* O brilho roxo e azul atrás do título. */
   .cabeca { position: relative; padding: clamp(60px, 7vw, 120px) 0 clamp(40px, 4vw, 70px); }
@@ -82,16 +76,8 @@
   .tabela div span:last-child { color: var(--texto-medio); }
   .destaque { margin-top: 18px; padding: 18px 22px; border-radius: 14px; border-left: 2px solid var(--verde); background: rgba(56,211,159,.06); color: var(--texto-medio); font-size: 15.5px; }
 
-  footer { padding: 46px 0 70px; border-top: 1px solid var(--traco); color: var(--texto-fraco); font-size: 13.5px; }
-  footer .largura { display: flex; align-items: center; gap: 22px; flex-wrap: wrap; }
-  footer .marca { color: var(--texto); }
-  footer .marca img { width: 26px; height: 26px; }
-  footer nav { display: flex; gap: 22px; }
-  footer nav a:hover { color: var(--texto); }
-  footer .dir { margin-left: auto; font: 12px var(--mono); }
 
   @media (max-width: 960px) {
-    .topo nav { display: none; }
     .resumo { grid-template-columns: 1fr 1fr; }
     .corpo { grid-template-columns: 1fr; }
     .indice { display: none; }
@@ -102,15 +88,42 @@
     .resumo { grid-template-columns: 1fr; }
     .tabela div { grid-template-columns: 1fr; gap: 4px; }
   }
+
+  /* O topo das três páginas do Painel (igual em todas). */
+  .topo { position: sticky; top: 0; z-index: 20; background: rgba(5,7,11,.9); border-bottom: 1px solid var(--traco); backdrop-filter: blur(8px); }
+  .topo .largura { display: flex; align-items: center; height: 66px; gap: 18px; }
+  .marca { display: flex; align-items: center; gap: 11px; font-weight: 800; letter-spacing: .2em; font-size: 15px; }
+  .marca img { width: 30px; height: 30px; }
+  .marca .barra { width: 1px; height: 22px; background: var(--traco-forte); margin: 0 4px; }
+  .marca .produto { font: 600 12px var(--mono); letter-spacing: .18em; color: var(--cor); }
+  .topo nav { margin-left: auto; display: flex; gap: 6px; font-size: 14px; color: var(--texto-medio); }
+  .topo nav a { padding: 8px 14px; border-radius: 10px; transition: background .2s, color .2s; }
+  .topo nav a:hover { color: var(--texto); background: rgba(var(--cor-rgb), .08); }
+  .topo nav a.aqui { color: var(--texto); background: rgba(var(--cor-rgb), .14); box-shadow: 0 0 0 1px rgba(var(--cor-rgb), .35) inset; }
+  footer { padding: 46px 0 70px; border-top: 1px solid var(--traco); color: var(--texto-fraco); font-size: 13.5px; }
+  footer .largura { display: flex; align-items: center; gap: 22px; flex-wrap: wrap; }
+  footer .marca { color: var(--texto); }
+  footer .marca img { width: 26px; height: 26px; }
+  footer nav { display: flex; gap: 22px; flex-wrap: wrap; }
+  footer nav a:hover { color: var(--texto); }
+  footer nav a.aqui { color: var(--texto); }
+  footer .dir { margin-left: auto; font: 12px var(--mono); letter-spacing: .04em; }
+  footer .dir a { color: var(--cor); }
+  @media (max-width: 760px) {
+    .marca .produto, .marca .barra { display: none; }
+    .topo nav a { padding: 8px 10px; font-size: 13px; }
+    footer .dir { margin-left: 0; }
+  }
 </style>
 </head>
 <body>
 <header class="topo">
   <div class="largura">
-    <a class="marca" href="../"><img src="../img/logo-azul.png" alt="">NOVA</a>
+    <a class="marca" href="../painel/"><img src="../img/logo-azul.png" alt="">NOVA<span class="barra"></span><span class="produto">PAINEL DO CANAL</span></a>
     <nav>
-      <a href="../">Site da NOVA</a>
       <a href="../painel/">Painel do Canal</a>
+      <a href="../privacidade/" class="aqui">Privacidade</a>
+      <a href="../termos/">Termos de uso</a>
     </nav>
   </div>
 </header>
@@ -217,9 +230,9 @@
 
 <footer>
   <div class="largura">
-    <span class="marca"><img src="../img/logo-azul.png" alt="">NOVA</span>
-    <nav><a href="../">Site da NOVA</a><a href="../painel/">Painel do Canal</a><a href="../termos/">Termos de uso</a></nav>
-    <span class="dir">Núcleo Operacional de Vozes Autônomas</span>
+    <a class="marca" href="../painel/"><img src="../img/logo-azul.png" alt="">NOVA</a>
+    <nav><a href="../painel/">Painel do Canal</a><a href="../privacidade/" class="aqui">Política de Privacidade</a><a href="../termos/">Termos de Uso</a></nav>
+    <span class="dir">Painel do Canal faz parte da <a href="../">NOVA</a> · usa os Serviços de API do YouTube</span>
   </div>
 </footer>
 

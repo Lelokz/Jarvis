@@ -35,18 +35,6 @@
   .rotulo { display: inline-flex; align-items: center; gap: 10px; font: 600 12px var(--mono); letter-spacing: .22em; color: var(--cor); }
   .rotulo::before { content: ""; width: 26px; height: 1px; background: currentColor; box-shadow: 0 0 8px currentColor; }
 
-  /* topo */
-  .topo { position: sticky; top: 0; z-index: 20; background: rgba(5,7,11,.9); border-bottom: 1px solid var(--traco); backdrop-filter: blur(8px); }
-  .topo .largura { display: flex; align-items: center; height: 66px; gap: 18px; }
-  .marca { display: flex; align-items: center; gap: 11px; font-weight: 800; letter-spacing: .2em; font-size: 15px; }
-  .marca img { width: 30px; height: 30px; }
-  .topo .barra { width: 1px; height: 22px; background: var(--traco-forte); }
-  .topo .produto { font: 600 12px var(--mono); letter-spacing: .18em; color: var(--cor); }
-  .topo nav { margin-left: auto; display: flex; gap: 26px; font-size: 14px; color: var(--texto-medio); }
-  .topo nav a { position: relative; padding: 4px 0; }
-  .topo nav a::after { content: ""; position: absolute; left: 0; right: 100%; bottom: -2px; height: 1px; background: var(--cor); box-shadow: 0 0 8px var(--cor); transition: right .3s; }
-  .topo nav a:hover { color: var(--texto); }
-  .topo nav a:hover::after { right: 0; }
 
   /* abertura */
   .abertura { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: clamp(30px, 4vw, 80px); align-items: center; min-height: min(calc(100vh - 66px), 940px); padding: 40px 0 60px; }
@@ -160,16 +148,8 @@
   .aviso svg { width: 20px; height: 20px; color: var(--cor); flex: none; }
   .aviso a { color: var(--cor); border-bottom: 1px solid rgba(var(--cor-rgb), .4); }
 
-  footer { padding: 46px 0 70px; border-top: 1px solid var(--traco); color: var(--texto-fraco); font-size: 13.5px; }
-  footer .largura { display: flex; align-items: center; gap: 22px; flex-wrap: wrap; }
-  footer .marca { color: var(--texto); }
-  footer .marca img { width: 26px; height: 26px; }
-  footer nav { display: flex; gap: 22px; flex-wrap: wrap; }
-  footer nav a:hover { color: var(--texto); }
-  footer .dir { margin-left: auto; font: 12px var(--mono); letter-spacing: .06em; }
 
   @media (max-width: 960px) {
-    .topo nav { display: none; }
     .abertura, .cabeca, .dados, .falas { grid-template-columns: 1fr; }
     .abertura { min-height: 0; padding-top: 30px; }
     .vitrine { max-width: 560px; width: 100%; justify-self: center; }
@@ -188,6 +168,32 @@
     .esteira .luz, .abertura h1 .brilho::after { animation: none; }
     .traco-grafico { animation: none; stroke-dashoffset: 0; }
   }
+
+  /* O topo das três páginas do Painel (igual em todas). */
+  .topo { position: sticky; top: 0; z-index: 20; background: rgba(5,7,11,.9); border-bottom: 1px solid var(--traco); backdrop-filter: blur(8px); }
+  .topo .largura { display: flex; align-items: center; height: 66px; gap: 18px; }
+  .marca { display: flex; align-items: center; gap: 11px; font-weight: 800; letter-spacing: .2em; font-size: 15px; }
+  .marca img { width: 30px; height: 30px; }
+  .marca .barra { width: 1px; height: 22px; background: var(--traco-forte); margin: 0 4px; }
+  .marca .produto { font: 600 12px var(--mono); letter-spacing: .18em; color: var(--cor); }
+  .topo nav { margin-left: auto; display: flex; gap: 6px; font-size: 14px; color: var(--texto-medio); }
+  .topo nav a { padding: 8px 14px; border-radius: 10px; transition: background .2s, color .2s; }
+  .topo nav a:hover { color: var(--texto); background: rgba(var(--cor-rgb), .08); }
+  .topo nav a.aqui { color: var(--texto); background: rgba(var(--cor-rgb), .14); box-shadow: 0 0 0 1px rgba(var(--cor-rgb), .35) inset; }
+  footer { padding: 46px 0 70px; border-top: 1px solid var(--traco); color: var(--texto-fraco); font-size: 13.5px; }
+  footer .largura { display: flex; align-items: center; gap: 22px; flex-wrap: wrap; }
+  footer .marca { color: var(--texto); }
+  footer .marca img { width: 26px; height: 26px; }
+  footer nav { display: flex; gap: 22px; flex-wrap: wrap; }
+  footer nav a:hover { color: var(--texto); }
+  footer nav a.aqui { color: var(--texto); }
+  footer .dir { margin-left: auto; font: 12px var(--mono); letter-spacing: .04em; }
+  footer .dir a { color: var(--cor); }
+  @media (max-width: 760px) {
+    .marca .produto, .marca .barra { display: none; }
+    .topo nav a { padding: 8px 10px; font-size: 13px; }
+    footer .dir { margin-left: 0; }
+  }
 </style>
 <script type="importmap">
 { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
@@ -197,14 +203,11 @@
 <body>
 <header class="topo">
   <div class="largura">
-    <a class="marca" href="../"><img src="../img/logo-azul.png" alt="">NOVA</a>
-    <span class="barra"></span>
-    <span class="produto">PAINEL DO CANAL</span>
+    <a class="marca" href="../painel/"><img src="../img/logo-azul.png" alt="">NOVA<span class="barra"></span><span class="produto">PAINEL DO CANAL</span></a>
     <nav>
-      <a href="#recursos">O que tem</a>
-      <a href="#producao">Produção</a>
-      <a href="#dados">Seus dados</a>
+      <a href="../painel/" class="aqui">Painel do Canal</a>
       <a href="../privacidade/">Privacidade</a>
+      <a href="../termos/">Termos de uso</a>
     </nav>
   </div>
 </header>
@@ -340,20 +343,16 @@
     </div>
     <div class="aviso vidro aparece">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5c0 4.5-3 8.3-7 10-4-1.7-7-5.5-7-10V6z"/></svg>
-      <span>Os detalhes estão na <a href="../privacidade/">política de privacidade</a>. O uso dos dados do Google segue a Política de Dados do Usuário dos Serviços de API do Google, incluindo as regras de Uso Limitado.</span>
+      <span>Os detalhes estão na <a href="../privacidade/">Política de Privacidade</a> e nos <a href="../termos/">Termos de Uso</a>. O uso dos dados do Google segue a Política de Dados do Usuário dos Serviços de API do Google, incluindo as regras de Uso Limitado.</span>
     </div>
   </section>
 </main>
 
 <footer>
   <div class="largura">
-    <span class="marca"><img src="../img/logo-azul.png" alt="">NOVA</span>
-    <nav>
-      <a href="../">Site da NOVA</a>
-      <a href="../privacidade/">Privacidade</a>
-      <a href="../termos/">Termos de uso</a>
-    </nav>
-    <span class="dir">Painel do Canal · parte da NOVA · usa os Serviços de API do YouTube</span>
+    <a class="marca" href="../painel/"><img src="../img/logo-azul.png" alt="">NOVA</a>
+    <nav><a href="../painel/" class="aqui">Painel do Canal</a><a href="../privacidade/">Política de Privacidade</a><a href="../termos/">Termos de Uso</a></nav>
+    <span class="dir">Painel do Canal faz parte da <a href="../">NOVA</a> · usa os Serviços de API do YouTube</span>
   </div>
 </footer>
 
