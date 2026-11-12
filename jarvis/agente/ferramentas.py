@@ -42,7 +42,8 @@ def criar_servidor(mostrar: Callable[[str, str], None], whatsapp,
                    falas_do_pedido: Callable[[], list[str]], ao_mandar: Callable[[str, str, str], None],
                    chamar_o_opus: Callable[[str], str] | None = None,
                    bloquear_pc: Callable[[], str] | None = None,
-                   pedir_desbloqueio: Callable[[], str] | None = None):
+                   pedir_desbloqueio: Callable[[], str] | None = None,
+                   cor_do_cursor: Callable[[], str] | None = None):
     """`falas_do_pedido()` devolve o que o Léo falou desde que a tarefa começou.
     `chamar_o_opus(motivo)`: passa o pedido do modelo rápido para o forte."""
 
@@ -173,4 +174,63 @@ def criar_servidor(mostrar: Callable[[str, str], None], whatsapp,
 
         ferramentas += [_contatos, _conversa, _mandar]
 
+    ferramentas += _ferramentas_da_tela(cor_do_cursor)
     return create_sdk_mcp_server("jarvis", tools=ferramentas)
+
+
+# O Modo Ajudante (12/11/2026): os olhos que o Léo escolheu às cegas ("Jeito 2": foto
+# + várias ações por olhada) e o cursor DELA (jarvis/ajudante/cursor.py).
+REGRAS_DA_TELA = (
+    "O Léo está VENDO o teu cursor (o rosa/azul, separado do dele). Aja como uma pessoa: "
+    "clique nos lugares, navegue pelas pastas clicando, NUNCA digite caminho de pasta nem "
+    "comando no lugar de clicar (no 'Salvar como', clique na pasta e digite só o NOME do "
+    "arquivo). Pesquisa em site você digita normalmente. Faça várias ações por olhada e só "
+    "olhe de novo quando precisar.")
+
+
+def _ferramentas_da_tela(cor_do_cursor) -> list:
+    import base64
+
+    estado = {"escala": 1.5}
+
+    def _foto(texto: str = "") -> dict[str, Any]:
+        from jarvis import ajudante
+        jpg, estado["escala"] = ajudante.foto()
+        c: list[dict] = [{"type": "image", "data": base64.b64encode(jpg).decode(), "mimeType": "image/jpeg"}]
+        if texto:
+            c.insert(0, {"type": "text", "text": texto})
+        return {"content": c}
+
+    @tool("tela_olhar",
+          "Foto da tela do PC agora (1280 de largura; use ESSAS coordenadas na tela_fazer). "
+          "Use quando o Léo pedir pra você fazer algo no PC dele ou mostrar onde clicar. " + REGRAS_DA_TELA, {})
+    async def _olhar(_args):
+        try:
+            if cor_do_cursor:
+                from jarvis import ajudante
+                ajudante.cor(cor_do_cursor())
+            return _foto()
+        except Exception as e:  # noqa: BLE001
+            return _texto(f"Não consegui ver a tela: {e}", True)
+
+    @tool("tela_fazer",
+          "Faz várias ações na tela com o TEU cursor e devolve a foto do resultado. `acoes` é uma "
+          "lista; cada item é UM destes: {\"clicar\":[x,y]} {\"clicar_duplo\":[x,y]} "
+          "{\"clicar_direito\":[x,y]} {\"apontar\":[x,y]} (só mostra, sem clicar: pro 'me mostra') "
+          "{\"digitar\":\"texto\"} {\"tecla\":\"ctrl+s\"} {\"rolar\":3} (negativo = pra baixo) "
+          "{\"esperar\":1}. Coordenadas da última tela_olhar. " + REGRAS_DA_TELA,
+          {"acoes": list})
+    async def _fazer(args):
+        import asyncio
+        from jarvis import ajudante
+        acoes = args.get("acoes") or []
+        if not isinstance(acoes, list) or not acoes:
+            return _texto("Faltou a lista de ações.", True)
+        try:
+            feito = await asyncio.to_thread(ajudante.fazer, acoes, estado["escala"])
+            await asyncio.sleep(0.4)
+            return _foto("Feito:\n" + "\n".join(feito) + "\nA tela agora:")
+        except Exception as e:  # noqa: BLE001
+            return _texto(f"As ações pararam: {e}", True)
+
+    return [_olhar, _fazer]

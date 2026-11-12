@@ -411,6 +411,7 @@ class Agente:
             chamar_o_opus=self._pedir_o_opus if self.cfg.modelo_rapido else None,
             bloquear_pc=self._bloquear_pc,
             pedir_desbloqueio=self._pedir_desbloqueio,
+            cor_do_cursor=self._cor_do_cursor,
         )
         self._no_opus = False
         self._modelo_atual = self._modelo_desejado()
@@ -446,6 +447,12 @@ class Agente:
             # celular ("JSON message exceeded maximum buffer size", 20/10/2026).
             max_buffer_size=64 * 1024 * 1024,
         )
+
+    def _cor_do_cursor(self) -> str:
+        """O cursor do Modo Ajudante na cor de quem está falando (Friday rosa, Jarvis azul)."""
+        if self.persona == "friday" and getattr(self.cfg, "friday", None):
+            return self.cfg.friday.cor
+        return "#4da3ff"
 
     def _env_local(self) -> dict[str, str]:
         """O Claude Code falando com o Ollama (que fala a API da Anthropic). Os apelidos

@@ -51,6 +51,7 @@ if [ "${1:-}" = "--desligar" ]; then
   pkill -TERM -f "$PROJETO/servidor_friday.py"
   pkill -TERM -f "$PROJETO/porta_remota.py"
   pkill -f "$PROJETO/interface.py"
+  pkill -f "jarvis.ajudante.cursor"   # o cursor do Modo Ajudante
   # Até 20 s: ao desligar, o assistente resume a conversa em andamento para
   # o diário (uma chamada ao Claude).
   for _ in $(seq 40); do ligado || exit 0; sleep 0.5; done

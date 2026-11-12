@@ -107,6 +107,8 @@ def precisa_do_leo(ferramenta: str, entrada: dict, memoria: Path) -> str | None:
             return "bloquear o PC"
         if acao == "pedir_desbloqueio":
             return "desbloquear o PC"
+        if acao == "tela_fazer":           # o cursor dela no PC do Léo (Modo Ajudante)
+            return "mexer no PC com o cursor"
         if any(p in acao for p in ("trash", "delete", "remove", "uninstall")):
             return "apagar"
     return None
