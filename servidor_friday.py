@@ -374,7 +374,8 @@ def main() -> int:
                 carregar_pronuncia(pasta / "pronuncia.txt")
                 for frase in frases(str(pedido.get("texto") or "")):
                     pcm, taxa = gerar(frase)
-                    con.sendall(json.dumps({"taxa": taxa, "n": len(pcm)}).encode() + b"\n" + pcm)
+                    con.sendall(json.dumps({"taxa": taxa, "n": len(pcm), "texto": frase}, ensure_ascii=False).encode()
+                                + b"\n" + pcm)
                 con.sendall(b'{"fim": true}\n')
             except (OSError, ValueError) as e:
                 try:

@@ -412,6 +412,7 @@ class Agente:
             bloquear_pc=self._bloquear_pc,
             pedir_desbloqueio=self._pedir_desbloqueio,
             cor_do_cursor=self._cor_do_cursor,
+            ajudante=lambda ligar: self.saidas.put(Saida("ajudante", "ligar" if ligar else "desligar")),
         )
         self._no_opus = False
         self._modelo_atual = self._modelo_desejado()

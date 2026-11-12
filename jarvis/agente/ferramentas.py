@@ -43,7 +43,8 @@ def criar_servidor(mostrar: Callable[[str, str], None], whatsapp,
                    chamar_o_opus: Callable[[str], str] | None = None,
                    bloquear_pc: Callable[[], str] | None = None,
                    pedir_desbloqueio: Callable[[], str] | None = None,
-                   cor_do_cursor: Callable[[], str] | None = None):
+                   cor_do_cursor: Callable[[], str] | None = None,
+                   ajudante: Callable[[bool], None] | None = None):
     """`falas_do_pedido()` devolve o que o Léo falou desde que a tarefa começou.
     `chamar_o_opus(motivo)`: passa o pedido do modelo rápido para o forte."""
 
@@ -175,6 +176,19 @@ def criar_servidor(mostrar: Callable[[str, str], None], whatsapp,
         ferramentas += [_contatos, _conversa, _mandar]
 
     ferramentas += _ferramentas_da_tela(cor_do_cursor)
+    if ajudante is not None:
+        @tool("modo_ajudante",
+              "Liga ou desliga o Modo Ajudante: a janela grande some e vira a barrinha embaixo da tela "
+              "(mostra o que você ouve, pensa e fala), pra ele ver a tela enquanto você ajuda. Ligue quando "
+              "ele pedir 'modo ajudante', 'me ajuda aqui no PC', 'me mostra como faz' ou 'faz pra mim' algo na "
+              "tela; desligue quando ele disser que acabou. Dois jeitos: 'FAZ PRA MIM' = você mesma faz com "
+              "tela_fazer. 'ME MOSTRA' = um passo POR VEZ: aponte com {\"apontar\":[x,y]} (sem clicar), diga "
+              "em uma frase curta o que ele tem que fazer e ESPERE ele fazer antes do próximo passo (nunca "
+              "liste vários passos: ele esquece).", {"ligar": bool})
+        async def _ajudante(args):
+            ajudante(bool(args.get("ligar", True)))
+            return _texto("Modo Ajudante " + ("ligado: a barra está na tela." if args.get("ligar", True) else "desligado."))
+        ferramentas.append(_ajudante)
     return create_sdk_mcp_server("jarvis", tools=ferramentas)
 
 

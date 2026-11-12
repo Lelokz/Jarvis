@@ -235,7 +235,7 @@ class Servidor:
     def quer(self, tipo: str) -> bool:
         if tipo not in protocolo.PUBLICOS:
             return False
-        if tipo == "nivel":
+        if tipo in ("nivel", "fala_nivel"):
             return bool(self._clientes)
         return True
 
@@ -353,10 +353,10 @@ class Servidor:
             return
         if len(cliente.fila) >= self.fila_max:
             antes = len(cliente.fila)
-            cliente.fila = deque(x for x in cliente.fila if x[0] != "nivel")
+            cliente.fila = deque(x for x in cliente.fila if x[0] not in ("nivel", "fala_nivel"))
             cliente.niveis_descartados += antes - len(cliente.fila)
         if len(cliente.fila) >= self.fila_max:
-            if tipo == "nivel":
+            if tipo in ("nivel", "fala_nivel"):
                 cliente.niveis_descartados += 1
                 return
             cliente.condenado = (

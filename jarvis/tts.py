@@ -23,6 +23,7 @@ class Trecho:
     pcm: bytes  # int16 cru
     taxa: int
     canais: int
+    texto: str = ""  # a frase deste pedaço, quando o motor sabe (a legenda da barra segue a voz)
 
 
 @dataclass(frozen=True)
@@ -198,6 +199,8 @@ def falar(
     dispositivo: int | None = None,
     ao_comecar=None,
     parar=None,
+    ao_trecho=None,
+    ao_nivel=None,
 ) -> TemposDaFala:
     """Sintetiza e toca, medindo síntese e reprodução separadamente.
 
@@ -255,12 +258,20 @@ def falar(
             if volume < 1:
                 import numpy as np
                 pcm = (np.frombuffer(pcm, dtype=np.int16) * volume).astype(np.int16).tobytes()
+            # O Modo Ajudante (12/11/2026): a barra recebe a frase que começa a
+            # tocar agora e quanto ela dura, pra legenda andar junto com a voz.
+            if ao_trecho is not None:
+                ao_trecho(trecho.texto, len(trecho.pcm) / (2 * trecho.canais * trecho.taxa))
             # Em fatias de 0,1 s: o Parar corta no meio da frase.
             passo = int(trecho.taxa * 0.1) * 2 * trecho.canais
             for i in range(0, len(pcm), passo):
                 if parar is not None and parar():
                     parou = True
                     break
+                if ao_nivel is not None:
+                    import numpy as np
+                    f = np.frombuffer(pcm[i:i + passo], dtype=np.int16).astype(np.float32) / 32768
+                    ao_nivel(float(min(1.0, np.sqrt(np.mean(f ** 2)) * 4)) if len(f) else 0.0)
                 stream.write(pcm[i:i + passo])
             if parou:
                 break
@@ -523,7 +534,7 @@ class VozF5(Voz):
                     pcm = np.concatenate([pcm, np.zeros(int(cab["taxa"] * 0.12), dtype=np.float32)])
                     entregou = True
                     yield Trecho(pcm=(pcm * 32767).astype(np.int16).tobytes(),
-                                 taxa=cab["taxa"], canais=1)
+                                 taxa=cab["taxa"], canais=1, texto=str(cab.get("texto") or ""))
         except (OSError, ValueError, KeyError):
             if entregou:
                 return  # caiu no meio: o que já foi dito fica, sem repetir
@@ -662,6 +673,7 @@ class VozRVC(Voz):
             self._rec = self._receita()
             if not self._rec:  # fora do ar: nem gasta a Kokoro à toa
                 raise OSError("servidor do timbre fora do ar")
+        primeiro = True
         for trecho in self.entrada.sintetizar(pedaco):
             with canal.conectar(self.caminho, timeout=2) as s:
                 s.settimeout(30)
@@ -681,7 +693,8 @@ class VozRVC(Voz):
                 arq = self._arquivo(chave)
                 if arq is not None:
                     arq.write_bytes(pcm)
-            yield Trecho(pcm=pcm, taxa=cab["taxa"], canais=1)
+            yield Trecho(pcm=pcm, taxa=cab["taxa"], canais=1, texto=pedaco if primeiro else "")
+            primeiro = False
 
     def sintetizar(self, texto: str) -> Iterator[Trecho]:
         pedacos = _pedacos(texto)

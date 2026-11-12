@@ -208,6 +208,14 @@ def main(argv: list[str] | None = None) -> int:
     #
     # A tela cheia continua vindo daqui, porque quem pergunta ao gerenciador de
     # janelas é o Python.
+    # A barrinha do Modo Ajudante só pega clique NA PRÓPRIA barra (a pílula): o resto
+    # da janela dela é transparente e o clique passa pro que está embaixo (12/11/2026).
+    from PySide6.QtCore import QRect
+    from PySide6.QtGui import QRegion, QWindow
+    barra_aj = janela.findChild(QWindow, "barraAjudante")
+    if barra_aj is not None:
+        bw, bh = barra_aj.width(), barra_aj.height()
+        barra_aj.setMask(QRegion(QRect(bw // 2 - 440, bh - 50 - 46, 880, 92)))
     olho.mudou.connect(lambda na_frente: janela.setProperty("jogoNaFrente", na_frente))
     olho.definirJanela(int(janela.winId()))
 

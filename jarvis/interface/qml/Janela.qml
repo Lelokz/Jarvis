@@ -81,6 +81,9 @@ Window {
     property string esforco: "medium"
     property string persona: "jarvis"
     property string corPersona: ""
+    // O Modo Ajudante (12/11/2026): a janela grande sai da frente e vira a barrinha embaixo.
+    property bool modoAjudante: false
+    function sairDoAjudante() { modoAjudante = false; janela.showMaximized(); janela.raise(); janela.requestActivate() }
     property string textoPensando: "Pensando…"
     property real usoCinco: -1
     property real voltaCinco: 0
@@ -1407,6 +1410,25 @@ Window {
         Connections {
             target: typeof ponte !== "undefined" ? ponte : null
             function onConexaoMudou(dados) { paginaAjustes.conexao = dados }
+        }
+    }
+
+    BarraAjudante {
+        id: barraAjudante
+        objectName: "barraAjudante"
+        visible: janela.modoAjudante
+        estado: interno.estado
+        nivelMic: interno.nivel
+        corPersona: tema.persona
+        nomePersona: janela.persona === "friday" ? "FRIDAY" : "JARVIS"
+        onFechar: janela.sairDoAjudante()
+    }
+    Connections {
+        target: typeof ponte !== "undefined" ? ponte : null
+        ignoreUnknownSignals: true
+        function onAjudanteMudou(ligado) {
+            if (ligado) { janela.modoAjudante = true; janela.showMinimized() }
+            else janela.sairDoAjudante()
         }
     }
 }

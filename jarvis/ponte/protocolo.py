@@ -17,6 +17,13 @@ ASSISTENTE -> CLIENTES
         Volume do microfone, 0 a 1 em escala de dB. ~15 por segundo (um a cada
         dois blocos de 32 ms do Silero), só acordado e só com cliente
         conectado. Descartável: é o primeiro a sair quando a fila enche.
+    {"ev":"fala_trecho", "texto":"Claro, chefinho!", "dur": 1.84}
+        (12/11/2026) Uma frase da fala dela COMEÇANDO a tocar no PC, com a duração.
+        A barra do Modo Ajudante revela a legenda no tempo dela.
+    {"ev":"ajudante", "ligado": true}
+        (12/11/2026) O Modo Ajudante ligou/desligou: a janela vira a barrinha.
+    {"ev":"fala_nivel", "v":0.31}
+        O volume da voz dela tocando no PC, a cada 0,1 s. Descartável.
     {"ev":"voce_disse", "texto":"abre o loft", "origem":"voz|texto"}
     {"ev":"jarvis_disse", "texto":"Abri o Loft.", "acao":"abrir:loft"|null,
      "perguntando":false, "opcoes":["Apagar", "Deixar"]}
@@ -191,7 +198,7 @@ VERSAO = 3
 
 # O que sai do assistente para os clientes. O resto que o Ciclo emite
 # (acordou, dormiu, janela, tempos...) é para o terminal e fica em casa.
-PUBLICOS = frozenset({"sessao", "estado", "nivel", "voce_disse", "jarvis_disse", "aviso",
+PUBLICOS = frozenset({"sessao", "estado", "nivel", "fala_trecho", "fala_nivel", "ajudante", "voce_disse", "jarvis_disse", "aviso",
                       "mostrar", "atividade", "voz", "cerebro", "conversa_atual", "uso",
                       "escrevendo", "som", "ajustes", "desbloqueio",
                       "aprovacao", "notificacao", "projetos", "mudancas",

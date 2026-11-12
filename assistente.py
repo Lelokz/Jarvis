@@ -604,8 +604,12 @@ class Ciclo:
                 )
 
         try:
+            # A barra do Modo Ajudante: cada frase quando começa a tocar (a legenda
+            # anda junto) e o volume da voz dela (as barrinhas pulam de verdade).
             return tts.falar(self.voz, texto, dispositivo=self.dispositivo_saida,
-                             ao_comecar=ao_comecar, parar=self._checar_parar)
+                             ao_comecar=ao_comecar, parar=self._checar_parar,
+                             ao_trecho=lambda frase, dur: self.emissor.emitir("fala_trecho", texto=frase, dur=round(dur, 3)),
+                             ao_nivel=lambda v: self.emissor.quer("fala_nivel") and self.emissor.emitir("fala_nivel", v=round(v, 3)))
         finally:
             time.sleep(self.guarda_s)
             self.portao.abrir_portao()
@@ -1025,6 +1029,8 @@ class Ciclo:
         elif s.tipo == "mostrar":
             self.registrador.registrar_estado("mostrar", titulo=s.titulo, texto=s.texto)
             self.emissor.emitir("mostrar", titulo=s.titulo, texto=s.texto)
+        elif s.tipo == "ajudante":       # o Modo Ajudante: a janela vira a barrinha (12/11/2026)
+            self.emissor.emitir("ajudante", ligado=s.texto == "ligar")
         elif s.tipo == "falar":
             self._acordar_se_dormindo()
             self.registrador.registrar_estado("fala_no_meio_da_tarefa", fala=s.texto)

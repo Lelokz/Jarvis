@@ -34,6 +34,9 @@ PEDIR_HISTORICO = 80
 class PonteQt(QObject):
     estadoMudou = Signal(str)
     nivelMudou = Signal(float)
+    falaTrecho = Signal(str, float)        # uma frase dela começando a tocar, e a duração (Modo Ajudante)
+    falaNivel = Signal(float)              # o volume da voz dela tocando (a cada 0,1 s)
+    ajudanteMudou = Signal(bool)           # o Modo Ajudante ligou/desligou
     voceDisse = Signal(str, str)           # texto, origem
     jarvisDisse = Signal(str, str, bool, list)   # texto, ação, perguntando, opções
     conexaoMudou = Signal(bool)
@@ -370,6 +373,12 @@ class PonteQt(QObject):
             self.estadoMudou.emit(str(ev.get("estado", "")))
         elif tipo == "nivel":
             self.nivelMudou.emit(float(ev.get("v", 0.0)))
+        elif tipo == "fala_trecho":
+            self.falaTrecho.emit(str(ev.get("texto", "")), float(ev.get("dur", 0.0)))
+        elif tipo == "fala_nivel":
+            self.falaNivel.emit(float(ev.get("v", 0.0)))
+        elif tipo == "ajudante":
+            self.ajudanteMudou.emit(bool(ev.get("ligado")))
         elif tipo == "voce_disse":
             self.voceDisse.emit(str(ev.get("texto", "")), str(ev.get("origem", "")))
         elif tipo == "jarvis_disse":

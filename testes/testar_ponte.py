@@ -538,7 +538,7 @@ def rodar_processos(base: Path) -> None:
         print("-- o cliente aberto ANTES de o assistente existir --")
         c = Processo([py, "-u", "-m", "jarvis.ponte.cliente", "--socket", caminho])
         processos.append(c)
-        espera = c.esperar("desconectado — esperando o Jarvis")
+        espera = c.esperar("desconectado — esperando a NOVA")
         checa("sobe desconectado e fica esperando", espera > 0, c.linhas)
         checa("sem socket nenhum no caminho ainda", not os.path.lexists(caminho))
         a = Processo([py, "-u", "-c", ASSISTENTE_FALSO.format(
@@ -554,7 +554,7 @@ def rodar_processos(base: Path) -> None:
         a.matar()
         caiu = c.esperar("a conexão caiu", desde=n)
         checa("o cliente percebe que caiu", caiu > 0, c.linhas[n:])
-        espera2 = c.esperar("desconectado — esperando o Jarvis", desde=caiu)
+        espera2 = c.esperar("desconectado — esperando a NOVA", desde=caiu)
         checa("e diz que está esperando", espera2 > 0, c.linhas[caiu:])
         checa("o socket morto ficou para trás, como num travamento de verdade",
               os.path.lexists(caminho))
