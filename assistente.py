@@ -198,6 +198,19 @@ COMANDOS_DE_PARAR = {
 }
 
 
+# Pausar SEM cancelar (Modo Ajudante, 12/11/2026): ela congela no passo e espera.
+COMANDOS_DE_PAUSAR = {"pausa", "pausar", "pausa ai", "espera", "espera ai", "pera", "pera ai", "calma",
+                      "calma ai", "segura", "segura ai"}
+COMANDOS_DE_CONTINUAR = {"continua", "continuar", "pode continuar", "segue", "pode seguir", "vai", "pode ir",
+                         "continua ai", "volta", "pode voltar"}
+
+
+def e_pedido(texto: str, comandos: set[str]) -> bool:
+    palavras = normalizar(texto).split()
+    sem_repetir = [p for i, p in enumerate(palavras) if i == 0 or p != palavras[i - 1]]
+    return " ".join(sem_repetir) in comandos
+
+
 def e_pedido_de_parar(texto: str) -> bool:
     # "Para, para." repetido também vale (aconteceu no primeiro teste por voz).
     palavras = normalizar(texto).split()
@@ -754,6 +767,16 @@ class Ciclo:
             self.atender_locutor()
             time.sleep(0.01)
 
+    def _pausar(self, pausar: bool) -> None:
+        """Pausa (ou continua) o que ela está fazendo na tela, sem cancelar nada."""
+        from jarvis import ajudante as _aj
+        if pausar:
+            _aj.PAUSA.set()
+        else:
+            _aj.PAUSA.clear()
+        self.registrador.registrar_estado("pausa" if pausar else "continuou")
+        self.emissor.emitir("ajudante_pausa", pausado=pausar)
+
     def _checar_parar(self) -> bool:
         """Apertaram Parar? Então para tudo agora (chamado no meio da fala)."""
         if self.pediu_parar():
@@ -765,6 +788,9 @@ class Ciclo:
         """O botão Parar: cala a voz na hora (a frase tocando e as que vinham
         depois) e interrompe o Claude, que para de pensar e de escrever. Antes
         ele só parava depois de terminar de falar (o Léo, 26/10/2026)."""
+        from jarvis import ajudante as _aj
+        if _aj.PAUSA.is_set():          # parar solta a pausa (senão a trava seguraria a tarefa)
+            self._pausar(False)
         self.registrador.registrar_estado("interrompeu", texto="(botão Parar)")
         self._parou_no_botao = True
         if self._locutor is not None:
@@ -937,6 +963,13 @@ class Ciclo:
 
         # 3. Com o Claude trabalhando: "para" interrompe; o resto entra na
         #    tarefa (medido: ele incorpora a fala nova).
+        from jarvis import ajudante as _aj
+        if self.agente.ocupado and e_pedido(texto, COMANDOS_DE_PAUSAR):
+            self._pausar(True)
+            return
+        if _aj.PAUSA.is_set() and e_pedido(texto, COMANDOS_DE_CONTINUAR):
+            self._pausar(False)
+            return
         if self.agente.ocupado:
             if e_pedido_de_parar(texto):
                 self.registrador.registrar_estado("interrompeu", texto=texto)
@@ -1565,6 +1598,11 @@ class Ciclo:
                 if pedido.valor == "commit" else \
                 ("Faz o push agora (o Léo apertou o botão Push: já está aprovado). Conta em uma frase.")
             self._responder(texto, origem="texto")
+            return
+        if pedido.tipo == "pausar":
+            # O ❚❚ da barra do Modo Ajudante: alterna pausado/seguindo.
+            from jarvis import ajudante as _aj
+            self._pausar(not _aj.PAUSA.is_set())
             return
         if pedido.tipo == "parar":
             # O botão Parar da janela e do app: cala e interrompe na hora.

@@ -71,7 +71,7 @@ MAX_PCM_BYTES = 16000 * 2 * 60
 LIMITE_LINHA_PONTE = 32 * 1024 * 1024
 # Os da janela nova (beta 0.6) também: conversas, cérebro, Parar.
 PEDIDOS_DO_CELULAR = {"falar", "memoria", "conversas", "abrir", "nova", "continuar", "cerebro",
-                      "parar", "renomear", "apagar", "fixar", "ajustes",
+                      "parar", "pausar", "renomear", "apagar", "fixar", "ajustes",
                       "memorias", "ler_memoria", "salvar_memoria",  # a aba Memórias (25/10/2026)
                       "conexao",  # o Conectar de Ajustes → Conexões (beta 0.17)
                       "projetos", "code", "mudancas", "git", "novo_projeto",  # o modo code (app beta 0.19.0)

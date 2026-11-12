@@ -30,10 +30,11 @@ Window {
     property string rotulo: ""
     property var frase: null                 // {texto, dur, t0}
     property real ultimaFala: 0
+    property bool pausado: false
 
     readonly property string modo: estado === "pensando" ? "pensando"
         : (estado === "falando" ? "falando" : (estado === "escutando" || estado === "ouvindo") ? "ouvindo" : "parado")
-    readonly property color corAlvo: modo === "ouvindo" ? "#38d39f" : modo === "pensando" ? "#9b7bff" : corPersona
+    readonly property color corAlvo: pausado ? "#ffb454" : modo === "ouvindo" ? "#38d39f" : modo === "pensando" ? "#9b7bff" : corPersona
 
     onVisibleChanged: if (visible) { abrindo = 0; entrar.restart() }
     NumberAnimation { id: entrar; target: barra; property: "abrindo"; from: 0; to: 1; duration: 900 }
@@ -46,6 +47,7 @@ Window {
             barra.ultimaFala = Date.now() / 1000
         }
         function onFalaNivel(v) { barra.nivelFala = v }
+        function onPausaMudou(p) { barra.pausado = p }
         function onVoceDisse(texto, origem) { barra.frase = null; barra.legenda = texto; barra.rotulo = "VOCÊ" }
         function onEstadoMudou(e) {
             if (e === "pensando") { barra.frase = null; barra.legenda = "Pensando…"; barra.rotulo = barra.nomePersona }
@@ -55,6 +57,7 @@ Window {
 
     // A legenda da frase que está tocando: as letras aparecem no tempo do áudio dela.
     function legendaDaFala() {
+        if (pausado) return "Pausado. Fala “continua” quando quiser."
         if (!frase) return legenda
         var k = Math.min(1, (Date.now() / 1000 - frase.t0) / (frase.dur * 0.94))
         var n = Math.max(1, Math.round(frase.texto.length * k))
@@ -88,7 +91,7 @@ Window {
             var N = 56; if (alt.length !== N) { alt = []; for (var i0 = 0; i0 < N; i0++) alt.push(4) }
             var alvo = [barra.corAlvo.r * 255, barra.corAlvo.g * 255, barra.corAlvo.b * 255]
             for (var c = 0; c < 3; c++) cor[c] += (alvo[c] - cor[c]) * 0.14
-            var modo = barra.modo
+            var modo = barra.pausado ? "parado" : barra.modo
             var rms = modo === "falando" ? barra.nivelFala : modo === "ouvindo" ? barra.nivelMic : 0
             rmsS += (rms - rmsS) * (rms > rmsS ? 0.6 : 0.18)
             var cx = width / 2, base = height - 50
@@ -139,7 +142,7 @@ Window {
             // a legenda
             var texto = barra.legendaDaFala()
             if (k > 0.8 && texto) {
-                var rot = barra.frase ? barra.nomePersona : barra.rotulo
+                var rot = barra.pausado ? "PAUSADO" : barra.frase ? barra.nomePersona : barra.rotulo
                 g.font = "500 22px 'Inter Variable'"
                 var tw = Math.min(width - 80, Math.max(g.measureText(texto).width, 160)), lx = cx - tw / 2 - 22, ly = base - 104
                 g.fillStyle = "rgba(9,12,18,0.88)"; g.beginPath(); g.roundedRect(lx, ly, tw + 44, 52, 16, 16); g.fill()
@@ -148,14 +151,19 @@ Window {
                 g.fillText(rot.split("").join(" "), lx + 22, ly - 8)
                 g.fillStyle = "#e6ebf2"; g.font = "500 22px 'Inter Variable'"; g.textBaseline = "middle"
                 g.fillText(texto, lx + 22, ly + 27)
-                if (barra.frase && texto.length < barra.frase.texto.length) {
+                if (!barra.pausado && barra.frase && texto.length < barra.frase.texto.length) {
                     var cxx = lx + 22 + Math.min(tw, g.measureText(texto).width) + 4
                     g.fillStyle = rgba(cor, (f % 16) < 9 ? 1 : 0.2); g.fillRect(cxx, ly + 15, 3, 24)
                 }
             }
-            // o botão de fechar (sai do Modo Ajudante)
+            // os botões: pausar/continuar e fechar (sai do Modo Ajudante)
             if (w > 300 && h > 40) {
                 g.globalAlpha = Math.min(1, (w - 300) / 300)
+                g.fillStyle = barra.pausado ? rgba(cor, 0.25) : "#181e29"; g.beginPath(); g.arc(x + w - 80, base, 15, 0, 7); g.fill()
+                g.strokeStyle = barra.pausado ? rgba(cor, 0.8) : "#2a3446"; g.lineWidth = 1; g.stroke()
+                g.fillStyle = barra.pausado ? rgba(cor, 1) : "#b9c1cf"
+                if (barra.pausado) { g.beginPath(); g.moveTo(x + w - 84, base - 6); g.lineTo(x + w - 74, base); g.lineTo(x + w - 84, base + 6); g.closePath(); g.fill() }
+                else { g.fillRect(x + w - 85, base - 6, 3, 12); g.fillRect(x + w - 78, base - 6, 3, 12) }
                 g.fillStyle = "#181e29"; g.beginPath(); g.arc(x + w - 40, base, 15, 0, 7); g.fill()
                 g.strokeStyle = "#2a3446"; g.lineWidth = 1; g.stroke()
                 g.fillStyle = "#b9c1cf"; g.font = "600 12px 'Inter Variable'"; g.textAlign = "center"; g.textBaseline = "middle"
@@ -177,6 +185,12 @@ Window {
         sendoVista: barra.visible
     }
 
+    MouseArea {   // o ❚❚ pausa/continua, sem cancelar
+        x: barra.width / 2 + 330 - 17; y: barra.height - 50 - 18
+        width: 34; height: 36
+        cursorShape: Qt.PointingHandCursor
+        onClicked: if (typeof ponte !== "undefined") ponte.pausar()
+    }
     MouseArea {   // o X fecha o Modo Ajudante
         x: barra.width / 2 + 370 - 17; y: barra.height - 50 - 18
         width: 34; height: 36

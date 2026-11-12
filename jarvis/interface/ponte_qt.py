@@ -37,6 +37,7 @@ class PonteQt(QObject):
     falaTrecho = Signal(str, float)        # uma frase dela começando a tocar, e a duração (Modo Ajudante)
     falaNivel = Signal(float)              # o volume da voz dela tocando (a cada 0,1 s)
     ajudanteMudou = Signal(bool)           # o Modo Ajudante ligou/desligou
+    pausaMudou = Signal(bool)              # a pausa do Modo Ajudante
     voceDisse = Signal(str, str)           # texto, origem
     jarvisDisse = Signal(str, str, bool, list)   # texto, ação, perguntando, opções
     conexaoMudou = Signal(bool)
@@ -314,6 +315,11 @@ class PonteQt(QObject):
     def parar(self) -> bool:
         return self._pedir({"pedir": "parar"})
 
+    @Slot(result=bool)
+    def pausar(self) -> bool:
+        """O ❚❚ da barra do Modo Ajudante: pausa ou continua, sem cancelar."""
+        return self._pedir({"pedir": "pausar"})
+
     @Slot(result=list)
     def colar(self) -> list:
         """O Ctrl+V da barra de escrever. Imagem na área de transferência (um
@@ -379,6 +385,8 @@ class PonteQt(QObject):
             self.falaNivel.emit(float(ev.get("v", 0.0)))
         elif tipo == "ajudante":
             self.ajudanteMudou.emit(bool(ev.get("ligado")))
+        elif tipo == "ajudante_pausa":
+            self.pausaMudou.emit(bool(ev.get("pausado")))
         elif tipo == "voce_disse":
             self.voceDisse.emit(str(ev.get("texto", "")), str(ev.get("origem", "")))
         elif tipo == "jarvis_disse":

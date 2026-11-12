@@ -1128,6 +1128,13 @@ class Agente:
 
     async def _trava_da_voz(self, entrada, _id, _ctx) -> dict:
         """Barra o que só o Léo pode pedir quando a voz não é a dele."""
+        # Pausado no Modo Ajudante: espera aqui antes da próxima ferramenta (até 170 s,
+        # dentro do teto de 180 s do gancho), sem cancelar a tarefa.
+        from jarvis import ajudante as _aj
+        espera = 0.0
+        while _aj.PAUSA.is_set() and espera < 170:
+            await asyncio.sleep(0.2)
+            espera += 0.2
         comando = str((entrada.get("tool_input") or {}).get("command") or "")
         terminal = entrada.get("tool_name") in travas.TERMINAIS
         if terminal and re.search(r"(localhost|127\.0\.0\.1):8080/api/send", comando):

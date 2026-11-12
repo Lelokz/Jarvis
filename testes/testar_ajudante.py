@@ -74,6 +74,20 @@ def main() -> int:
         salvo = list(casa.rglob("teste-ajudante.txt"))
         checa("o arquivo foi salvo de verdade (com acento)", bool(salvo) and "maçã" in salvo[0].read_text(),
               str(salvo))
+        # A pausa (etapa 4): segura entre as ações até "continua"
+        import threading
+        ajudante.PAUSA.set()
+        threading.Timer(1.0, ajudante.PAUSA.clear).start()
+        t0 = time.monotonic()
+        ajudante.fazer([{"tecla": "End"}], 1.5)
+        checa("pausado, ela espera o 'continua' antes da próxima ação", time.monotonic() - t0 >= 0.95,
+              f"{time.monotonic() - t0:.2f}s")
+        sys.path.insert(0, str(RAIZ))
+        import assistente
+        checa("'pausa' e 'espera aí' pausam", assistente.e_pedido("Pausa!", assistente.COMANDOS_DE_PAUSAR)
+              and assistente.e_pedido("espera aí", assistente.COMANDOS_DE_PAUSAR))
+        checa("'continua' continua", assistente.e_pedido("pode continuar", assistente.COMANDOS_DE_CONTINUAR))
+        checa("'para' NÃO é pausa (para cancela)", not assistente.e_pedido("para", assistente.COMANDOS_DE_PAUSAR))
         r = asyncio.run(fazer.handler({"acoes": []}))
         checa("lista vazia é recusada", r.get("is_error") is True)
         checa("outra voz não pode mexer no PC com o cursor",

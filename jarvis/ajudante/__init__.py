@@ -17,6 +17,13 @@ from pathlib import Path
 
 from jarvis.ajudante.cursor import SOCKET
 
+import threading
+
+# A pausa do Modo Ajudante (etapa 4): "pausa" congela no passo em que está, sem
+# cancelar; "continua" segue dali. Vale entre as ações do cursor e antes de
+# qualquer ferramenta nova dela (a trava do agente espera enquanto estiver marcada).
+PAUSA = threading.Event()
+
 LARGURA_FOTO = 1280          # a foto que o cérebro vê (a tela de verdade é maior)
 RAIZ = Path(__file__).resolve().parents[2]
 
@@ -79,6 +86,8 @@ def fazer(acoes: list[dict], escala: float) -> list[str]:
     """Várias ações seguidas, com as coordenadas da FOTO. Devolve um resumo do que fez."""
     feito = []
     for a in acoes:
+        while PAUSA.is_set():
+            time.sleep(0.15)
         if "clicar" in a or "clicar_duplo" in a or "clicar_direito" in a or "apontar" in a:
             chave = next(k for k in ("clicar", "clicar_duplo", "clicar_direito", "apontar") if k in a)
             x, y = (round(v * escala) for v in a[chave])

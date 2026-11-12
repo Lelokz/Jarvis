@@ -22,6 +22,8 @@ ASSISTENTE -> CLIENTES
         A barra do Modo Ajudante revela a legenda no tempo dela.
     {"ev":"ajudante", "ligado": true}
         (12/11/2026) O Modo Ajudante ligou/desligou: a janela vira a barrinha.
+    {"ev":"ajudante_pausa", "pausado": true}
+        A pausa do Modo Ajudante ligou/desligou (a barra mostra "Pausado").
     {"ev":"fala_nivel", "v":0.31}
         O volume da voz dela tocando no PC, a cada 0,1 s. Descartável.
     {"ev":"voce_disse", "texto":"abre o loft", "origem":"voz|texto"}
@@ -139,6 +141,7 @@ CLIENTES -> ASSISTENTE
          {"pedir":"cerebro", "modelo":"...", "esforco":"...", "persona":"jarvis|friday"}
              (um, dois ou os três)
          {"pedir":"parar"}                -> interrompe a tarefa (o botão Parar)
+         {"pedir":"pausar"}               -> pausa/continua sem cancelar (o ❚❚ do Modo Ajudante)
          {"pedir":"renomear", "id":"...", "titulo":"..."} -> "conversas"
          {"pedir":"apagar", "id":"..."}   -> manda para a lixeira; "conversas"
          {"pedir":"fixar", "id":"...", "fixar":bool} -> no topo da lista; "conversas"
@@ -198,7 +201,7 @@ VERSAO = 3
 
 # O que sai do assistente para os clientes. O resto que o Ciclo emite
 # (acordou, dormiu, janela, tempos...) é para o terminal e fica em casa.
-PUBLICOS = frozenset({"sessao", "estado", "nivel", "fala_trecho", "fala_nivel", "ajudante", "voce_disse", "jarvis_disse", "aviso",
+PUBLICOS = frozenset({"sessao", "estado", "nivel", "fala_trecho", "fala_nivel", "ajudante", "ajudante_pausa", "voce_disse", "jarvis_disse", "aviso",
                       "mostrar", "atividade", "voz", "cerebro", "conversa_atual", "uso",
                       "escrevendo", "som", "ajustes", "desbloqueio",
                       "aprovacao", "notificacao", "projetos", "mudancas",
@@ -206,7 +209,7 @@ PUBLICOS = frozenset({"sessao", "estado", "nivel", "fala_trecho", "fala_nivel", 
                       "alteracoes", "desfeito", "terminal", "plano", "contexto"})
 ESTADOS = ("dormindo", "ouvindo", "escutando", "pensando", "falando")
 PEDIDOS = frozenset({"ola", "falar", "memoria", "ouvir",
-                     "conversas", "abrir", "nova", "continuar", "cerebro", "parar",
+                     "conversas", "abrir", "nova", "continuar", "cerebro", "parar", "pausar",
                      "renomear", "apagar", "som", "ajustes", "fixar",
                      "memorias", "ler_memoria", "salvar_memoria", "conexao",
                      "projetos", "code", "mudancas", "git", "novo_projeto",
@@ -257,7 +260,7 @@ def ler_pedido(linha: bytes) -> tuple[str, dict[str, Any]]:
             raise ErroDeProtocolo(f"texto com mais de {MAX_TEXTO} caracteres")
         return tipo, {"texto": texto, "anexos": _anexos(objeto), "mudo": _mudo(objeto)}
 
-    if tipo in ("memoria", "conversas", "nova", "parar", "memorias", "projetos", "estatisticas", "agendados", "feitos"):
+    if tipo in ("memoria", "conversas", "nova", "parar", "pausar", "memorias", "projetos", "estatisticas", "agendados", "feitos"):
         return tipo, {}
 
     # O modo code (10/11/2026): entrar num projeto ("" = sair), ver as mudanças
