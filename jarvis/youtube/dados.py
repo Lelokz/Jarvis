@@ -203,7 +203,8 @@ def _comparacao(con, v) -> str:
     jeito = "bem acima" if rel >= 1.3 else "acima" if rel >= 1.05 else "na" if rel >= 0.95 else \
         "abaixo" if rel >= 0.7 else "bem abaixo"
     dia = "no 1º dia" if idade == 1 else f"nos primeiros {idade} dias"
-    return f"{jeito} da tua média ({_mil(int(media))} views {dia})"
+    jeito = "na tua média" if jeito == "na" else f"{jeito} da tua média"
+    return f"{jeito} ({_mil(int(media))} views {dia})"
 
 
 def resumo() -> str:
