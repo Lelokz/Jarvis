@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Se atualiza sozinho, igual ao app da NOVA: baixa o APK do PC. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- Pega o link e a chave do PC com o app da NOVA (só apps com a mesma assinatura). -->
+    <uses-permission android:name="com.lelokz.jarvis.permissao.LIGACAO" />
+
+    <queries>
+        <package android:name="com.lelokz.jarvis" />
+    </queries>
+
+    <application
+        android:label="Painel do Canal"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher"
+        android:theme="@style/Tema.Painel"
+        android:allowBackup="false">
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+        <receiver
+            android:name=".ResultadoDaInstalacao"
+            android:exported="false" />
+    </application>
+</manifest>

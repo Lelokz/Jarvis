@@ -31,10 +31,12 @@ object Atualizador {
     }
 
     /** Baixa e manda instalar. Roda fora da thread principal. Devolve o erro, ou "" se foi. */
-    fun baixarEInstalar(c: Context, base: String, progresso: (Float) -> Unit): String {
-        val arquivo = File(c.cacheDir, "jarvis.apk")
+    // `apk` e `pacote`: o app do Painel do Canal se instala pelo mesmo caminho (app beta 0.23.0).
+    fun baixarEInstalar(c: Context, base: String, apk: String = "jarvis.apk", pacote: String = c.packageName,
+                        progresso: (Float) -> Unit): String {
+        val arquivo = File(c.cacheDir, apk)
         try {
-            cliente.newCall(Request.Builder().url("${base.trimEnd('/')}/jarvis.apk").build()).execute().use { r ->
+            cliente.newCall(Request.Builder().url("${base.trimEnd('/')}/$apk").build()).execute().use { r ->
                 if (!r.isSuccessful) return "O PC não entregou o app (${r.code})."
                 val corpo = r.body ?: return "Veio vazio."
                 val total = corpo.contentLength()
@@ -60,10 +62,10 @@ object Atualizador {
         return try {
             val instalador = c.packageManager.packageInstaller
             val parametros = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL)
-                .apply { setAppPackageName(c.packageName) }
+                .apply { setAppPackageName(pacote) }
             val id = instalador.createSession(parametros)
             instalador.openSession(id).use { sessao ->
-                sessao.openWrite("jarvis", 0, arquivo.length()).use { saida ->
+                sessao.openWrite(apk.removeSuffix(".apk"), 0, arquivo.length()).use { saida ->
                     arquivo.inputStream().use { it.copyTo(saida) }
                     sessao.fsync(saida)
                 }

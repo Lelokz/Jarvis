@@ -19,9 +19,14 @@
     <!-- O app se atualiza sozinho (beta 0.10.0): baixa o APK do PC e entrega ao instalador. -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
+    <!-- O app "Painel do Canal" pega o link e a chave do PC daqui (DarLigacao):
+         "signature" = só apps assinados pela mesma chave do Léo. -->
+    <permission android:name="com.lelokz.jarvis.permissao.LIGACAO" android:protectionLevel="signature" />
+
     <!-- O passo a passo do Fora de casa (beta 0.17): saber se o Tailscale já está neste celular. -->
     <queries>
         <package android:name="com.tailscale.ipn" />
+        <package android:name="com.lelokz.painel" />
     </queries>
 
     <application
@@ -83,6 +88,17 @@
             android:grantUriPermissions="true">
             <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/arquivos" />
         </provider>
+        <activity
+            android:name=".DarLigacao"
+            android:exported="true"
+            android:permission="com.lelokz.jarvis.permissao.LIGACAO"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:excludeFromRecents="true">
+            <intent-filter>
+                <action android:name="com.lelokz.jarvis.LIGACAO" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
         <receiver
             android:name=".ResultadoDaInstalacao"
             android:exported="false" />

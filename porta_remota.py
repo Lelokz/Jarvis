@@ -59,6 +59,8 @@ APK = RAIZ / "celular" / "app" / "build" / "outputs" / "apk" / "debug" / "app-de
 # Fala gravada maior que isto não é uma frase: 8 MB de webm são vários minutos.
 # A versão do APK compilado: o app compara com a dele e oferece atualizar.
 METADADOS_APK = APK.parent / "output-metadata.json"
+# O app "Painel do Canal" (12/11/2026): o mesmo esquema, com o APK dele.
+PAINEL_APK = RAIZ / "celular" / "painel" / "build" / "outputs" / "apk" / "debug" / "painel-debug.apk"
 # As notificações que o celular busca sozinho, mesmo com o app fechado
 # (por enquanto, os avisos do grupo da família: jarvis/grupo/familia.py).
 NOVIDADES = Path.home() / ".local/share/jarvis/novidades.jsonl"
@@ -167,6 +169,44 @@ def criar_app(cfg: config.Config):
         return JSONResponse({"versionCode": elemento.get("versionCode"),
                              "versionName": elemento.get("versionName")},
                             headers={"Cache-Control": "no-store"})
+
+    async def painel_apk(_):
+        if not PAINEL_APK.is_file():
+            return PlainTextResponse("o app do Painel ainda não foi compilado (celular/compilar.sh)", status_code=404)
+        return FileResponse(PAINEL_APK, media_type="application/vnd.android.package-archive",
+                            filename="painel.apk", headers={"Cache-Control": "no-store"})
+
+    async def painel_versao(_):
+        try:
+            elemento = json.loads((PAINEL_APK.parent / "output-metadata.json").read_text(encoding="utf-8"))["elements"][0]
+        except (OSError, ValueError, KeyError, IndexError):
+            return JSONResponse({}, status_code=404)
+        return JSONResponse({"versionCode": elemento.get("versionCode"),
+                             "versionName": elemento.get("versionName")},
+                            headers={"Cache-Control": "no-store"})
+
+    async def painel(request):
+        # O app do Painel do Canal: dados, thumbs e os pedidos (jarvis/youtube/remoto.py).
+        if not hmac.compare_digest(request.headers.get("authorization", ""), f"Bearer {chave}"):
+            return JSONResponse({"erro": "chave"}, status_code=401)
+        from jarvis.youtube import remoto
+        qual = request.path_params["qual"]
+        if qual == "dados":
+            return JSONResponse(await asyncio.to_thread(remoto.pacote), headers={"Cache-Control": "no-store"})
+        if qual == "thumb":
+            arq = remoto.thumb(request.query_params.get("id", ""))
+            if arq is None:
+                return JSONResponse({"erro": "não achei"}, status_code=404)
+            return FileResponse(arq, media_type="image/jpeg")
+        if qual == "acao" and request.method == "POST":
+            try:
+                pedido = await request.json()
+                resposta = await asyncio.to_thread(remoto.acao, pedido)
+            except (ValueError, KeyError, TypeError):
+                return JSONResponse({"ok": False, "texto": "Pedido torto."}, status_code=400)
+            print(f"{time.strftime('%H:%M:%S')} painel pelo celular: {pedido.get('acao')} → {resposta.get('texto')}", flush=True)
+            return JSONResponse(resposta)
+        return JSONResponse({"erro": "não achei"}, status_code=404)
 
     # O que subiu pelo /anexo esperando o "anexo_pronto" da conexão do app.
     subidos: dict[str, Path] = {}
@@ -454,6 +494,8 @@ def criar_app(cfg: config.Config):
 
     return Starlette(routes=[Route("/", pagina), Route("/ligar", ligar), Route("/saude", saude), Route("/jarvis.apk", apk),
                                Route("/versao", versao), Route("/novidades", novidades), Route("/feito", feito),
+                             Route("/painel.apk", painel_apk), Route("/painel/versao", painel_versao),
+                             Route("/painel/{qual}", painel, methods=["GET", "POST"]),
                              Route("/desbloqueio", desbloqueio_pc, methods=["GET", "POST"]),
                              Route("/anexo", anexo_http, methods=["POST"]),
                              Route("/aprovacao", aprovacao, methods=["GET", "POST"]),

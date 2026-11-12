@@ -1837,6 +1837,7 @@ private val indiceDosAjustes = listOf(
     AjusteAchavel("Relógio (Wear OS)", "Conexões", "conexoes", Icones.relogio, "pulso relogio"),
     AjusteAchavel("Música (YouTube)", "Conexões", "conexoes", Icones.musica, "tocar video youtube musica"),
     AjusteAchavel("Sobre a NOVA (versão)", "Sobre a NOVA", "sobre", Icones.sobre, "versao beta atualizacao"),
+    AjusteAchavel("Painel do Canal (instalar o app)", "Sobre a NOVA", "sobre", Icones.sobre, "youtube canal painel outros apps instalar"),
 )
 
 private fun semAcento(t: String) = java.text.Normalizer.normalize(t.lowercase(), java.text.Normalizer.Form.NFD)
@@ -2549,6 +2550,50 @@ private fun AjustesSobre(modelo: Jarvis) {
             append(", mais carinhosa e animada. Você escolhe com quem quer falar, e os dois conhecem a tua " +
                 "rotina, lembram das tuas coisas e cuidam do que você pedir.")
         }, color = TextoMedio, fontSize = 14.sp, lineHeight = 21.sp, modifier = Modifier.padding(top = 14.dp))
+    }
+    AjustesOutrosApps(modelo)
+}
+
+/** O app "Painel do Canal" (12/11/2026): instala pelo PC, igual à atualização; depois só abre. */
+@Composable
+private fun AjustesOutrosApps(modelo: Jarvis) {
+    val contexto = LocalContext.current
+    val escopo = rememberCoroutineScope()
+    val pacote = "com.lelokz.painel"
+    var instalado by remember { mutableStateOf(contexto.packageManager.getLaunchIntentForPackage(pacote) != null) }
+    var baixando by remember { mutableStateOf(-1f) }
+    LaunchedEffect(baixando) {   // voltou do instalador do Android: confere de novo
+        while (!instalado) { delay(2000); instalado = contexto.packageManager.getLaunchIntentForPackage(pacote) != null }
+    }
+    SecaoDosAjustes("Outros apps") {
+        LinhaDeAjuste("Painel do Canal", "O teu canal do YouTube no celular, ligado a este mesmo PC.", ultima = true) {
+            when {
+                instalado -> BotaoDeConexao("Abrir", forte = true) {
+                    contexto.packageManager.getLaunchIntentForPackage(pacote)?.let { contexto.startActivity(it) }
+                }
+                baixando in 0f..1f -> Text("${(baixando * 100).toInt()}%", color = TextoMedio, fontSize = 14.sp)
+                baixando > 1f -> Text("Instalando…", color = TextoMedio, fontSize = 14.sp)
+                else -> BotaoDeConexao("Instalar", forte = true, ativo = modelo.configurado.value) {
+                    if (!Atualizador.podeInstalar(contexto)) {
+                        modelo.aviso.value = "Libera a NOVA e toca em Instalar de novo."
+                        return@BotaoDeConexao
+                    }
+                    val prefs = contexto.getSharedPreferences("jarvis", android.content.Context.MODE_PRIVATE)
+                    val base = prefs.getString("base", "") ?: return@BotaoDeConexao
+                    baixando = 0f
+                    escopo.launch(Dispatchers.IO) {
+                        val erro = Atualizador.baixarEInstalar(contexto, base, "painel.apk", pacote) { p ->
+                            escopo.launch(Dispatchers.Main) { baixando = p }
+                        }
+                        withContext(Dispatchers.Main) {
+                            if (erro.isNotEmpty()) { modelo.aviso.value = erro; baixando = -1f } else baixando = 2f
+                        }
+                        delay(60_000)
+                        withContext(Dispatchers.Main) { if (baixando > 1f) baixando = -1f }
+                    }
+                }
+            }
+        }
     }
 }
 
