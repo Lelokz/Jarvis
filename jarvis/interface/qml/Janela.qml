@@ -829,7 +829,8 @@ Window {
                     // igual à de sempre (11/11/2026: escondê-lo puxava tudo pra cima).
                     opacity: janela.atomoNoFundo ? 0 : 1
                     // Em tela grande ele cresce (11/11/2026: 230 px ficava miúdo no 1080p do Léo).
-                    width: Math.min(370, areaDoChat.height * 0.36)
+                    // 12/11/2026: um pouco maior ("fica muito pequeno na janela"); o grandão no fundo foi recusado.
+                    width: Math.min(450, areaDoChat.height * 0.44)
                     height: width
                     readonly property bool vivo: janela.conectado
                     corDeFundo: tema.fundo

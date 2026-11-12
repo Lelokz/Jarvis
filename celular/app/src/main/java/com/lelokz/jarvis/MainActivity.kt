@@ -717,7 +717,8 @@ private fun Chat(modelo: Jarvis, abrirSeletores: () -> Unit) {
             Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()),
                 horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                 Spacer(Modifier.height(24.dp))
-                AtomoVivo(modelo, 190.dp, Modifier.segurarPraFalar(modelo))
+                // 12/11/2026: um pouco maior (190 → 230), igual à janela.
+                AtomoVivo(modelo, 230.dp, Modifier.segurarPraFalar(modelo))
                 Text(rotuloDoEstado(modelo.estadoVisivel), color = corDoEstado(modelo.estadoVisivel),
                     fontSize = 11.sp, letterSpacing = 2.sp, fontWeight = FontWeight.SemiBold)
                 Spacer(Modifier.height(14.dp))
